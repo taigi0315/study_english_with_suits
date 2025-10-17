@@ -55,18 +55,20 @@ def test_suits_analysis():
             print("=" * 30)
             
             for i, result in enumerate(results, 1):
-                print(f"\n{i}. Expression: {result.get('expression', 'N/A')}")
-                print(f"   Definition: {result.get('definition', 'N/A')}")
-                print(f"   Translation: {result.get('translation', {}).get('korean', 'N/A')}")
-                print(f"   Context: {result.get('context_start_time', 'N/A')} - {result.get('context_end_time', 'N/A')}")
-                print(f"   Similar: {', '.join(result.get('similar_expressions', []))}")
+                print(f"\n{i}. Expression: {result.expression}")
+                print(f"   Translation: {result.expression_translation}")
+                print(f"   Context: {result.context_start_time} - {result.context_end_time}")
+                print(f"   Similar: {', '.join(result.similar_expressions)}")
+                print(f"   Dialogues: {' | '.join(result.dialogues)}")
+                print(f"   Dialogue Translations: {' | '.join(result.translation)}")
         else:
             print("❌ No expressions found or analysis failed")
             
-        # Save results to file
+        # Save results to file (convert to dict for JSON serialization)
         output_file = "suits_analysis_results.json"
+        results_dict = [result.model_dump() for result in results]
         with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump(results_dict, f, indent=2, ensure_ascii=False)
         print(f"\n💾 Results saved to: {output_file}")
         
     except Exception as e:

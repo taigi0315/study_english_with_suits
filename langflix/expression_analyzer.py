@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from dotenv import load_dotenv
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from . import config
 from .prompts import get_prompt_for_chunk
 from .models import ExpressionAnalysisResponse, ExpressionAnalysis
@@ -19,17 +19,30 @@ logger = logging.getLogger(__name__)
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-def analyze_chunk(subtitle_chunk: List[dict]) -> List[Dict[str, Any]]:
+def analyze_chunk(subtitle_chunk: List[dict]) -> List[ExpressionAnalysis]:
     """
-    Sends a chunk of subtitles to the LLM for analysis and returns the parsed JSON response.
-    Uses structured output with Pydantic models for reliable JSON parsing.
+    Analyzes a chunk of subtitles using Gemini API with structured output.
+    
+    Uses Pydantic models for reliable JSON parsing and type safety.
+    Returns validated ExpressionAnalysis objects instead of raw dictionaries.
     
     Args:
         subtitle_chunk: List of subtitle dictionaries with start_time, end_time, and text
         
     Returns:
-        List of expression dictionaries with analysis results
+        List of ExpressionAnalysis objects with validated analysis results
+        
+    Raises:
+        ValueError: If subtitle_chunk is empty or invalid
+        RuntimeError: If API key is not configured
     """
+    # Input validation
+    if not subtitle_chunk:
+        raise ValueError("Subtitle chunk cannot be empty")
+    
+    if not os.getenv("GEMINI_API_KEY"):
+        raise RuntimeError("GEMINI_API_KEY environment variable not set")
+    
     try:
         prompt = get_prompt_for_chunk(subtitle_chunk)
         
@@ -60,30 +73,19 @@ def analyze_chunk(subtitle_chunk: List[dict]) -> List[Dict[str, Any]]:
             # Use the parsed response directly
             if hasattr(response, 'parsed') and response.parsed:
                 parsed_response: ExpressionAnalysisResponse = response.parsed
-                result = [expr.model_dump() for expr in parsed_response.expressions]
+                logger.info(f"Successfully analyzed chunk with structured output, found {len(parsed_response.expressions)} expressions")
+                return parsed_response.expressions
             else:
                 # Fallback to manual JSON parsing
-                response_text = response.text.strip()
-                
-                # Remove markdown code blocks if present
-                if response_text.startswith('```json'):
-                    response_text = response_text.replace('```json', '').replace('```', '').strip()
-                elif response_text.startswith('```'):
-                    response_text = response_text.replace('```', '').strip()
-                
-                # Parse and validate with Pydantic
-                json_data = json.loads(response_text)
-                parsed_response = ExpressionAnalysisResponse.model_validate(json_data)
-                result = [expr.model_dump() for expr in parsed_response.expressions]
-            
-            logger.info(f"Successfully analyzed chunk with structured output, found {len(result)} expressions")
-            return result
+                parsed_response = _parse_response_text(response.text)
+                logger.info(f"Successfully analyzed chunk with fallback parsing, found {len(parsed_response.expressions)} expressions")
+                return parsed_response.expressions
             
         except Exception as parse_error:
             logger.error(f"Failed to parse structured response: {parse_error}")
             logger.error(f"Raw response: {response.text}")
             
-            # Fallback to legacy parsing
+            # Final fallback to legacy parsing
             return _fallback_parse_response(response.text)
         
     except Exception as e:
@@ -91,15 +93,49 @@ def analyze_chunk(subtitle_chunk: List[dict]) -> List[Dict[str, Any]]:
         return []
 
 
-def _fallback_parse_response(response_text: str) -> List[Dict[str, Any]]:
+def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
     """
-    Fallback method for parsing responses when structured output fails.
+    Parse response text using Pydantic validation.
     
     Args:
         response_text: Raw response text from Gemini API
         
     Returns:
-        List of expression dictionaries
+        Validated ExpressionAnalysisResponse object
+        
+    Raises:
+        ValueError: If response cannot be parsed or validated
+    """
+    try:
+        # Clean response text
+        cleaned_text = response_text.strip()
+        
+        # Remove markdown code blocks if present
+        if cleaned_text.startswith('```json'):
+            cleaned_text = cleaned_text.replace('```json', '').replace('```', '').strip()
+        elif cleaned_text.startswith('```'):
+            cleaned_text = cleaned_text.replace('```', '').strip()
+        
+        # Parse JSON and validate with Pydantic
+        json_data = json.loads(cleaned_text)
+        return ExpressionAnalysisResponse.model_validate(json_data)
+        
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in response: {e}")
+    except Exception as e:
+        raise ValueError(f"Failed to validate response: {e}")
+
+
+def _fallback_parse_response(response_text: str) -> List[ExpressionAnalysis]:
+    """
+    Final fallback method for parsing responses when all other methods fail.
+    Attempts to parse as raw JSON and convert to ExpressionAnalysis objects.
+    
+    Args:
+        response_text: Raw response text from Gemini API
+        
+    Returns:
+        List of ExpressionAnalysis objects (may be empty if parsing fails)
     """
     try:
         # Clean response text
@@ -112,15 +148,36 @@ def _fallback_parse_response(response_text: str) -> List[Dict[str, Any]]:
             cleaned_text = cleaned_text.replace('```', '').strip()
         
         # Parse JSON
-        result = json.loads(cleaned_text)
+        json_data = json.loads(cleaned_text)
         
-        # Validate that result is a list
-        if not isinstance(result, list):
-            logger.warning("LLM response is not a list, wrapping in list")
-            result = [result] if result else []
-        
-        logger.info(f"Fallback parsing successful, found {len(result)} expressions")
-        return result
+        # Handle different response formats
+        if isinstance(json_data, list):
+            # Direct list of expressions
+            expressions = []
+            for item in json_data:
+                try:
+                    expr = ExpressionAnalysis.model_validate(item)
+                    expressions.append(expr)
+                except Exception as e:
+                    logger.warning(f"Failed to validate expression: {e}")
+                    continue
+            return expressions
+        elif isinstance(json_data, dict) and 'expressions' in json_data:
+            # Wrapped in response format
+            try:
+                response = ExpressionAnalysisResponse.model_validate(json_data)
+                return response.expressions
+            except Exception as e:
+                logger.warning(f"Failed to validate response format: {e}")
+                return []
+        else:
+            # Single expression
+            try:
+                expr = ExpressionAnalysis.model_validate(json_data)
+                return [expr]
+            except Exception as e:
+                logger.warning(f"Failed to validate single expression: {e}")
+                return []
         
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse JSON in fallback: {e}")

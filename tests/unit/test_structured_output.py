@@ -145,7 +145,7 @@ class TestStructuredOutput:
         
         assert isinstance(result, list)
         if result:  # If parsing succeeded
-            assert "expression" in result[0]
+            assert hasattr(result[0], "expression")
     
     def test_fallback_parse_response_valid_json(self):
         """Test fallback parsing with valid JSON"""
@@ -155,7 +155,7 @@ class TestStructuredOutput:
         
         assert isinstance(result, list)
         assert len(result) == 1
-        assert result[0]["expression"] == "Hello"
+        assert result[0].expression == "Hello"
     
     def test_fallback_parse_response_markdown_cleanup(self):
         """Test fallback parsing with markdown code blocks"""
@@ -165,7 +165,7 @@ class TestStructuredOutput:
         
         assert isinstance(result, list)
         assert len(result) == 1
-        assert result[0]["expression"] == "Hello"
+        assert result[0].expression == "Hello"
     
     def test_fallback_parse_response_invalid_json(self):
         """Test fallback parsing with invalid JSON"""
@@ -183,7 +183,7 @@ class TestStructuredOutput:
         
         assert isinstance(result, list)
         assert len(result) == 1
-        assert result[0]["expression"] == "Hello"
+        assert result[0].expression == "Hello"
 
 
 if __name__ == "__main__":

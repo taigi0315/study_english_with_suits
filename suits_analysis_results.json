@@ -1,0 +1,30 @@
+[
+  {
+    "expression": "what's happening to his deal",
+    "definition": "A question inquiring about the current status, progress, or potential issues of a business agreement or transaction.",
+    "translation": {
+      "korean": "그의 계약은 어떻게 진행되고 있나요?"
+    },
+    "context_start_time": "00:00:50,260000",
+    "context_end_time": "00:00:54,264000",
+    "similar_expressions": [
+      "What's the status of his agreement?",
+      "How's his negotiation coming along?",
+      "What's the progress on his transaction?"
+    ]
+  },
+  {
+    "expression": "I'm all-in",
+    "definition": "In poker, to bet all of one's remaining chips. Idiomatically, it means to commit completely to a course of action or to put everything one has into something.",
+    "translation": {
+      "korean": "올인했어요."
+    },
+    "context_start_time": "00:01:04,080000",
+    "context_end_time": "00:01:12,219000",
+    "similar_expressions": [
+      "I'm committing everything.",
+      "I'm putting all my chips in.",
+      "I'm fully committed."
+    ]
+  }
+]

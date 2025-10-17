@@ -1,0 +1,138 @@
+
+Here is a segment of dialogue from the TV show "Suits":
+
+---
+[00:00:21.565000-00:00:24.733000] [Muffled chatter]\n[00:00:48.891000-00:00:50.192000] [Knocking]\n[00:00:50.260000-00:00:51.327000] Gerald Tate's here.\n[00:00:51.395000-00:00:52.729000] He wants to know
+what's happening to his deal.\n[00:00:52.797000-00:00:54.264000] Go get Harvey.\n[00:00:55.793000-00:00:59.793000] == sync, corrected by <font color="#00ff00">elderman</font> ==\n[00:01:04.080000-00:01:06.715000] I check.\n[00:01:06.783000-00:01:07.949000] Raise.\n[00:01:08.017000-00:01:10.151000] 5,000.\n[00:01:10.219000-00:01:12.219000] I'm all-in.\n[00:01:15.991000-00:01:17.558000] [Cell phone dings]\n[00:01:19.227000-00:01:21.761000] You can pay me later.
+I got to go.\n[00:01:22.721000-00:01:24.155000] Gentlemen.\n[00:01:25.657000-00:01:27.826000] I'm paying you millions,\n[00:01:27.893000-00:01:29.494000] and you're telling me
+I'm gonna get screwed?\n[00:01:29.561000-00:01:32.230000] Jessica, have I come
+at a bad time?\n[00:01:32.298000-00:01:36.501000] Gerald, this is
+Harvey Specter.\n[00:01:36.569000-00:01:37.895000] He's our best closer.\n[00:01:37.896000-00:01:38.804000] Well, if you're
+the best closer,\n[00:01:38.805000-00:01:40.406000] where the hell you been
+for the last three hours?\n[00:01:40.474000-00:01:43.775000] Well, Gerald, I specialize
+in troubled situations,\n[00:01:43.776000-00:01:44.909000] and when I left here
+at 7:00 p.m.,\n[00:01:44.977000-00:01:46.812000] this deal wasn't
+in jeopardy,\n[00:01:46.880000-00:01:48.380000] so I'm just trying to figure out
+what happened in the interim.\n[00:01:48.448000-00:01:49.749000] We keep offering more money.\n[00:01:49.817000-00:01:51.250000] They keep rejecting it.\n[00:01:51.318000-00:01:52.985000] It's last-minute
+bad faith bullshit.\n[00:01:53.053000-00:01:55.021000] Says here that Cooper
+won't be staying on\n[00:01:55.089000-00:01:57.190000] as honorary vice president.\n[00:01:57.258000-00:01:59.091000] That's right.
+I don't want him around.\n[00:01:59.159000-00:02:00.159000] He wouldn't be around.\n[00:02:00.227000-00:02:01.461000] It's an honorary position.\n[00:02:01.529000-00:02:02.662000] I don't give a shit.\n[00:02:02.730000-00:02:04.530000] Well, I think you do,\n[00:02:04.598000-00:02:06.365000] because that's what's changed
+since I left,\n[00:02:06.433000-00:02:08.800000] which means it's you
+who's been dealing in bad faith.\n[00:02:08.868000-00:02:11.002000] Well, now that you've got
+a grasp on what's happened\n[00:02:11.070000-00:02:12.570000] in the goddamn interim,\n[00:02:12.638000-00:02:14.305000] what are you
+gonna do about it?\n[00:02:14.373000-00:02:15.973000] Because he's not getting
+that title.\n[00:02:16.041000-00:02:19.344000] Well, let me make sure
+I understand this, okay?\n[00:02:19.411000-00:02:21.946000] We negotiated a deal that
+gave you everything you wanted,\n[00:02:22.014000-00:02:24.750000] Mr. Cooper signed it,
+and now you won't close\n[00:02:24.817000-00:02:26.618000] until we take away
+the last shred of his dignity?\n[00:02:26.686000-00:02:28.788000] - Bingo.
+- Well, that's not gonna happen.\n[00:02:28.855000-00:02:31.090000] - And why the hell not?
+- Because I like Mr. Cooper,\n[00:02:31.158000-00:02:33.426000] and my firm doesn't operate
+in bad faith.\n[00:02:33.494000-00:02:36.329000] Oh.
+I see how it is.\n[00:02:36.397000-00:02:37.564000] Instead of working Cooper,\n[00:02:37.632000-00:02:39.833000] you're working me.\n[00:02:39.901000-00:02:42.235000] Well, why don't you take
+your pansy attitude\n[00:02:42.303000-00:02:44.838000] back in there
+and make him sign my deal?\n[00:02:44.906000-00:02:46.573000] Or I'll pay someone else
+your money\n[00:02:46.641000-00:02:49.109000] to do it for me.
+First of all, Gerald,\n[00:02:49.177000-00:02:50.944000] if you think
+anyone's gonna touch this deal\n[00:02:51.011000-00:02:53.880000] after your bad faith,
+you're mistaken.\n[00:02:53.947000-00:02:57.316000] Second, the way
+our agreement works is,\n[00:02:57.384000-00:02:58.951000] the minute Cooper
+signed the deal\n[00:02:59.019000-00:03:00.519000] which gave you everything
+you wanted,\n[00:03:00.587000-00:03:03.556000] our fee was due and payable,
+which is why at 7:30\n[00:03:03.623000-00:03:06.626000] I received confirmation
+of a wire transfer\n[00:03:06.694000-00:03:09.729000] from escrow indicating payment
+in full.\n[00:03:16.104000-00:03:17.605000] So I'd say
+the ball's in your court,\n[00:03:17.673000-00:03:20.207000] but the truth is
+your balls are in my fist.\n[00:03:20.275000-00:03:23.677000] Now I apologize if that image
+is too pansy for you,\n[00:03:23.745000-00:03:25.112000] but I'm comfortable enough
+with my manhood\n[00:03:25.179000-00:03:26.446000] to put it out there.\n[00:03:26.514000-00:03:28.081000] Now get your ass in there\n[00:03:28.149000-00:03:31.184000] and close the goddamn deal.\n[00:03:31.252000-00:03:32.952000] You gonna let him talk to me
+like this?\n[00:03:33.019000-00:03:35.354000] Harvey speaks for the firm.\n[00:03:46.332000-00:03:48.934000] [Clears throat]\n[00:03:49.002000-00:03:51.971000] We got paid
+before Gerald signed the deal?\n[00:03:52.038000-00:03:53.405000] What are you talking about?
+This is a memo\n[00:03:53.473000-00:03:55.074000] about some fire drill
+on Tuesday.\n[00:03:55.142000-00:03:56.742000] - Huh.
+- You're the blue team captain.\n[00:03:56.810000-00:03:59.645000] You get to wear a fire hat.\n[00:04:12.625000-00:04:14.725000] Time's up.\n[00:04:14.793000-00:04:17.161000] Pencils down.\n[00:04:17.229000-00:04:19.997000] Excuse me.
+Do I know you from somewhere?\n[00:04:20.065000-00:04:21.933000] I don't think so.\n[00:04:22.001000-00:04:24.904000] I have a pretty good memory
+for faces.\n[00:04:24.971000-00:04:28.073000] So do I.\n[00:04:28.141000-00:04:31.643000] - Sorry.
+- I got it.\n[00:04:43.623000-00:04:45.823000] Hey.
+Hey!\n[00:04:45.891000-00:04:47.325000] Stop! You in the cap!\n[00:05:15.056000-00:05:18.556000] <font color=#00ff00>♪ Suits 1x01 ♪</font>
+<font color=#00ffff>Pilot</font>
+Original Air Date on June 23, 2011\n[00:05:18.557000-00:05:19.877000] [Knocking]\n[00:05:20.325000-00:05:22.326000] What did you get me?\n[00:05:22.394000-00:05:23.928000] What I said
+I was gonna get you.\n[00:05:23.996000-00:05:26.997000] A 158.
+I told you I wanted a 175.\n[00:05:27.065000-00:05:28.299000] And I told you
+only 1 out of 100 people\n[00:05:28.366000-00:05:30.234000] can score that.\n[00:05:30.301000-00:05:33.237000] You're a B-minus student.
+You got 1,000 on your SATs.\n[00:05:33.305000-00:05:34.873000] If I get you a 175,
+they'll know you cheated.\n[00:05:34.940000-00:05:37.775000] So only a genius loser
+can get a 175?\n[00:05:37.843000-00:05:40.311000] Actually, no.
+I would get a 180.\n[00:05:40.379000-00:05:42.747000] Now can I have my money,
+please?\n[00:05:48.754000-00:05:51.155000] Whoa.
+This is only half.\n[00:05:51.223000-00:05:52.657000] Then why don't you
+go call the police?\n[00:05:56.662000-00:06:00.165000] I got to get my shit
+together.\n[00:06:00.233000-00:06:02.167000] That's the best cheeseburger
+I've had in my life.\n[00:06:02.235000-00:06:05.705000] It's from Monday, Trevor.\n[00:06:05.773000-00:06:07.006000] Look, man, I'm serious.\n[00:06:07.074000-00:06:08.608000] I almost got caught today.\n[00:06:08.676000-00:06:10.076000] I've got
+to stop getting stoned.\n[00:06:10.144000-00:06:11.377000] I've got to get
+my act together.\n[00:06:11.445000-00:06:12.912000] Dude, look at me.\n[00:06:12.980000-00:06:15.415000] You can burn bud
+and still be a success.\n[00:06:15.483000-00:06:17.084000] You sell pot for a living.\n[00:06:17.151000-00:06:19.052000] Still saps the motivation.\n[00:06:19.120000-00:06:21.754000] All I'm saying is,
+you want in,\n[00:06:21.822000-00:06:23.222000] you are in.\n[00:06:23.290000-00:06:25.224000] You know,
+that is word for word\n[00:06:25.292000-00:06:27.126000] your offer before I got caught\n[00:06:27.194000-00:06:29.261000] cheating on your math test
+in the third grade.\n[00:06:29.329000-00:06:30.329000] Goddamn memory.\n[00:06:30.397000-00:06:32.097000] Stop.\n[00:06:32.165000-00:06:34.299000] Look, no one's gonna suspect
+you're a dealer.\n[00:06:34.367000-00:06:35.300000] I mean, look at me.\n[00:06:35.368000-00:06:37.168000] This is a $2,000 suit, Mike.\n[00:06:37.236000-00:06:38.636000] I got, like, 12 of 'em.\n[00:06:38.704000-00:06:40.405000] I take on
+real software projects.\n[00:06:40.473000-00:06:45.110000] I have clients who bring me
+briefcases filled with cash,
+---
+
+Your task is to act as an English language expert. From the dialogue provided, identify ONLY the MOST VALUABLE expressions, idioms, or phrases that would be extremely useful for an English learner.
+
+**SELECTION CRITERIA - Choose ONLY expressions that are:**
+- Commonly used in real conversations
+- Not too basic (avoid simple words like "hello", "yes", "no")
+- Not too advanced (avoid highly technical legal/business jargon)
+- Idiomatic expressions, phrasal verbs, or colloquial phrases
+- Maximum 5 expressions (can be fewer if not enough good ones)
+
+For each expression you identify, you MUST provide the following in a valid JSON format:
+1.  `dialogues`: A list of ALL dialogue lines in the scene (complete conversation between start and end time)
+2.  `translation`: A list of translations of ALL dialogue lines into Korean (same order as dialogues)
+3.  `expression`: The main expression/phrase to learn (string)
+4.  `expression_translation`: Translation of the main expression into Korean (string)
+5.  `definition`: A clear, simple definition of the main expression
+6.  `context_start_time`: The timestamp where the conversational context should BEGIN
+7.  `context_end_time`: The timestamp where the conversational context should END
+8.  `similar_expressions`: A list of 1-2 similar expressions or alternative ways to say the same thing
+
+**CRITICAL REQUIREMENTS:**
+- `dialogues` must include ALL dialogue lines in the scene (complete conversation)
+- `translation` must include CONTEXTUAL translations of ALL dialogue lines - understand the full context, character relationships, and situation before translating. Do NOT provide literal word-for-word translations.
+- `expression` should be the key phrase/idiom to learn from the scene
+- `expression_translation` should be the CONTEXTUAL translation of just the main expression - understand the meaning and context, not just literal translation
+- Context should be wide enough to show the full conversational flow and meaning
+- Choose ONLY the most valuable expressions - quality over quantity
+- Maximum 5 expressions total
+
+**TRANSLATION GUIDELINES:**
+- Understand the ENTIRE context of the conversation, character relationships, and situation
+- Provide translations that capture the MEANING and INTENT, not just literal words
+- Consider the tone, emotion, and cultural context of the dialogue
+- Make translations natural and understandable in Korean
+
+Example of a single JSON object in the list:
+{
+  "dialogues": [
+    "I'm paying you millions,",
+    "and you're telling me I'm gonna get screwed?"
+  ],
+  "translation": [
+    "나는 당신에게 수백만 달러를 지불하고 있는데,",
+    "당신은 내가 속임을 당할 것이라고 말하고 있나요?"
+  ],
+  "expression": "I'm gonna get screwed",
+  "expression_translation": "속임을 당할 것 같아요",
+  "definition": "An expression meaning 'I'm going to be cheated or treated unfairly' - used when someone feels they're being taken advantage of.",
+  "context_start_time": "00:01:25,657",
+  "context_end_time": "00:01:32,230",
+  "similar_expressions": [
+    "I'm going to be cheated",
+    "I'm getting the short end of the stick"
+  ]
+}
+
+Now, analyze the provided dialogue and return the JSON list with ONLY the most valuable expressions.

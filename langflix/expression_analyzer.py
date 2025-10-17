@@ -70,23 +70,24 @@ def analyze_chunk(subtitle_chunk: List[dict]) -> List[ExpressionAnalysis]:
         
         # Parse structured JSON response
         try:
-            # Use the parsed response directly
+            # Use the parsed response directly (structured output)
             if hasattr(response, 'parsed') and response.parsed:
                 parsed_response: ExpressionAnalysisResponse = response.parsed
                 logger.info(f"Successfully analyzed chunk with structured output, found {len(parsed_response.expressions)} expressions")
                 return parsed_response.expressions
             else:
-                # Fallback to manual JSON parsing
+                # Fallback: Parse response text with Pydantic validation
                 parsed_response = _parse_response_text(response.text)
-                logger.info(f"Successfully analyzed chunk with fallback parsing, found {len(parsed_response.expressions)} expressions")
+                logger.info(f"Successfully analyzed chunk with text parsing, found {len(parsed_response.expressions)} expressions")
                 return parsed_response.expressions
             
         except Exception as parse_error:
-            logger.error(f"Failed to parse structured response: {parse_error}")
+            logger.error(f"Failed to parse response: {parse_error}")
             logger.error(f"Raw response: {response.text}")
             
-            # Final fallback to legacy parsing
-            return _fallback_parse_response(response.text)
+            # If all parsing fails, return empty list
+            logger.warning("All parsing methods failed, returning empty list")
+            return []
         
     except Exception as e:
         logger.error(f"Unexpected error in analyze_chunk: {e}")
@@ -126,63 +127,3 @@ def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
         raise ValueError(f"Failed to validate response: {e}")
 
 
-def _fallback_parse_response(response_text: str) -> List[ExpressionAnalysis]:
-    """
-    Final fallback method for parsing responses when all other methods fail.
-    Attempts to parse as raw JSON and convert to ExpressionAnalysis objects.
-    
-    Args:
-        response_text: Raw response text from Gemini API
-        
-    Returns:
-        List of ExpressionAnalysis objects (may be empty if parsing fails)
-    """
-    try:
-        # Clean response text
-        cleaned_text = response_text.strip()
-        
-        # Remove markdown code blocks if present
-        if cleaned_text.startswith('```json'):
-            cleaned_text = cleaned_text.replace('```json', '').replace('```', '').strip()
-        elif cleaned_text.startswith('```'):
-            cleaned_text = cleaned_text.replace('```', '').strip()
-        
-        # Parse JSON
-        json_data = json.loads(cleaned_text)
-        
-        # Handle different response formats
-        if isinstance(json_data, list):
-            # Direct list of expressions
-            expressions = []
-            for item in json_data:
-                try:
-                    expr = ExpressionAnalysis.model_validate(item)
-                    expressions.append(expr)
-                except Exception as e:
-                    logger.warning(f"Failed to validate expression: {e}")
-                    continue
-            return expressions
-        elif isinstance(json_data, dict) and 'expressions' in json_data:
-            # Wrapped in response format
-            try:
-                response = ExpressionAnalysisResponse.model_validate(json_data)
-                return response.expressions
-            except Exception as e:
-                logger.warning(f"Failed to validate response format: {e}")
-                return []
-        else:
-            # Single expression
-            try:
-                expr = ExpressionAnalysis.model_validate(json_data)
-                return [expr]
-            except Exception as e:
-                logger.warning(f"Failed to validate single expression: {e}")
-                return []
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON in fallback: {e}")
-        logger.error(f"Raw response: {response_text}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error in fallback parsing: {e}")
-        return []

@@ -4,7 +4,7 @@ Unit tests for structured output functionality
 import pytest
 from unittest.mock import patch, MagicMock
 from langflix.models import ExpressionAnalysis, ExpressionAnalysisResponse
-from langflix.expression_analyzer import analyze_chunk, _fallback_parse_response
+from langflix.expression_analyzer import analyze_chunk
 
 
 class TestPydanticModels:
@@ -147,43 +147,38 @@ class TestStructuredOutput:
         if result:  # If parsing succeeded
             assert hasattr(result[0], "expression")
     
-    def test_fallback_parse_response_valid_json(self):
-        """Test fallback parsing with valid JSON"""
-        response_text = '[{"expression": "Hello", "dialogues": ["Hello"], "translation": ["안녕"], "expression_translation": "안녕", "context_start_time": "00:01:25,657", "context_end_time": "00:01:32,230", "similar_expressions": ["Hi"]}]'
+    def test_parse_response_text_valid_json(self):
+        """Test _parse_response_text with valid JSON"""
+        from langflix.expression_analyzer import _parse_response_text
         
-        result = _fallback_parse_response(response_text)
+        response_text = '{"expressions": [{"expression": "Hello", "dialogues": ["Hello"], "translation": ["안녕"], "expression_translation": "안녕", "context_start_time": "00:01:25,657", "context_end_time": "00:01:32,230", "similar_expressions": ["Hi"]}]}'
         
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0].expression == "Hello"
+        result = _parse_response_text(response_text)
+        
+        assert isinstance(result, ExpressionAnalysisResponse)
+        assert len(result.expressions) == 1
+        assert result.expressions[0].expression == "Hello"
     
-    def test_fallback_parse_response_markdown_cleanup(self):
-        """Test fallback parsing with markdown code blocks"""
-        response_text = '```json\n[{"expression": "Hello", "dialogues": ["Hello"], "translation": ["안녕"], "expression_translation": "안녕", "context_start_time": "00:01:25,657", "context_end_time": "00:01:32,230", "similar_expressions": ["Hi"]}]\n```'
+    def test_parse_response_text_markdown_cleanup(self):
+        """Test _parse_response_text with markdown code blocks"""
+        from langflix.expression_analyzer import _parse_response_text
         
-        result = _fallback_parse_response(response_text)
+        response_text = '```json\n{"expressions": [{"expression": "Hello", "dialogues": ["Hello"], "translation": ["안녕"], "expression_translation": "안녕", "context_start_time": "00:01:25,657", "context_end_time": "00:01:32,230", "similar_expressions": ["Hi"]}]}\n```'
         
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0].expression == "Hello"
+        result = _parse_response_text(response_text)
+        
+        assert isinstance(result, ExpressionAnalysisResponse)
+        assert len(result.expressions) == 1
+        assert result.expressions[0].expression == "Hello"
     
-    def test_fallback_parse_response_invalid_json(self):
-        """Test fallback parsing with invalid JSON"""
+    def test_parse_response_text_invalid_json(self):
+        """Test _parse_response_text with invalid JSON"""
+        from langflix.expression_analyzer import _parse_response_text
+        
         response_text = "This is not JSON"
         
-        result = _fallback_parse_response(response_text)
-        
-        assert result == []
-    
-    def test_fallback_parse_response_non_list(self):
-        """Test fallback parsing with non-list response"""
-        response_text = '{"expression": "Hello", "dialogues": ["Hello"], "translation": ["안녕"], "expression_translation": "안녕", "context_start_time": "00:01:25,657", "context_end_time": "00:01:32,230", "similar_expressions": ["Hi"]}'
-        
-        result = _fallback_parse_response(response_text)
-        
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0].expression == "Hello"
+        with pytest.raises(ValueError):
+            _parse_response_text(response_text)
 
 
 if __name__ == "__main__":

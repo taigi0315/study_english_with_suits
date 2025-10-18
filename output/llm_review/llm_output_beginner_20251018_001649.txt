@@ -1,0 +1,319 @@
+LLM Output Review
+==================
+Language Level: beginner
+Timestamp: 2025-10-18T00:16:49.481687
+Chunk Size: 100 subtitles
+
+Original Subtitle Chunk:
+--------------------------------------------------
+1. [00:00:35.970000-00:00:41.260000] <font color="#3399FF">Sync and correction by Mlmlte</font>
+<font color="#3399FF">www.addic7ed.com</font>
+2. [00:00:48.380000-00:00:49.950000] Gerald Tate's here.
+3. [00:00:50.010000-00:00:51.350000] He wants to know
+what's happening to his deal.
+4. [00:00:51.420000-00:00:52.880000] Go get Harvey.
+5. [00:01:02.230000-00:01:04.860000] I check.
+6. [00:01:04.930000-00:01:06.100000] Raise.
+7. [00:01:06.160000-00:01:08.300000] 5,000.
+8. [00:01:08.370000-00:01:10.370000] I'm all-in.
+9. [00:01:17.370000-00:01:19.910000] You can pay me later.
+I got to go.
+10. [00:01:21.140000-00:01:22.580000] Gentlemen.
+11. [00:01:24.080000-00:01:26.250000] I'm paying you millions,
+12. [00:01:26.320000-00:01:27.920000] and you're telling me
+I'm gonna get screwed?
+13. [00:01:27.980000-00:01:30.650000] Jessica, have I come
+at a bad time?
+14. [00:01:30.720000-00:01:34.920000] Gerald, this is Harvey Specter.
+15. [00:01:34.990000-00:01:37.130000] He's our best closer.
+16. [00:01:37.200000-00:01:38.630000] Well, if you're
+the best closer,
+17. [00:01:38.700000-00:01:40.300000] where the hell you been
+for the last three hours?
+18. [00:01:40.370000-00:01:42.500000] Well, Gerald, I specialize
+in troubled situations,
+19. [00:01:42.570000-00:01:43.700000] and when I left here
+at 7:00 P.M.,
+20. [00:01:43.770000-00:01:45.600000] this deal wasn't in jeopardy,
+21. [00:01:45.670000-00:01:47.170000] so I'm just trying to figure out
+what happened in the interim.
+22. [00:01:47.240000-00:01:48.540000] We keep offering more money.
+23. [00:01:48.610000-00:01:50.040000] They keep rejecting it.
+24. [00:01:50.110000-00:01:51.780000] It's last-minute
+bad faith bullsh--.
+25. [00:01:51.840000-00:01:53.810000] Says here that Cooper
+won't be staying on
+26. [00:01:53.880000-00:01:55.980000] as honorary vice president.
+27. [00:01:56.050000-00:01:57.880000] That's right.
+I don't want him around.
+28. [00:01:57.950000-00:01:58.950000] He wouldn't be around.
+29. [00:01:59.020000-00:02:00.250000] It's an honorary position.
+30. [00:02:00.320000-00:02:01.450000] I don't give a sh--.
+31. [00:02:01.520000-00:02:03.320000] Well, I think you do,
+32. [00:02:03.390000-00:02:05.160000] because that's what's changed
+since I left,
+33. [00:02:05.220000-00:02:07.590000] which means it's you
+who's been dealing in bad faith.
+34. [00:02:07.660000-00:02:09.790000] Well, now that you've got
+a grasp on what's happened
+35. [00:02:09.860000-00:02:11.360000] in the goddamn interim,
+36. [00:02:11.430000-00:02:13.100000] what are you gonna do about it?
+37. [00:02:13.160000-00:02:14.760000] Because he's not getting
+that title.
+38. [00:02:14.830000-00:02:18.140000] Well, let me make sure
+I understand this, okay?
+39. [00:02:18.200000-00:02:20.740000] We negotiated a deal that
+gave you everything you wanted,
+40. [00:02:20.810000-00:02:23.540000] Mr. Cooper signed it,
+and now you won't close
+41. [00:02:23.610000-00:02:25.410000] until we take away
+the last shred of his dignity?
+42. [00:02:25.480000-00:02:27.580000] - Bingo.
+- Well, that's not gonna happen.
+43. [00:02:27.650000-00:02:29.880000] - And why the hell not?
+- Because I like Mr. Cooper,
+44. [00:02:29.950000-00:02:32.220000] and my firm doesn't operate
+in bad faith.
+45. [00:02:32.290000-00:02:35.120000] Oh.
+I see how it is.
+46. [00:02:35.190000-00:02:36.360000] Instead of working Cooper,
+47. [00:02:36.420000-00:02:38.620000] you're working me.
+48. [00:02:38.690000-00:02:41.030000] Well, why don't you take
+your pansy attitude
+49. [00:02:41.090000-00:02:43.630000] back in there
+and make him sign my deal?
+50. [00:02:43.700000-00:02:45.360000] Or I'll pay someone else
+your money
+51. [00:02:45.430000-00:02:47.900000] to do it for me.
+First of all, Gerald,
+52. [00:02:47.970000-00:02:49.740000] if you think
+anyone's gonna touch this deal
+53. [00:02:49.800000-00:02:52.670000] after your bad faith,
+you're mistaken.
+54. [00:02:52.740000-00:02:56.110000] Second, the way
+our agreement works is,
+55. [00:02:56.180000-00:02:57.740000] the minute Cooper
+signed the deal
+56. [00:02:57.810000-00:02:59.310000] which gave you everything
+you wanted,
+57. [00:02:59.380000-00:03:02.350000] our fee was due and payable,
+which is why at 7:30
+58. [00:03:02.410000-00:03:05.420000] I received confirmation
+of a wire transfer
+59. [00:03:05.490000-00:03:08.520000] from escrow indicating payment
+in full.
+60. [00:03:14.900000-00:03:16.400000] So I'd say
+the ball's in your court,
+61. [00:03:16.460000-00:03:19] but the truth is
+your balls are in my fist.
+62. [00:03:19.070000-00:03:22.470000] Now I apologize if that image
+is too pansy for you,
+63. [00:03:22.540000-00:03:23.900000] but I'm comfortable enough
+with my manhood
+64. [00:03:23.970000-00:03:25.240000] to put it out there.
+65. [00:03:25.310000-00:03:26.870000] Now get your ass in there
+66. [00:03:26.940000-00:03:29.980000] and close the goddamn deal.
+67. [00:03:30.040000-00:03:31.740000] You gonna let him talk to me
+like this?
+68. [00:03:31.810000-00:03:34.150000] Harvey speaks for the firm.
+69. [00:03:47.790000-00:03:50.760000] We got paid
+before Gerald signed the deal?
+70. [00:03:50.830000-00:03:52.200000] What are you talking about?
+This is a memo
+71. [00:03:52.260000-00:03:53.870000] about some fire drill
+on Tuesday.
+72. [00:03:53.930000-00:03:55.530000] - Huh.
+- You're the Blue Team Captain.
+73. [00:03:55.600000-00:03:58.440000] You get to wear a fire hat.
+74. [00:04:11.420000-00:04:13.520000] Time's up.
+75. [00:04:13.580000-00:04:15.950000] Pencils down.
+76. [00:04:16.020000-00:04:18.790000] Excuse me.
+Do I know you from somewhere?
+77. [00:04:18.860000-00:04:20.720000] I don't think so.
+78. [00:04:20.790000-00:04:23.700000] I have a pretty good memory
+for faces.
+79. [00:04:23.760000-00:04:26.860000] So do I.
+80. [00:04:26.930000-00:04:30.430000] - Sorry.
+- I got it.
+81. [00:04:42.410000-00:04:44.610000] Hey.
+Hey!
+82. [00:04:44.680000-00:04:46.120000] Stop! You in the cap!
+83. [00:05:19.120000-00:05:21.120000] What did you get me?
+84. [00:05:21.190000-00:05:22.720000] What I said
+I was gonna get you.
+85. [00:05:22.790000-00:05:25.790000] A 158.
+I told you I wanted a 175.
+86. [00:05:25.860000-00:05:27.090000] And I told you
+only 1 out of 100 people
+87. [00:05:27.160000-00:05:29.030000] can score that.
+88. [00:05:29.090000-00:05:32.030000] You're a B-minus student.
+You got 1,000 on your sats.
+89. [00:05:32.100000-00:05:33.660000] If I get you a 175,
+they'll know you cheated.
+90. [00:05:33.730000-00:05:36.570000] So only a genius loser
+can get a 175?
+91. [00:05:36.630000-00:05:39.100000] Actually, no.
+I would get a 180.
+92. [00:05:39.170000-00:05:41.540000] Now can I have my money,
+please?
+93. [00:05:47.550000-00:05:49.950000] Whoa.
+This is only half.
+94. [00:05:50.010000-00:05:51.450000] Then why don't you
+go call the police?
+95. [00:05:55.450000-00:05:58.960000] I got to get my sh--
+together.
+96. [00:05:59.020000-00:06:00.960000] That's the best cheeseburger
+I've had in my life.
+97. [00:06:01.030000-00:06:04.500000] It's from Monday, Trevor.
+98. [00:06:04.560000-00:06:05.800000] Look, man, I'm serious.
+99. [00:06:05.870000-00:06:07.400000] I almost got caught today.
+100. [00:06:07.470000-00:06:08.870000] I've got
+to stop getting stoned.
+
+LLM Response:
+--------------------------------------------------
+```json
+[
+  {
+    "dialogues": [
+      "I'm paying you millions,",
+      "and you're telling me I'm gonna get screwed?",
+      "Jessica, have I come at a bad time?",
+      "Gerald, this is Harvey Specter.",
+      "He's our best closer."
+    ],
+    "translation": [
+      "제가 당신들에게 수백만 달러를 지불하는데요,",
+      "절 망하게 할 거라고 말하는 거예요?",
+      "제시카, 제가 안 좋은 시간에 온 건가요?",
+      "제럴드, 이쪽은 하비 스펙터예요.",
+      "우리 회사 최고의 해결사죠."
+    ],
+    "expression": "Have I come at a bad time?",
+    "expression_translation": "제가 안 좋은 시간에 온 건가요? / 지금 방해하는 건가요?",
+    "context_start_time": "00:01:24,080",
+    "context_end_time": "00:01:37,130",
+    "similar_expressions": [
+      "Is this a bad time?",
+      "Am I interrupting something?",
+      "Is now a good time? (opposite)"
+    ],
+    "scene_type": "tension|dramatic",
+    "why_valuable": "This phrase is a very common and polite way to ask if your presence is inconvenient or if the timing of your arrival is problematic. It's useful in both social and professional settings for checking in with others."
+  },
+  {
+    "dialogues": [
+      "Well, if you're the best closer,",
+      "where the hell you been for the last three hours?",
+      "Well, Gerald, I specialize in troubled situations,",
+      "and when I left here at 7:00 P.M.,",
+      "this deal wasn't in jeopardy,",
+      "so I'm just trying to figure out what happened in the interim."
+    ],
+    "translation": [
+      "음, 당신이 최고의 해결사라면,",
+      "지난 세 시간 동안 대체 어디 있었던 겁니까?",
+      "음, 제럴드, 저는 곤란한 상황 전문입니다.",
+      "그리고 제가 저녁 7시에 여기를 떠났을 때,",
+      "이 계약은 위태롭지 않았어요.",
+      "그래서 그 사이에 무슨 일이 일어났는지 알아내려고 하는 중입니다."
+    ],
+    "expression": "trying to figure out",
+    "expression_translation": "~을 알아내려고 노력하다 / ~을 이해하려고 하다",
+    "context_start_time": "00:01:37,200",
+    "context_end_time": "00:01:47,170",
+    "similar_expressions": [
+      "trying to understand",
+      "trying to discover",
+      "trying to solve"
+    ],
+    "scene_type": "witty|confrontation",
+    "why_valuable": "This phrasal verb is extremely common and versatile, used when you are attempting to understand, solve, or discover something. It's a fundamental expression for problem-solving and making sense of situations."
+  },
+  {
+    "dialogues": [
+      "We negotiated a deal that gave you everything you wanted,",
+      "Mr. Cooper signed it, and now you won't close",
+      "until we take away the last shred of his dignity?",
+      "- Bingo. - Well, that's not gonna happen."
+    ],
+    "translation": [
+      "우리는 당신이 원하는 모든 것을 주는 계약을 협상했고,",
+      "쿠퍼 씨도 서명했어요. 그런데 이제 와서 당신은",
+      "그의 마지막 자존심마저 빼앗아야만 계약을 마무리하겠다는 건가요?",
+      "- 빙고. - 음, 그건 안 될 겁니다."
+    ],
+    "expression": "That's not gonna happen.",
+    "expression_translation": "그건 안 될 겁니다. / 그럴 일은 없을 겁니다.",
+    "context_start_time": "00:02:18,200",
+    "context_end_time": "00:02:27,580",
+    "similar_expressions": [
+      "No way.",
+      "Not a chance.",
+      "Impossible."
+    ],
+    "scene_type": "confrontation|drama",
+    "why_valuable": "This is a direct and forceful way to state that something will not occur or that you will not allow it to happen. It's an important phrase for expressing firm refusal or setting boundaries in various situations."
+  },
+  {
+    "dialogues": [
+      "We got paid before Gerald signed the deal?",
+      "What are you talking about? This is a memo",
+      "about some fire drill on Tuesday.",
+      "- Huh. - You're the Blue Team Captain.",
+      "You get to wear a fire hat."
+    ],
+    "translation": [
+      "제럴드가 계약에 서명하기 전에 우리가 돈을 받았다고요?",
+      "무슨 소리예요? 이건 메모잖아요.",
+      "화요일에 있을 소방 훈련에 대한 건데.",
+      "- 응. - 넌 블루 팀 팀장이야.",
+      "소방모를 쓸 수 있지."
+    ],
+    "expression": "What are you talking about?",
+    "expression_translation": "무슨 말씀이세요? / 무슨 소리예요?",
+    "context_start_time": "00:03:47,790",
+    "context_end_time": "00:03:58,440",
+    "similar_expressions": [
+      "What do you mean?",
+      "I don't understand.",
+      "Could you explain?"
+    ],
+    "scene_type": "humor|witty",
+    "why_valuable": "This is an extremely common question used to express confusion, disbelief, or to ask for clarification when someone says something unexpected or unclear. It's a key phrase for managing conversations and understanding others."
+  },
+  {
+    "dialogues": [
+      "A 158. I told you I wanted a 175.",
+      "And I told you only 1 out of 100 people",
+      "can score that.",
+      "You're a B-minus student. You got 1,000 on your sats.",
+      "If I get you a 175, they'll know you cheated.",
+      "So only a genius loser can get a 175?",
+      "Actually, no. I would get a 180.",
+      "Now can I have my money, please?"
+    ],
+    "translation": [
+      "158점. 전 175점을 원한다고 했잖아요.",
+      "그리고 저는 당신에게 100명 중 1명만이",
+      "그 점수를 받을 수 있다고 말했죠.",
+      "당신은 B-학점 학생이에요. SAT는 1,000점이었고요.",
+      "제가 당신에게 175점을 받게 하면, 사람들이 당신이 속인 걸 알 거예요.",
+      "그럼 천재 루저만 175점을 받을 수 있다는 건가요?",
+      "실은 아니요. 저는 180점을 받을 거예요.",
+      "이제 제 돈 좀 받을 수 있을까요?"
+    ],
+    "expression": "Can I have my money, please?",
+    "expression_translation": "제 돈 좀 받을 수 있을까요?",
+    "context_start_time": "00:05:22,790",
+    "context_end_time": "00:05:41,540",
+    "similar_expressions": [
+      "Could I get my money, please?",
+      "I'd like my money, please.",
+      "May I have my money, please?"
+    ],
+    "scene_type": "dynamic|confrontation",
+    "why_valuable": "This is a fundamental and polite way to request something, particularly payment or a possession. It's essential for everyday interactions, from ordering food to requesting what is owed to you."
+  }
+]
+```

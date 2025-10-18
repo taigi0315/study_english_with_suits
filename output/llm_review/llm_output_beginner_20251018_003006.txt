@@ -1,0 +1,457 @@
+LLM Output Review
+==================
+Language Level: beginner
+Timestamp: 2025-10-18T00:30:06.713766
+Chunk Size: 200 subtitles
+
+Original Subtitle Chunk:
+--------------------------------------------------
+1. [00:00:35.970000-00:00:41.260000] <font color="#3399FF">Sync and correction by Mlmlte</font>
+<font color="#3399FF">www.addic7ed.com</font>
+2. [00:00:48.380000-00:00:49.950000] Gerald Tate's here.
+3. [00:00:50.010000-00:00:51.350000] He wants to know
+what's happening to his deal.
+4. [00:00:51.420000-00:00:52.880000] Go get Harvey.
+5. [00:01:02.230000-00:01:04.860000] I check.
+6. [00:01:04.930000-00:01:06.100000] Raise.
+7. [00:01:06.160000-00:01:08.300000] 5,000.
+8. [00:01:08.370000-00:01:10.370000] I'm all-in.
+9. [00:01:17.370000-00:01:19.910000] You can pay me later.
+I got to go.
+10. [00:01:21.140000-00:01:22.580000] Gentlemen.
+11. [00:01:24.080000-00:01:26.250000] I'm paying you millions,
+12. [00:01:26.320000-00:01:27.920000] and you're telling me
+I'm gonna get screwed?
+13. [00:01:27.980000-00:01:30.650000] Jessica, have I come
+at a bad time?
+14. [00:01:30.720000-00:01:34.920000] Gerald, this is Harvey Specter.
+15. [00:01:34.990000-00:01:37.130000] He's our best closer.
+16. [00:01:37.200000-00:01:38.630000] Well, if you're
+the best closer,
+17. [00:01:38.700000-00:01:40.300000] where the hell you been
+for the last three hours?
+18. [00:01:40.370000-00:01:42.500000] Well, Gerald, I specialize
+in troubled situations,
+19. [00:01:42.570000-00:01:43.700000] and when I left here
+at 7:00 P.M.,
+20. [00:01:43.770000-00:01:45.600000] this deal wasn't in jeopardy,
+21. [00:01:45.670000-00:01:47.170000] so I'm just trying to figure out
+what happened in the interim.
+22. [00:01:47.240000-00:01:48.540000] We keep offering more money.
+23. [00:01:48.610000-00:01:50.040000] They keep rejecting it.
+24. [00:01:50.110000-00:01:51.780000] It's last-minute
+bad faith bullsh--.
+25. [00:01:51.840000-00:01:53.810000] Says here that Cooper
+won't be staying on
+26. [00:01:53.880000-00:01:55.980000] as honorary vice president.
+27. [00:01:56.050000-00:01:57.880000] That's right.
+I don't want him around.
+28. [00:01:57.950000-00:01:58.950000] He wouldn't be around.
+29. [00:01:59.020000-00:02:00.250000] It's an honorary position.
+30. [00:02:00.320000-00:02:01.450000] I don't give a sh--.
+31. [00:02:01.520000-00:02:03.320000] Well, I think you do,
+32. [00:02:03.390000-00:02:05.160000] because that's what's changed
+since I left,
+33. [00:02:05.220000-00:02:07.590000] which means it's you
+who's been dealing in bad faith.
+34. [00:02:07.660000-00:02:09.790000] Well, now that you've got
+a grasp on what's happened
+35. [00:02:09.860000-00:02:11.360000] in the goddamn interim,
+36. [00:02:11.430000-00:02:13.100000] what are you gonna do about it?
+37. [00:02:13.160000-00:02:14.760000] Because he's not getting
+that title.
+38. [00:02:14.830000-00:02:18.140000] Well, let me make sure
+I understand this, okay?
+39. [00:02:18.200000-00:02:20.740000] We negotiated a deal that
+gave you everything you wanted,
+40. [00:02:20.810000-00:02:23.540000] Mr. Cooper signed it,
+and now you won't close
+41. [00:02:23.610000-00:02:25.410000] until we take away
+the last shred of his dignity?
+42. [00:02:25.480000-00:02:27.580000] - Bingo.
+- Well, that's not gonna happen.
+43. [00:02:27.650000-00:02:29.880000] - And why the hell not?
+- Because I like Mr. Cooper,
+44. [00:02:29.950000-00:02:32.220000] and my firm doesn't operate
+in bad faith.
+45. [00:02:32.290000-00:02:35.120000] Oh.
+I see how it is.
+46. [00:02:35.190000-00:02:36.360000] Instead of working Cooper,
+47. [00:02:36.420000-00:02:38.620000] you're working me.
+48. [00:02:38.690000-00:02:41.030000] Well, why don't you take
+your pansy attitude
+49. [00:02:41.090000-00:02:43.630000] back in there
+and make him sign my deal?
+50. [00:02:43.700000-00:02:45.360000] Or I'll pay someone else
+your money
+51. [00:02:45.430000-00:02:47.900000] to do it for me.
+First of all, Gerald,
+52. [00:02:47.970000-00:02:49.740000] if you think
+anyone's gonna touch this deal
+53. [00:02:49.800000-00:02:52.670000] after your bad faith,
+you're mistaken.
+54. [00:02:52.740000-00:02:56.110000] Second, the way
+our agreement works is,
+55. [00:02:56.180000-00:02:57.740000] the minute Cooper
+signed the deal
+56. [00:02:57.810000-00:02:59.310000] which gave you everything
+you wanted,
+57. [00:02:59.380000-00:03:02.350000] our fee was due and payable,
+which is why at 7:30
+58. [00:03:02.410000-00:03:05.420000] I received confirmation
+of a wire transfer
+59. [00:03:05.490000-00:03:08.520000] from escrow indicating payment
+in full.
+60. [00:03:14.900000-00:03:16.400000] So I'd say
+the ball's in your court,
+61. [00:03:16.460000-00:03:19] but the truth is
+your balls are in my fist.
+62. [00:03:19.070000-00:03:22.470000] Now I apologize if that image
+is too pansy for you,
+63. [00:03:22.540000-00:03:23.900000] but I'm comfortable enough
+with my manhood
+64. [00:03:23.970000-00:03:25.240000] to put it out there.
+65. [00:03:25.310000-00:03:26.870000] Now get your ass in there
+66. [00:03:26.940000-00:03:29.980000] and close the goddamn deal.
+67. [00:03:30.040000-00:03:31.740000] You gonna let him talk to me
+like this?
+68. [00:03:31.810000-00:03:34.150000] Harvey speaks for the firm.
+69. [00:03:47.790000-00:03:50.760000] We got paid
+before Gerald signed the deal?
+70. [00:03:50.830000-00:03:52.200000] What are you talking about?
+This is a memo
+71. [00:03:52.260000-00:03:53.870000] about some fire drill
+on Tuesday.
+72. [00:03:53.930000-00:03:55.530000] - Huh.
+- You're the Blue Team Captain.
+73. [00:03:55.600000-00:03:58.440000] You get to wear a fire hat.
+74. [00:04:11.420000-00:04:13.520000] Time's up.
+75. [00:04:13.580000-00:04:15.950000] Pencils down.
+76. [00:04:16.020000-00:04:18.790000] Excuse me.
+Do I know you from somewhere?
+77. [00:04:18.860000-00:04:20.720000] I don't think so.
+78. [00:04:20.790000-00:04:23.700000] I have a pretty good memory
+for faces.
+79. [00:04:23.760000-00:04:26.860000] So do I.
+80. [00:04:26.930000-00:04:30.430000] - Sorry.
+- I got it.
+81. [00:04:42.410000-00:04:44.610000] Hey.
+Hey!
+82. [00:04:44.680000-00:04:46.120000] Stop! You in the cap!
+83. [00:05:19.120000-00:05:21.120000] What did you get me?
+84. [00:05:21.190000-00:05:22.720000] What I said
+I was gonna get you.
+85. [00:05:22.790000-00:05:25.790000] A 158.
+I told you I wanted a 175.
+86. [00:05:25.860000-00:05:27.090000] And I told you
+only 1 out of 100 people
+87. [00:05:27.160000-00:05:29.030000] can score that.
+88. [00:05:29.090000-00:05:32.030000] You're a B-minus student.
+You got 1,000 on your sats.
+89. [00:05:32.100000-00:05:33.660000] If I get you a 175,
+they'll know you cheated.
+90. [00:05:33.730000-00:05:36.570000] So only a genius loser
+can get a 175?
+91. [00:05:36.630000-00:05:39.100000] Actually, no.
+I would get a 180.
+92. [00:05:39.170000-00:05:41.540000] Now can I have my money,
+please?
+93. [00:05:47.550000-00:05:49.950000] Whoa.
+This is only half.
+94. [00:05:50.010000-00:05:51.450000] Then why don't you
+go call the police?
+95. [00:05:55.450000-00:05:58.960000] I got to get my sh--
+together.
+96. [00:05:59.020000-00:06:00.960000] That's the best cheeseburger
+I've had in my life.
+97. [00:06:01.030000-00:06:04.500000] It's from Monday, Trevor.
+98. [00:06:04.560000-00:06:05.800000] Look, man, I'm serious.
+99. [00:06:05.870000-00:06:07.400000] I almost got caught today.
+100. [00:06:07.470000-00:06:08.870000] I've got
+to stop getting stoned.
+101. [00:06:08.940000-00:06:10.170000] I've got to get
+my act together.
+102. [00:06:10.240000-00:06:11.700000] Dude, look at me.
+103. [00:06:11.770000-00:06:14.210000] You can burn bud
+and still be a success.
+104. [00:06:14.270000-00:06:15.880000] You sell pot for a living.
+105. [00:06:15.940000-00:06:17.840000] Still saps the motivation.
+106. [00:06:17.910000-00:06:20.550000] All I'm saying is, you want in,
+107. [00:06:20.610000-00:06:22.010000] you are in.
+108. [00:06:22.080000-00:06:24.020000] You know, that is word for word
+109. [00:06:24.080000-00:06:25.920000] your offer before I got caught
+110. [00:06:25.990000-00:06:28.050000] cheating on your math test
+in the third grade.
+111. [00:06:28.120000-00:06:29.120000] Goddamn memory.
+112. [00:06:29.190000-00:06:30.890000] Stop.
+113. [00:06:30.960000-00:06:33.090000] Look, no one's gonna suspect
+you're a dealer.
+114. [00:06:33.160000-00:06:34.090000] I mean, look at me.
+115. [00:06:34.160000-00:06:35.960000] This is a $2,000 suit, Mike.
+116. [00:06:36.030000-00:06:37.430000] I got, like, 12 of 'em.
+117. [00:06:37.500000-00:06:39.200000] I take on
+real software projects.
+118. [00:06:39.260000-00:06:43.900000] I have clients who bring me
+briefcases filled with cash,
+119. [00:06:43.970000-00:06:45.470000] and I hand them
+identical briefcases
+120. [00:06:45.540000-00:06:46.940000] with vacuum-sealed bud.
+121. [00:06:47.010000-00:06:48.740000] So what do you need me for?
+122. [00:06:48.810000-00:06:51.010000] Well, I have a client
+coming in from out of town,
+123. [00:06:51.080000-00:06:52.650000] and I can't meet him,
+124. [00:06:52.710000-00:06:55.620000] and I need someone I can trust
+to make the drop.
+125. [00:06:55.680000-00:06:57.220000] It's totally safe.
+126. [00:06:57.280000-00:06:58.950000] Trevor, a person
+is more likely to die
+127. [00:06:59.020000-00:07:00.390000] while dealing drugs
+than they would be
+128. [00:07:00.450000-00:07:02.650000] on death row in Texas.
+129. [00:07:02.720000-00:07:04.120000] Wait.
+What are you talking about?
+130. [00:07:04.190000-00:07:05.460000] It's from <i>Freakonomics.</i>
+131. [00:07:05.530000-00:07:06.620000] Do you read anything
+that I give you?
+132. [00:07:06.690000-00:07:08.490000] It doesn't matter,
+133. [00:07:08.560000-00:07:10.130000] because you have to find
+somebody else.
+134. [00:07:10.200000-00:07:11.360000] I'm not interested.
+135. [00:07:11.430000-00:07:13.530000] Not interested in what?
+136. [00:07:13.600000-00:07:14.770000] What are you doing here?
+You said you were gonna stay
+137. [00:07:14.830000-00:07:15.770000] at your place tonight.
+138. [00:07:15.830000-00:07:17.530000] Hi, sweetie.
+139. [00:07:17.600000-00:07:19] What a pleasant surprise.
+140. [00:07:19.070000-00:07:20.910000] I'm so glad you stopped by.
+Yeah.
+141. [00:07:20.970000-00:07:22.140000] We're in the middle
+of something.
+142. [00:07:22.210000-00:07:24.180000] What are you in the middle of?
+143. [00:07:24.240000-00:07:26.040000] Trevor's trying to set me up.
+144. [00:07:26.110000-00:07:27.410000] That's terrific.
+145. [00:07:27.480000-00:07:29.250000] Who's the lucky girl?
+146. [00:07:29.320000-00:07:31.120000] I'm trying to get him
+to work for me.
+147. [00:07:31.180000-00:07:32.990000] That's a great idea.
+148. [00:07:33.050000-00:07:34.520000] It will take some stress
+off Trevor,
+149. [00:07:34.590000-00:07:35.590000] and you'll pick up writing code
+150. [00:07:35.660000-00:07:37.560000] like you do everything else.
+151. [00:07:37.630000-00:07:39.060000] All right.
+I got to go.
+152. [00:07:39.130000-00:07:40.790000] I got go get up early
+to see my grandmother
+153. [00:07:40.860000-00:07:41.900000] and pay them another month.
+154. [00:07:41.960000-00:07:43.460000] Oh.
+155. [00:07:45.370000-00:07:46.370000] - Good night.
+- Bye.
+156. [00:07:49.170000-00:07:51.940000] How did you know Gerald
+wouldn't look at that memo?
+157. [00:07:52-00:07:54.010000] Because a charging bull
+always looks at the red cape,
+158. [00:07:54.070000-00:07:55.540000] not at the man with the sword.
+159. [00:07:55.610000-00:07:57.680000] By the way,
+I've set up a meeting
+160. [00:07:57.740000-00:07:59.880000] for you and John Dockery
+next week.
+161. [00:07:59.950000-00:08:01.380000] Dockery?
+He's Skadden's biggest client.
+162. [00:08:01.450000-00:08:02.450000] Not anymore.
+163. [00:08:02.510000-00:08:04.280000] He's looking around.
+164. [00:08:04.350000-00:08:05.620000] He plays tennis.
+I want you to close him.
+165. [00:08:05.690000-00:08:07.050000] Consider it done.
+166. [00:08:07.120000-00:08:10.090000] Then you are
+officially dismissed
+167. [00:08:10.160000-00:08:11.960000] for the evening.
+168. [00:08:12.030000-00:08:13.630000] Cheers.
+169. [00:08:13.690000-00:08:14.690000] Well, you two seem
+to be celebrating something.
+170. [00:08:14.760000-00:08:17.030000] Mm-hmm.
+We are.
+171. [00:08:17.100000-00:08:18.600000] In fact, you are looking
+172. [00:08:18.670000-00:08:19.900000] at the best closer
+this city has ever seen.
+173. [00:08:19.970000-00:08:21.200000] Closer, huh?
+174. [00:08:21.270000-00:08:22.600000] Baseball?
+Attorney.
+175. [00:08:22.670000-00:08:24.100000] I close situations.
+176. [00:08:24.170000-00:08:26.010000] Hmm.
+So you only care about money?
+177. [00:08:26.070000-00:08:27.840000] The truth is,
+I do it for the children.
+178. [00:08:29.780000-00:08:31.350000] I'm Lisa.
+179. [00:08:31.410000-00:08:32.650000] Harvey.
+180. [00:08:32.720000-00:08:35.720000] Lisa, I don't normally do this,
+181. [00:08:35.790000-00:08:37.390000] but since we are celebrating,
+182. [00:08:37.450000-00:08:39.290000] what time do you get off
+tonight?
+183. [00:08:39.360000-00:08:41.290000] I'm glad you asked.
+184. [00:08:41.360000-00:08:45.600000] I get off at ten past
+"I'm never going out with you."
+185. [00:08:48.170000-00:08:52.270000] I guess you're not the best
+closer this city's ever seen.
+186. [00:08:55.610000-00:09:03.380000] ♪ ♪
+187. [00:09:06.220000-00:09:07.720000] Good morning.
+188. [00:09:07.790000-00:09:09.350000] Lisa, this was lovely,
+189. [00:09:09.420000-00:09:11.120000] but I'm afraid you have to go.
+190. [00:09:11.190000-00:09:12.860000] - Aw.
+- I hate to miss a workout,
+191. [00:09:12.920000-00:09:15.160000] and I really need
+to be in the office by 7:30.
+192. [00:09:15.230000-00:09:17.430000] Can't we have breakfast?
+193. [00:09:17.500000-00:09:18.930000] You could eat it
+off my stomach.
+194. [00:09:19-00:09:20.200000] I guess if I skip the gym,
+195. [00:09:20.260000-00:09:22.170000] I can still get in by 9:00.
+196. [00:09:33.740000-00:09:36.650000] I hear someone's
+not taking their pills.
+197. [00:09:36.710000-00:09:39.320000] Because they're trying
+to poison me.
+198. [00:09:39.380000-00:09:41.520000] Grammy, that's crazy.
+199. [00:09:41.580000-00:09:42.990000] Dr. shrager gave me her word
+200. [00:09:43.050000-00:09:45.490000] she wouldn't poison you
+until January.
+
+LLM Response:
+--------------------------------------------------
+```json
+[
+  {
+    "dialogues": [
+      "I'm paying you millions,",
+      "and you're telling me I'm gonna get screwed?",
+      "Jessica, have I come at a bad time?",
+      "Gerald, this is Harvey Specter.",
+      "He's our best closer."
+    ],
+    "translation": [
+      "제가 수백만 달러를 지불하는데,",
+      "당신은 제가 망할 거라고 말하는 건가요?",
+      "제시카, 제가 안 좋은 때 온 건가요?",
+      "제럴드, 이분은 하비 스펙터예요.",
+      "저희 최고의 '클로저'죠."
+    ],
+    "expression": "Have I come at a bad time?",
+    "expression_translation": "제가 안 좋은 때 온 건가요?",
+    "context_start_time": "00:01:24,080",
+    "context_end_time": "00:01:34,920",
+    "similar_expressions": [
+      "Is this a bad time?",
+      "Am I interrupting?",
+      "Is now a good time?"
+    ],
+    "scene_type": "tension|relatable",
+    "why_valuable": "This is a polite and common way to ask if your presence or timing is inconvenient, useful in various social and professional situations."
+  },
+  {
+    "dialogues": [
+      "what are you gonna do about it?",
+      "Because he's not getting that title.",
+      "Well, let me make sure I understand this, okay?",
+      "We negotiated a deal that gave you everything you wanted,",
+      "Mr. Cooper signed it,"
+    ],
+    "translation": [
+      "그럼 당신은 뭘 할 건가요?",
+      "왜냐하면 그는 그 직함을 얻지 못할 거니까요.",
+      "음, 제가 제대로 이해했는지 확인해볼게요, 알았죠?",
+      "우리는 당신이 원하는 모든 것을 주는 계약을 협상했고,",
+      "쿠퍼 씨가 서명했어요."
+    ],
+    "expression": "Let me make sure I understand this.",
+    "expression_translation": "제가 제대로 이해했는지 확인해볼게요.",
+    "context_start_time": "00:02:13,160",
+    "context_end_time": "00:02:23,540",
+    "similar_expressions": [
+      "Just to clarify...",
+      "So, if I understand correctly...",
+      "To be clear..."
+    ],
+    "scene_type": "confrontation|drama",
+    "why_valuable": "An excellent phrase for clarifying information, especially in formal or tense discussions, ensuring you've grasped the situation correctly."
+  },
+  {
+    "dialogues": [
+      "We got paid before Gerald signed the deal?",
+      "What are you talking about? This is a memo",
+      "about some fire drill on Tuesday.",
+      "- Huh.",
+      "- You're the Blue Team Captain."
+    ],
+    "translation": [
+      "제럴드가 계약서에 서명하기 전에 우리가 돈을 받았다고요?",
+      "무슨 소리예요? 이건 화요일에 있을",
+      "소방 훈련에 대한 메모잖아요.",
+      "- 응?",
+      "- 당신이 블루 팀 대장이에요."
+    ],
+    "expression": "What are you talking about?",
+    "expression_translation": "무슨 말씀이세요? / 무슨 소리예요?",
+    "context_start_time": "00:03:47,790",
+    "context_end_time": "00:03:55,530",
+    "similar_expressions": [
+      "What do you mean?",
+      "Could you explain?",
+      "I don't understand."
+    ],
+    "scene_type": "intrigue|mild confusion",
+    "why_valuable": "This is a very common and versatile expression used to ask for clarification, express confusion, or show disbelief when someone says something unexpected."
+  },
+  {
+    "dialogues": [
+      "Now can I have my money, please?",
+      "Whoa.",
+      "This is only half.",
+      "Then why don't you",
+      "go call the police?"
+    ],
+    "translation": [
+      "이제 제 돈 좀 주시겠어요?",
+      "이봐요.",
+      "이건 절반밖에 안 되잖아요.",
+      "그럼 경찰에",
+      "전화해 보지 그래요?"
+    ],
+    "expression": "Why don't you [do something]?",
+    "expression_translation": "[무엇을 하는 게 어때요]?",
+    "context_start_time": "00:05:39,170",
+    "context_end_time": "00:05:53,050",
+    "similar_expressions": [
+      "How about [doing something]?",
+      "You should [do something].",
+      "What if you [do something]?"
+    ],
+    "scene_type": "tension|witty",
+    "why_valuable": "This phrase is great for making suggestions, but this scene highlights its use in a sarcastic or challenging way, which is a common nuance in real conversation."
+  },
+  {
+    "dialogues": [
+      "I'm Lisa.",
+      "Harvey.",
+      "Lisa, I don't normally do this,",
+      "but since we are celebrating,",
+      "what time do you get off tonight?"
+    ],
+    "translation": [
+      "리사예요.",
+      "하비.",
+      "리사, 제가 평소에는 이러지 않는데,",
+      "오늘 저희가 축하하는 날이라서요,",
+      "오늘 밤 몇 시에 퇴근하세요?"
+    ],
+    "expression": "What time do you get off tonight?",
+    "expression_translation": "오늘 밤 몇 시에 퇴근해요? / 오늘 몇 시에 끝나요?",
+    "context_start_time": "00:08:31,350",
+    "context_end_time": "00:08:39,290",
+    "similar_expressions": [
+      "When do you finish work tonight?",
+      "What time are you done tonight?",
+      "When are you free tonight?"
+    ],
+    "scene_type": "witty|flirtatious",
+    "why_valuable": "This is a practical and commonly used question to inquire about someone's work or school schedule, and 'get off' is a very useful phrasal verb for ending work or a task."
+  }
+]
+```

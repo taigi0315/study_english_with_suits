@@ -62,7 +62,7 @@ class LangFlixPipeline:
         self.expressions = []
         self.processed_expressions = 0
         
-    def run(self, max_expressions: int = 10, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False) -> Dict[str, Any]:
+    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline
         
@@ -125,12 +125,12 @@ class LangFlixPipeline:
             logger.error(f"Error parsing subtitles: {e}")
             raise
     
-    def _analyze_expressions(self, max_expressions: int, language_level: str = None, save_llm_output: bool = False) -> List[ExpressionAnalysis]:
+    def _analyze_expressions(self, max_expressions: int = None, language_level: str = None, save_llm_output: bool = False) -> List[ExpressionAnalysis]:
         """Analyze expressions from subtitle chunks"""
         all_expressions = []
         
         for i, chunk in enumerate(self.chunks):
-            if len(all_expressions) >= max_expressions:
+            if max_expressions is not None and len(all_expressions) >= max_expressions:
                 break
                 
             logger.info(f"Analyzing chunk {i+1}/{len(self.chunks)}...")
@@ -245,8 +245,8 @@ Examples:
     parser.add_argument(
         "--max-expressions",
         type=int,
-        default=10,
-        help="Maximum number of expressions to process (default: 10)"
+        default=None,
+        help="Maximum number of expressions to process (default: no limit - process all found expressions)"
     )
     
     parser.add_argument(

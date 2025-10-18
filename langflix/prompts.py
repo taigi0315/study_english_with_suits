@@ -129,7 +129,8 @@ Return a JSON list where each object contains:
 {{
   "dialogues": [
     // ALL dialogue lines in the scene (complete conversation between start and end time)
-    // Include speaker identification if it helps clarity
+    // IMPORTANT: Use EXACT dialogue text from subtitles - DO NOT add speaker names like "Mike:" or "Rachel:"
+    // Keep the original subtitle format as-is
   ],
   "translation": [
     // CONTEXTUAL translations of ALL dialogue lines in {settings.TARGET_LANGUAGE}
@@ -155,6 +156,13 @@ Return a JSON list where each object contains:
 - Prioritize expressions at the target language level: {level_description}
 - Ensure each clip is self-contained and understandable
 - Verify start/end times create natural, complete moments
+
+**CRITICAL: DIALOGUE FORMAT REQUIREMENTS:**
+- Use EXACT dialogue text from the provided subtitles
+- DO NOT add speaker names like "Mike:", "Rachel:", "Harvey:" etc.
+- DO NOT modify the original dialogue text
+- Keep the subtitle format exactly as provided
+- The dialogues array should contain the raw subtitle text only
 
 Now analyze the provided dialogue and return the JSON list with ONLY the most valuable, engaging expressions.
 """

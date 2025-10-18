@@ -3,7 +3,7 @@
 # The maximum number of characters to include in a single prompt to the LLM.
 # Gemini 2.5 Flash supports up to 1,048,576 tokens (~4M characters)
 # We use a conservative limit to ensure prompt + dialogue fits comfortably
-MAX_LLM_INPUT_LENGTH = 15000  # Balanced limit for manageable chunks
+MAX_LLM_INPUT_LENGTH = 5000  # Further reduced to ensure API success
 
 # The target language for translation.
 TARGET_LANGUAGE = "Korean"

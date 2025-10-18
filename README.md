@@ -131,10 +131,13 @@ python -m langflix.main \
 # Test mode (analysis only, no video processing)
 python -m langflix.main --subtitle "path/to/subtitle.srt" --dry-run
 
-# Language level specific analysis
+# Language level specific analysis (processes ALL found expressions by default)
 python -m langflix.main --subtitle "path/to/subtitle.srt" --language-level beginner
 python -m langflix.main --subtitle "path/to/subtitle.srt" --language-level intermediate
 python -m langflix.main --subtitle "path/to/subtitle.srt" --language-level advanced
+
+# Limit number of expressions (optional)
+python -m langflix.main --subtitle "path/to/subtitle.srt" --max-expressions 5
 
 # Save LLM output for review
 python -m langflix.main --subtitle "path/to/subtitle.srt" --save-llm-output

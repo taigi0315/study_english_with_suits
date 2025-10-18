@@ -75,15 +75,38 @@ python -m pytest tests/test_expression_analyzer.py -v
 ## 사용 방법 (Usage)
 
 ### 1. 미디어 파일 준비
+
+#### **권장 폴더 구조 (New Structure)**
+```
+assets/
+├── media/
+│   └── Suits/                    # 시리즈별 폴더
+│       ├── Suits.S01E01.720p.HDTV.x264.mkv
+│       ├── Suits.S01E01.720p.HDTV.x264.srt
+│       ├── Suits.S01E02.720p.HDTV.x264.mkv
+│       ├── Suits.S01E02.720p.HDTV.x264.srt
+│       └── ...
+└── subtitles/                    # 대안 자막 위치
+    └── Suits - season 1.en/
+        ├── Suits - 1x01 - Pilot.720p.WEB-DL.en.srt
+        └── ...
+```
+
+#### **파일 요구사항**
 - **자막 파일**: `.srt` 형식의 자막 파일 필요
-  - 예시: `assets/subtitles/Suits - season 1.en/` 폴더의 파일들
 - **비디오 파일**: `.mp4`, `.mkv`, `.avi` 등 지원 형식
-  - 예시: `assets/media/` 폴더의 비디오 파일들
-  - 자막 파일명과 매칭되는 비디오 파일 필요
+- **파일명 매칭**: 자막 파일과 비디오 파일의 이름이 일치해야 함
+- **폴더 구조**: 시리즈별로 정리된 폴더 구조 권장
 
 ### 2. 기본 실행
+
+#### **새로운 폴더 구조 사용**
 ```bash
-python -m langflix.main --subtitle path/to/subtitle.srt --video path/to/video.mp4
+# 새로운 구조 (권장)
+python -m langflix.main --subtitle "assets/media/Suits/Suits.S01E01.720p.HDTV.x264.srt" --video-dir "assets/media"
+
+# 기존 구조도 지원
+python -m langflix.main --subtitle "assets/subtitles/Suits - season 1.en/Suits - 1x01 - Pilot.720p.WEB-DL.en.srt"
 ```
 
 ### 3. 드라이 런 (JSON만 생성, 비디오 처리 없음)

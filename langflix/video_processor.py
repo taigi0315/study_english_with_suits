@@ -48,9 +48,16 @@ class VideoProcessor:
         logger.info(f"Looking for video file with base name: {base_name}")
         
         # Search for video files with matching base name
+        # First try direct match in media directory
         for video_file in self.media_dir.glob(f"{base_name}.*"):
             if video_file.suffix.lower() in self.supported_formats:
                 logger.info(f"Found video file: {video_file}")
+                return video_file
+        
+        # Try searching in subdirectories (e.g., assets/media/Suits/)
+        for video_file in self.media_dir.rglob(f"{base_name}.*"):
+            if video_file.suffix.lower() in self.supported_formats:
+                logger.info(f"Found video file in subdirectory: {video_file}")
                 return video_file
         
         # If no exact match, try more flexible matching

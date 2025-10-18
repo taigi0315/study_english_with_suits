@@ -73,6 +73,23 @@ langflix/
    # Edit .env and add your GEMINI_API_KEY
    ```
 
+5. **Prepare media files**
+   ```bash
+   # Organize your media files in the following structure:
+   assets/
+   ├── media/
+   │   └── Suits/                    # Series folder
+   │       ├── Suits.S01E01.720p.HDTV.x264.mkv
+   │       ├── Suits.S01E01.720p.HDTV.x264.srt
+   │       ├── Suits.S01E02.720p.HDTV.x264.mkv
+   │       ├── Suits.S01E02.720p.HDTV.x264.srt
+   │       └── ...
+   └── subtitles/                    # Alternative subtitle location
+       └── Suits - season 1.en/
+           ├── Suits - 1x01 - Pilot.720p.WEB-DL.en.srt
+           └── ...
+   ```
+
 ## 🧪 Testing
 
 ### Run All Tests
@@ -118,7 +135,10 @@ python tests/functional/test_llm_only.py --subtitle "assets/subtitles/Suits.S01E
 ### 🚀 **Complete End-to-End Pipeline (Recommended)**
 
 ```bash
-# Basic usage - process entire episode
+# Basic usage - process entire episode (new structure)
+python -m langflix.main --subtitle "assets/media/Suits/Suits.S01E01.720p.HDTV.x264.srt" --video-dir "assets/media"
+
+# Alternative - using subtitles folder
 python -m langflix.main --subtitle "assets/subtitles/Suits - season 1.en/Suits - 1x01 - Pilot.720p.WEB-DL.en.srt"
 
 # Advanced options

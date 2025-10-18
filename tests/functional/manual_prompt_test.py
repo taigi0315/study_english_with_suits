@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
 from langflix.prompts import get_prompt_for_chunk
-from langflix import config
+from langflix import settings
 
 
 def print_separator(title=""):
@@ -37,8 +37,8 @@ def test_manual_prompt():
     
     print(f"📁 Subtitle file: {subtitle_path}")
     print(f"📏 Max chunk size: {max_chunk_size} entries")
-    print(f"📏 Max LLM input length: {config.MAX_LLM_INPUT_LENGTH} characters")
-    print(f"🌍 Target language: {config.TARGET_LANGUAGE}")
+        print(f"📏 Max LLM input length: {settings.MAX_LLM_INPUT_LENGTH} characters")
+    print(f"🌍 Target language: {settings.TARGET_LANGUAGE}")
     
     # Check if file exists
     if not os.path.exists(subtitle_path):

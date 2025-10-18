@@ -47,7 +47,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         raise RuntimeError("GEMINI_API_KEY environment variable not set")
     
     try:
-           prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
+        prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
         
         logger.info("Sending prompt to Gemini API with structured output...")
         logger.debug(f"Prompt: {prompt[:200]}...")  # Log first 200 chars

@@ -1,6 +1,6 @@
 import pysrt
 from typing import List, Dict, Any
-from . import config
+from . import settings
 
 def parse_srt_file(file_path: str) -> List[Dict[str, Any]]:
     """
@@ -15,8 +15,8 @@ def parse_srt_file(file_path: str) -> List[Dict[str, Any]]:
         
         for sub in subs:
             result.append({
-                'start_time': sub.start.to_time(),
-                'end_time': sub.end.to_time(),
+                'start_time': str(sub.start.to_time()),
+                'end_time': str(sub.end.to_time()),
                 'text': sub.text
             })
         
@@ -48,7 +48,7 @@ def chunk_subtitles(subtitles: List[Dict[str, Any]]) -> List[List[Dict[str, Any]
 
     for sub in subtitles:
         text_length = len(sub['text'])
-        if current_length + text_length > config.MAX_LLM_INPUT_LENGTH:
+        if current_length + text_length > settings.MAX_LLM_INPUT_LENGTH:
             chunks.append(current_chunk)
             current_chunk = [sub]
             current_length = text_length

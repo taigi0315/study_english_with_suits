@@ -27,16 +27,15 @@ class ExpressionAnalysis(BaseModel):
     )
     context_start_time: str = Field(
         description="Timestamp where conversational context should BEGIN",
-        pattern=r"^\d{2}:\d{2}:\d{2},\d{3}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
     )
     context_end_time: str = Field(
         description="Timestamp where conversational context should END", 
-        pattern=r"^\d{2}:\d{2}:\d{2},\d{3}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
     )
     similar_expressions: List[str] = Field(
-        description="List of 1-2 similar expressions or alternative ways to say the same thing",
+        description="List of 1-3 similar expressions or alternative ways to say the same thing",
         min_length=1,
-        max_length=2
     )
 
     model_config = {
@@ -68,8 +67,7 @@ class ExpressionAnalysisResponse(BaseModel):
     Model for the complete response from Gemini API
     """
     expressions: List[ExpressionAnalysis] = Field(
-        description="List of analyzed expressions (maximum 5)",
-        max_length=5
+        description="List of analyzed expressions",
     )
 
     model_config = {

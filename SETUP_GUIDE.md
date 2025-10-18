@@ -17,12 +17,28 @@ source venv/bin/activate  # macOS/Linux
 venv\Scripts\activate     # Windows
 ```
 
-### 2. 의존성 설치
+### 2. ffmpeg 설치 (비디오 처리용)
+```bash
+# macOS (Homebrew 사용)
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt update
+sudo apt install ffmpeg
+
+# Windows (Chocolatey 사용)
+choco install ffmpeg
+
+# 또는 Windows에서 직접 다운로드
+# https://ffmpeg.org/download.html
+```
+
+### 3. 의존성 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 환경 변수 설정
+### 4. 환경 변수 설정
 ```bash
 # .env 파일 생성
 cp env.example .env
@@ -40,8 +56,17 @@ cp env.example .env
 ## 테스트 실행 (Running Tests)
 
 ```bash
+# 전체 테스트 실행
+python run_tests.py
+
+# 비디오 처리 테스트
+python tests/functional/test_video_clip_extraction.py
+
+# 자막 처리 테스트
+python tests/functional/test_subtitle_processing.py
+
 # 단위 테스트 실행
-python -m pytest tests/
+python -m pytest tests/unit/
 
 # 특정 테스트 파일 실행
 python -m pytest tests/test_expression_analyzer.py -v
@@ -49,9 +74,12 @@ python -m pytest tests/test_expression_analyzer.py -v
 
 ## 사용 방법 (Usage)
 
-### 1. 자막 파일 준비
-- `.srt` 형식의 자막 파일 필요
-- 예시: `assets/subtitles/Suits - season 1.en/` 폴더의 파일들
+### 1. 미디어 파일 준비
+- **자막 파일**: `.srt` 형식의 자막 파일 필요
+  - 예시: `assets/subtitles/Suits - season 1.en/` 폴더의 파일들
+- **비디오 파일**: `.mp4`, `.mkv`, `.avi` 등 지원 형식
+  - 예시: `assets/media/` 폴더의 비디오 파일들
+  - 자막 파일명과 매칭되는 비디오 파일 필요
 
 ### 2. 기본 실행
 ```bash
@@ -71,10 +99,11 @@ python -m langflix.main --subtitle path/to/subtitle.srt --dry-run
   - ✅ 프롬프트 엔지니어링
   - ✅ 에러 처리 및 로깅
 
-- 🔄 **Phase 2**: 비디오 처리 및 조립 (진행 예정)
-  - 비디오 클립 추출
-  - 제목 카드 생성
-  - 최종 비디오 조립
+- ✅ **Phase 2**: 비디오 처리 및 조립 (완료)
+  - ✅ 비디오 파일 매핑 및 검증
+  - ✅ 프레임 정확한 비디오 클립 추출 (0.1초 정확도)
+  - ✅ 이중 언어 자막 생성
+  - ✅ 완전한 파이프라인 테스트
 
 - 📋 **Phase 3**: 개선 및 사용성 (계획)
   - CLI 개선

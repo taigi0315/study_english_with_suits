@@ -15,6 +15,8 @@ from .subtitle_parser import parse_srt_file, chunk_subtitles
 from .expression_analyzer import analyze_chunk
 from .video_processor import VideoProcessor
 from .subtitle_processor import SubtitleProcessor
+from .video_editor import VideoEditor
+from .output_manager import OutputManager, create_output_structure
 from .models import ExpressionAnalysis
 from . import settings
 
@@ -36,7 +38,7 @@ class LangFlixPipeline:
     """
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media", 
-                 output_dir: str = "output"):
+                 output_dir: str = "output", language_code: str = "ko"):
         """
         Initialize the LangFlix pipeline
         
@@ -44,17 +46,20 @@ class LangFlixPipeline:
             subtitle_file: Path to subtitle file
             video_dir: Directory containing video files
             output_dir: Directory for output files
+            language_code: Target language code (e.g., 'ko', 'ja', 'zh')
         """
         self.subtitle_file = Path(subtitle_file)
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
+        self.language_code = language_code
         
-        # Create output directory
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Create organized output structure
+        self.paths = create_output_structure(str(self.subtitle_file), language_code)
         
         # Initialize processors
         self.video_processor = VideoProcessor(str(self.video_dir))
         self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file))
+        self.video_editor = VideoEditor(str(self.paths['language']['final_videos']))
         
         # Pipeline state
         self.subtitles = []
@@ -102,6 +107,10 @@ class LangFlixPipeline:
             if not dry_run:
                 logger.info("Step 4: Processing expressions...")
                 self._process_expressions()
+                
+                # Step 5: Create educational videos
+                logger.info("Step 5: Creating educational videos...")
+                self._create_educational_videos()
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             
@@ -136,7 +145,7 @@ class LangFlixPipeline:
             logger.info(f"Analyzing chunk {i+1}/{len(self.chunks)}...")
             
             try:
-                expressions = analyze_chunk(chunk, language_level, save_llm_output, str(self.output_dir))
+                expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, str(self.paths['episode']['metadata']['llm_outputs']))
                 if expressions:
                     all_expressions.extend(expressions)
                     logger.info(f"Found {len(expressions)} expressions in chunk {i+1}")
@@ -165,10 +174,10 @@ class LangFlixPipeline:
                     logger.warning(f"No video file found for expression {i+1}")
                     continue
                 
-                # Create output filenames
+                # Create output filenames using organized structure
                 safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                video_output = self.output_dir / f"expression_{i+1:02d}_{safe_expression[:30]}.mkv"
-                subtitle_output = self.output_dir / f"expression_{i+1:02d}_{safe_expression[:30]}.srt"
+                video_output = self.paths['episode']['shared']['video_clips'] / f"expression_{i+1:02d}_{safe_expression[:30]}.mkv"
+                subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_expression[:30]}.srt"
                 
                 # Extract video clip
                 success = self.video_processor.extract_clip(
@@ -199,6 +208,43 @@ class LangFlixPipeline:
                 logger.error(f"Error processing expression {i+1}: {e}")
                 continue
     
+    def _create_educational_videos(self):
+        """Create educational video sequences for each expression"""
+        logger.info(f"Creating educational videos for {len(self.expressions)} expressions...")
+        
+        for i, expression in enumerate(self.expressions):
+            try:
+                logger.info(f"Creating educational video {i+1}/{len(self.expressions)}: {expression.expression}")
+                
+                # Find corresponding video files using organized structure
+                safe_expression = self._sanitize_filename(expression.expression)
+                context_video = self.paths['episode']['shared']['video_clips'] / f"expression_{i+1:02d}_{safe_expression}.mkv"
+                expression_video = context_video  # Use same video for now
+                
+                if not context_video.exists():
+                    logger.warning(f"Context video not found: {context_video}")
+                    continue
+                
+                # Create educational sequence
+                educational_video = self.video_editor.create_educational_sequence(
+                    expression, 
+                    str(context_video), 
+                    str(expression_video)
+                )
+                
+                logger.info(f"✅ Educational video created: {educational_video}")
+                
+            except Exception as e:
+                logger.error(f"Error creating educational video {i+1}: {e}")
+                continue
+    
+    def _sanitize_filename(self, text: str) -> str:
+        """Sanitize text for filename"""
+        import re
+        sanitized = re.sub(r'[^\w\s-]', '', text)
+        sanitized = re.sub(r'[-\s]+', '_', sanitized)
+        return sanitized[:50]
+    
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate processing summary"""
         return {
@@ -206,7 +252,10 @@ class LangFlixPipeline:
             "total_chunks": len(self.chunks),
             "total_expressions": len(self.expressions),
             "processed_expressions": self.processed_expressions,
-            "output_directory": str(self.output_dir),
+            "output_directory": str(self.paths['episode']['episode_dir']),
+            "language_code": self.language_code,
+            "series_name": self.paths['series_name'],
+            "episode_name": self.paths['episode_name'],
             "timestamp": datetime.now().isoformat()
         }
 
@@ -270,6 +319,14 @@ Examples:
     )
     
     parser.add_argument(
+        "--language-code",
+        type=str,
+        default="ko",
+        choices=['ko', 'ja', 'zh', 'es', 'fr'],
+        help="Target language code for output (default: ko)"
+    )
+    
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging"
@@ -286,7 +343,8 @@ Examples:
         pipeline = LangFlixPipeline(
             subtitle_file=args.subtitle,
             video_dir=args.video_dir,
-            output_dir=args.output_dir
+            output_dir=args.output_dir,
+            language_code=args.language_code
         )
         
         # Run pipeline

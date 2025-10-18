@@ -1,13 +1,15 @@
 from typing import List
 from . import settings
+from .language_config import LanguageConfig
 
-def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None) -> str:
+def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko") -> str:
     """
     Generates the prompt for the LLM based on a chunk of subtitles.
     
     Args:
         subtitle_chunk: List of subtitle dictionaries
         language_level: Target language level (beginner, intermediate, advanced, mixed)
+        language_code: Target language code (ko, ja, zh, es, fr)
     """
     # Use default language level if not specified
     if language_level is None:
@@ -15,6 +17,10 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None)
     
     # Get level description
     level_description = settings.LANGUAGE_LEVELS[language_level]["description"]
+    
+    # Get language-specific settings
+    lang_config = LanguageConfig.get_config(language_code)
+    target_language = lang_config['prompt_language']
     
     dialogues = "\\n".join([f"[{sub['start_time']}-{sub['end_time']}] {sub['text']}" for sub in subtitle_chunk])
 
@@ -132,13 +138,13 @@ Return a JSON list where each object contains:
     // IMPORTANT: Use EXACT dialogue text from subtitles - DO NOT add speaker names like "Mike:" or "Rachel:"
     // Keep the original subtitle format as-is
   ],
-  "translation": [
-    // CONTEXTUAL translations of ALL dialogue lines in {settings.TARGET_LANGUAGE}
+         "translation": [
+           // CONTEXTUAL translations of ALL dialogue lines in {target_language}
     // Translate MEANING and INTENT, not literal words
     // Consider tone, emotion, relationships, and cultural context
   ],
   "expression": "the main expression/phrase to learn",
-  "expression_translation": "contextual translation of the main expression in {settings.TARGET_LANGUAGE}",
+  "expression_translation": "contextual translation of the main expression in {target_language}",
   "context_start_time": "00:00:00,000",  // When context begins
   "context_end_time": "00:00:00,000",    // When context ends
   "similar_expressions": [

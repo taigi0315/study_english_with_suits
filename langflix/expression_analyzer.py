@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, save_output: bool = False, output_dir: str = None) -> List[ExpressionAnalysis]:
+def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None) -> List[ExpressionAnalysis]:
     """
     Analyzes a chunk of subtitles using Gemini API with structured output.
     
@@ -47,7 +47,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, save_o
         raise RuntimeError("GEMINI_API_KEY environment variable not set")
     
     try:
-        prompt = get_prompt_for_chunk(subtitle_chunk, language_level)
+           prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
         
         logger.info("Sending prompt to Gemini API with structured output...")
         logger.debug(f"Prompt: {prompt[:200]}...")  # Log first 200 chars

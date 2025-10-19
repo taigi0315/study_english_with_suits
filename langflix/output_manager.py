@@ -116,10 +116,12 @@ class OutputManager:
         
         # Create language subdirectories
         subtitles_dir = lang_dir / "subtitles"
+        context_videos_dir = lang_dir / "context_videos"
         slides_dir = lang_dir / "slides"
         final_videos_dir = lang_dir / "final_videos"
         
         subtitles_dir.mkdir(exist_ok=True)
+        context_videos_dir.mkdir(exist_ok=True)
         slides_dir.mkdir(exist_ok=True)
         final_videos_dir.mkdir(exist_ok=True)
         
@@ -127,6 +129,7 @@ class OutputManager:
         lang_paths = {
             'language_dir': lang_dir,
             'subtitles': subtitles_dir,
+            'context_videos': context_videos_dir,
             'slides': slides_dir,
             'final_videos': final_videos_dir
         }

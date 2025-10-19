@@ -1,0 +1,120 @@
+# LangFlix Default Configuration
+# This file contains all default settings for the LangFlix application
+# To customize these settings, copy this file to config.yaml at the project root
+
+# ============================================================================
+# LLM (Language Learning Model) Settings
+# ============================================================================
+llm:
+  # Maximum characters of subtitle content per chunk
+  # Total prompt = content (3500) + template overhead (~6500) ≈ 10K
+  max_input_length: 3500
+  
+  # Default language proficiency level for expression extraction
+  # Options: beginner, intermediate, advanced, mixed
+  default_language_level: "intermediate"
+  
+  # Target language for translations
+  target_language: "Korean"
+  
+  # API retry configuration
+  max_retries: 3
+  retry_backoff_seconds: [3, 6, 12]  # Wait times between retries
+  
+  # Generation configuration
+  temperature: 0.1
+  top_p: 0.8
+  top_k: 40
+
+# ============================================================================
+# Language Proficiency Levels
+# ============================================================================
+language_levels:
+  beginner:
+    description: "A1-A2 level. Focus on basic everyday expressions, simple phrasal verbs, and common conversational phrases used in daily life. Avoid complex idioms or advanced vocabulary."
+    examples: "Let's go, I'm sorry, How are you, Can you help me, What's up"
+  
+  intermediate:
+    description: "B1-B2 level. Focus on commonly used idiomatic expressions, standard phrasal verbs, and colloquial phrases that appear frequently in casual and professional contexts."
+    examples: "Get the ball rolling, Call it a day, Piece of cake, Break the ice, On the same page"
+  
+  advanced:
+    description: "C1-C2 level. Focus on sophisticated idioms, nuanced expressions, professional jargon, and complex colloquialisms that native speakers use in various contexts."
+    examples: "Read between the lines, Cut to the chase, Play devil's advocate, Bite off more than you can chew"
+  
+  mixed:
+    description: "All levels. Extract valuable expressions regardless of difficulty level, but prioritize practical, commonly-used phrases that appear in authentic conversations."
+    examples: "Any useful expression from basic to advanced"
+
+# ============================================================================
+# Video Processing Settings
+# ============================================================================
+video:
+  # Video codec for encoding
+  codec: "libx264"
+  
+  # Audio codec
+  audio_codec: "aac"
+  
+  # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+  preset: "fast"
+  
+  # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
+  crf: 23
+  
+  # Output resolution
+  resolution: "1280x720"
+  
+  # Frames per second
+  fps: 30
+  
+  # Video bitrate
+  bitrate: "2000k"
+  
+  # Audio bitrate
+  audio_bitrate: "128k"
+
+# ============================================================================
+# Font Configuration
+# ============================================================================
+font:
+  sizes:
+    default: 32          # Default font size
+    expression: 48       # Main expression text
+    translation: 40      # Translation text
+    similar: 32          # Similar expressions text
+  
+  # Automatically detect platform-specific fonts
+  auto_detect: true
+
+# ============================================================================
+# Processing Settings
+# ============================================================================
+processing:
+  # Maximum characters per subtitle chunk for LLM processing
+  chunk_size: 8000
+  
+  # Maximum expressions to extract per chunk
+  max_expressions_per_chunk: 5
+  
+  # Automatically cleanup temporary files after processing
+  temp_file_cleanup: true
+
+# ============================================================================
+# Video Transition Settings
+# ============================================================================
+transitions:
+  # Enable smooth transitions between video segments
+  enabled: true
+  
+  # Transition from context video to educational slide
+  context_to_slide:
+    type: "xfade"           # Options: xfade, fade, none
+    effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
+    duration: 0.5           # Duration in seconds
+  
+  # Transition between different expressions
+  expression_to_expression:
+    type: "fade"            # Options: fade, xfade, none
+    duration: 0.5           # Duration in seconds
+

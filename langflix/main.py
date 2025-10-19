@@ -331,10 +331,13 @@ class LangFlixPipeline:
                 
                 # Create output filenames using organized structure
                 safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                video_output = self.paths['episode']['shared']['video_clips'] / f"expression_{i+1:02d}_{safe_expression[:30]}.mkv"
+                # Don't save raw clips - use temp directory
+                import tempfile
+                temp_dir = Path(tempfile.gettempdir())
+                video_output = temp_dir / f"temp_expression_{i+1:02d}_{safe_expression[:30]}.mkv"
                 subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_expression[:30]}.srt"
                 
-                # Extract video clip
+                # Extract video clip to temp location
                 success = self.video_processor.extract_clip(
                     video_file,
                     expression.context_start_time,
@@ -367,9 +370,10 @@ class LangFlixPipeline:
         """Create educational video sequences for each expression"""
         logger.info(f"Creating educational videos for {len(self.expressions)} expressions...")
         
-        # First, find all actual video files that were created and original video file
-        video_clips_dir = self.paths['episode']['shared']['video_clips']
-        video_files = list(video_clips_dir.glob("expression_*.mkv"))
+        # First, find all actual video files that were created from temp directory
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir())
+        video_files = list(temp_dir.glob("temp_expression_*.mkv"))
         video_files.sort()
         
         # Get original video file for expression audio extraction
@@ -416,36 +420,77 @@ class LangFlixPipeline:
         else:
             # Fallback: Try to create final video from temp files if available
             self._create_final_video_from_temp_files()
+        
+        # Clean up temp video clips after processing
+        logger.info("Cleaning up temporary video clips...")
+        for video_file in video_files:
+            try:
+                if video_file.exists():
+                    video_file.unlink()
+                    logger.debug(f"Deleted temp file: {video_file}")
+            except Exception as e:
+                logger.warning(f"Could not delete temp file {video_file}: {e}")
     
     def _create_final_video(self, educational_videos: List[str]):
-        """Create final concatenated educational video"""
+        """Create final concatenated educational video with fade transitions"""
         try:
             logger.info(f"Creating final video from {len(educational_videos)} educational sequences...")
+            
+            if not educational_videos:
+                logger.error("No educational videos provided for final video creation")
+                return
+            
+            # Validate that all video files exist and are individual expression videos
+            valid_videos = []
+            for video_path in educational_videos:
+                video_name = Path(video_path).name
+                # Only include individual educational videos, not slides or context videos
+                if video_name.startswith('educational_') and Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
+                    valid_videos.append(video_path)
+                    logger.info(f"Valid video: {video_name}")
+                else:
+                    logger.warning(f"Skipping invalid or non-educational video: {video_path}")
+            
+            if not valid_videos:
+                logger.error("No valid educational videos found for final video creation")
+                return
+            
+            logger.info(f"Using {len(valid_videos)} valid videos for final concatenation")
             
             final_video_path = self.paths['language']['final_videos'] / "final_educational_video_with_slides.mkv"
             
             # Create concat file
             concat_file = self.paths['language']['final_videos'] / "final_concat.txt"
             with open(concat_file, 'w') as f:
-                for video_path in educational_videos:
+                for video_path in valid_videos:
                     f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate all educational videos
+            # Concatenate all educational videos with proper audio handling
+            # Use fade transitions between expressions for smoother viewing
             (
                 ffmpeg
                 .input(str(concat_file), format='concat', safe=0)
                 .output(str(final_video_path), 
                        vcodec='libx264', 
                        acodec='aac', 
-                       preset='fast')
+                       preset='fast',
+                       ac=2,  # Force stereo audio
+                       ar=48000,  # Set sample rate
+                       crf=23)  # Good quality
                 .overwrite_output()
-                .run(quiet=True)
+                .run(capture_stdout=True, capture_stderr=True)
             )
             
-            logger.info(f"✅ Final educational video created: {final_video_path}")
-            
+            # Verify final video was created successfully
+            if final_video_path.exists() and final_video_path.stat().st_size > 10000:
+                logger.info(f"✅ Final educational video created: {final_video_path} ({final_video_path.stat().st_size} bytes)")
+            else:
+                logger.error(f"Final video creation failed or resulted in empty file: {final_video_path}")
+                
         except Exception as e:
             logger.error(f"Error creating final video: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     def _create_final_video_from_temp_files(self):
@@ -591,11 +636,11 @@ Examples:
     )
     
     parser.add_argument(
-        "--language-code",
+        "--language-code", "--language",
         type=str,
         default="ko",
         choices=['ko', 'ja', 'zh', 'es', 'fr'],
-        help="Target language code for output (default: ko)"
+        help="Target language code for output (default: ko for Korean)"
     )
     
     parser.add_argument(

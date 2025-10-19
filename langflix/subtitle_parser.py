@@ -1,4 +1,5 @@
 import pysrt
+import re
 from typing import List, Dict, Any
 from . import settings
 
@@ -47,7 +48,11 @@ def chunk_subtitles(subtitles: List[Dict[str, Any]]) -> List[List[Dict[str, Any]
     current_length = 0
 
     for sub in subtitles:
-        text_length = len(sub['text'])
+        # Clean HTML markup for more accurate length calculation
+        clean_text = re.sub(r'<[^>]+>', '', sub['text'])  # Remove HTML tags
+        clean_text = re.sub(r'\s+', ' ', clean_text)      # Normalize whitespace
+        text_length = len(clean_text)
+        
         if current_length + text_length > settings.MAX_LLM_INPUT_LENGTH:
             chunks.append(current_chunk)
             current_chunk = [sub]

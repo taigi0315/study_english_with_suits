@@ -18,8 +18,13 @@ load_dotenv()
 # Get logger (logging will be configured in main.py)
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Configure Gemini API with better timeout handling
+genai.configure(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    client_options={
+        "api_endpoint": "generativelanguage.googleapis.com",
+    }
+)
 
 def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> List[ExpressionAnalysis]:
     """
@@ -95,26 +100,43 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
         
         logger.info("Sending prompt to Gemini API with structured output...")
+        logger.info(f"Prompt length: {len(prompt)} characters")
         
-        # Configure model
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
+        # Save full prompt for debugging/testing
+        _save_prompt_for_debugging(prompt, subtitle_chunk, language_level, output_dir)
+        
+        # Check if total prompt is too long and warn
+        if len(prompt) > 15000:  # Warn if total prompt exceeds reasonable size
+            logger.warning(f"Total prompt length ({len(prompt)}) is very large. Consider reducing chunk size.")
+        
+        # Configure model with settings from YAML config
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        generation_config = settings.get_generation_config()
+        
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=generation_config
+        )
         
         # Generate content with retry logic
-        response = _generate_content_with_retry(model, prompt, max_retries=3)
+        max_retries = settings.get_max_retries()
+        logger.info(f"Using generation config: {generation_config}")
+        response = _generate_content_with_retry(model, prompt, max_retries=max_retries, generation_config=generation_config)
         
-        if not response.text:
+        # Extract text from response (handle new Gemini API response format)
+        response_text = _extract_response_text(response)
+        if not response_text:
             logger.error("Empty response from Gemini API")
             return []
         
         # Save LLM output if requested
         if save_output and output_dir:
-            _save_llm_output(response.text, subtitle_chunk, language_level, output_dir)
+            _save_llm_output(response_text, subtitle_chunk, language_level, output_dir)
         
         # Parse JSON response
         try:
             # Parse response text with Pydantic validation
-            parsed_response = _parse_response_text(response.text)
+            parsed_response = _parse_response_text(response_text)
             logger.info(f"Successfully analyzed chunk, found {len(parsed_response.expressions)} expressions")
             
             # Validate and filter expressions
@@ -125,7 +147,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             
         except Exception as parse_error:
             logger.error(f"Failed to parse response: {parse_error}")
-            logger.error(f"Raw response: {response.text}")
+            logger.error(f"Raw response: {response_text}")
             
             # If all parsing fails, return empty list
             logger.warning("All parsing methods failed, returning empty list")
@@ -212,6 +234,38 @@ def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
         raise ValueError(f"Failed to parse and validate response: {e}")
 
 
+def _save_prompt_for_debugging(prompt: str, subtitle_chunk: List[dict], language_level: str, output_dir: str):
+    """Save the full prompt to file for debugging and manual testing"""
+    try:
+        from pathlib import Path
+        import os
+        
+        if not output_dir:
+            return
+            
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"full_prompt_debug_{language_level}_{timestamp}.txt"
+        filepath = output_path / filename
+        
+        # Save the complete prompt
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write("=== FULL PROMPT SENT TO GEMINI API ===\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Language Level: {language_level}\n")
+            f.write(f"Chunk Size: {len(subtitle_chunk)} subtitles\n")
+            f.write(f"Prompt Length: {len(prompt)} characters\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(prompt)
+        
+        logger.info(f"Full prompt saved for debugging: {filepath}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to save prompt for debugging: {e}")
+
+
 def _save_llm_output(response_text: str, subtitle_chunk: List[dict], language_level: str, output_dir: str):
     """Save LLM output to file for review"""
     try:
@@ -258,7 +312,74 @@ LLM Response:
         logger.error(f"Failed to save LLM output: {e}")
 
 
-def _generate_content_with_retry(model, prompt: str, max_retries: int = 3) -> Any:
+def _extract_response_text(response) -> str:
+    """
+    Extract text from Gemini API response, handling different response formats.
+    
+    Args:
+        response: Gemini API response object
+        
+    Returns:
+        Extracted text string or empty string if no text found
+    """
+    try:
+        # Try the simple text accessor first
+        result = response.text
+        if result:
+            logger.info(f"Successfully extracted text via response.text, length: {len(result)}")
+            return result
+        else:
+            logger.warning("response.text returned empty string")
+    except Exception as e:
+        logger.warning(f"Failed to extract text via response.text: {e}")
+        
+    try:
+        # Fall back to accessing parts directly
+        if hasattr(response, 'candidates') and response.candidates:
+            logger.info(f"Trying to extract via candidates, count: {len(response.candidates)}")
+            candidate = response.candidates[0]
+            
+            # Check finish_reason first
+            finish_reason = getattr(candidate, 'finish_reason', None)
+            logger.info(f"Candidate finish_reason: {finish_reason}")
+            
+            # Handle different finish reasons
+            if finish_reason == 2 or str(finish_reason) == 'MAX_TOKENS':
+                logger.error("Response truncated due to max_output_tokens limit")
+                return ""
+            elif finish_reason == 3 or str(finish_reason) == 'SAFETY':
+                logger.warning("Response blocked due to safety concerns")
+                return ""
+            elif finish_reason == 4 or str(finish_reason) == 'RECITATION':
+                logger.warning("Response blocked due to recitation concerns")
+                return ""
+                
+            if hasattr(candidate, 'content') and candidate.content:
+                if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    logger.info(f"Found {len(candidate.content.parts)} parts in content")
+                    text_parts = []
+                    for i, part in enumerate(candidate.content.parts):
+                        if hasattr(part, 'text') and part.text:
+                            text_parts.append(part.text)
+                            logger.info(f"Part {i} has text, length: {len(part.text)}")
+                        else:
+                            logger.warning(f"Part {i} has no text: {part}")
+                    result = "".join(text_parts)
+                    logger.info(f"Extracted text via parts, total length: {len(result)}")
+                    return result
+                else:
+                    logger.warning("Content has no parts")
+            else:
+                logger.warning("Candidate has no content")
+        else:
+            logger.warning("Response has no candidates")
+    except Exception as e:
+        logger.warning(f"Could not extract text from response via parts: {e}")
+    
+    return ""
+
+
+def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, generation_config: dict = None) -> Any:
     """
     Generate content with exponential backoff retry logic for API failures.
     
@@ -266,6 +387,7 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3) -> An
         model: Gemini GenerativeModel instance
         prompt: The prompt to send to the API
         max_retries: Maximum number of retry attempts
+        generation_config: Generation configuration to use
         
     Returns:
         API response object
@@ -278,17 +400,51 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3) -> An
     for attempt in range(max_retries + 1):  # +1 for initial attempt
         try:
             if attempt > 0:
-                wait_time = 2 ** attempt  # Exponential backoff: 2, 4, 8 seconds
+                # Use configured backoff times from YAML config
+                backoff_times = settings.get_retry_backoff_seconds()
+                wait_time = backoff_times[min(attempt - 1, len(backoff_times) - 1)]
                 logger.info(f"Retrying API call (attempt {attempt + 1}/{max_retries + 1}) after {wait_time}s delay...")
                 time.sleep(wait_time)
             
-            response = model.generate_content(prompt)
+            # Time the API call to understand response times
+            start_time = time.time()
+            logger.info(f"Making API call (attempt {attempt + 1}/{max_retries + 1})...")
             
-            if response.text:
+            # Use model's pre-configured generation config or pass explicit config
+            if generation_config:
+                # Create GenerationConfig object
+                config_obj = genai.types.GenerationConfig(**generation_config)
+                response = model.generate_content(prompt, generation_config=config_obj)
+            else:
+                response = model.generate_content(prompt)
+            
+            call_duration = time.time() - start_time
+            logger.info(f"API call completed in {call_duration:.1f}s")
+            
+            # Check if response has content
+            response_text = _extract_response_text(response)
+            
+            # Debug: Log response structure to understand what we're getting
+            logger.info(f"Response object type: {type(response)}")
+            logger.info(f"Response has candidates: {hasattr(response, 'candidates') and response.candidates}")
+            if hasattr(response, 'candidates') and response.candidates:
+                logger.info(f"Number of candidates: {len(response.candidates)}")
+                candidate = response.candidates[0]
+                logger.info(f"Candidate finish_reason: {getattr(candidate, 'finish_reason', 'Unknown')}")
+                if hasattr(candidate, 'content') and candidate.content:
+                    logger.info(f"Content has parts: {hasattr(candidate.content, 'parts') and candidate.content.parts}")
+                    if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                        logger.info(f"Number of parts: {len(candidate.content.parts)}")
+                        
+            logger.info(f"Extracted response text length: {len(response_text) if response_text else 0}")
+            
+            if response_text:
                 logger.info(f"API call successful on attempt {attempt + 1}")
                 return response
             else:
                 logger.warning(f"Empty response on attempt {attempt + 1}")
+                # Log raw response for debugging
+                logger.warning(f"Raw response object: {response}")
                 last_error = ValueError("Empty response from API")
                 
         except Exception as e:

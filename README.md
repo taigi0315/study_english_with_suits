@@ -91,6 +91,82 @@ langflix/
            └── ...
    ```
 
+## ⚙️ Configuration
+
+LangFlix uses YAML-based configuration files for easy customization. The system supports cascading configuration with environment variable overrides.
+
+### Quick Setup
+
+1. **Copy the example configuration**
+   ```bash
+   cp config.example.yaml config.yaml
+   ```
+
+2. **Edit `config.yaml`** to customize settings like:
+   - Target language
+   - Video quality settings  
+   - Font sizes
+   - LLM parameters
+   - Transition effects
+
+### Configuration Structure
+
+LangFlix loads configuration in this order (later overrides earlier):
+
+1. **Default settings** (`langflix/config/default.yaml`) - Built-in defaults
+2. **User configuration** (`config.yaml` at project root) - Your customizations  
+3. **Environment variables** (e.g., `LANGFLIX_LLM_MAX_INPUT_LENGTH=5000`)
+
+### Key Configuration Sections
+
+**LLM Settings:**
+```yaml
+llm:
+  max_input_length: 10000
+  target_language: "Spanish"
+  default_language_level: "intermediate"
+  temperature: 0.1
+```
+
+**Video Processing:**
+```yaml
+video:
+  codec: "libx264"
+  preset: "fast"
+  crf: 23
+  resolution: "1920x1080"
+```
+
+**Font Settings:**
+```yaml
+font:
+  sizes:
+    expression: 48
+    translation: 40
+    default: 32
+```
+
+**Transitions:**
+```yaml
+transitions:
+  enabled: true
+  context_to_slide:
+    type: "xfade"
+    effect: "slideup"
+    duration: 0.5
+```
+
+For complete configuration options, see `config.example.yaml` which includes all available settings with descriptions.
+
+### Environment Variable Overrides
+
+You can override any configuration value using environment variables with the format:
+```bash
+export LANGFLIX_LLM_MAX_INPUT_LENGTH=5000
+export LANGFLIX_VIDEO_CRF=28
+export LANGFLIX_TARGET_LANGUAGE="French"
+```
+
 ## 🧪 Testing
 
 ### Run All Tests
@@ -280,7 +356,7 @@ python tests/functional/manual_prompt_test.py 2
 - ✅ **Reliability**: Robust error handling and recovery mechanisms
 
 **Latest Infrastructure Enhancements:**
-- ✅ **Configuration Management**: JSON-based settings with runtime updates
+- ✅ **YAML Configuration Management**: External YAML-based settings with cascading configs and environment overrides
 - ✅ **Cross-Platform Compatibility**: Enhanced font and path handling
 - ✅ **API Reliability**: Circuit breaker pattern and intelligent retry logic
 - ✅ **Memory Optimization**: Automatic resource cleanup and management
@@ -293,7 +369,6 @@ python tests/functional/manual_prompt_test.py 2
 ### 📋 Phase 3: Production Readiness & Enhancement (Planned)
 - [ ] Batch processing optimization
 - [ ] User interface improvements
-- [ ] Configuration management
 - [ ] Performance monitoring
 - [ ] Advanced error recovery
 

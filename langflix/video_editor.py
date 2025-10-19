@@ -171,8 +171,12 @@ class VideoEditor:
     def _add_subtitles_to_context(self, video_path: str, expression: ExpressionAnalysis) -> str:
         """Add target language subtitles to context video (translation only)"""
         try:
-            output_path = self.output_dir / f"temp_context_with_subs_{self._sanitize_filename(expression.expression)}.mkv"
-            self._register_temp_file(output_path)
+            # Save to context_videos directory instead of temp
+            context_videos_dir = self.output_dir.parent / "context_videos"
+            context_videos_dir.mkdir(exist_ok=True)
+            
+            safe_name = self._sanitize_filename(expression.expression)
+            output_path = context_videos_dir / f"context_{safe_name}.mkv"
             
             # Find the corresponding subtitle file
             subtitle_file = self._find_subtitle_file_for_expression(expression)
@@ -181,17 +185,19 @@ class VideoEditor:
                 logger.info(f"Using subtitle file: {subtitle_file}")
                 
                 try:
-                    # Create a temporary subtitle file with only target language
-                    temp_subtitle_file = self.output_dir / f"temp_target_only_{self._sanitize_filename(expression.expression)}.srt"
+                    # Create a temporary dual-language subtitle file 
+                    import tempfile
+                    temp_dir = Path(tempfile.gettempdir())
+                    temp_subtitle_file = temp_dir / f"temp_dual_lang_{self._sanitize_filename(expression.expression)}.srt"
                     self._register_temp_file(temp_subtitle_file)
-                    self._create_target_only_subtitle_file(subtitle_file, temp_subtitle_file)
+                    self._create_dual_language_subtitle_file(subtitle_file, temp_subtitle_file)
                     
                     # Add subtitles using the subtitle file
                     (
                         ffmpeg
                         .input(str(video_path))
                         .output(str(output_path),
-                               vf=f"subtitles={temp_subtitle_file}:force_style='FontSize=32,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2'",
+                               vf=f"subtitles={temp_subtitle_file}:force_style='FontSize=19,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2'",
                                vcodec='libx264',
                                acodec='copy',
                                preset='fast')
@@ -220,80 +226,58 @@ class VideoEditor:
             raise
     
     def _find_subtitle_file_for_expression(self, expression: ExpressionAnalysis) -> str:
-        """Find the subtitle file for the given expression"""
-        # Look for subtitle files in the expected locations
-        expression_name = self._sanitize_filename(expression.expression)
-        
-        # Look in common subtitle directories
-        possible_paths = [
-            Path("output") / "**" / "translations" / "**" / "subtitles" / f"*{expression_name}*.srt",
-            Path("output") / "**" / "*" / "subtitles" / f"*{expression_name}*.srt",
-        ]
-        
-        import glob
-        for path_pattern in possible_paths:
-            matches = glob.glob(str(path_pattern), recursive=True)
-            if matches:
-                # Return the most recent match
-                return max(matches, key=lambda p: Path(p).stat().st_mtime)
-        
-        logger.warning(f"Could not find subtitle file for expression: {expression.expression}")
-        return None
-    
-    def _create_target_only_subtitle_file(self, source_subtitle_file: str, target_subtitle_file: Path) -> None:
-        """Create a subtitle file with only target language (translation)"""
+        """Find the subtitle file for a specific expression using exact matching"""
         try:
+            # Build the safe expression name the same way as in main.py
+            safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            
+            # Build exact path based on output structure
+            # Format: output/Series/Episode/translations/{lang}/subtitles/expression_XX_{expression}.srt
+            subtitle_dir = self.output_dir.parent / "subtitles"
+            
+            # Search for files that match the expected pattern
+            import glob
+            patterns = [
+                # Try with index prefix: expression_01_, expression_02_, etc.
+                str(subtitle_dir / f"expression_*_{safe_expression[:30]}.srt"),
+                # Try without index: expression_{expression}.srt  
+                str(subtitle_dir / f"expression_{safe_expression[:30]}.srt"),
+                # Try with sanitized name as fallback
+                str(subtitle_dir / f"expression_*_{self._sanitize_filename(expression.expression)}.srt"),
+            ]
+            
+            for pattern in patterns:
+                matches = glob.glob(pattern)
+                if matches:
+                    # Return the first match, prefer numbered ones
+                    matches.sort()  # This will put expression_01 before expression_02, etc.
+                    logger.info(f"Found subtitle file: {matches[0]}")
+                    return matches[0]
+            
+            logger.warning(f"Could not find subtitle file for expression: {expression.expression}")
+            logger.warning(f"Searched in: {subtitle_dir}")
+            logger.warning(f"Tried patterns: {patterns}")
+            return None
+        except Exception as e:
+            logger.error(f"Error finding subtitle file: {e}")
+            return None
+    
+    def _create_dual_language_subtitle_file(self, source_subtitle_file: str, target_subtitle_file: Path) -> None:
+        """Create a subtitle file with both original and target language from the validated source"""
+        try:
+            # Since we have validation that ensures dialogue and translation counts match,
+            # we should just copy the dual-language subtitle file as-is
             with open(source_subtitle_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Process the subtitle file to extract only translation lines
-            # SRT format: number, time, original text, translation text, empty line
-            lines = content.split('\n')
-            output_lines = []
-            i = 0
-            
-            while i < len(lines):
-                line = lines[i].strip()
-                
-                # Add subtitle number and timing directly
-                if line.isdigit() or '-->' in line or not line:
-                    output_lines.append(line)
-                    i += 1
-                    continue
-                
-                # Found text line - this is the original text
-                original_text = line
-                i += 1
-                
-                # Look for the translation line (next non-empty line that's not timing/number)
-                while i < len(lines):
-                    next_line = lines[i].strip()
-                    if not next_line:
-                        # Empty line - end of subtitle block
-                        i += 1
-                        break
-                    elif next_line.isdigit() or '-->' in next_line:
-                        # Next subtitle block started
-                        break
-                    else:
-                        # This should be the translation
-                        output_lines.append(next_line)
-                        i += 1
-                        break
-                
-                # Add empty line if there's supposed to be one
-                if i < len(lines) and lines[i].strip() == '':
-                    output_lines.append('')
-                    i += 1
-            
-            # Write the target-only subtitle file
+            # Copy the content directly - validation should have ensured proper format
             with open(target_subtitle_file, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(output_lines))
+                f.write(content)
                 
-            logger.info(f"Created target-only subtitle file: {target_subtitle_file}")
+            logger.info(f"Created dual-language subtitle file for context: {target_subtitle_file}")
                 
         except Exception as e:
-            logger.error(f"Error creating target-only subtitle file: {e}")
+            logger.error(f"Error creating dual-language subtitle file: {e}")
             raise
     
     def _fallback_drawtext_subtitles(self, video_path: str, output_path: Path, expression: ExpressionAnalysis) -> None:
@@ -703,9 +687,10 @@ class VideoEditor:
                         .run(quiet=True)
                     )
             
-            # Combine slide with 3x audio
-            final_slide_path = self.output_dir / f"temp_final_slide_{self._sanitize_filename(expression.expression)}.mkv"
-            # Note: Don't register final_slide_path as temp file since it's the return value
+            # Combine slide with 3x audio - save to slides directory
+            slides_dir = self.output_dir.parent / "slides"
+            slides_dir.mkdir(exist_ok=True)
+            final_slide_path = slides_dir / f"slide_{self._sanitize_filename(expression.expression)}.mkv"
             
             video_input = ffmpeg.input(str(output_path))
             audio_input = ffmpeg.input(str(audio_3x_path))
@@ -759,25 +744,92 @@ class VideoEditor:
             return 0.0
     
     def _concatenate_sequence(self, video_paths: List[str], output_path: str) -> str:
-        """Concatenate video sequence"""
+        """Concatenate video sequence with smooth transitions"""
         try:
-            # Create concat file for ffmpeg
+            # If only 2 videos (context + slide), apply xfade transition
+            if len(video_paths) == 2:
+                try:
+                    logger.info("Applying xfade transition between context and slide...")
+                    context_path = video_paths[0]
+                    slide_path = video_paths[1]
+                    
+                    # Get video durations - using correct format like in step-by-step test
+                    try:
+                        context_probe = ffmpeg.probe(context_path)
+                        slide_probe = ffmpeg.probe(slide_path)
+                        
+                        context_duration = float(context_probe['format']['duration'])
+                        slide_duration = float(slide_probe['format']['duration'])
+                        
+                        logger.info(f"Context duration: {context_duration:.2f}s, Slide duration: {slide_duration:.2f}s")
+                        
+                    except Exception as probe_error:
+                        logger.warning(f"Could not probe video durations: {probe_error}")
+                        context_duration = 1.0
+                        slide_duration = 1.0
+                    
+                    # Transition settings
+                    transition_effect = "slideup"
+                    transition_duration = 0.5
+                    
+                    # Create inputs
+                    context_input = ffmpeg.input(context_path)
+                    slide_input = ffmpeg.input(slide_path)
+                    
+                    # Normalize frame rates for compatibility
+                    v0 = ffmpeg.filter(context_input['v'], 'fps', fps=25)
+                    v1 = ffmpeg.filter(slide_input['v'], 'fps', fps=25)
+                    
+                    # Apply xfade transition - offset is context duration minus transition duration
+                    transition_offset = max(0, context_duration - transition_duration)
+                    
+                    video_out = ffmpeg.filter([v0, v1], 'xfade',
+                                             transition=transition_effect,
+                                             duration=transition_duration,
+                                             offset=transition_offset)
+                    
+                    # Concatenate audio streams separately for proper sequencing
+                    audio_out = ffmpeg.filter([context_input['a'], slide_input['a']], 'concat', n=2, v=0, a=1)
+                    
+                    # Combine video with transition and audio concatenation
+                    (
+                        ffmpeg
+                        .output(video_out, audio_out, str(output_path),
+                               vcodec='libx264', acodec='aac', preset='fast',
+                               ac=2, ar=48000, crf=23)
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                    
+                    logger.info(f"✅ Applied xfade transition '{transition_effect}'")
+                    return output_path
+                    
+                except Exception as transition_error:
+                    logger.warning(f"Transition failed, falling back to simple concat: {transition_error}")
+                    # Fall through to simple concatenation
+            
+            # Fallback: Simple concatenation for multiple videos or if transition fails
+            logger.info("Using simple concatenation (transition failed or multiple videos)")
             concat_file = self.output_dir / "temp_concat.txt"
             self._register_temp_file(concat_file)
             
             with open(concat_file, 'w') as f:
                 for video_path in video_paths:
-                    f.write(f"file '{video_path}'\n")
+                    f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate videos
+            # Concatenate videos with robust settings like in step-by-step test
             (
                 ffmpeg
                 .input(str(concat_file), format='concat', safe=0)
                 .output(str(output_path),
                        vcodec='libx264',
-                       acodec='aac')
+                       acodec='aac',
+                       preset='fast',
+                       ac=2,
+                       ar=48000,
+                       crf=23)
                 .overwrite_output()
-                .run(quiet=True)
+                .run(capture_stdout=True, capture_stderr=True)
             )
             
             return output_path

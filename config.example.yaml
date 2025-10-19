@@ -1,0 +1,100 @@
+# LangFlix Configuration Example
+# Copy this file to config.yaml and customize as needed
+# All settings are optional - defaults will be used if not specified
+
+# ============================================================================
+# LLM (Language Learning Model) Settings
+# ============================================================================
+llm:
+  # Maximum characters to include in a single prompt (default: 2000)
+  max_input_length: 2000
+  
+  # Language proficiency level for expression extraction (default: intermediate)
+  # Options: beginner, intermediate, advanced, mixed
+  default_language_level: "intermediate"
+  
+  # Target language for translations (default: Korean)
+  target_language: "Spanish"
+  
+  # API retry configuration
+  max_retries: 3
+  retry_backoff_seconds: [3, 6, 12]
+  
+  # Generation configuration
+  temperature: 0.1
+  top_p: 0.8
+  top_k: 40
+
+# ============================================================================
+# Video Processing Settings
+# ============================================================================
+video:
+  # Video codec for encoding (default: libx264)
+  codec: "libx264"
+  
+  # Audio codec (default: aac)
+  audio_codec: "aac"
+  
+  # Encoding preset (default: fast)
+  # Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+  preset: "fast"
+  
+  # Constant Rate Factor - quality (0-51, lower = better quality, default: 23)
+  crf: 23
+  
+  # Output resolution (default: 1280x720)
+  resolution: "1920x1080"
+  
+  # Frames per second (default: 30)
+  fps: 30
+  
+  # Video bitrate (default: 2000k)
+  bitrate: "3000k"
+  
+  # Audio bitrate (default: 128k)
+  audio_bitrate: "192k"
+
+# ============================================================================
+# Font Configuration
+# ============================================================================
+font:
+  sizes:
+    # Font sizes for different text types (defaults in comments)
+    default: 32      # Default: 32
+    expression: 48   # Default: 48
+    translation: 40  # Default: 40
+    similar: 32      # Default: 32
+  
+  # Automatically detect platform-specific fonts (default: true)
+  auto_detect: true
+
+# ============================================================================
+# Processing Settings
+# ============================================================================
+processing:
+  # Maximum characters per subtitle chunk for LLM processing (default: 2000)
+  chunk_size: 2000
+  
+  # Maximum expressions to extract per chunk (default: 5)
+  max_expressions_per_chunk: 5
+  
+  # Automatically cleanup temporary files after processing (default: true)
+  temp_file_cleanup: true
+
+# ============================================================================
+# Video Transition Settings
+# ============================================================================
+transitions:
+  # Enable smooth transitions between video segments (default: true)
+  enabled: true
+  
+  # Transition from context video to educational slide
+  context_to_slide:
+    type: "xfade"           # Options: xfade, fade, none
+    effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
+    duration: 0.5           # Duration in seconds
+  
+  # Transition between different expressions
+  expression_to_expression:
+    type: "fade"            # Options: fade, xfade, none
+    duration: 0.5           # Duration in seconds

@@ -1,3 +1,4 @@
+import re
 from typing import List
 from . import settings
 from .language_config import LanguageConfig
@@ -22,7 +23,15 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     lang_config = LanguageConfig.get_config(language_code)
     target_language = lang_config['prompt_language']
     
-    dialogues = "\\n".join([f"[{sub['start_time']}-{sub['end_time']}] {sub['text']}" for sub in subtitle_chunk])
+    # Clean HTML markup from subtitle text before including in prompt
+    cleaned_dialogues = []
+    for sub in subtitle_chunk:
+        clean_text = re.sub(r'<[^>]+>', '', sub['text'])  # Remove HTML tags
+        clean_text = re.sub(r'\s+', ' ', clean_text)      # Normalize whitespace
+        clean_text = clean_text.strip()
+        cleaned_dialogues.append(f"[{sub['start_time']}-{sub['end_time']}] {clean_text}")
+    
+    dialogues = "\\n".join(cleaned_dialogues)
 
     prompt = f"""
 Here is a segment of dialogue from the TV show "Suits":
@@ -156,7 +165,6 @@ Return a JSON list where each object contains:
     // Include both formal and informal alternatives when relevant
   ],
   "scene_type": "humor|drama|tension|emotional|witty|confrontation",  // What makes this scene engaging
-  "why_valuable": "Brief explanation of why this expression and scene are valuable for learners"
 }}
 
 **FINAL REQUIREMENTS:**

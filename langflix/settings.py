@@ -2,10 +2,11 @@
 
 import os
 import platform
-import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
+
+from .config import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -39,25 +40,26 @@ def get_default_font():
     else:
         return ""
 
-# Default font configuration
+# Initialize YAML configuration loader
+config_loader = ConfigLoader()
+
+# Get values from YAML config with fallbacks for backward compatibility
 DEFAULT_FONT_FILE = get_default_font()
-FONT_SIZE_DEFAULT = 32
-FONT_SIZE_EXPRESSION = 48  # For main expression text
-FONT_SIZE_TRANSLATION = 40  # For translation text
-FONT_SIZE_SIMILAR = 32  # For similar expressions
 
-# The maximum number of characters to include in a single prompt to the LLM.
-# Gemini 2.5 Flash supports up to 1,048,576 tokens (~4M characters)
-# We use a conservative limit to ensure prompt + dialogue fits comfortably
-MAX_LLM_INPUT_LENGTH = 3000  # Even smaller for test mode to avoid API timeouts
+# Font sizes - loaded from YAML config
+FONT_SIZE_DEFAULT = config_loader.get('font', 'sizes', 'default') or 32
+FONT_SIZE_EXPRESSION = config_loader.get('font', 'sizes', 'expression') or 48
+FONT_SIZE_TRANSLATION = config_loader.get('font', 'sizes', 'translation') or 40
+FONT_SIZE_SIMILAR = config_loader.get('font', 'sizes', 'similar') or 32
 
-# The target language for translation.
-TARGET_LANGUAGE = "Spanish"
+# LLM settings - loaded from YAML config  
+llm_config = config_loader.get('llm') or {}
+MAX_LLM_INPUT_LENGTH = llm_config.get('max_input_length') or 8000
+TARGET_LANGUAGE = llm_config.get('target_language') or "Korean"
+DEFAULT_LANGUAGE_LEVEL = llm_config.get('default_language_level') or "intermediate"
 
-# Default language level for expression analysis
-DEFAULT_LANGUAGE_LEVEL = "intermediate"
-
-LANGUAGE_LEVELS = {
+# Language levels - loaded from YAML config with fallbacks
+_language_levels_fallback = {
     "beginner": {
         "description": "A1-A2 level. Focus on basic everyday expressions, simple phrasal verbs, and common conversational phrases used in daily life. Avoid complex idioms or advanced vocabulary.",
         "examples": "Let's go, I'm sorry, How are you, Can you help me, What's up"
@@ -75,108 +77,82 @@ LANGUAGE_LEVELS = {
         "examples": "Any useful expression from basic to advanced"
     }
 }
+LANGUAGE_LEVELS = config_loader.get('language_levels') or _language_levels_fallback
 
-# Video processing configuration
-VIDEO_CONFIG = {
+# Video processing configuration - loaded from YAML config with fallbacks
+_video_config_fallback = {
     "codec": "libx264",
     "audio_codec": "aac", 
     "preset": "fast",
-    "crf": 23,  # Constant Rate Factor (lower = higher quality)
+    "crf": 23,
     "resolution": "1280x720",
     "fps": 30,
     "bitrate": "2000k",
     "audio_bitrate": "128k"
 }
+VIDEO_CONFIG = config_loader.get('video') or _video_config_fallback
 
-# Configuration management
+# Configuration management - Updated to use YAML loader
 class ConfigManager:
-    """Configuration manager for LangFlix settings"""
+    """Configuration manager for LangFlix settings - Updated to use YAML"""
     
     def __init__(self, config_file: Optional[str] = None):
-        self.config_file = Path(config_file) if config_file else Path("langflix_config.json")
-        self.config = self._load_config()
-    
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration"""
-        return {
-            "video": VIDEO_CONFIG,
-            "font": {
-                "default_file": get_default_font(),
-                "sizes": {
-                    "default": 32,
-                    "expression": 48,
-                    "translation": 40,
-                    "similar": 32
-                }
-            },
-            "llm": {
-                "max_input_length": MAX_LLM_INPUT_LENGTH,
-                "default_language_level": DEFAULT_LANGUAGE_LEVEL,
-                "target_language": TARGET_LANGUAGE
-            },
-            "processing": {
-                "chunk_size": 5000,
-                "max_expressions_per_chunk": 5,
-                "temp_file_cleanup": True
-            }
-        }
-    
-    def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default"""
-        if self.config_file.exists():
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    # Merge with defaults to ensure all keys exist
-                    default_config = self._get_default_config()
-                    return self._merge_config(default_config, config)
-            except Exception as e:
-                print(f"Warning: Could not load config file {self.config_file}: {e}")
-                return self._get_default_config()
+        # Use the global config_loader for backward compatibility
+        self.config_loader = config_loader
+        
+    def get(self, section: str, key: Optional[str] = None, default: Optional[Union[str, int, float, bool, Dict, List]] = None) -> Union[str, int, float, bool, Dict, List, None]:
+        """Get a configuration value
+        
+        Maintains backward compatibility with old get(section, key, default) API
+        but also supports get(section) for full section access
+        """
+        if key is None:
+            # Return entire section
+            return self.config_loader.get_section(section)
         else:
-            return self._get_default_config()
+            # Return specific key from section
+            return self.config_loader.get(section, key, default=default)
     
-    def _merge_config(self, default: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge user config with defaults"""
-        result = default.copy()
-        for key, value in user.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._merge_config(result[key], value)
-            else:
-                result[key] = value
-        return result
+    def set(self, section: str, key: str, value: Union[str, int, float, bool, Dict, List]) -> None:
+        """Set a configuration value - Note: This modifies runtime config only"""
+        # For now, we'll update the config_loader's internal config
+        # In a full implementation, this would update the user config file
+        current_section = self.config_loader.get_section(section)
+        current_section[key] = value
+        logger.warning("Runtime config changes via set() are not persisted to YAML files")
     
     def save_config(self):
         """Save current configuration to file"""
-        try:
-            self.config_file.parent.mkdir(exist_ok=True)
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"Warning: Could not save config file {self.config_file}: {e}")
-    
-    def get(self, section: str, key: str, default: Optional[Union[str, int, float, bool, Dict, List]] = None) -> Union[str, int, float, bool, Dict, List, None]:
-        """Get a configuration value"""
-        return self.config.get(section, {}).get(key, default)
-    
-    def set(self, section: str, key: str, value: Union[str, int, float, bool, Dict, List]) -> None:
-        """Set a configuration value"""
-        if section not in self.config:
-            self.config[section] = {}
-        self.config[section][key] = value
+        # This would need to be implemented to save back to config.yaml
+        logger.warning("save_config() not fully implemented for YAML config - use YAML files directly")
 
-# Global configuration instance
+# Global configuration instance - maintains backward compatibility
 config = ConfigManager()
 
 # Export commonly used settings with fallbacks to config
 def get_video_config(attribute: str = None):
     """Get video processing configuration"""
-    video_config = config.get("video", {})
-    return video_config.get(attribute) if attribute else video_config
+    video_config = config.get("video")
+    return video_config.get(attribute) if attribute and isinstance(video_config, dict) else video_config
 
 def get_font_size(size_type: str = "default") -> int:
     """Get font size for different text types"""
-    return config.get("font", {}).get("sizes", {}).get(size_type, FONT_SIZE_DEFAULT)
+    try:
+        # Try to get from YAML config first
+        font_sizes = config_loader.get('font', 'sizes')
+        if isinstance(font_sizes, dict) and size_type in font_sizes:
+            return int(font_sizes[size_type])
+    except Exception as e:
+        logger.debug(f"Error getting font size from config: {e}")
+    
+    # Fallback to constants for backward compatibility
+    fallbacks = {
+        'default': FONT_SIZE_DEFAULT,
+        'expression': FONT_SIZE_EXPRESSION,
+        'translation': FONT_SIZE_TRANSLATION,
+        'similar': FONT_SIZE_SIMILAR
+    }
+    return fallbacks.get(size_type, FONT_SIZE_DEFAULT)
 
 def get_font_file(language_code: str = None) -> str:
     """Get font file path for the given language or default"""
@@ -214,5 +190,24 @@ def get_font_file(language_code: str = None) -> str:
 
 def get_llm_config(key: str = None):
     """Get LLM configuration"""
-    llm_config = config.get("llm", {})
-    return llm_config.get(key) if key else llm_config
+    llm_config = config.get("llm")
+    return llm_config.get(key) if key and isinstance(llm_config, dict) else llm_config
+
+def get_generation_config():
+    """Get generation configuration for LLM API calls"""
+    llm_cfg = config.get("llm") or {}
+    return {
+        "temperature": llm_cfg.get('temperature', 0.1),
+        "top_p": llm_cfg.get('top_p', 0.8),
+        "top_k": llm_cfg.get('top_k', 40),
+    }
+
+def get_max_retries():
+    """Get maximum retries for API calls"""
+    llm_cfg = config.get("llm") or {}
+    return llm_cfg.get('max_retries', 3)
+
+def get_retry_backoff_seconds():
+    """Get retry backoff times"""
+    llm_cfg = config.get("llm") or {}
+    return llm_cfg.get('retry_backoff_seconds', [3, 6, 12])

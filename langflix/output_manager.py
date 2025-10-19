@@ -168,7 +168,7 @@ class OutputManager:
         for pattern in patterns:
             match = re.match(pattern, filename)
             if match:
-                if 'S(\d+)E(\d+)' in pattern:
+                if 'S(\\d+)E(\\d+)' in pattern:
                     # Handle S01E01 format
                     series_name = match.group(1)
                     season = match.group(2)
@@ -236,18 +236,19 @@ class OutputManager:
         return log_file
 
 
-def create_output_structure(subtitle_file_path: str, language_code: str = "ko") -> Dict[str, Path]:
+def create_output_structure(subtitle_file_path: str, language_code: str = "ko", base_output_dir: str = "output") -> Dict[str, Path]:
     """
     Convenience function to create complete output structure
     
     Args:
         subtitle_file_path: Path to subtitle file
         language_code: Target language code
+        base_output_dir: Base output directory (default: "output")
         
     Returns:
         Complete path mappings for the episode and language
     """
-    manager = OutputManager()
+    manager = OutputManager(base_output_dir)
     
     # Extract series and episode names
     series_name, episode_name = manager.get_series_episode_name(subtitle_file_path)

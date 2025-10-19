@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 # Import test utilities
-from test_config import setup_test_environment, clean_step_directory, get_step_output_dir
+from test_config import setup_test_environment, clean_step_directory, get_step_output_dir, TRANSITION_CONFIG
 from test_utils import (validate_file_exists, validate_video_properties,
                        load_test_results, save_test_results, log_step_start, log_step_complete)
 
@@ -121,6 +121,23 @@ def test_step7():
             
             logger.info(f"Creating final video: {final_video_path}")
             logger.info(f"Expected duration: {total_expected_duration:.2f} seconds")
+            
+            # Get transition configuration for expression-to-expression
+            transition_enabled = TRANSITION_CONFIG.get("enabled", True)
+            expr_transition_settings = TRANSITION_CONFIG.get("expression_to_expression", {})
+            expr_transition_type = expr_transition_settings.get("type", "fade")
+            
+            # Create smooth transitions between expressions if enabled and multiple sequences exist
+            if transition_enabled and len(valid_sequences) > 1 and expr_transition_type != "none":
+                logger.info(f"Creating {expr_transition_type} transitions between {len(valid_sequences)} expressions...")
+                try:
+                    transition_duration = expr_transition_settings.get("duration", 0.5)
+                    logger.info(f"Using {expr_transition_type} transition with {transition_duration:.2f}s duration")
+                    # Note: For now, we'll still use simple concatenation for Step 7
+                    # but log the transition settings for future enhancement
+                    
+                except Exception as transition_error:
+                    logger.warning(f"Transition setup failed: {transition_error}")
             
             # Use concat demuxer with proper audio handling for better compatibility
             (

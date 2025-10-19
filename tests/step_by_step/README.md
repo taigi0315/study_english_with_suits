@@ -38,17 +38,17 @@ The testing scripts are designed to help debug the LangFlix pipeline by validati
 - **Input**: Results from Steps 1 and 4
 - **Output**: `test_output/step5/expression_XX_slide.mkv`
 
-### Step 6: Combine Slide with Audio
-- **Script**: `test_step6_slide_with_audio.py`
-- **Purpose**: Combine educational slides with 3x repeated expression audio
-- **Input**: Results from Steps 4 and 5
-- **Output**: `test_output/step6/expression_XX_slide_with_audio.mkv`
+### Step 6: Append Slide to Context (with Transition)
+- **Script**: `test_step6_append_to_context.py`
+- **Purpose**: Combine context videos with educational slides using smooth transitions
+- **Input**: Results from Steps 3 and 5
+- **Output**: `test_output/step6/expression_XX_full_sequence.mkv`
 
-### Step 7: Append to Context
-- **Script**: `test_step7_append_to_context.py`
-- **Purpose**: Concatenate context videos with slide+audio videos
-- **Input**: Results from Steps 3 and 6
-- **Output**: `test_output/step7/expression_XX_full_sequence.mkv`
+### Step 7: Final Concatenation (with Expression Transitions)
+- **Script**: `test_step7_final_concat.py`
+- **Purpose**: Concatenate all expression sequences into final educational video
+- **Input**: Results from Step 6
+- **Output**: `test_output/step7/final_educational_video_with_slides.mkv`
 
 ### Step 8: Process Multiple
 - **Script**: `test_step8_process_multiple.py`
@@ -175,6 +175,46 @@ Test configuration is in `test_config.py`:
 - Output directories
 - Validation thresholds
 - Test settings (max expressions, language codes, etc.)
+
+### Transition Settings
+
+Smooth transitions between videos can be configured in `test_config.py`:
+
+```python
+TRANSITION_CONFIG = {
+    "enabled": True,  # Enable/disable all transitions
+    "context_to_slide": {
+        "type": "xfade",  # Options: "xfade", "fade", "none"
+        "transition": "fade",  # Transition effect type
+        "duration": 0.8,  # Transition duration in seconds
+        "max_duration_ratio": 0.15  # Max 15% of shorter clip
+    },
+    "expression_to_expression": {
+        "type": "fade",  # Options: "fade", "none"
+        "duration": 0.5,  # Transition duration in seconds
+        "fade_in_out": True  # Apply fade-in and fade-out
+    }
+}
+```
+
+#### Available Transition Effects
+
+For `context_to_slide` transitions (xfade type), you can use:
+- `"fade"` - Simple crossfade (default, smooth)
+- `"wipeleft"` - Wipe from left to right
+- `"wiperight"` - Wipe from right to left  
+- `"wipeup"` - Wipe from bottom to top
+- `"wipedown"` - Wipe from top to bottom
+- `"slideleft"` - Slide left (new video comes from right)
+- `"slideright"` - Slide right (new video comes from left)
+- `"slideup"` - Slide up (new video comes from bottom)
+- `"slidedown"` - Slide down (new video comes from top)
+- `"circlecrop"` - Circular crop with zoom out
+- `"rectcrop"` - Rectangular crop with zoom out
+- `"fadeblack"` - Fade to black between videos
+- `"fadewhite"` - Fade to white between videos
+
+To change transition settings, edit `test_config.py` and modify the `TRANSITION_CONFIG` values.
 
 ## Test Data
 

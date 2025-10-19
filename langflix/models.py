@@ -33,6 +33,16 @@ class ExpressionAnalysis(BaseModel):
         description="Timestamp where conversational context should END", 
         pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
     )
+    expression_start_time: Optional[str] = Field(
+        default=None,
+        description="Exact timestamp where the expression phrase begins (for audio extraction)",
+        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+    )
+    expression_end_time: Optional[str] = Field(
+        default=None,
+        description="Exact timestamp where the expression phrase ends (for audio extraction)",
+        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+    )
     similar_expressions: List[str] = Field(
         description="List of 1-3 similar expressions or alternative ways to say the same thing",
         min_length=1,

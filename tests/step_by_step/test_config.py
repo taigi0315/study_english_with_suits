@@ -49,6 +49,46 @@ TEST_SETTINGS = {
     "test_mode": True  # Process only first chunk
 }
 
+# Available transition types for FFmpeg xfade filter
+XFADE_TRANSITIONS = [
+    "fade",      # Simple crossfade (default)
+    "wipeleft",  # Wipe from left to right
+    "wiperight", # Wipe from right to left  
+    "wipeup",    # Wipe from bottom to top
+    "wipedown",  # Wipe from top to bottom
+    "slideleft", # Slide left (new video comes from right)
+    "slideright",# Slide right (new video comes from left)
+    "slideup",   # Slide up (new video comes from bottom)
+    "slidedown", # Slide down (new video comes from top)
+    "circlecrop",# Circular crop with zoom out
+    "rectcrop",  # Rectangular crop with zoom out
+    "distance",  # Distance-based transition
+    "fadeblack", # Fade to black between videos
+    "fadewhite", # Fade to white between videos
+    "radial",    # Radial transition
+    "smoothleft",# Smooth left transition
+    "smoothright",# Smooth right transition
+    "smoothup",  # Smooth up transition
+    "smoothdown",# Smooth down transition
+]
+
+# Transition settings for smooth video effects
+TRANSITION_CONFIG = {
+    "enabled": True,  # Enable/disable transitions
+    "context_to_slide": {
+        "type": "xfade",  # Options: "xfade", "fade", "none"
+        "transition": "slideup",  # One of XFADE_TRANSITIONS above
+        "duration": 1.0,  # Transition duration in seconds
+        "max_duration_ratio": 0.15  # Max 15% of shorter clip duration
+    },
+    "expression_to_expression": {
+        "type": "fade",  # Options: "fade", "xfade", "none"  
+        "duration": 1.0,  # Transition duration in seconds
+        "fade_in_out": True,  # Apply fade-in and fade-out at boundaries
+        "transition": "slideleft"  # For xfade type: transition effect
+    }
+}
+
 def setup_test_environment():
     """Setup test environment and verify input files exist"""
     # Verify input files

@@ -78,6 +78,195 @@ class SubtitleProcessor:
             logger.error(f"Error extracting subtitles for expression: {e}")
             return []
     
+    def _find_expression_with_advanced_matching(self, context_subtitles, expression_text, expression_clean, expression_words):
+        """
+        Advanced matching algorithm to find expression timing with multiple strategies.
+        
+        Returns:
+            Tuple of (start_time, end_time, score) or None if no match found
+        """
+        best_match = None
+        best_score = 0
+        
+        # Strategy 1: Exact substring match (highest priority)
+        for subtitle in context_subtitles:
+            subtitle_text = subtitle['text'].lower().strip()
+            if expression_text in subtitle_text:
+                logger.debug(f"Found exact match in subtitle: {subtitle['text']}")
+                return subtitle['start_time'], subtitle['end_time'], 1.0
+        
+        # Strategy 2: Fuzzy word sequence matching
+        expression_word_list = expression_clean.split()
+        for i, subtitle in enumerate(context_subtitles):
+            subtitle_clean = self._clean_text_for_matching(subtitle['text'])
+            subtitle_word_list = subtitle_clean.split()
+            
+            # Check for consecutive word sequence match
+            score = self._calculate_sequence_match_score(expression_word_list, subtitle_word_list)
+            if score > best_score and score > 0.6:
+                best_match = (subtitle['start_time'], subtitle['end_time'], score)
+                best_score = score
+                logger.debug(f"Found sequence match (score {score:.2f}): {subtitle['text']}")
+        
+        # Strategy 3: Word overlap with position weighting
+        if not best_match or best_score < 0.8:
+            for subtitle in context_subtitles:
+                subtitle_clean = self._clean_text_for_matching(subtitle['text'])
+                subtitle_words = set(subtitle_clean.split())
+                
+                if expression_words and subtitle_words:
+                    # Calculate weighted overlap considering word position
+                    overlap_score = self._calculate_weighted_overlap(expression_clean, subtitle_clean)
+                    if overlap_score > best_score and overlap_score > 0.5:
+                        best_match = (subtitle['start_time'], subtitle['end_time'], overlap_score)
+                        best_score = overlap_score
+                        logger.debug(f"Found weighted overlap match (score {overlap_score:.2f}): {subtitle['text']}")
+        
+        # Strategy 4: Multi-subtitle span matching for longer expressions
+        if not best_match and len(expression_word_list) > 3:
+            best_match = self._find_multi_subtitle_match(context_subtitles, expression_word_list)
+        
+        return best_match
+    
+    def _calculate_sequence_match_score(self, expression_words, subtitle_words):
+        """Calculate score for consecutive word sequence matching"""
+        if not expression_words or not subtitle_words:
+            return 0.0
+        
+        # Look for the best consecutive sequence match
+        best_match_length = 0
+        for i in range(len(subtitle_words) - len(expression_words) + 1):
+            match_length = 0
+            for j, expr_word in enumerate(expression_words):
+                if i + j < len(subtitle_words) and subtitle_words[i + j] == expr_word:
+                    match_length += 1
+                else:
+                    break
+            best_match_length = max(best_match_length, match_length)
+        
+        return best_match_length / len(expression_words) if expression_words else 0.0
+    
+    def _calculate_weighted_overlap(self, expression_clean, subtitle_clean):
+        """Calculate weighted overlap with position consideration"""
+        expression_words = expression_clean.split()
+        subtitle_words = subtitle_clean.split()
+        
+        if not expression_words or not subtitle_words:
+            return 0.0
+        
+        # Simple word overlap
+        expr_set = set(expression_words)
+        sub_set = set(subtitle_words)
+        overlap = len(expr_set.intersection(sub_set))
+        base_score = overlap / len(expr_set)
+        
+        # Bonus for word order preservation (simplified)
+        order_bonus = 0.0
+        if len(expression_words) > 1:
+            consecutive_matches = 0
+            for i in range(min(len(expression_words), len(subtitle_words))):
+                if expression_words[i] == subtitle_words[i]:
+                    consecutive_matches += 1
+                else:
+                    break
+            order_bonus = consecutive_matches / len(expression_words) * 0.2
+        
+        return min(1.0, base_score + order_bonus)
+    
+    def _find_multi_subtitle_match(self, context_subtitles, expression_words):
+        """Find matches that span multiple subtitles for longer expressions"""
+        if len(context_subtitles) < 2:
+            return None
+        
+        # Try to find expression across 2-3 consecutive subtitles
+        for i in range(min(len(context_subtitles), 3)):
+            combined_text = " ".join([
+                self._clean_text_for_matching(sub['text']) 
+                for sub in context_subtitles[i:i+2]
+            ])
+            combined_words = combined_text.split()
+            
+            score = self._calculate_sequence_match_score(expression_words, combined_words)
+            if score > 0.7:
+                # Use the timing of the first subtitle as start
+                start_subtitle = context_subtitles[i]
+                end_subtitle = context_subtitles[min(i+1, len(context_subtitles)-1)]
+                return start_subtitle['start_time'], end_subtitle['end_time'], score
+            
+        return None
+
+    def find_expression_timing(self, expression: ExpressionAnalysis) -> tuple[str, str]:
+        """
+        Find the exact start and end time of the expression phrase within the context time.
+        This searches through subtitle text to find where the expression appears.
+        
+        Args:
+            expression: ExpressionAnalysis object with expression text and context times
+            
+        Returns:
+            Tuple of (expression_start_time, expression_end_time) in "HH:MM:SS,mmm" format
+        """
+        try:
+            # Get context time range
+            context_start = self._time_to_seconds(expression.context_start_time)
+            context_end = self._time_to_seconds(expression.context_end_time)
+            
+            # Extract subtitles within context range
+            context_subtitles = self.extract_subtitles_for_expression(expression)
+            
+            if not context_subtitles:
+                logger.warning(f"No context subtitles found for expression: {expression.expression}")
+                return expression.context_start_time, expression.context_end_time
+            
+            # Clean the expression text for matching
+            expression_text = expression.expression.lower().strip()
+            expression_clean = self._clean_text_for_matching(expression.expression)
+            expression_words = set(expression_clean.split())
+            
+            best_match_start = None
+            best_match_end = None
+            best_score = 0
+            
+            # Try multiple matching strategies
+            match_result = self._find_expression_with_advanced_matching(
+                context_subtitles, expression_text, expression_clean, expression_words
+            )
+            
+            if match_result:
+                best_match_start, best_match_end, best_score = match_result
+            
+            if best_match_start and best_match_end:
+                logger.info(f"Found expression timing: {best_match_start} to {best_match_end} (score: {best_score:.2f})")
+                return best_match_start, best_match_end
+            else:
+                # Fallback: use a shorter section in the middle of context
+                context_duration = context_end - context_start
+                mid_point = context_start + context_duration / 2
+                # Create a 3-second window around the middle point
+                fallback_start = mid_point - 1.5
+                fallback_end = mid_point + 1.5
+                
+                # Convert back to time format
+                fallback_start_str = self._seconds_to_time(fallback_start)
+                fallback_end_str = self._seconds_to_time(fallback_end)
+                
+                logger.warning(f"Could not find exact expression timing, using fallback: {fallback_start_str} to {fallback_end_str}")
+                return fallback_start_str, fallback_end_str
+                
+        except Exception as e:
+            logger.error(f"Error finding expression timing: {e}")
+            return expression.context_start_time, expression.context_end_time
+    
+    def _seconds_to_time(self, seconds: float) -> str:
+        """Convert seconds to HH:MM:SS,mmm format"""
+        try:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = seconds % 60
+            return f"{hours:02d}:{minutes:02d}:{secs:06.3f}".replace('.', ',')
+        except Exception:
+            return "00:00:00,000"
+    
     def create_translated_subtitle_file(self, expression: ExpressionAnalysis, 
                                       output_path: str) -> bool:
         """
@@ -240,6 +429,17 @@ class SubtitleProcessor:
         # Get the start time of the first subtitle to adjust all times
         first_start_time = self._time_to_timedelta(subtitles[0]['start_time'])
         
+        # Create a mapping between dialogue text and translations
+        dialogue_translation_map = {}
+        if len(expression.dialogues) == len(expression.translation):
+            for dialogue, translation in zip(expression.dialogues, expression.translation):
+                clean_dialogue = self._clean_text_for_matching(dialogue)
+                dialogue_translation_map[clean_dialogue] = translation
+        
+        # For better matching, we'll track which dialogue line each subtitle belongs to
+        # by accumulating subtitle text and matching against complete dialogues
+        subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, expression.dialogues)
+        
         for i, subtitle in enumerate(subtitles):
             # SRT entry number
             srt_lines.append(str(i + 1))
@@ -260,17 +460,104 @@ class SubtitleProcessor:
             # Original text
             srt_lines.append(subtitle['text'])
             
-            # Translated text (if available)
-            if i < len(expression.translation):
-                srt_lines.append(expression.translation[i])
-            else:
-                # Fallback to expression translation
-                srt_lines.append(expression.expression_translation)
+            # Find translation using improved mapping
+            translation_text = self._get_translation_for_subtitle(i, subtitle, subtitle_to_dialogue_map, expression)
+            srt_lines.append(translation_text)
             
             # Empty line between entries
             srt_lines.append("")
         
         return "\n".join(srt_lines)
+    
+    def _map_subtitles_to_dialogues(self, subtitles: List[Dict[str, Any]], dialogues: List[str]) -> List[int]:
+        """Map each subtitle to its corresponding dialogue index"""
+        subtitle_to_dialogue = []
+        
+        # Clean dialogues for matching
+        clean_dialogues = [self._clean_text_for_matching(dialogue) for dialogue in dialogues]
+        
+        # For each subtitle, find which dialogue it belongs to
+        for i, subtitle in enumerate(subtitles):
+            best_match_idx = -1
+            best_score = 0
+            clean_subtitle = self._clean_text_for_matching(subtitle['text'])
+            
+            for j, clean_dialogue in enumerate(clean_dialogues):
+                # Check if this subtitle text is part of this dialogue
+                if clean_subtitle in clean_dialogue:
+                    # Calculate word overlap score
+                    subtitle_words = set(clean_subtitle.split())
+                    dialogue_words = set(clean_dialogue.split())
+                    if subtitle_words and dialogue_words:
+                        overlap = len(subtitle_words.intersection(dialogue_words))
+                        score = overlap / len(subtitle_words)
+                        if score > best_score:
+                            best_score = score
+                            best_match_idx = j
+            
+            subtitle_to_dialogue.append(best_match_idx)
+        
+        return subtitle_to_dialogue
+    
+    def _get_translation_for_subtitle(self, subtitle_idx: int, subtitle: Dict[str, Any], 
+                                    subtitle_to_dialogue_map: List[int], expression: ExpressionAnalysis) -> str:
+        """Get the appropriate translation for a subtitle"""
+        dialogue_idx = subtitle_to_dialogue_map[subtitle_idx]
+        
+        if dialogue_idx >= 0 and dialogue_idx < len(expression.translation):
+            return expression.translation[dialogue_idx]
+        
+        # Fallback: use improved matching
+        return self._find_matching_translation(
+            subtitle['text'], 
+            dict(zip([self._clean_text_for_matching(d) for d in expression.dialogues], expression.translation)),
+            expression
+        )
+    
+    def _clean_text_for_matching(self, text: str) -> str:
+        """Clean text for better matching between dialogue and subtitle"""
+        if not text:
+            return ""
+        
+        # Remove extra whitespace, normalize case, remove punctuation
+        cleaned = " ".join(text.strip().lower().split())
+        # Remove common punctuation that might cause mismatch
+        cleaned = ''.join(c for c in cleaned if c.isalnum() or c.isspace())
+        return cleaned
+    
+    def _find_matching_translation(self, subtitle_text: str, dialogue_translation_map: dict, expression: ExpressionAnalysis) -> str:
+        """Find the best matching translation for a subtitle text"""
+        if not subtitle_text or not dialogue_translation_map:
+            return expression.expression_translation
+        
+        # Clean the subtitle text for matching
+        clean_subtitle = self._clean_text_for_matching(subtitle_text)
+        
+        # Try exact match first
+        for dialogue_key, translation in dialogue_translation_map.items():
+            if dialogue_key == clean_subtitle:
+                return translation
+        
+        # Try partial match (check if subtitle text is contained in dialogue)
+        for dialogue_key, translation in dialogue_translation_map.items():
+            if clean_subtitle in dialogue_key or dialogue_key in clean_subtitle:
+                return translation
+        
+        # Try word overlap
+        subtitle_words = set(clean_subtitle.split())
+        best_match_score = 0
+        best_translation = expression.expression_translation
+        
+        for dialogue_key, translation in dialogue_translation_map.items():
+            dialogue_words = set(dialogue_key.split())
+            if subtitle_words and dialogue_words:
+                overlap = len(subtitle_words.intersection(dialogue_words))
+                score = overlap / len(subtitle_words)
+                if score > best_match_score and score > 0.3:  # At least 30% word overlap
+                    best_match_score = score
+                    best_translation = translation
+        
+        return best_translation
     
     def _timedelta_to_srt_time(self, td: timedelta) -> str:
         """

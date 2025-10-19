@@ -8,7 +8,7 @@ from pathlib import Path
 import ffmpeg
 
 # Import test utilities
-from test_config import setup_test_environment, clean_step_directory, get_step_output_dir
+from test_config import setup_test_environment, clean_step_directory, get_step_output_dir, TRANSITION_CONFIG
 from test_utils import (validate_file_exists, validate_video_properties,
                        load_test_results, save_test_results, log_step_start, log_step_complete)
 
@@ -116,16 +116,17 @@ def test_step6():
                 output_dir = get_step_output_dir(6)
                 full_sequence_path = output_dir / f"{expression_id}_full_sequence.mkv"
                 
+                # Simple concatenation - just append videos in correct order
+                logger.info("  Concatenating context video -> education slide video...")
+                
                 try:
-                    # Use simple concatenation with fade transition
-                    # First try simple concatenation with fade effects
+                    # Create concat list file for ffmpeg
                     concat_list_path = output_dir / f"{expression_id}_concat_list.txt"
-                    
                     with open(concat_list_path, 'w') as f:
                         f.write(f"file '{context_path.absolute()}'\n")
                         f.write(f"file '{slide_path.absolute()}'\n")
                     
-                    # Use concat demuxer - transition will be added later as separate processing step
+                    # Use concat demuxer to append videos in correct order
                     (
                         ffmpeg
                         .input(str(concat_list_path), format='concat', safe=0)
@@ -141,56 +142,18 @@ def test_step6():
                         .run(capture_stdout=True, capture_stderr=True)
                     )
                     
-                    # Clean up concat list immediately
+                    # Clean up concat file
                     concat_list_path.unlink()
                     
                     logger.info(f"  ✅ Successfully concatenated videos")
                     
-                except ffmpeg.Error as e:
-                    logger.warning(f"Fade transition failed, falling back to simple concatenation: {e}")
-                    # Fallback to simple concatenation without transition
-                    try:
-                        # Create concat list file for ffmpeg
-                        fallback_concat_path = output_dir / f"{expression_id}_fallback_concat_list.txt"
-                        with open(fallback_concat_path, 'w') as f:
-                            f.write(f"file '{context_path.absolute()}'\n")
-                            f.write(f"file '{slide_path.absolute()}'\n")
-                        
-                        # Use concat demuxer with proper audio channel handling
-                        (
-                            ffmpeg
-                            .input(str(fallback_concat_path), format='concat', safe=0)
-                            .output(
-                                str(full_sequence_path),
-                                vcodec='libx264',
-                                acodec='aac',
-                                preset='fast',
-                                ac=2,  # Force stereo audio output
-                                ar=48000  # Set sample rate
-                            )
-                            .overwrite_output()
-                            .run(capture_stdout=True, capture_stderr=True)
-                        )
-                        
-                        # Clean up fallback concat file
-                        fallback_concat_path.unlink()
-                        
-                        logger.info(f"  ✅ Successfully concatenated videos (fallback method)")
-                        
-                    except ffmpeg.Error as fallback_error:
-                        logger.error(f"FFmpeg concatenation error (both methods failed): {fallback_error}")
-                        if fallback_error.stderr:
-                            logger.error(f"FFmpeg stderr: {fallback_error.stderr.decode('utf-8')}")
-                        if fallback_error.stdout:
-                            logger.error(f"FFmpeg stdout: {fallback_error.stdout.decode('utf-8')}")
-                        raise
-                
-                # Ensure concat list file is cleaned up if it still exists
-                try:
-                    if 'concat_list_path' in locals() and concat_list_path.exists():
-                        concat_list_path.unlink()
-                except:
-                    pass
+                except ffmpeg.Error as concat_error:
+                    logger.error(f"FFmpeg concatenation error: {concat_error}")
+                    if concat_error.stderr:
+                        logger.error(f"FFmpeg stderr: {concat_error.stderr.decode('utf-8')}")
+                    if concat_error.stdout:
+                        logger.error(f"FFmpeg stdout: {concat_error.stdout.decode('utf-8')}")
+                    raise
                     
                 # Step 6.6: Validate concatenated video
                 if not validate_file_exists(full_sequence_path, min_size=20000):

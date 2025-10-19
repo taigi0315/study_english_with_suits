@@ -113,23 +113,29 @@ class VideoEditor:
         Returns:
             Tuple of (background_input, input_type)
         """
-        # Try multiple possible background image locations
+        import os
+        
+        # Try multiple possible background image locations with absolute paths
         possible_paths = [
             Path("assets/education_slide_background.png"),
             Path("assets/education_slide_background.jpg"),
             Path("assets/background.png"),
             Path("assets/background.jpg"),
             Path(".").absolute() / "assets" / "education_slide_background.png",
+            Path(os.getcwd()) / "assets" / "education_slide_background.png",
+            Path(__file__).parent.parent / "assets" / "education_slide_background.png",
         ]
         
         background_path = None
         for path in possible_paths:
+            logger.info(f"Checking background path: {path} (exists: {path.exists()})")
             if path.exists():
-                logger.info(f"Found background image: {path}")
-                background_path = path
+                logger.info(f"Found background image: {path.absolute()}")
+                background_path = path.absolute()
                 break
         
         if background_path:
+            logger.info(f"Using background image: {background_path}")
             return str(background_path), "image2"
         else:
             logger.warning("No background image found, using solid color fallback")

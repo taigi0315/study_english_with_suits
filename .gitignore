@@ -11,5 +11,35 @@ venv/
 .vscode/
 .idea/
 
+# Large files and output directories
 assets/
 test_output/
+output/
+
+# Video files (usually large)
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+
+# Audio files (can be large)
+*.wav
+*.mp3
+*.aac
+*.flac
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

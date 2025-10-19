@@ -23,6 +23,10 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     lang_config = LanguageConfig.get_config(language_code)
     target_language = lang_config['prompt_language']
     
+    # Get expression limits from configuration
+    min_expressions = settings.get_min_expressions_per_chunk()
+    max_expressions = settings.get_max_expressions_per_chunk()
+    
     # Clean HTML markup from subtitle text before including in prompt
     cleaned_dialogues = []
     for sub in subtitle_chunk:
@@ -168,8 +172,8 @@ Return a JSON list where each object contains:
 }}
 
 **FINAL REQUIREMENTS:**
-- Maximum 5 expressions total
-- Quality over quantity - be selective
+- Minimum {min_expressions} expression, maximum {max_expressions} expressions total
+- Quality over quantity - be selective but ensure you find at least {min_expressions} valuable expression
 - Each scene must be engaging AND educational
 - Prioritize expressions at the target language level: {level_description}
 - Ensure each clip is self-contained and understandable

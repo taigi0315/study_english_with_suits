@@ -211,3 +211,13 @@ def get_retry_backoff_seconds():
     """Get retry backoff times"""
     llm_cfg = config.get("llm") or {}
     return llm_cfg.get('retry_backoff_seconds', [3, 6, 12])
+
+def get_min_expressions_per_chunk():
+    """Get minimum expressions per chunk"""
+    proc_cfg = config.get("processing") or {}
+    return proc_cfg.get('min_expressions_per_chunk', 1)
+
+def get_max_expressions_per_chunk():
+    """Get maximum expressions per chunk"""
+    proc_cfg = config.get("processing") or {}
+    return proc_cfg.get('max_expressions_per_chunk', 3)

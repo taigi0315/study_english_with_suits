@@ -94,8 +94,9 @@ processing:
   # Maximum characters per subtitle chunk for LLM processing
   chunk_size: 8000
   
-  # Maximum expressions to extract per chunk
-  max_expressions_per_chunk: 5
+  # Expression count limits per chunk
+  min_expressions_per_chunk: 1
+  max_expressions_per_chunk: 3
   
   # Automatically cleanup temporary files after processing
   temp_file_cleanup: true

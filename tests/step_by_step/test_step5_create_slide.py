@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 # Import test utilities
-from test_config import setup_test_environment, clean_step_directory, get_step_output_dir, VIDEO_FILE
+from test_config import setup_test_environment, clean_step_directory, get_step_output_dir, VIDEO_FILE, TEST_SETTINGS
 from test_utils import (validate_file_exists, validate_video_properties, 
                        load_test_results, save_test_results, log_step_start, log_step_complete)
 
@@ -70,7 +70,8 @@ def test_step5():
         # Step 5.3: Initialize video editor
         logger.info("5.3 Initializing video editor...")
         output_dir = get_step_output_dir(5)
-        video_editor = VideoEditor(str(output_dir))
+        language_code = TEST_SETTINGS.get("language_code", "es")
+        video_editor = VideoEditor(str(output_dir), language_code)
         
         # Step 5.4: Create slides for each expression
         logger.info("5.4 Creating educational slides...")

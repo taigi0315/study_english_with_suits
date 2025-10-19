@@ -19,16 +19,18 @@ class VideoEditor:
     Creates educational video sequences from expression analysis results
     """
     
-    def __init__(self, output_dir: str = "output"):
+    def __init__(self, output_dir: str = "output", language_code: str = None):
         """
         Initialize VideoEditor
         
         Args:
             output_dir: Directory for output files
+            language_code: Target language code for font selection
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self._temp_files = []  # Track temporary files for cleanup
+        self.language_code = language_code
         
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
@@ -88,7 +90,7 @@ class VideoEditor:
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext"""
         try:
-            font_file = settings.get_font_file()
+            font_file = settings.get_font_file(self.language_code)
             # Ensure font_file is a string
             if isinstance(font_file, str) and font_file and os.path.exists(font_file):
                 return f"fontfile={font_file}:"
@@ -477,8 +479,8 @@ class VideoEditor:
                 cleaned = cleaned.replace("{", "").replace("}", "").replace("(", "").replace(")", "")
                 cleaned = cleaned.replace("\n", " ").replace("\t", " ")
                 
-                # Remove other problematic characters for drawtext
-                cleaned = "".join(c for c in cleaned if c.isprintable() and c not in "@#$%^&*+=|<>/")
+                # Remove other problematic characters for drawtext (preserve "/" for alternatives like "estafado/perjudicado")
+                cleaned = "".join(c for c in cleaned if c.isprintable() and c not in "@#$%^&*+=|<>")
                 
                 # Proper spacing and length limit
                 cleaned = " ".join(cleaned.split())  # Remove extra spaces

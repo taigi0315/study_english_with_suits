@@ -3,8 +3,11 @@
 import os
 import platform
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
+
+logger = logging.getLogger(__name__)
 
 def get_default_font():
     """Get appropriate default font based on platform"""
@@ -49,7 +52,7 @@ FONT_SIZE_SIMILAR = 32  # For similar expressions
 MAX_LLM_INPUT_LENGTH = 3000  # Even smaller for test mode to avoid API timeouts
 
 # The target language for translation.
-TARGET_LANGUAGE = "Korean"
+TARGET_LANGUAGE = "Spanish"
 
 # Default language level for expression analysis
 DEFAULT_LANGUAGE_LEVEL = "intermediate"
@@ -175,9 +178,25 @@ def get_font_size(size_type: str = "default") -> int:
     """Get font size for different text types"""
     return config.get("font", {}).get("sizes", {}).get(size_type, FONT_SIZE_DEFAULT)
 
-def get_font_file() -> str:
-    """Get default font file path"""
+def get_font_file(language_code: str = None) -> str:
+    """Get font file path for the given language or default"""
     try:
+        # Import language_config here to avoid circular imports
+        from .language_config import LanguageConfig
+        
+        # If language code is provided, try to get language-specific font
+        if language_code:
+            try:
+                font_path = LanguageConfig.get_font_path(language_code)
+                if font_path and os.path.exists(font_path):
+                    logger.info(f"Using language-specific font for {language_code}: {font_path}")
+                    return font_path
+                else:
+                    logger.warning(f"Language-specific font not found for {language_code}, falling back to default")
+            except Exception as e:
+                logger.warning(f"Error getting font for language {language_code}: {e}")
+        
+        # Fallback to default font configuration
         font_config = config.get("font")
         if isinstance(font_config, dict):
             font_file = font_config.get("default_file", DEFAULT_FONT_FILE)
@@ -189,7 +208,8 @@ def get_font_file() -> str:
             return font_file
         else:
             return str(font_file) if font_file else DEFAULT_FONT_FILE
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Error getting font file: {e}")
         return DEFAULT_FONT_FILE
 
 def get_llm_config(key: str = None):

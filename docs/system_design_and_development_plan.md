@@ -1,164 +1,221 @@
-# LangFlix: System Design and Development Plan
+# LangFlix — Final System Design & Development Plan
 
-This document outlines the system architecture and phased development plan for the LangFlix project, based on the initial `project_plan.md`.
+> Consolidated and finalised system design and phased development plan for the LangFlix educational video pipeline. This document synthesises the provided English and Korean plans and the Educational Video Terminology into one actionable plan.
 
-## 1. System Architecture
+---
 
-The system is designed as a modular pipeline that processes video and subtitle files to produce educational content. The architecture is centered around a core processing script that can be executed from the command line.
+## 1. Project Summary (one-liner)
 
-### 1.1. High-Level Architecture Diagram
+LangFlix converts raw video + subtitle files into short, language-learning educational videos composed of: Context Video → Expression Repeat Clip → Educational Slide (multi-language support, configurable pipeline).
 
-```mermaid
-graph TD
-    subgraph "User's Local Machine"
-        A["Video File (.mp4)"] --> C;
-        B["Subtitle File (.srt/.vtt)"] --> C;
-        C["Python Script: main.py"] --> D{"Subtitle Parser"};
-        D --> E{"Expression Analyzer (LLM)"};
-        E --> F{"Video Processor (ffmpeg)"};
-        F --> G["Generated Video (.mp4)"];
-        E --> H["Expression Data (JSON)"];
-    end
+---
 
-    subgraph "External Services"
-        E --> I["Large Language Model API (e.g., OpenAI)"];
-    end
+## 2. High-level architecture
 
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style G fill:#ccf,stroke:#333,stroke-width:2px
-    style H fill:#ccf,stroke:#333,stroke-width:2px
+A modular, local-first pipeline executed from CLI. Key flow:
+
+```
+Raw Video (.mp4) + Subtitles (.srt/.vtt)
+    → main controller (CLI)
+    → subtitle parser
+    → expression analyzer (LLM)
+    → video processor (ffmpeg)
+    → output/Series/Episode/<lang>/final_video.mp4 + metadata.json
 ```
 
-### 1.2. Component Breakdown
+External services: LLM API (e.g., OpenAI) for content extraction and localization; otherwise processing is local (ffmpeg, Pillow etc.).
 
-1.  **Main Controller (`main.py`)**:
-    *   **Responsibility**: Orchestrates the entire workflow.
-    *   **Functionality**: Takes input file paths (video and subtitles), calls the necessary modules in sequence, and handles configuration (e.g., target language, output path).
+---
 
-2.  **Subtitle Parser (`subtitle_parser.py`)**:
-    *   **Responsibility**: Parses subtitle files into a structured format.
-    *   **Input**: `.srt` or `.vtt` file path.
-    *   **Output**: A list of subtitle objects, each containing `start_time`, `end_time`, and `text`.
-    *   **Technology**: `pysrt` or `webvtt-py` library.
+## 3. Components & responsibilities
 
-3.  **Expression Analyzer (`expression_analyzer.py`)**:
-    *   **Responsibility**: Interacts with an LLM to extract learning content from dialogues.
-    *   **Input**: A list of subtitle objects.
-    *   **Functionality**:
-        *   Groups dialogues into logical scenes or chunks.
-        *   Constructs a prompt for the LLM.
-        *   Calls the LLM API.
-        *   Parses the LLM's JSON response.
-    *   **Output**: A structured list of "learning cards," each with an expression, definition, translation, examples, and context-aware `[start_time, end_time]`.
-    *   **Technology**: `openai` library.
+### 3.1 main.py (Orchestrator)
 
-4.  **Video Processor (`video_processor.py`)**:
-    *   **Responsibility**: Creates video clips and assembles the final educational video.
-    *   **Input**: Original video file path and the list of learning cards.
-    *   **Functionality**:
-        *   For each card, extract the corresponding video clip using the `[start_time, end_time]`.
-        *   Generate "title cards" (images or short video clips) with the expression text and explanations.
-        *   Concatenate the title cards and video clips into the final output video.
-    *   **Technology**: `ffmpeg-python` library.
+* Accepts CLI args / config file: input video, subtitle, target languages, output path, mode (dry-run / full-run), logging level.
+* Validates inputs and environment (ffmpeg availability, API key presence if required).
+* Invokes pipeline modules in sequence and coordinates retries / error handling.
 
-### 1.3. Data Models
+### 3.2 subtitle_parser.py
 
-#### Subtitle Entry (from Parser)
+* Parses `.srt` and `.vtt` into canonical subtitle objects: `{index, start_time, end_time, text}`.
+* Normalises timestamps to a consistent ISO-like format / seconds.fraction.
+* Provides utilities: join adjacent short/subsplit lines, merge overlapping ranges, map dialogue turns to speaker if available.
+* Unit tests for different subtitle encodings/formats.
 
-```json
-{
-  "index": 1,
-  "start_time": "00:01:15,250",
-  "end_time": "00:01:17,500",
-  "text": "You gotta be kidding me."
-}
+### 3.3 expression_analyzer.py (LLM integration)
+
+* Groups subtitles into scene chunks suitable for extracting expressions and context (configurable chunk size / silence threshold).
+* Builds clear, structured prompts to the LLM requesting JSON output that contains learning cards. Each learning card includes:
+
+  ```json
+  {
+    "expression": "...",
+    "context_start_time": "...",
+    "context_end_time": "...",
+    "repeat_start_time": "...",
+    "repeat_end_time": "...",
+    "definition": "...",
+    "translations": {"ko": "...", ...},
+    "notes": "...",
+    "examples": ["..."],
+    "confidence": 0.0
+  }
+  ```
+* Performs schema validation and sanitisation of LLM output. Fall back to heuristics when the LLM fails.
+* Dry-run mode: produce JSON without invoking video processing.
+
+### 3.4 video_processor.py
+
+* Responsibilities:
+
+  * Extract context clip for each card (`[context_start_time, context_end_time]`).
+  * Create expression repeat clip (expression audio/video repeated 3×).
+  * Render educational slide (image -> short clip) containing expression, translation, and optional example sentence with audio.
+  * Concatenate: Context Video → Expression Repeat Clip → Educational Slide.
+  * Ensure consistent resolution (default 1280×720), framerate (23.98 fps), codecs (H.264/AAC), audio normalization.
+* Implementation details:
+
+  * Use `ffmpeg-python` or call `ffmpeg` CLI for reliability.
+  * Use `Pillow` to render slides; convert slide images to short silent video and overlay TTS or original audio when required.
+  * Store intermediate clips in per-episode temp folder for debugging and reassembly.
+
+### 3.5 i18n & localization
+
+* Centralized translations per episode in `translations/<lang>/`.
+* Font support and fallback per language.
+* Template-based slide layouts for each language.
+
+### 3.6 metadata & outputs
+
+* Produce `metadata.json` per generated video with learning card indices, timestamps, durations, used fonts, LLM prompt snapshot (for reproducibility), and checksums for inputs.
+* Folder layout:
+
+```
+output/
+└─ Series/
+   └─ Episode001/
+      ├─ shared/
+      ├─ translations/
+      │  ├─ ko/
+      │  ├─ ja/
+      │  └─ ...
+      └─ metadata.json
 ```
 
-#### Learning Card (from LLM)
+---
 
-```json
-{
-  "expression": "You gotta be kidding me.",
-  "context_start_time": "00:01:14,000",
-  "context_end_time": "00:01:18,000",
-  "definition": "An expression of disbelief or astonishment.",
-  "translation": {
-    "korean": "농담하는 거겠지."
-  },
-  "similar_expressions": [
-    "You can't be serious.",
-    "Are you for real?"
-  ]
-}
-```
+## 4. Data models (canonical)
 
-## 2. Development Plan (Phased Approach)
+* **SubtitleEntry**: `{index:int, start_sec:float, end_sec:float, text:str}`
+* **LearningCard** (validated): `{id:int, expression:str, context_start_sec:float, context_end_sec:float, repeat_start_sec:float, repeat_end_sec:float, definition:str, translations:dict, examples:list, tags:list, quality_score:float}`
 
-This project will be developed in three main phases to ensure incremental progress and allow for feedback at each stage.
+---
 
-### Phase 1: Core Logic and Content Generation
+## 5. Phased Development Plan & Deliverables (phases/milestones)
 
-**Goal**: To build the data processing backbone of the application. By the end of this phase, we should be able to generate a JSON file with all the necessary learning content from a subtitle file.
+> Deliverables are concrete module outputs; no time estimates are enforced in this document — focus on order of implementation and acceptance criteria.
 
-*   **Milestone 1.1: Setup Project Structure**:
-    *   Create directories: `langflix/`, `tests/`, `data/`.
-    *   Initialize `git` repository.
-    *   Set up `requirements.txt` (`pysrt`, `openai`, `python-dotenv`).
-    *   Create basic module files: `langflix/main.py`, `langflix/subtitle_parser.py`, `langflix/expression_analyzer.py`.
+### Phase 1 — Core pipeline & LLM extraction
 
-*   **Milestone 1.2: Implement Subtitle Parser**:
-    *   Create a function to read a `.srt` file and return a list of subtitle entries.
-    *   Write unit tests to verify parsing for various subtitle formats.
+**Deliverables:**
 
-*   **Milestone 1.3: Implement Expression Analyzer**:
-    *   Develop the prompt engineering strategy for the LLM. The prompt should request a structured JSON output.
-    *   Implement the function to call the LLM API and parse the response.
-    *   Add error handling for API failures or malformed JSON.
-    *   Implement a "dry run" mode that prints the generated JSON instead of proceeding to video processing.
+* Project skeleton and `requirements.txt`.
+* `subtitle_parser` with unit tests + canonicalised subtitle outputs.
+* `expression_analyzer` that produces validated `metadata.json` / `learning_cards.json` in dry-run mode.
+* Logging and error handling basics.
 
-### Phase 2: Video Processing and Assembly
+**Acceptance criteria:** Given `video.mp4` + `subs.srt`, the system emits `learning_cards.json` with ≥1 validated learning card per detected expression, and unit tests pass.
 
-**Goal**: To add video manipulation capabilities. By the end of this phase, the tool will be able to generate a complete educational video.
+### Phase 2 — Video clip extraction & card assets
 
-*   **Milestone 2.1: Implement Video Clip Extraction**:
-    *   Add `ffmpeg-python` to `requirements.txt`.
-    *   Create a function in `video_processor.py` that takes a video path and `[start, end]` times and saves a new clip.
-    *   Test with various time formats.
+**Deliverables:**
 
-*   **Milestone 2.2: Implement Title Card Generation**:
-    *   Use a library like `Pillow` to generate images with text for expressions and definitions.
-    *   Convert these images into short video clips using `ffmpeg`.
+* `video_processor` that extracts context clips and stores them.
+* Title/slide image renderer and converter to short clip.
+* Expression repeat generator (audio/video repeated 3×, synced).
+* Concatenation routine producing a single MP4 per episode.
 
-*   **Milestone 2.3: Implement Final Video Assembly**:
-    *   Create a function to concatenate all the generated clips (title cards and context clips) in the correct order.
-    *   Ensure smooth transitions and consistent audio levels.
+**Acceptance criteria:** For a sample episode, pipeline produces a final MP4 where each expression section follows: Context → 3× Expression → Slide, and video plays with no glitches.
 
-### Phase 3: Refinement and Usability
+### Phase 3 — Usability, configuration, localization, polish
 
-**Goal**: To make the tool robust, configurable, and easy to use.
+**Deliverables:**
 
-*   **Milestone 3.1: Configuration and CLI**:
-    *   Use `argparse` or `click` to create a user-friendly command-line interface.
-    *   Allow users to specify input/output paths, target language, and number of expressions.
-    *   Use a `.env` file for API keys.
+* Robust CLI (`click` recommended) supporting target language, dry-run, and selective re-run of phases.
+* `.env` support for API keys and config.
+* Documentation (`README.md`, examples, prompt templates).
+* Improvements: audio leveling, transitions, subtitle burn-in option, batch processing mode.
 
-*   **Milestone 3.2: Logging and Error Reporting**:
-    *   Implement structured logging to track the progress of the pipeline.
-    *   Provide clear error messages to the user (e.g., "ffmpeg not found," "Invalid API key").
+**Acceptance criteria:** Non-developer can run the pipeline with minimal steps and produce localized outputs for at least two languages.
 
-*   **Milestone 3.3: Documentation**:
-    *   Write a `README.md` with clear instructions on how to install and run the project.
-    *   Document the code and module responsibilities.
+### Phase 4 — Testing, monitoring & maintenance
 
-## 3. Technology Stack Summary
+**Deliverables:**
 
-| Component             | Technology/Library                               | Justification                                         |
-| --------------------- | ------------------------------------------------ | ----------------------------------------------------- |
-| **Language**          | Python 3.9+                                      | Rich ecosystem for data processing, AI, and scripting.|
-| **Subtitle Parsing**  | `pysrt`                                          | Simple and effective for handling `.srt` files.       |
-| **LLM Interaction**   | `openai`                                         | Official and well-supported client for OpenAI models. |
-| **Video Processing**  | `ffmpeg-python`                                  | Powerful and standard tool for video manipulation.    |
-| **CLI**               | `argparse` (standard library)                    | Sufficient for the project's needs; no extra deps.    |
-| **Environment Mgmt**  | `venv`, `requirements.txt`, `python-dotenv`      | Standard and lightweight Python practices.            |
+* End-to-end integration tests (sample videos).
+* Smoke tests for LLM outputs and ffmpeg operations.
+* CI pipeline configuration (GitHub Actions / similar) to run unit + integration tests.
+* Maintenance notes (how to update prompts, swap LLM, update ffmpeg settings).
 
-This plan provides a clear path forward. We will start with Phase 1 to build the core data pipeline before moving on to the more complex video processing tasks.
+**Acceptance criteria:** CI runs tests automatically on PRs and key workflows are covered by tests.
+
+---
+
+## 6. Technology stack (recommended)
+
+* **Language:** Python 3.9+
+* **Subtitle parsing:** `pysrt` or `webvtt-py`
+* **LLM client:** `openai` (or pluggable adapter for other LLMs)
+* **Video:** `ffmpeg` (invoked via `ffmpeg-python` or shell)
+* **Image rendering:** `Pillow`
+* **TTS (optional):** local TTS or cloud TTS for slide audio
+* **CLI:** `click` (better UX) or `argparse`
+* **Env management:** `python-dotenv`
+* **Testing:** `pytest`
+* **Packaging / CI:** standard Git + GitHub Actions
+
+---
+
+## 7. Quality, testing & validation
+
+* Unit tests for parser, timestamp conversions, and small helper functions.
+* Schema validation for LLM JSON outputs (reject and log malformed responses, attempt re-prompt with stricter schema).
+* Integration tests with short sample videos.
+* Manual QA checklist for output video (timing correctness, audio sync, text legibility across languages).
+
+---
+
+## 8. Operational considerations
+
+* **Local-first processing:** avoid shipping raw media to cloud unless user opts in.
+* **Privacy:** never log full subtitle text or PII to central logs; redact or hash if storing.
+* **Resource usage:** keep temp working directory per run and provide `--clean` option to delete intermediates.
+* **Extensibility:** design LLM adapter interface and abstraction layer for alternate models.
+
+---
+
+## 9. Risks & mitigations
+
+* **LLM output variability:** validate schema and provide clear re-prompting + fallback heuristics.
+* **Timestamp imprecision:** allow padding on context windows and provide manual timestamp overrides in metadata.
+* **ffmpeg compatibility across platforms:** detect ffmpeg in PATH and document installation steps.
+
+---
+
+## 10. Next steps & recommended immediate actions
+
+1. Initialize repository with skeleton, requirements, and CI config.
+2. Implement `subtitle_parser` and write unit tests (Phase 1 start).
+3. Design LLM prompt templates and a simple adapter returning the expected JSON shape (dry-run).
+4. Prepare a small sample video + .srt to be used as an integration test fixture for Phase 2.
+
+---
+
+## 11. Appendix
+
+* **Educational video sequence** (canonical): Context Video → Expression Repeat Clip (×3) → Educational Slide (audio + 3s pause). See terminology file for durations and media settings.
+* **Recommended media defaults:** 1280×720, H.264, AAC, 23.98 fps.
+
+---
+
+*End of plan.*

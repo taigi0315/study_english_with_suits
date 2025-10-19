@@ -1,24 +1,24 @@
-# LangFlix Project Dependencies (pinned versions)
+# LangFlix Project Dependencies
 
 # For web scraping / transcript download
-beautifulsoup4==4.12.2
-requests==2.31.0
+beautifulsoup4>=4.12.2
+requests>=2.31.0
 
 # For parsing .srt subtitle files
-pysrt==1.1.2
+pysrt>=1.1.2
 
 # OpenAI Python client
-openai==1.3.7
+openai>=1.3.7
 
 # Google Gemini API
-google-generativeai
+google-generativeai>=0.8.0
 
 # Data validation and structured output
 pydantic>=2.0.0
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
-# Video processing (Phase 2)
-ffmpeg-python==0.2.0
-Pillow==10.1.0
+# Video processing
+ffmpeg-python>=0.2.0
+Pillow>=10.2.0

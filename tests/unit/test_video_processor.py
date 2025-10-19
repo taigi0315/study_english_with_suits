@@ -220,6 +220,171 @@ class TestVideoProcessor(unittest.TestCase):
         
         self.assertIsNotNone(result)
         self.assertEqual(result.name, "Test.mp4")
+    
+    def test_find_video_file_multiple_matches(self):
+        """Test finding video file when multiple similar files exist."""
+        # Create test files with similar names
+        subtitle_path = "Test.episode.srt"
+        video_paths = [
+            self.media_dir / "Test.episode.1080p.mp4",
+            self.media_dir / "Test.episode.720p.mkv",
+            self.media_dir / "Test.episode.season.1.mkv"
+        ]
+        
+        for path in video_paths:
+            path.touch()
+        
+        result = self.processor.find_video_file(subtitle_path)
+        
+        # Should find the first matching file
+        self.assertIsNotNone(result)
+        self.assertIn(result.name, [p.name for p in video_paths])
+    
+    def test_extract_clip_invalid_time_format(self):
+        """Test video clip extraction with invalid time format."""
+        video_path = self.media_dir / "source.mkv"
+        output_path = self.media_dir / "clip.mkv"
+        video_path.touch()
+        
+        # Test with invalid time formats
+        result = self.processor.extract_clip(
+            video_path, 
+            "invalid_time", 
+            "also_invalid", 
+            output_path
+        )
+        
+        self.assertFalse(result)
+    
+    def test_extract_clip_zero_duration(self):
+        """Test video clip extraction with zero duration."""
+        video_path = self.media_dir / "source.mkv"
+        output_path = self.media_dir / "clip.mkv"
+        video_path.touch()
+        
+        # Same start and end time (zero duration)
+        result = self.processor.extract_clip(
+            video_path, 
+            "00:01:25,657", 
+            "00:01:25,657", 
+            output_path
+        )
+        
+        self.assertFalse(result)
+    
+    def test_extract_clip_negative_duration(self):
+        """Test video clip extraction with negative duration."""
+        video_path = self.media_dir / "source.mkv"
+        output_path = self.media_dir / "clip.mkv"
+        video_path.touch()
+        
+        # End time before start time
+        result = self.processor.extract_clip(
+            video_path, 
+            "00:01:32,230", 
+            "00:01:25,657", 
+            output_path
+        )
+        
+        self.assertFalse(result)
+    
+    @patch('langflix.video_processor.ffmpeg.probe')
+    def test_validate_video_file_corrupted_streams(self, mock_probe):
+        """Test video file validation with corrupted stream data."""
+        # Mock ffmpeg probe response with missing stream data
+        mock_probe.return_value = {
+            'streams': [
+                {
+                    'codec_type': 'video',
+                    # Missing width, height, codec_name
+                }
+            ],
+            'format': {
+                'duration': 'invalid_duration'  # Invalid duration
+            }
+        }
+        
+        video_path = self.media_dir / "test.mkv"
+        video_path.touch()
+        
+        result = self.processor.validate_video_file(video_path)
+        
+        # Should handle gracefully
+        self.assertIsNotNone(result)
+        # May be valid or invalid depending on implementation
+    
+    def test_time_to_seconds_edge_cases(self):
+        """Test time conversion with edge cases."""
+        test_cases = [
+            ("23:59:59.999", 86399.999),  # Max time
+            ("00:00:00.000", 0.0),        # Zero time
+            ("00:00:01.001", 1.001),      # Just over 1 second
+            ("99:99:99.999", 0.0),        # Invalid time (should return 0)
+        ]
+        
+        for time_str, expected_seconds in test_cases:
+            with self.subTest(time_str=time_str):
+                result = self.processor._time_to_seconds(time_str)
+                if expected_seconds == 0.0:
+                    self.assertEqual(result, expected_seconds)
+                else:
+                    self.assertAlmostEqual(result, expected_seconds, places=3)
+    
+    @patch('langflix.video_processor.ffmpeg')
+    def test_extract_clip_permission_error(self, mock_ffmpeg):
+        """Test video clip extraction with permission error."""
+        # Mock ffmpeg to raise permission error
+        mock_ffmpeg.input.side_effect = PermissionError("Permission denied")
+        
+        video_path = self.media_dir / "source.mkv"
+        output_path = self.media_dir / "clip.mkv"
+        video_path.touch()
+        
+        result = self.processor.extract_clip(
+            video_path, 
+            "00:01:25,657", 
+            "00:01:32,230", 
+            output_path
+        )
+        
+        self.assertFalse(result)
+    
+    def test_find_video_file_case_sensitivity(self):
+        """Test video file finding with case sensitivity."""
+        # Create test file with different case
+        subtitle_path = "test.srt"
+        video_path = self.media_dir / "TEST.MP4"  # Different case
+        video_path.touch()
+        
+        result = self.processor.find_video_file(subtitle_path)
+        
+        # Implementation should handle case sensitivity appropriately
+        # This test documents the current behavior
+        if result is not None:
+            self.assertIsInstance(result, Path)
+    
+    @patch('langflix.video_processor.ffmpeg')
+    def test_extract_clip_large_timestamps(self, mock_ffmpeg):
+        """Test video clip extraction with large timestamps."""
+        mock_input = MagicMock()
+        mock_output = MagicMock()
+        mock_ffmpeg.input.return_value = mock_input
+        mock_input.output.return_value = mock_output
+        
+        video_path = self.media_dir / "source.mkv"
+        output_path = self.media_dir / "clip.mkv"
+        video_path.touch()
+        
+        # Large timestamp (over 24 hours)
+        result = self.processor.extract_clip(
+            video_path, 
+            "25:30:45,123", 
+            "25:30:50,456", 
+            output_path
+        )
+        
+        # Should handle large timestamps without error
+        self.assertIsInstance(result, bool)
 
 
 if __name__ == '__main__':

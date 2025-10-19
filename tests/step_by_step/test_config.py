@@ -43,7 +43,7 @@ VALIDATION_CONFIG = {
 # Test settings
 TEST_SETTINGS = {
     "max_expressions": None,  # No limit - process all expressions
-    "language_code": "ko", 
+    "language_code": "es",  # Spanish language code
     "language_level": None,
     "save_llm_output": True,
     "test_mode": True  # Process only first chunk
@@ -78,12 +78,12 @@ TRANSITION_CONFIG = {
     "context_to_slide": {
         "type": "xfade",  # Options: "xfade", "fade", "none"
         "transition": "slideup",  # One of XFADE_TRANSITIONS above
-        "duration": 1.0,  # Transition duration in seconds
+        "duration": 0.5,  # Transition duration in seconds
         "max_duration_ratio": 0.15  # Max 15% of shorter clip duration
     },
     "expression_to_expression": {
         "type": "fade",  # Options: "fade", "xfade", "none"  
-        "duration": 1.0,  # Transition duration in seconds
+        "duration": 0.5,  # Transition duration in seconds
         "fade_in_out": True,  # Apply fade-in and fade-out at boundaries
         "transition": "slideleft"  # For xfade type: transition effect
     }

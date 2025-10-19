@@ -85,6 +85,7 @@ Prioritize scenes that are:
 1. **Understand the full narrative** - What happens before, during, and after the expression
 2. **Identify the dramatic arc** - Where does the tension/humor/emotion build and resolve?
 3. expression should be in the middle of the context
+4. Use comma separated for multiple expressions (no othe special characters)
 
 **When selecting `context_start_time` and `context_end_time`:**
 

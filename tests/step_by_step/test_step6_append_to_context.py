@@ -91,6 +91,13 @@ def test_step6():
                 logger.info(f"  Context video: {context_path}")
                 logger.info(f"  Slide video: {slide_path}")
                 
+                # Get transition configuration first
+                transition_enabled = TRANSITION_CONFIG.get("enabled", True)
+                transition_settings = TRANSITION_CONFIG.get("context_to_slide", {})
+                transition_type = transition_settings.get("type", "xfade")
+                transition_effect = transition_settings.get("transition", "slideup")
+                transition_duration = transition_settings.get("duration", 1.0)
+                
                 # Step 6.4: Get durations for validation
                 try:
                     context_probe = ffmpeg.probe(str(context_path))
@@ -98,7 +105,6 @@ def test_step6():
                     
                     context_duration = float(context_probe['format']['duration'])
                     slide_duration = float(slide_probe['format']['duration'])
-                    transition_duration = 1.0  # 1 second transition
                     expected_total_duration = context_duration + slide_duration - transition_duration
                     
                     logger.info(f"  Context duration: {context_duration:.2f}s")
@@ -116,39 +122,69 @@ def test_step6():
                 output_dir = get_step_output_dir(6)
                 full_sequence_path = output_dir / f"{expression_id}_full_sequence.mkv"
                 
-                # Simple concatenation - just append videos in correct order
-                logger.info("  Concatenating context video -> education slide video...")
+                logger.info(f"  Concatenating context video -> education slide video with transition...")
+                logger.info(f"  Transition: {transition_type} '{transition_effect}' for {transition_duration}s")
                 
                 try:
-                    # Create concat list file for ffmpeg
-                    concat_list_path = output_dir / f"{expression_id}_concat_list.txt"
-                    with open(concat_list_path, 'w') as f:
-                        f.write(f"file '{context_path.absolute()}'\n")
-                        f.write(f"file '{slide_path.absolute()}'\n")
-                    
-                    # Use concat demuxer to append videos in correct order
-                    (
-                        ffmpeg
-                        .input(str(concat_list_path), format='concat', safe=0)
-                        .output(
-                            str(full_sequence_path),
-                            vcodec='libx264',
-                            acodec='aac',
-                            preset='fast',
-                            ac=2,  # Force stereo audio output
-                            ar=48000  # Set sample rate
+                    if transition_enabled and transition_type == "xfade":
+                        # Use xfade transition for smooth video transition
+                        context_input = ffmpeg.input(str(context_path))
+                        slide_input = ffmpeg.input(str(slide_path))
+                        
+                        # Normalize frame rates for compatibility
+                        v0 = ffmpeg.filter(context_input['v'], 'fps', fps=25)
+                        v1 = ffmpeg.filter(slide_input['v'], 'fps', fps=25)
+                        
+                        # Apply xfade transition - offset is context duration minus transition duration
+                        transition_offset = max(0, context_duration - transition_duration)
+                        
+                        video_out = ffmpeg.filter([v0, v1], 'xfade', 
+                                                transition=transition_effect,
+                                                duration=transition_duration,
+                                                offset=transition_offset)
+                        
+                        # Concatenate audio streams separately for proper sequencing
+                        audio_out = ffmpeg.filter([context_input['a'], slide_input['a']], 'concat', n=2, v=0, a=1)
+                        
+                        # Combine video with transition and audio concatenation
+                        (
+                            ffmpeg
+                            .output(video_out, audio_out, str(full_sequence_path),
+                                   vcodec='libx264', acodec='aac', preset='fast',
+                                   ac=2, ar=48000, crf=23)
+                            .overwrite_output()
+                            .run(capture_stdout=True, capture_stderr=True)
                         )
-                        .overwrite_output()
-                        .run(capture_stdout=True, capture_stderr=True)
-                    )
-                    
-                    # Clean up concat file
-                    concat_list_path.unlink()
-                    
-                    logger.info(f"  ✅ Successfully concatenated videos")
+                        
+                        logger.info(f"  ✅ Successfully created xfade transition '{transition_effect}'")
+                        
+                    else:
+                        # Fallback: Simple concatenation without transition
+                        logger.info("  Using simple concatenation (transitions disabled)")
+                        concat_list_path = output_dir / f"{expression_id}_concat_list.txt"
+                        with open(concat_list_path, 'w') as f:
+                            f.write(f"file '{context_path.absolute()}'\n")
+                            f.write(f"file '{slide_path.absolute()}'\n")
+                        
+                        (
+                            ffmpeg
+                            .input(str(concat_list_path), format='concat', safe=0)
+                            .output(
+                                str(full_sequence_path),
+                                vcodec='libx264',
+                                acodec='aac',
+                                preset='fast',
+                                ac=2, ar=48000
+                            )
+                            .overwrite_output()
+                            .run(capture_stdout=True, capture_stderr=True)
+                        )
+                        
+                        concat_list_path.unlink()
+                        logger.info(f"  ✅ Successfully concatenated videos (no transition)")
                     
                 except ffmpeg.Error as concat_error:
-                    logger.error(f"FFmpeg concatenation error: {concat_error}")
+                    logger.error(f"FFmpeg error: {concat_error}")
                     if concat_error.stderr:
                         logger.error(f"FFmpeg stderr: {concat_error.stderr.decode('utf-8')}")
                     if concat_error.stdout:

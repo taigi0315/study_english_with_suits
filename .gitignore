@@ -12,3 +12,4 @@ venv/
 .idea/
 
 assets/
+test_output/

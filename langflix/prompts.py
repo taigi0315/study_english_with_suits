@@ -84,6 +84,7 @@ Prioritize scenes that are:
 **BEFORE selecting start/end times, you MUST:**
 1. **Understand the full narrative** - What happens before, during, and after the expression
 2. **Identify the dramatic arc** - Where does the tension/humor/emotion build and resolve?
+3. expression should be in the middle of the context
 
 **When selecting `context_start_time` and `context_end_time`:**
 
@@ -138,10 +139,12 @@ Return a JSON list where each object contains:
     // IMPORTANT: Use EXACT dialogue text from subtitles - DO NOT add speaker names like "Mike:" or "Rachel:"
     // Keep the original subtitle format as-is
   ],
-         "translation": [
-           // CONTEXTUAL translations of ALL dialogue lines in {target_language}
+  "translation": [
+    // CRITICAL: EXACT 1:1 MAPPING - MUST have same number of items as dialogues array
+    // CONTEXTUAL translations of ALL dialogue lines in {target_language}
     // Translate MEANING and INTENT, not literal words
     // Consider tone, emotion, relationships, and cultural context
+    // REQUIRED: Each dialogue line MUST have exactly one corresponding translation line
   ],
   "expression": "the main expression/phrase to learn",
   "expression_translation": "contextual translation of the main expression in {target_language}",
@@ -169,6 +172,12 @@ Return a JSON list where each object contains:
 - DO NOT modify the original dialogue text
 - Keep the subtitle format exactly as provided
 - The dialogues array should contain the raw subtitle text only
+
+**CRITICAL: VALIDATION REQUIREMENTS:**
+- The `dialogues` and `translation` arrays MUST have EXACTLY the same number of elements
+- Each dialogue line must have exactly one corresponding translation line
+- NO EXCEPTIONS: If you cannot provide a translation for every dialogue line, DO NOT include that expression
+- Double-check your arrays before returning the JSON
 
 Now analyze the provided dialogue and return the JSON list with ONLY the most valuable, engaging expressions.
 """

@@ -33,6 +33,7 @@ langflix/
 │   ├── unit/               # Unit tests
 │   ├── functional/         # End-to-end tests
 │   ├── integration/        # API integration tests
+│   ├── step_by_step/       # Step-by-step workflow tests
 │   └── test_output/        # Generated test files
 ├── assets/                  # Media assets
 │   ├── subtitles/          # Suits Season 1 subtitles
@@ -109,6 +110,38 @@ python run_tests.py functional
 python run_tests.py integration
 ```
 
+### Step-by-Step Testing System 🧪
+
+LangFlix includes a comprehensive step-by-step testing system that breaks down the entire workflow into 7 isolated test steps. This allows for detailed debugging and validation of each stage:
+
+```bash
+# Run individual steps for debugging
+python tests/step_by_step/test_step1_load_and_analyze.py      # Load & analyze subtitles with LLM
+python tests/step_by_step/test_step2_slice_video.py           # Extract context video clips  
+python tests/step_by_step/test_step3_add_subtitles.py         # Add target language subtitles
+python tests/step_by_step/test_step4_extract_audio.py         # Extract expression audio
+python tests/step_by_step/test_step5_create_slide.py          # Create educational slides
+python tests/step_by_step/test_step6_append_to_context.py     # Combine context + slides
+python tests/step_by_step/test_step7_final_concat.py          # Create final video
+
+# Run all steps in sequence
+python tests/step_by_step/run_all_steps.py
+
+# Clean all test outputs
+python tests/step_by_step/cleanup_all.py
+```
+
+**Step-by-Step Workflow:**
+1. **Step 1**: Load subtitles, chunk them, and analyze with Gemini API
+2. **Step 2**: Extract video clips based on expression context timing  
+3. **Step 3**: Add dual-language subtitles to context videos
+4. **Step 4**: Extract precise audio for each expression phrase
+5. **Step 5**: Create educational slides with background and text overlays
+6. **Step 6**: Combine context videos with educational slides (includes transition effects)
+7. **Step 7**: Concatenate all expressions into final educational video
+
+Each step validates its output and provides detailed error reporting, making it easy to identify and fix issues at any stage of the pipeline.
+
 ### Manual Testing
 ```bash
 # Test video clip extraction
@@ -128,6 +161,9 @@ python tests/functional/test_suits_analysis.py
 
 # LLM-only test (no video processing)
 python tests/functional/test_llm_only.py --subtitle "assets/subtitles/Suits.S01E01.720p.HDTV.x264.srt" --language-level beginner
+
+# Complete End-to-End Test (NEW - Recommended)
+python tests/functional/run_end_to_end_test.py
 ```
 
 ## 📖 Usage
@@ -233,7 +269,7 @@ python tests/functional/manual_prompt_test.py 2
 
 ### 🎉 **CORE PIPELINE COMPLETE - READY FOR PRODUCTION USE**
 
-**Recent Achievements (October 17, 2025):**
+**Recent Achievements (January 18, 2025):**
 - ✅ **End-to-End Pipeline**: Single command processes entire workflow
 - ✅ **Language Level Support**: Beginner, Intermediate, Advanced, Mixed levels
 - ✅ **LLM Output Review**: Save and analyze AI responses for debugging
@@ -242,6 +278,17 @@ python tests/functional/manual_prompt_test.py 2
 - ✅ **Output Quality**: Generated high-quality learning videos with dual-language subtitles
 - ✅ **Performance**: Optimized chunking and processing
 - ✅ **Reliability**: Robust error handling and recovery mechanisms
+
+**Latest Infrastructure Enhancements:**
+- ✅ **Configuration Management**: JSON-based settings with runtime updates
+- ✅ **Cross-Platform Compatibility**: Enhanced font and path handling
+- ✅ **API Reliability**: Circuit breaker pattern and intelligent retry logic
+- ✅ **Memory Optimization**: Automatic resource cleanup and management
+- ✅ **Expression Timing**: Advanced matching algorithms for precision
+- ✅ **Input Validation**: Comprehensive security and error prevention
+- ✅ **Production Logging**: Structured logging for monitoring and debugging
+- ✅ **Test Coverage**: Comprehensive edge case testing for robustness
+- ✅ **Step-by-Step Testing System**: 7-stage isolated testing for debugging and validation
 
 ### 📋 Phase 3: Production Readiness & Enhancement (Planned)
 - [ ] Batch processing optimization

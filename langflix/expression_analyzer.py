@@ -18,7 +18,7 @@ load_dotenv()
 # Get logger (logging will be configured in main.py)
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API with better timeout handling
+# Configure Gemini API - no timeout restrictions to let it take as long as needed
 genai.configure(
     api_key=os.getenv("GEMINI_API_KEY"),
     client_options={
@@ -113,10 +113,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         generation_config = settings.get_generation_config()
         
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            generation_config=generation_config
-        )
+        model = genai.GenerativeModel(model_name=model_name)
         
         # Generate content with retry logic
         max_retries = settings.get_max_retries()

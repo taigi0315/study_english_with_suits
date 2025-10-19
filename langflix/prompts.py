@@ -51,10 +51,16 @@ You are an expert English language educator specializing in teaching through aut
 {level_description}
 
 **YOUR TASK:**
-Analyze this dialogue and identify the MOST VALUABLE expressions for learners at this level. Extract scenes that are:
+Follow this two-step process to select the BEST expressions:
+
+**STEP 1: FULL ANALYSIS**
+First, go through the entire dialogue segment and identify ALL potentially valuable expressions for learners at this level. Look for expressions that are:
 1. **Educationally Valuable** - Contains useful, practical expressions
 2. **Engaging & Entertaining** - Dynamic, humorous, dramatic, tense, emotional, or compelling moments
 3. **Contextually Clear** - Can be understood as a standalone short video
+
+**STEP 2: SELECT BEST ONES**
+From all the valuable expressions you identified, select the TOP {min_expressions} to {max_expressions} BEST expressions. Rank them by educational value and engagement, then pick only the highest quality ones.
 
 ---
 
@@ -172,8 +178,9 @@ Return a JSON list where each object contains:
 }}
 
 **FINAL REQUIREMENTS:**
+- Complete your full analysis first, then select the TOP {min_expressions} to {max_expressions} BEST expressions
+- Quality over quantity - rank all potential expressions and pick only the highest quality ones
 - Minimum {min_expressions} expression, maximum {max_expressions} expressions total
-- Quality over quantity - be selective but ensure you find at least {min_expressions} valuable expression
 - Each scene must be engaging AND educational
 - Prioritize expressions at the target language level: {level_description}
 - Ensure each clip is self-contained and understandable
@@ -192,6 +199,6 @@ Return a JSON list where each object contains:
 - NO EXCEPTIONS: If you cannot provide a translation for every dialogue line, DO NOT include that expression
 - Double-check your arrays before returning the JSON
 
-Now analyze the provided dialogue and return the JSON list with ONLY the most valuable, engaging expressions.
+Remember: First scan the entire dialogue for ALL good expressions, then select the TOP {min_expressions} to {max_expressions} BEST ones. Return the JSON list with your highest quality selections only.
 """
     return prompt

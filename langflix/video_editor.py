@@ -294,7 +294,8 @@ class VideoEditor:
             def clean_text_for_ffmpeg(text):
                 cleaned = text.replace("'", "").replace('"', "").replace("\n", " ")
                 cleaned = "".join(c for c in cleaned if c.isprintable())
-                return cleaned[:50] if cleaned else "Translation"
+                # Increased limit to prevent text cutoff - 200 chars should be sufficient for most expressions
+                return cleaned[:200] if cleaned else "Translation"
             
             clean_translation = clean_text_for_ffmpeg(translation_text)
             
@@ -468,7 +469,8 @@ class VideoEditor:
                 
                 # Proper spacing and length limit
                 cleaned = " ".join(cleaned.split())  # Remove extra spaces
-                return cleaned[:35] if cleaned else "Expression"
+                # Increased limit to prevent text cutoff - 100 chars should be sufficient for expressions
+                return cleaned[:100] if cleaned else "Expression"
             
             def escape_drawtext_string(text):
                 """Escape text for FFmpeg drawtext filter"""

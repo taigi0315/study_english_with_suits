@@ -7,8 +7,8 @@
 # ============================================================================
 llm:
   # Maximum characters of subtitle content per chunk
-  # Total prompt = content (3500) + template overhead (~6500) ≈ 10K
-  max_input_length: 3500
+  # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
+  max_input_length: 1680
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed

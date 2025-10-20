@@ -391,7 +391,7 @@ class VideoEditor:
                 # Generate single audio from expression text
                 temp_audio_path = tts_client.generate_speech(expression.expression)
                 
-                # Save TTS audio to permanent location for debugging
+                # Save ORIGINAL TTS audio to permanent location for debugging
                 tts_audio_dir = self.output_dir.parent / "tts_audio"
                 tts_audio_dir.mkdir(exist_ok=True)
                 
@@ -400,24 +400,41 @@ class VideoEditor:
                 tts_config = settings.get_tts_config()
                 provider_config = tts_config.get(settings.get_tts_provider(), {})
                 audio_format = provider_config.get('response_format', 'mp3')
-                audio_filename = f"tts_single_{self._sanitize_filename(expression.expression)}.{audio_format}"
-                audio_path = tts_audio_dir / audio_filename
+                original_audio_filename = f"tts_original_{self._sanitize_filename(expression.expression)}.{audio_format}"
+                original_audio_path = tts_audio_dir / original_audio_filename
                 
-                # Copy from temp location to permanent location
+                # Validate the original TTS audio is not empty before saving
+                temp_file_size = temp_audio_path.stat().st_size
+                logger.info(f"Generated TTS audio file size: {temp_file_size} bytes")
+                
+                if temp_file_size == 0:
+                    raise ValueError(f"Generated TTS audio file is empty: {temp_audio_path}")
+                
+                # Copy original TTS audio to permanent location and keep using temp for processing
                 import shutil
-                shutil.copy2(str(temp_audio_path), str(audio_path))
-                logger.info(f"TTS audio saved permanently: {audio_path}")
+                shutil.copy2(str(temp_audio_path), str(original_audio_path))
                 
-                # Still register temp file for cleanup
+                # Verify the permanent copy is also not empty
+                permanent_file_size = original_audio_path.stat().st_size
+                logger.info(f"Original TTS audio saved permanently: {original_audio_path}")
+                logger.info(f"Permanent file size: {permanent_file_size} bytes")
+                
+                if permanent_file_size == 0:
+                    raise ValueError(f"Permanent TTS audio file is empty: {original_audio_path}")
+                
+                # Use the temp file for processing (this ensures we're using the original file)
+                audio_path = temp_audio_path
+                
+                # Register temp file for cleanup but keep original permanently
                 self._register_temp_file(temp_audio_path)
                 
-                logger.info(f"Successfully generated TTS audio: {audio_path}")
+                logger.info(f"Successfully generated TTS audio: {original_audio_path}")
                 
-                # Get audio duration using ffmpeg probe
+                # Get audio duration using ffmpeg probe from the original file
                 probe = ffmpeg.probe(str(audio_path))
                 expression_duration = float(probe['streams'][0]['duration'])
                 
-                logger.info(f"TTS audio duration: {expression_duration:.2f}s")
+                logger.info(f"Original TTS audio duration: {expression_duration:.2f}s")
                 
             except Exception as tts_error:
                 logger.error(f"Error generating TTS audio: {tts_error}")
@@ -445,7 +462,7 @@ class VideoEditor:
                 temp_audio_path = self.output_dir / f"temp_3x_{self._sanitize_filename(expression.expression)}.wav"
                 self._register_temp_file(temp_audio_path)
                 
-                # Create 3x repeated audio using ffmpeg aloop filter
+                # Create 3x repeated audio using ffmpeg aloop filter (temporary only)
                 (
                     ffmpeg
                     .input(str(audio_path))
@@ -455,16 +472,11 @@ class VideoEditor:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Save 3x audio permanently for debugging (save as WAV since that's what we created)
-                audio_3x_filename = f"tts_3x_{self._sanitize_filename(expression.expression)}.wav"
-                audio_3x_permanent_path = tts_audio_dir / audio_3x_filename
-                
-                # Copy temp file to final location and permanent location
+                # Copy temp 3x file to final audio_3x_path for slide creation (no permanent save)
                 import shutil
                 shutil.copy2(str(temp_audio_path), str(audio_3x_path))
-                shutil.copy2(str(temp_audio_path), str(audio_3x_permanent_path))
-                logger.info(f"Successfully created 3x repeated TTS audio: {expression_duration * 3:.2f}s")
-                logger.info(f"3x TTS audio saved permanently: {audio_3x_permanent_path}")
+                logger.info(f"Successfully created 3x repeated TTS audio temporarily: {expression_duration * 3:.2f}s")
+                logger.info("Note: 3x audio is temporary - only original TTS audio is saved permanently")
             except ffmpeg.Error as e:
                 logger.error(f"Error creating 3x audio: {e}")
                 logger.error(f"FFmpeg stdout: {e.stdout.decode('utf-8') if e.stdout else 'None'}")

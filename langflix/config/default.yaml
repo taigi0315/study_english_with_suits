@@ -3,6 +3,16 @@
 # To customize these settings, copy this file to config.yaml at the project root
 
 # ============================================================================
+# Application Settings
+# ============================================================================
+app:
+  # Name of the TV show for prompting
+  show_name: "Suits"
+  
+  # Template file for expression analysis prompt
+  template_file: "expression_analysis_prompt.txt"
+
+# ============================================================================
 # LLM (Language Learning Model) Settings
 # ============================================================================
 llm:
@@ -152,4 +162,20 @@ tts:
   #   region: "us-east-1"
   #   voice_id: "Joanna"
   #   engine: "neural"
+
+# ============================================================================
+# Short Video Settings
+# ============================================================================
+short_video:
+  # Enable short video generation
+  enabled: true
+  
+  # Video resolution (width x height) - 9:16 format for social media
+  resolution: "1080x1920"
+  
+  # Target duration for each batch (seconds)
+  target_duration: 120
+  
+  # Allow variance (+/- seconds)
+  duration_variance: 10
 

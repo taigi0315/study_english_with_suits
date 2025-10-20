@@ -200,7 +200,7 @@ class LangFlixPipeline:
         self.expressions = []
         self.processed_expressions = 0
         
-    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False) -> Dict[str, Any]:
+    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline
         
@@ -210,6 +210,7 @@ class LangFlixPipeline:
             language_level: Target language level (beginner, intermediate, advanced, mixed)
             save_llm_output: If True, save LLM responses to files for review
             test_mode: If True, process only the first chunk for testing
+            no_shorts: If True, skip creating short-format videos
             
         Returns:
             Dictionary with processing results
@@ -247,14 +248,21 @@ class LangFlixPipeline:
                 # Step 5: Create educational videos
                 logger.info("Step 5: Creating educational videos...")
                 self._create_educational_videos()
+                
+                # Step 6: Create short-format videos (unless disabled)
+                if not no_shorts:
+                    logger.info("Step 6: Creating short-format videos...")
+                    self._create_short_videos()
+                else:
+                    logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             
-            # Step 5: Generate summary
+            # Step 7: Generate summary
             summary = self._generate_summary()
             
-            # Step 6: Cleanup temporary files
-            logger.info("Step 6: Cleaning up temporary files...")
+            # Step 8: Cleanup temporary files
+            logger.info("Step 8: Cleaning up temporary files...")
             self._cleanup_resources()
             
             logger.info("✅ Pipeline completed successfully!")
@@ -444,6 +452,81 @@ class LangFlixPipeline:
                     logger.debug(f"Deleted temp file: {video_file}")
             except Exception as e:
                 logger.warning(f"Could not delete temp file {video_file}: {e}")
+    
+    def _create_short_videos(self):
+        """Create short-format videos for social media."""
+        try:
+            # Check if short video generation is enabled
+            from . import settings
+            if not settings.is_short_video_enabled():
+                logger.info("Short video generation is disabled in configuration")
+                return
+                
+            logger.info("Creating short-format videos...")
+            
+            # Get context videos with subtitles
+            context_videos_dir = self.paths['language']['context_videos']
+            context_videos = sorted(list(context_videos_dir.glob("context_*.mkv")))
+            
+            logger.info(f"Found {len(context_videos)} context videos for short video creation")
+            
+            if not context_videos:
+                logger.warning("No context videos found for short video creation")
+                return
+            
+            short_format_videos = []
+            
+            # Create a mapping from expression names to context videos
+            context_video_map = {}
+            for context_video in context_videos:
+                # Extract expression name from filename: context_{expression_name}.mkv
+                video_name = context_video.stem  # Remove .mkv extension
+                if video_name.startswith('context_'):
+                    expression_name = video_name[8:]  # Remove 'context_' prefix
+                    context_video_map[expression_name] = context_video
+            
+            logger.info(f"Context video mapping: {list(context_video_map.keys())}")
+            
+            for i, expression in enumerate(self.expressions):
+                # Sanitize expression name to match filename format
+                safe_expression_name = self._sanitize_filename(expression.expression)
+                logger.info(f"Looking for context video: context_{safe_expression_name}.mkv")
+                
+                if safe_expression_name in context_video_map:
+                    context_video = context_video_map[safe_expression_name]
+                    logger.info(f"Creating short format video {i+1}/{len(self.expressions)}: {expression.expression}")
+                    logger.info(f"Using context video: {context_video.name}")
+                    
+                    try:
+                        output_path, duration = self.video_editor.create_short_format_video(
+                            str(context_video), expression, i
+                        )
+                        short_format_videos.append((output_path, duration))
+                        logger.info(f"✅ Short format video created: {output_path} (duration: {duration:.2f}s)")
+                    except Exception as e:
+                        logger.error(f"Error creating short format video for expression {i+1}: {e}")
+                        continue
+                else:
+                    logger.warning(f"No context video found for expression '{expression.expression}' (sanitized: '{safe_expression_name}')")
+                    continue
+            
+            if short_format_videos:
+                # Batch into ~120s videos using configuration
+                from . import settings
+                target_duration = settings.get_short_video_target_duration()
+                batch_videos = self.video_editor.create_batched_short_videos(
+                    short_format_videos, target_duration=target_duration
+                )
+                
+                logger.info(f"✅ Created {len(batch_videos)} short video batches")
+                for batch_path in batch_videos:
+                    logger.info(f"  - {batch_path}")
+            else:
+                logger.warning("No short format videos were created successfully")
+                
+        except Exception as e:
+            logger.error(f"Error creating short videos: {e}")
+            raise
     
     def _create_final_video(self, educational_videos: List[str]):
         """Create final concatenated educational video with fade transitions"""
@@ -669,6 +752,12 @@ Examples:
         help="Process only the first chunk for faster testing"
     )
     
+    parser.add_argument(
+        "--no-shorts",
+        action="store_true",
+        help="Skip creating short-format videos (default: create short videos)"
+    )
+    
     args = parser.parse_args()
 
     # Setup logging based on verbose flag
@@ -692,7 +781,8 @@ Examples:
             dry_run=args.dry_run,
             language_level=args.language_level,
             save_llm_output=args.save_llm_output,
-            test_mode=args.test_mode
+            test_mode=args.test_mode,
+            no_shorts=args.no_shorts
         )
         
         # Print summary

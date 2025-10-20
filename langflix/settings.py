@@ -124,9 +124,12 @@ def get_font_size(size_type: str = "default") -> int:
     # Default fallbacks if not in config
     default_sizes = {
         'default': 32,
-        'expression': 48,
-        'translation': 40,
-        'similar': 32
+        'expression_dialogue': 40,      # Full dialogue line containing expression
+        'expression': 58,               # Main expression/phrase (emphasized)
+        'expression_dialogue_trans': 36, # Translation of dialogue line
+        'expression_trans': 48,         # Translation of expression (emphasized)
+        'translation': 40,              # Legacy: Translation text (for backward compatibility)
+        'similar': 32                   # Similar expressions text
     }
     
     return sizes.get(size_type, default_sizes.get(size_type, 32))

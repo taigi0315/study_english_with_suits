@@ -48,9 +48,9 @@ DEFAULT_FONT_FILE = get_default_font()
 
 # Font sizes - loaded from YAML config
 FONT_SIZE_DEFAULT = config_loader.get('font', 'sizes', 'default') or 32
-FONT_SIZE_EXPRESSION = config_loader.get('font', 'sizes', 'expression') or 48
-FONT_SIZE_TRANSLATION = config_loader.get('font', 'sizes', 'translation') or 40
-FONT_SIZE_SIMILAR = config_loader.get('font', 'sizes', 'similar') or 32
+FONT_SIZE_EXPRESSION = config_loader.get('font', 'sizes', 'expression') or 55
+FONT_SIZE_TRANSLATION = config_loader.get('font', 'sizes', 'translation') or 55
+FONT_SIZE_SIMILAR = config_loader.get('font', 'sizes', 'similar') or 42
 
 # LLM settings - loaded from YAML config  
 llm_config = config_loader.get('llm') or {}
@@ -236,3 +236,33 @@ def is_tts_enabled() -> bool:
     """Check if TTS is enabled"""
     tts_cfg = get_tts_config()
     return tts_cfg.get('enabled', True)
+
+def get_show_name() -> str:
+    """Get the TV show name from configuration"""
+    app_cfg = config.get("app") or {}
+    return app_cfg.get('show_name', 'Suits')
+
+def get_template_file() -> str:
+    """Get the template file name from configuration"""
+    app_cfg = config.get("app") or {}
+    return app_cfg.get('template_file', 'expression_analysis_prompt_v2.txt')
+
+def get_short_video_config() -> Dict[str, Any]:
+    """Get short video configuration"""
+    short_video_cfg = config.get("short_video") or {}
+    return short_video_cfg
+
+def is_short_video_enabled() -> bool:
+    """Check if short video generation is enabled"""
+    short_video_cfg = get_short_video_config()
+    return short_video_cfg.get('enabled', True)
+
+def get_short_video_target_duration() -> float:
+    """Get target duration for short video batches"""
+    short_video_cfg = get_short_video_config()
+    return short_video_cfg.get('target_duration', 120.0)
+
+def get_short_video_resolution() -> str:
+    """Get short video resolution"""
+    short_video_cfg = get_short_video_config()
+    return short_video_cfg.get('resolution', '1080x1920')

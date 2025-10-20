@@ -6,7 +6,8 @@ from .language_config import LanguageConfig
 
 def _load_prompt_template() -> str:
     """Load the prompt template from file"""
-    template_path = Path(__file__).parent / "templates" / "expression_analysis_prompt.txt"
+    template_filename = settings.get_template_file()
+    template_path = Path(__file__).parent / "templates" / template_filename
     try:
         with open(template_path, 'r', encoding='utf-8') as f:
             return f.read()
@@ -39,6 +40,9 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     min_expressions = settings.get_min_expressions_per_chunk()
     max_expressions = settings.get_max_expressions_per_chunk()
     
+    # Get show name from configuration
+    show_name = settings.get_show_name()
+    
     # Clean HTML markup from subtitle text before including in prompt
     cleaned_dialogues = []
     for sub in subtitle_chunk:
@@ -58,6 +62,7 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         level_description=level_description,
         min_expressions=min_expressions,
         max_expressions=max_expressions,
-        target_language=target_language
+        target_language=target_language,
+        show_name=show_name
     )
     return prompt

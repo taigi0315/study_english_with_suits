@@ -44,7 +44,7 @@ LangFlixPipeline(
 
 #### Methods
 
-##### `run(max_expressions=None, dry_run=False, language_level=None, save_llm_output=False, test_mode=False) -> Dict[str, Any]`
+##### `run(max_expressions=None, dry_run=False, language_level=None, save_llm_output=False, test_mode=False, no_shorts=False) -> Dict[str, Any]`
 
 Execute the complete LangFlix pipeline.
 
@@ -54,6 +54,7 @@ Execute the complete LangFlix pipeline.
 - `language_level` (str, optional): Target language level ("beginner", "intermediate", "advanced", "mixed"). Uses default from settings if None.
 - `save_llm_output` (bool): If True, save LLM responses to files for review (default: False)
 - `test_mode` (bool): If True, process only the first chunk for testing (default: False)
+- `no_shorts` (bool): If True, skip creating short-format videos (default: False, shorts are created by default)
 
 **Returns:**
 - Dictionary containing processing results:
@@ -219,6 +220,72 @@ if video_path:
     # Get video info
     info = processor.get_video_info(str(video_path))
     print(f"Duration: {info.get('duration')}")
+```
+
+### `VideoEditor`
+
+Handles video editing operations including educational video creation and short-format video generation.
+
+#### Constructor
+
+```python
+VideoEditor(output_dir: str = "output", language_code: str = None)
+```
+
+**Parameters:**
+- `output_dir` (str): Output directory for generated videos
+- `language_code` (str): Target language code (default: None)
+
+#### Methods
+
+##### `create_short_format_video(context_video_path: str, expression: ExpressionAnalysis, expression_index: int = 0) -> Tuple[str, float]`
+
+Create vertical short-format video (9:16) with context video on top and slide on bottom.
+
+**Parameters:**
+- `context_video_path` (str): Path to context video with subtitles
+- `expression` (ExpressionAnalysis): Expression data containing text and translations
+- `expression_index` (int): Index of expression for voice alternation (default: 0)
+
+**Returns:**
+- `Tuple[str, float]`: (output_path, duration) of created short video
+
+**Features:**
+- Total duration = context_duration + (TTS_duration × 2) + 0.5s
+- Context video plays normally, then freezes on last frame
+- TTS audio plays twice with 0.5s gap after context ends
+- Slide displays throughout entire video (silent)
+
+##### `create_batched_short_videos(short_format_videos: List[Tuple[str, float]], target_duration: float = 120.0) -> List[str]`
+
+Combine short format videos into batches of ~120 seconds each.
+
+**Parameters:**
+- `short_format_videos` (List[Tuple[str, float]]): List of (video_path, duration) tuples
+- `target_duration` (float): Target duration for each batch (default: 120.0)
+
+**Returns:**
+- `List[str]`: List of created batch video paths
+
+**Example:**
+```python
+from langflix.video_editor import VideoEditor
+from langflix.models import ExpressionAnalysis
+
+editor = VideoEditor("output", "ko")
+
+# Create short format video
+output_path, duration = editor.create_short_format_video(
+    "context_video.mkv",
+    expression,
+    expression_index=0
+)
+
+# Batch short videos
+batched_videos = editor.create_batched_short_videos(
+    [(output_path, duration)],
+    target_duration=120.0
+)
 ```
 
 ---

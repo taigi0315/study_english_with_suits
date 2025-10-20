@@ -32,6 +32,15 @@ class VideoEditor:
         self._temp_files = []  # Track temporary files for cleanup
         self.language_code = language_code
         
+        # Set up paths for different video types
+        self.final_videos_dir = self.output_dir  # This will be final_videos
+        self.context_slide_combined_dir = self.output_dir.parent / "context_slide_combined"
+        self.short_videos_dir = self.output_dir.parent / "short_videos"
+        
+        # Ensure directories exist
+        self.context_slide_combined_dir.mkdir(exist_ok=True)
+        self.short_videos_dir.mkdir(exist_ok=True)
+        
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
                                   expression_video_path: str, 
@@ -51,10 +60,10 @@ class VideoEditor:
             Path to created educational video
         """
         try:
-            # Create output filename
+            # Create output filename - save to context_slide_combined directory
             safe_expression = self._sanitize_filename(expression.expression)
             output_filename = f"educational_{safe_expression}.mkv"
-            output_path = self.output_dir / output_filename
+            output_path = self.context_slide_combined_dir / output_filename
             
             logger.info(f"Creating educational sequence for: {expression.expression}")
             
@@ -755,6 +764,243 @@ class VideoEditor:
             logger.error(f"Error creating educational slide: {e}")
             raise
     
+    def _create_educational_slide_silent(self, expression: ExpressionAnalysis, duration: float) -> str:
+        """Create educational slide with background image and text, but without audio"""
+        try:
+            output_path = self.output_dir / f"temp_slide_silent_{self._sanitize_filename(expression.expression)}.mkv"
+            self._register_temp_file(output_path)
+            
+            # Get background configuration with proper fallbacks
+            background_input, input_type = self._get_background_config()
+            
+            logger.info(f"Creating silent slide for: {expression.expression} (duration: {duration:.2f}s)")
+            
+            # Clean text properly for educational slide (remove special characters including underscores)
+            def clean_text_for_slide(text):
+                """Clean text for slide display, removing special characters"""
+                if not isinstance(text, str):
+                    text = str(text)
+                
+                # Replace problematic characters for FFmpeg drawtext
+                cleaned = text.replace("'", "").replace('"', "").replace(":", "").replace(",", "")
+                cleaned = cleaned.replace("\\", "").replace("[", "").replace("]", "")
+                cleaned = cleaned.replace("{", "").replace("}", "").replace("(", "").replace(")", "")
+                cleaned = cleaned.replace("\n", " ").replace("\t", " ")
+                
+                # Remove other problematic characters for drawtext (preserve "/" for alternatives like "estafado/perjudicado")
+                cleaned = "".join(c for c in cleaned if c.isprintable() and c not in "@#$%^&*+=|<>")
+                
+                # Proper spacing and length limit
+                cleaned = " ".join(cleaned.split())  # Remove extra spaces
+                return cleaned[:100] if cleaned else "Expression"
+            
+            def escape_drawtext_string(text):
+                """Escape text for FFmpeg drawtext filter"""
+                # Escape single quotes and colons for drawtext
+                return text.replace(":", "\\:").replace("'", "\\'")
+            
+            # Prepare text content with proper cleaning
+            expression_text_raw = clean_text_for_slide(expression.expression)
+            translation_text_raw = clean_text_for_slide(expression.expression_translation)
+            
+            # Escape for drawtext filter
+            expression_text = escape_drawtext_string(expression_text_raw)
+            translation_text = escape_drawtext_string(translation_text_raw)
+            
+            # Prepare similar expressions (max 2) - handle different data types safely
+            similar_expressions = []
+            if hasattr(expression, 'similar_expressions') and expression.similar_expressions:
+                raw_similar = expression.similar_expressions
+                if isinstance(raw_similar, list):
+                    # Extract strings from list, handling mixed types
+                    for item in raw_similar[:2]:
+                        if isinstance(item, str):
+                            similar_expressions.append(item)
+                        elif isinstance(item, dict):
+                            # If it's a dict, try to extract text from common keys
+                            text = item.get('text') or item.get('expression') or item.get('value') or str(item)
+                            similar_expressions.append(str(text))
+                        else:
+                            similar_expressions.append(str(item))
+                else:
+                    # Handle single item or other types
+                    similar_expressions.append(str(raw_similar))
+            
+            logger.info(f"Creating silent slide with expression: '{expression_text}', translation: '{translation_text}'")
+            if similar_expressions:
+                logger.info(f"Similar expressions: {similar_expressions}")
+            
+            # Create slide with proper text layout (same as original but without audio)
+            try:
+                # Build drawtext filters for proper layout
+                drawtext_filters = []
+                
+                # Get font option safely
+                try:
+                    font_file_option = self._get_font_option()
+                    if not isinstance(font_file_option, str):
+                        font_file_option = str(font_file_option) if font_file_option else ""
+                except Exception as e:
+                    logger.warning(f"Error getting font option: {e}")
+                    font_file_option = ""
+                
+                # Safe font size retrieval with fallback - increased by 20%
+                try:
+                    expr_font_size = settings.get_font_size('expression')
+                    if not isinstance(expr_font_size, (int, float)):
+                        expr_font_size = 48
+                    expr_font_size = int(expr_font_size * 1.2)  # Increase by 20%
+                except:
+                    expr_font_size = 58  # 48 * 1.2 rounded
+                    
+                try:
+                    trans_font_size = settings.get_font_size('translation')
+                    if not isinstance(trans_font_size, (int, float)):
+                        trans_font_size = 40
+                    trans_font_size = int(trans_font_size * 1.2)  # Increase by 20%
+                except:
+                    trans_font_size = 48  # 40 * 1.2
+                
+                # 1. Original expression (upper middle area)
+                if expression_text and isinstance(expression_text, str):
+                    drawtext_filters.append(
+                        f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=white:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y=h/2-180:"
+                        f"borderw=2:bordercolor=black"
+                    )
+                
+                # 2. Translation (lower middle area) 
+                if translation_text and isinstance(translation_text, str):
+                    drawtext_filters.append(
+                        f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=white:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y=h/2+30:"
+                        f"borderw=2:bordercolor=black"
+                    )
+                
+                # 3. Similar expressions (bottom area, positioned higher and with line breaks)
+                if similar_expressions:
+                    # Ensure all items are strings before processing
+                    safe_similar = []
+                    for sim in similar_expressions:
+                        try:
+                            if isinstance(sim, str):
+                                safe_similar.append(clean_text_for_slide(sim))
+                            elif isinstance(sim, dict):
+                                # Extract text from dict safely
+                                text = sim.get('text') or sim.get('expression') or sim.get('value', '')
+                                if text:
+                                    safe_similar.append(clean_text_for_slide(str(text)))
+                            else:
+                                safe_similar.append(clean_text_for_slide(str(sim)))
+                        except Exception as e:
+                            logger.warning(f"Could not process similar expression {sim}: {e}")
+                            continue
+                    
+                    # Safe font size retrieval
+                    try:
+                        similar_font_size = settings.get_font_size('similar')
+                    except:
+                        similar_font_size = 32
+                    
+                    # Add each similar expression as a separate drawtext for proper line spacing
+                    base_y = 130  # Distance from bottom
+                    line_spacing = 40  # Space between lines
+                    
+                    for i, similar_text in enumerate(safe_similar[:2]):  # Limit to 2 expressions
+                        if similar_text:
+                            similar_text_escaped = escape_drawtext_string(similar_text)
+                            y_position = f"h-{base_y + (i * line_spacing)}"
+                            drawtext_filters.append(
+                                f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
+                                f"{font_file_option}"
+                                f"x=(w-text_w)/2:y={y_position}:"
+                                f"borderw=1:bordercolor=black"
+                            )
+                
+                # Combine all text filters
+                video_filter = ",".join(drawtext_filters)
+                
+                logger.info("Creating silent educational slide with text overlay...")
+                
+                # Create video input based on background type - NO AUDIO
+                if input_type == "image2":
+                    video_input = ffmpeg.input(background_input, loop=1, t=duration, f=input_type)
+                else:
+                    video_input = ffmpeg.input(background_input, f=input_type, t=duration)
+                
+                logger.info(f"Creating slide with video duration: {duration}s, NO AUDIO")
+                
+                # Create the slide with video only (completely silent, no audio track)
+                try:
+                    (
+                        ffmpeg
+                        .output(video_input['v'], str(output_path),
+                               vf=f"scale=1280:720,{video_filter}",
+                               vcodec='libx264',
+                               t=duration,
+                               preset='fast',
+                               crf=23)
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                    logger.info(f"Successfully created silent slide: {output_path}")
+                        
+                except Exception as ffmpeg_error:
+                    logger.error(f"FFmpeg error creating silent slide: {ffmpeg_error}")
+                    raise
+                
+                logger.info("Silent educational slide created successfully with text overlay")
+                    
+            except Exception as slide_error:
+                logger.error(f"Failed to create silent slide with text overlay: {slide_error}")
+                logger.info("Creating fallback silent slide without text...")
+                
+                # Fallback: create slide without text overlay and without audio
+                logger.warning("Creating fallback silent slide without text overlay due to error")
+                try:
+                    if input_type == "image2":
+                        video_input = ffmpeg.input(background_input, loop=1, t=duration, f=input_type)
+                    else:
+                        video_input = ffmpeg.input(background_input, f=input_type, t=duration)
+                    
+                    (
+                        ffmpeg
+                        .output(video_input['v'], str(output_path),
+                               vf="scale=1280:720",
+                               vcodec='libx264',
+                               t=duration,
+                               preset='fast',
+                               crf=23)
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                except Exception as fallback_error:
+                    logger.error(f"Even fallback silent slide creation failed: {fallback_error}")
+                    # Final emergency fallback - basic slide without audio
+                    try:
+                        video_input = ffmpeg.input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=duration)
+                        
+                        (
+                            ffmpeg
+                            .output(video_input['v'], str(output_path),
+                                   vcodec='libx264',
+                                   preset='fast',
+                                   crf=23)
+                            .overwrite_output()
+                            .run(quiet=True)
+                        )
+                    except Exception as emergency_error:
+                        logger.error(f"Emergency fallback also failed: {emergency_error}")
+                        raise
+            
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating silent educational slide: {e}")
+            raise
+    
     def _time_to_seconds(self, time_str: str) -> float:
         """Convert time string to seconds"""
         try:
@@ -889,6 +1135,67 @@ class VideoEditor:
         
         return "\n".join(srt_content)
     
+    def _generate_single_tts(self, text: str, expression_index: int = 0) -> Tuple[str, float]:
+        """
+        Generate single TTS audio and return path + duration.
+        For short videos where we need to play TTS with custom timing.
+        
+        Args:
+            text: Text to convert to speech
+            expression_index: Index of expression (0-based) for voice alternation
+            
+        Returns:
+            Tuple of (tts_audio_path, duration)
+        """
+        try:
+            from .tts.factory import create_tts_client
+            from . import settings
+            
+            # Get TTS configuration
+            tts_config = settings.get_tts_config()
+            provider = tts_config.get('provider', 'google')
+            provider_config = tts_config.get(provider, {})
+            
+            # Get alternate voices from config
+            alternate_voices = provider_config.get('alternate_voices', ['en-US-Wavenet-D', 'en-US-Wavenet-A'])
+            if len(alternate_voices) < 2:
+                alternate_voices = ['en-US-Wavenet-D', 'en-US-Wavenet-A']
+            
+            # Select voice based on expression index
+            voice_index = expression_index % len(alternate_voices)
+            selected_voice = alternate_voices[voice_index]
+            voice_name = "Puck" if voice_index == 0 else "Leda"
+            
+            logger.info(f"Expression {expression_index}: Using voice {voice_name} ({selected_voice}) for short video TTS")
+            
+            # Generate TTS audio file
+            voice_config = provider_config.copy()
+            voice_config['voice_name'] = selected_voice
+            
+            tts_client = create_tts_client(provider, voice_config)
+            tts_path = tts_client.generate_speech(text)
+            
+            # Register for cleanup
+            self._register_temp_file(tts_path)
+            
+            # Get duration of the TTS file
+            try:
+                probe = ffmpeg.probe(str(tts_path))
+                if 'streams' in probe and len(probe['streams']) > 0 and 'duration' in probe['streams'][0]:
+                    tts_duration = float(probe['streams'][0]['duration'])
+                else:
+                    tts_duration = 2.0  # Fallback
+            except:
+                tts_duration = 2.0  # Fallback
+            
+            logger.info(f"Generated single TTS with {voice_name}: {tts_duration:.2f}s")
+            
+            return str(tts_path), tts_duration
+            
+        except Exception as e:
+            logger.error(f"Error in _generate_single_tts: {e}")
+            raise
+
     def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
         """
         Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
@@ -1024,6 +1331,253 @@ class VideoEditor:
                 
         except Exception as e:
             logger.error(f"Error in _generate_tts_timeline: {e}")
+            raise
+
+    def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
+                                  expression_index: int = 0) -> Tuple[str, float]:
+        """
+        Create vertical short-format video (9:16) with context video on top and slide on bottom.
+        Total duration = context_duration + (TTS_duration * 2) + 0.5s
+        Context video plays normally, then freezes on last frame while TTS plays twice.
+        
+        Args:
+            context_video_path: Path to context video with subtitles
+            expression: ExpressionAnalysis object
+            expression_index: Index of expression (for voice alternation)
+            
+        Returns:
+            Tuple of (output_path, duration)
+        """
+        try:
+            # Create output filename
+            safe_expression = self._sanitize_filename(expression.expression)
+            output_filename = f"short_{safe_expression}.mkv"
+            output_path = self.context_slide_combined_dir / output_filename
+            
+            logger.info(f"Creating short-format video for: {expression.expression}")
+            
+            # Get context video duration
+            try:
+                context_probe = ffmpeg.probe(context_video_path)
+                context_duration = float(context_probe['format']['duration'])
+                logger.info(f"Context video duration: {context_duration:.2f}s")
+            except Exception as e:
+                logger.error(f"Error getting context video duration: {e}")
+                context_duration = 10.0  # Fallback duration
+            
+            # Generate TTS audio for the expression
+            logger.info(f"Generating TTS for short video: '{expression.expression}'")
+            tts_audio_path, tts_duration = self._generate_single_tts(expression.expression, expression_index)
+            logger.info(f"TTS audio duration: {tts_duration:.2f}s")
+            
+            # Calculate total video duration: context + (TTS * 2) + 0.5s gap
+            total_duration = context_duration + (tts_duration * 2) + 0.5
+            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×2: {tts_duration * 2:.2f}s + gap: 0.5s)")
+            
+            # Create silent slide with total duration (displays throughout entire video)
+            slide_path = self._create_educational_slide_silent(expression, total_duration)
+            
+            # Get resolution from configuration
+            resolution = settings.get_short_video_resolution()
+            width, height = map(int, resolution.split('x'))
+            half_height = height // 2
+            
+            logger.info(f"Creating vertical short-format video layout ({resolution})")
+            logger.info(f"Top half: {width}x{half_height}, Bottom half: {width}x{half_height}")
+            
+            # Create inputs
+            context_input = ffmpeg.input(context_video_path)
+            slide_input = ffmpeg.input(slide_path)
+            
+            # Extend context video by freezing last frame
+            # Use tpad filter to clone the last frame for the extended duration
+            freeze_duration = total_duration - context_duration
+            logger.info(f"Extending context video by {freeze_duration:.2f}s with freeze frame")
+            context_extended = ffmpeg.filter(
+                context_input['v'],
+                'tpad',
+                stop_mode='clone',
+                stop_duration=freeze_duration
+            )
+            
+            # Scale videos to half height for stacking
+            context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
+            slide_scaled = ffmpeg.filter(slide_input['v'], 'scale', width, half_height)
+            
+            # Stack videos vertically (context on top, slide on bottom)
+            stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
+            
+            # Create combined audio: context_audio + TTS (twice with 0.5s gap)
+            logger.info("Creating combined audio timeline: context audio + TTS×2 with 0.5s gap")
+            
+            # Create audio timeline: context_audio + TTS×2 with 0.5s gap
+            # First, create TTS timeline (TTS + 0.5s silence + TTS)
+            try:
+                # Create silence for 0.5s gap
+                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
+                self._register_temp_file(silence_0_5s_path)
+                
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
+                 .output(str(silence_0_5s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Convert TTS to WAV with stereo for concatenation
+                tts_wav_path = self.output_dir / f"temp_tts_short_{safe_expression}.wav"
+                self._register_temp_file(tts_wav_path)
+                
+                (ffmpeg.input(str(tts_audio_path))
+                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Extract context audio to WAV
+                context_audio_path = self.output_dir / f"temp_context_audio_short_{safe_expression}.wav"
+                self._register_temp_file(context_audio_path)
+                
+                (ffmpeg.input(context_video_path)
+                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2, vn=None)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Create concat file for audio timeline: context_audio + TTS + 0.5s silence + TTS
+                audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
+                self._register_temp_file(audio_concat_file)
+                
+                with open(audio_concat_file, 'w') as f:
+                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")
+                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                    f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
+                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                
+                # Concatenate all audio segments
+                combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"
+                self._register_temp_file(combined_audio_path)
+                
+                (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
+                 .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                logger.info(f"✅ Combined audio timeline created: {total_duration:.2f}s")
+                
+                # Create final video with combined audio
+                combined_audio_input = ffmpeg.input(str(combined_audio_path))
+                
+                (
+                    ffmpeg
+                    .output(stacked_video, combined_audio_input['a'], str(output_path),
+                           vcodec='libx264',
+                           acodec='aac',
+                           preset='fast',
+                           crf=23,
+                           ac=2,
+                           ar=48000,
+                           t=total_duration)
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                
+                logger.info("✅ Short video created with extended audio successfully")
+                
+            except ffmpeg.Error as e:
+                logger.error(f"FFmpeg error creating short video: {e}")
+                logger.error(f"FFmpeg stderr: {e.stderr.decode() if e.stderr else 'No stderr'}")
+                raise
+            except Exception as e:
+                logger.error(f"Error creating short video audio timeline: {e}")
+                raise
+            
+            logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
+            return str(output_path), total_duration
+            
+        except Exception as e:
+            logger.error(f"Error creating short-format video: {e}")
+            raise
+
+    def create_batched_short_videos(self, short_format_videos: List[Tuple[str, float]], 
+                                    target_duration: float = 120.0) -> List[str]:
+        """
+        Combine short format videos into batches of ~120 seconds each.
+        
+        Args:
+            short_format_videos: List of (video_path, duration) tuples
+            target_duration: Target duration for each batch (default: 120 seconds)
+        
+        Returns:
+            List of created batch video paths
+        """
+        try:
+            logger.info(f"Creating batched short videos from {len(short_format_videos)} videos")
+            logger.info(f"Target duration per batch: {target_duration}s")
+            
+            batch_videos = []
+            current_batch_videos = []
+            current_duration = 0.0
+            batch_number = 1
+            
+            for video_path, duration in short_format_videos:
+                # Check if adding this video would exceed target duration
+                if current_duration + duration > target_duration and current_batch_videos:
+                    # Create batch with current videos
+                    batch_path = self._create_video_batch(current_batch_videos, batch_number)
+                    batch_videos.append(batch_path)
+                    
+                    # Reset for next batch
+                    current_batch_videos = [video_path]
+                    current_duration = duration
+                    batch_number += 1
+                else:
+                    # Add to current batch
+                    current_batch_videos.append(video_path)
+                    current_duration += duration
+            
+            # Create final batch if there are remaining videos
+            if current_batch_videos:
+                batch_path = self._create_video_batch(current_batch_videos, batch_number)
+                batch_videos.append(batch_path)
+            
+            logger.info(f"✅ Created {len(batch_videos)} short video batches")
+            return batch_videos
+            
+        except Exception as e:
+            logger.error(f"Error creating batched short videos: {e}")
+            raise
+
+    def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
+        """Create a single batch video from a list of video paths"""
+        try:
+            batch_filename = f"short_video_{batch_number:03d}.mkv"
+            batch_path = self.short_videos_dir / batch_filename
+            
+            logger.info(f"Creating batch {batch_number} with {len(video_paths)} videos")
+            
+            # Create concat file
+            concat_file = self.short_videos_dir / f"temp_concat_batch_{batch_number}.txt"
+            self._register_temp_file(concat_file)
+            
+            with open(concat_file, 'w') as f:
+                for video_path in video_paths:
+                    f.write(f"file '{Path(video_path).absolute()}'\n")
+            
+            # Concatenate videos
+            (
+                ffmpeg
+                .input(str(concat_file), format='concat', safe=0)
+                .output(str(batch_path),
+                       vcodec='libx264',
+                       acodec='aac',
+                       preset='fast',
+                       crf=23)
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+            
+            logger.info(f"✅ Batch {batch_number} created: {batch_path}")
+            return str(batch_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating video batch {batch_number}: {e}")
             raise
 
 

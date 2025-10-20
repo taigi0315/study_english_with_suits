@@ -119,11 +119,15 @@ class OutputManager:
         context_videos_dir = lang_dir / "context_videos"
         slides_dir = lang_dir / "slides"
         final_videos_dir = lang_dir / "final_videos"
+        context_slide_combined_dir = lang_dir / "context_slide_combined"
+        short_videos_dir = lang_dir / "short_videos"
         
         subtitles_dir.mkdir(exist_ok=True)
         context_videos_dir.mkdir(exist_ok=True)
         slides_dir.mkdir(exist_ok=True)
         final_videos_dir.mkdir(exist_ok=True)
+        context_slide_combined_dir.mkdir(exist_ok=True)
+        short_videos_dir.mkdir(exist_ok=True)
         
         # Return language-specific paths
         lang_paths = {
@@ -131,7 +135,9 @@ class OutputManager:
             'subtitles': subtitles_dir,
             'context_videos': context_videos_dir,
             'slides': slides_dir,
-            'final_videos': final_videos_dir
+            'final_videos': final_videos_dir,
+            'context_slide_combined': context_slide_combined_dir,
+            'short_videos': short_videos_dir
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")

@@ -414,10 +414,16 @@ output/
                 ├── subtitles/            # Dual-language subtitle files
                 │   ├── expression_01_[name].srt
                 │   └── expression_02_[name].srt
-                ├── final_videos/         # Complete educational sequences
+                ├── context_slide_combined/ # Individual educational videos
                 │   ├── educational_[expression_01].mkv
                 │   ├── educational_[expression_02].mkv
+                │   ├── short_[expression_01].mkv      # Short format videos (9:16)
+                │   └── short_[expression_02].mkv
+                ├── final_videos/         # Complete educational sequences
                 │   └── final_educational_video_with_slides.mkv
+                ├── short_videos/         # Batched short format videos
+                │   ├── short_video_001.mkv
+                │   └── short_video_002.mkv
                 └── metadata/             # Processing metadata
                     └── processing_info.json
 ```
@@ -438,6 +444,28 @@ Each educational video follows this sequence:
    - Audio: Expression repeated 3 times
 
 3. **Next Expression** (repeat pattern)
+
+### Short Format Videos (9:16 Aspect Ratio)
+
+Short format videos are optimized for social media platforms and follow this structure:
+
+1. **Total Duration**: `context_duration + (TTS_duration × 2) + 0.5s`
+   - Example: Context (7.2s) + TTS×2 (2.8s) + gap (0.5s) = **10.5s total**
+
+2. **Layout**:
+   - **Top half**: Context video with subtitles
+     - Plays normally for original context duration
+     - Freezes on last frame for remaining duration
+   - **Bottom half**: Educational slide (silent, displays throughout entire video)
+     - Shows expression, translation, and similar expressions
+     - No audio (context audio + TTS audio only)
+
+3. **Audio Timeline**:
+   - Context audio plays during video portion
+   - After context ends: TTS audio plays twice with 0.5s gap between repetitions
+   - Total audio length matches video length
+
+4. **Batching**: Individual short videos are automatically batched into ~120-second segments in the `short_videos/` folder for easier social media posting.
 
 ### Metadata Files
 
@@ -491,6 +519,7 @@ python -m langflix.main [OPTIONS]
 | `--test-mode` | False | Process only first chunk for testing |
 | `--dry-run` | False | Analysis only, no video processing |
 | `--save-llm-output` | False | Save LLM responses to files |
+| `--no-shorts` | False | Skip creating short-format videos (shorts enabled by default) |
 | `--verbose` | False | Enable debug logging |
 
 ### Examples
@@ -520,6 +549,12 @@ python -m langflix.main \
 python -m langflix.main \
   --subtitle "file.srt" \
   --dry-run
+
+# Skip short videos
+python -m langflix.main \
+  --subtitle "file.srt" \
+  --no-shorts \
+  --verbose
 ```
 
 ---

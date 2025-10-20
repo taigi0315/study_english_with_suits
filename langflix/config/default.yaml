@@ -131,7 +131,7 @@ tts:
   
   # LemonFox TTS Configuration
   lemonfox:
-    api_key: "XqovmVk0O3QLEfUHEurTQQKXX8PrQLmd"
+    # api_key: "set via LEMONFOX_API_KEY environment variable"
     voice: "bella"
     response_format: "wav"  # wav or mp3 (wav recommended for video processing)
   

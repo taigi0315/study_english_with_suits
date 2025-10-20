@@ -2,6 +2,7 @@
 Factory for creating TTS client instances
 """
 
+import os
 import logging
 from typing import Dict, Any
 
@@ -38,10 +39,13 @@ def create_tts_client(provider: str, config: Dict[str, Any]) -> TTSClient:
     logger.info(f"Creating TTS client for provider: {provider}")
     
     if provider == "lemonfox":
-        # Validate required configuration
-        api_key = config.get('api_key')
+        # Get API key from environment variable first, fallback to config
+        api_key = os.getenv("LEMONFOX_API_KEY") or config.get('api_key')
         if not api_key:
-            raise ValueError("LemonFox API key is required in configuration")
+            raise ValueError(
+                "LemonFox API key is required. Set LEMONFOX_API_KEY environment variable "
+                "or provide api_key in configuration"
+            )
         
         voice = config.get('voice', 'bella')
         response_format = config.get('response_format', 'wav')

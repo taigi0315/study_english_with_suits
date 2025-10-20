@@ -46,6 +46,7 @@ class VideoEditor:
         """
         Ensure expression has dialogue fields for backward compatibility.
         If fields are missing, fall back to using expression as dialogue.
+        Handle edge cases like very long text and expression==dialogue.
         
         Args:
             expression: ExpressionAnalysis object
@@ -53,13 +54,32 @@ class VideoEditor:
         Returns:
             ExpressionAnalysis with guaranteed dialogue fields
         """
+        # Handle missing expression_dialogue with fallback
         if not hasattr(expression, 'expression_dialogue') or not expression.expression_dialogue:
             logger.warning(f"expression_dialogue missing for '{expression.expression}', using fallback")
             expression.expression_dialogue = expression.expression
         
+        # Handle missing expression_dialogue_translation with fallback
         if not hasattr(expression, 'expression_dialogue_translation') or not expression.expression_dialogue_translation:
             logger.warning(f"expression_dialogue_translation missing, using fallback")
             expression.expression_dialogue_translation = expression.expression_translation
+        
+        # Edge case: If expression is the same as dialogue, avoid duplication in TTS
+        if (expression.expression and expression.expression_dialogue and 
+            expression.expression.strip() == expression.expression_dialogue.strip()):
+            logger.info(f"Expression same as dialogue, will handle in TTS generation")
+        
+        # Edge case: Truncate very long dialogue lines for better slide display
+        MAX_DIALOGUE_LENGTH = 120  # characters
+        if len(expression.expression_dialogue) > MAX_DIALOGUE_LENGTH:
+            logger.warning(f"Expression dialogue too long ({len(expression.expression_dialogue)} chars), truncating")
+            expression.expression_dialogue = expression.expression_dialogue[:MAX_DIALOGUE_LENGTH] + "..."
+        
+        # Edge case: Truncate very long TTS text for provider limits
+        MAX_TTS_CHARS = 500  # Adjust based on provider
+        combined_text = f"{expression.expression_dialogue}. {expression.expression}"
+        if len(combined_text) > MAX_TTS_CHARS:
+            logger.warning(f"TTS text too long ({len(combined_text)} chars), will truncate in TTS generation")
         
         return expression
         
@@ -406,9 +426,20 @@ class VideoEditor:
             # Get background configuration with proper fallbacks
             background_input, input_type = self._get_background_config()
             
-            # Generate TTS audio for dialogue + expression
-            tts_text = f"{expression.expression_dialogue}. {expression.expression}"
-            logger.info(f"Generating TTS audio for: '{tts_text}'")
+            # Generate TTS audio for dialogue + expression with edge case handling
+            # Edge case: If expression is same as dialogue, only read once
+            if (expression.expression.strip() == expression.expression_dialogue.strip()):
+                tts_text = expression.expression_dialogue  # Only read once to avoid duplication
+                logger.info(f"Expression same as dialogue, TTS will read once: '{tts_text}'")
+            else:
+                tts_text = f"{expression.expression_dialogue}. {expression.expression}"
+                logger.info(f"Generating TTS audio for: '{tts_text}'")
+            
+            # Edge case: Truncate if too long for TTS provider
+            MAX_TTS_CHARS = 500  # Adjust based on provider
+            if len(tts_text) > MAX_TTS_CHARS:
+                logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
+                tts_text = tts_text[:MAX_TTS_CHARS]
             
             # Import TTS modules
             from .tts.factory import create_tts_client
@@ -830,6 +861,9 @@ class VideoEditor:
     def _create_educational_slide_silent(self, expression: ExpressionAnalysis, duration: float) -> str:
         """Create educational slide with background image and text, but without audio"""
         try:
+            # Ensure backward compatibility for expression_dialogue fields
+            expression = self._ensure_expression_dialogue(expression)
+            
             output_path = self.output_dir / f"temp_slide_silent_{self._sanitize_filename(expression.expression)}.mkv"
             self._register_temp_file(output_path)
             
@@ -837,6 +871,7 @@ class VideoEditor:
             background_input, input_type = self._get_background_config()
             
             logger.info(f"Creating silent slide for: {expression.expression} (duration: {duration:.2f}s)")
+            logger.info(f"Dialogue: {expression.expression_dialogue}")
             
             # Clean text properly for educational slide (remove special characters including underscores)
             def clean_text_for_slide(text):
@@ -863,11 +898,16 @@ class VideoEditor:
                 return text.replace(":", "\\:").replace("'", "\\'")
             
             # Prepare text content with proper cleaning
+            # NEW: Add expression_dialogue and expression_dialogue_translation
+            expression_dialogue_raw = clean_text_for_slide(expression.expression_dialogue)
             expression_text_raw = clean_text_for_slide(expression.expression)
+            expression_dialogue_trans_raw = clean_text_for_slide(expression.expression_dialogue_translation)
             translation_text_raw = clean_text_for_slide(expression.expression_translation)
             
             # Escape for drawtext filter
+            expression_dialogue = escape_drawtext_string(expression_dialogue_raw)
             expression_text = escape_drawtext_string(expression_text_raw)
+            expression_dialogue_trans = escape_drawtext_string(expression_dialogue_trans_raw)
             translation_text = escape_drawtext_string(translation_text_raw)
             
             # Prepare similar expressions (max 2) - handle different data types safely
@@ -889,11 +929,15 @@ class VideoEditor:
                     # Handle single item or other types
                     similar_expressions.append(str(raw_similar))
             
-            logger.info(f"Creating silent slide with expression: '{expression_text}', translation: '{translation_text}'")
+            logger.info(f"Creating silent slide with:")
+            logger.info(f"  - expression_dialogue: '{expression_dialogue}'")
+            logger.info(f"  - expression: '{expression_text}'")
+            logger.info(f"  - dialogue_translation: '{expression_dialogue_trans}'")
+            logger.info(f"  - expression_translation: '{translation_text}'")
             if similar_expressions:
                 logger.info(f"Similar expressions: {similar_expressions}")
             
-            # Create slide with proper text layout (same as original but without audio)
+            # Create slide with NEW 5-section layout (same as main educational slide)
             try:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
@@ -907,42 +951,72 @@ class VideoEditor:
                     logger.warning(f"Error getting font option: {e}")
                     font_file_option = ""
                 
-                # Safe font size retrieval with fallback - increased by 20%
+                # Safe font size retrieval with NEW font size keys (same as main slide)
+                try:
+                    dialogue_font_size = settings.get_font_size('expression_dialogue')
+                    if not isinstance(dialogue_font_size, (int, float)):
+                        dialogue_font_size = 40
+                except:
+                    dialogue_font_size = 40
+                
                 try:
                     expr_font_size = settings.get_font_size('expression')
                     if not isinstance(expr_font_size, (int, float)):
-                        expr_font_size = 48
-                    expr_font_size = int(expr_font_size * 1.2)  # Increase by 20%
+                        expr_font_size = 58
                 except:
-                    expr_font_size = 58  # 48 * 1.2 rounded
+                    expr_font_size = 58
                     
                 try:
-                    trans_font_size = settings.get_font_size('translation')
-                    if not isinstance(trans_font_size, (int, float)):
-                        trans_font_size = 40
-                    trans_font_size = int(trans_font_size * 1.2)  # Increase by 20%
+                    dialogue_trans_font_size = settings.get_font_size('expression_dialogue_trans')
+                    if not isinstance(dialogue_trans_font_size, (int, float)):
+                        dialogue_trans_font_size = 36
                 except:
-                    trans_font_size = 48  # 40 * 1.2
+                    dialogue_trans_font_size = 36
                 
-                # 1. Original expression (upper middle area)
+                try:
+                    trans_font_size = settings.get_font_size('expression_trans')
+                    if not isinstance(trans_font_size, (int, float)):
+                        trans_font_size = 48
+                except:
+                    trans_font_size = 48
+                
+                # 1. Expression dialogue (full sentence) - upper area
+                if expression_dialogue and isinstance(expression_dialogue, str):
+                    drawtext_filters.append(
+                        f"drawtext=text='{expression_dialogue}':fontsize={dialogue_font_size}:fontcolor=white:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y=h/2-280:"
+                        f"borderw=2:bordercolor=black"
+                    )
+                
+                # 2. Expression (key phrase) - highlighted in yellow, below dialogue
                 if expression_text and isinstance(expression_text, str):
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=white:"
+                        f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-180:"
+                        f"x=(w-text_w)/2:y=h/2-210:"
+                        f"borderw=3:bordercolor=black"
+                    )
+                
+                # 3. Expression dialogue translation - middle area
+                if expression_dialogue_trans and isinstance(expression_dialogue_trans, str):
+                    drawtext_filters.append(
+                        f"drawtext=text='{expression_dialogue_trans}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y=h/2-60:"
                         f"borderw=2:bordercolor=black"
                     )
                 
-                # 2. Translation (lower middle area) 
+                # 4. Expression translation (key phrase) - highlighted in yellow
                 if translation_text and isinstance(translation_text, str):
                     drawtext_filters.append(
-                        f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=white:"
+                        f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2+30:"
-                        f"borderw=2:bordercolor=black"
+                        f"x=(w-text_w)/2:y=h/2+10:"
+                        f"borderw=3:bordercolor=black"
                     )
                 
-                # 3. Similar expressions (bottom area, positioned higher and with line breaks)
+                # 5. Similar expressions (bottom area, positioned higher and with line breaks)
                 if similar_expressions:
                     # Ensure all items are strings before processing
                     safe_similar = []

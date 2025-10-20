@@ -104,6 +104,8 @@ print(f"처리된 표현 수: {results['processed_expressions']}")
 class ExpressionAnalysis(BaseModel):
     dialogues: List[str]
     translation: List[str]
+    expression_dialogue: str
+    expression_dialogue_translation: str
     expression: str
     expression_translation: str
     context_start_time: str
@@ -116,13 +118,21 @@ class ExpressionAnalysis(BaseModel):
 **필드:**
 - `dialogues` (List[str]): 장면의 전체 대화 라인
 - `translation` (List[str]): 모든 대화 라인의 번역 (동일한 순서)
-- `expression` (str): 학습할 메인 표현/구문
-- `expression_translation` (str): 메인 표현의 번역
+- `expression_dialogue` (str): **NEW** - 표현이 포함된 완전한 대화 문장 (자막의 전체 문장)
+- `expression_dialogue_translation` (str): **NEW** - 표현이 포함된 완전한 대화 문장의 번역
+- `expression` (str): 학습할 메인 표현/구문 (`expression_dialogue`에서 추출한 핵심 부분)
+- `expression_translation` (str): 메인 표현의 번역 (핵심 부분의 번역)
 - `context_start_time` (str): 대화 컨텍스트가 시작되어야 하는 타임스탬프 (형식: "HH:MM:SS,mmm")
 - `context_end_time` (str): 대화 컨텍스트가 끝나야 하는 타임스탬프 (형식: "HH:MM:SS,mmm")
 - `expression_start_time` (str, 선택사항): 표현 구문이 시작되는 정확한 타임스탬프
 - `expression_end_time` (str, 선택사항): 표현 구문이 끝나는 정확한 타임스탬프
 - `similar_expressions` (List[str]): 1-3개의 유사한 표현 또는 대안
+
+**필드 관계:**
+- `expression_dialogue`는 표현이 나타나는 **전체 문장**을 포함합니다
+- `expression`은 `expression_dialogue`에서 추출한 **핵심 구문/관용구**로 집중 학습을 위한 것입니다
+- `expression_dialogue_translation`은 전체 문장을 번역합니다
+- `expression_translation`은 핵심 표현 부분만 번역합니다
 
 **예제:**
 ```python
@@ -131,6 +141,8 @@ from langflix.models import ExpressionAnalysis
 expr = ExpressionAnalysis(
     dialogues=["I'm paying you millions,", "and you're telling me I'm gonna get screwed?"],
     translation=["나는 당신에게 수백만 달러를 지불하고 있는데,", "당신은 내가 속임을 당할 것이라고 말하고 있나요?"],
+    expression_dialogue="and you're telling me I'm gonna get screwed?",
+    expression_dialogue_translation="당신은 내가 속임을 당할 것이라고 말하고 있나요?",
     expression="I'm gonna get screwed",
     expression_translation="속임을 당할 것 같아요",
     context_start_time="00:01:25,657",

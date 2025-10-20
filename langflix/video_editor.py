@@ -594,38 +594,30 @@ class VideoEditor:
                 # Combine all text filters
                 video_filter = ",".join(drawtext_filters)
                 
-                logger.info("Creating educational slide with text overlay...")
+                logger.info("Creating educational slide with text overlay and TTS audio...")
                 
-                # Use proper ffmpeg input based on background type
+                # Create video input based on background type
                 if input_type == "image2":
-                    (
-                        ffmpeg
-                        .input(background_input, loop=1, t=slide_duration, f=input_type)
-                        .output(str(output_path),
-                               vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
-                               acodec='aac',
-                               t=slide_duration,
-                               preset='fast',
-                               crf=23)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
+                    video_input = ffmpeg.input(background_input, loop=1, t=slide_duration, f=input_type)
                 else:
-                    # For lavfi (color) input
-                    (
-                        ffmpeg
-                        .input(background_input, f=input_type, t=slide_duration)
-                        .output(str(output_path),
-                               vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
-                               acodec='aac',
-                               t=slide_duration,
-                               preset='fast',
-                               crf=23)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
+                    video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
+                
+                # Add the 3x TTS audio input
+                audio_input = ffmpeg.input(str(audio_3x_path))
+                
+                # Create the slide with both video and audio directly
+                (
+                    ffmpeg
+                    .output(video_input['v'], audio_input['a'], str(output_path),
+                           vf=f"scale=1280:720,{video_filter}",
+                           vcodec='libx264',
+                           acodec='aac',
+                           t=slide_duration,
+                           preset='fast',
+                           crf=23)
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
                 
                 logger.info("Educational slide created successfully with text overlay")
                     
@@ -633,79 +625,74 @@ class VideoEditor:
                 logger.error(f"Failed to create slide with text overlay: {slide_error}")
                 logger.info("Creating fallback slide without text...")
                 
-                # Fallback: create slide without text overlay
+                # Fallback: create slide without text overlay but with audio
                 logger.warning("Creating fallback slide without text overlay due to error")
                 try:
                     if input_type == "image2":
-                        (
-                            ffmpeg
-                            .input(background_input, loop=1, t=slide_duration, f=input_type)
-                            .output(str(output_path),
-                                   vf="scale=1280:720",
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   t=slide_duration,
-                                   preset='fast',
-                                   crf=23)
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
+                        video_input = ffmpeg.input(background_input, loop=1, t=slide_duration, f=input_type)
                     else:
-                        (
-                            ffmpeg
-                            .input(background_input, f=input_type, t=slide_duration)
-                            .output(str(output_path),
-                                   vf="scale=1280:720",
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   t=slide_duration,
-                                   preset='fast',
-                                   crf=23)
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
-                except Exception as fallback_error:
-                    logger.error(f"Even fallback slide creation failed: {fallback_error}")
-                    # Final emergency fallback
+                        video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
+                    
+                    audio_input = ffmpeg.input(str(audio_3x_path))
+                    
                     (
                         ffmpeg
-                        .input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
-                        .output(str(output_path),
+                        .output(video_input['v'], audio_input['a'], str(output_path),
+                               vf="scale=1280:720",
                                vcodec='libx264',
                                acodec='aac',
+                               t=slide_duration,
                                preset='fast',
                                crf=23)
                         .overwrite_output()
-                        .run(quiet=True)
+                        .run(capture_stdout=True, capture_stderr=True)
                     )
+                except Exception as fallback_error:
+                    logger.error(f"Even fallback slide creation failed: {fallback_error}")
+                    # Final emergency fallback - basic slide with audio
+                    try:
+                        video_input = ffmpeg.input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
+                        audio_input = ffmpeg.input(str(audio_3x_path))
+                        
+                        (
+                            ffmpeg
+                            .output(video_input['v'], audio_input['a'], str(output_path),
+                                   vcodec='libx264',
+                                   acodec='aac',
+                                   preset='fast',
+                                   crf=23)
+                            .overwrite_output()
+                            .run(quiet=True)
+                        )
+                    except Exception as emergency_error:
+                        logger.error(f"Emergency fallback also failed: {emergency_error}")
+                        # Last resort: create basic video without audio
+                        (
+                            ffmpeg
+                            .input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
+                            .output(str(output_path),
+                                   vcodec='libx264',
+                                   acodec='aac',
+                                   preset='fast',
+                                   crf=23)
+                            .overwrite_output()
+                            .run(quiet=True)
+                        )
             
-            # Combine slide with 3x audio - save to slides directory
+            # Move temp slide to final location in slides directory
             slides_dir = self.output_dir.parent / "slides"
             slides_dir.mkdir(exist_ok=True)
             final_slide_path = slides_dir / f"slide_{self._sanitize_filename(expression.expression)}.mkv"
             
-            video_input = ffmpeg.input(str(output_path))
-            audio_input = ffmpeg.input(str(audio_3x_path))
-            
             try:
-                # Combine video and audio streams properly with duration limit
-                (
-                    ffmpeg
-                    .output(video_input['v'], audio_input['a'], str(final_slide_path),
-                           vcodec='libx264',
-                           acodec='aac',
-                           preset='fast',
-                           crf=23,
-                           t=slide_duration)
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
-                logger.info(f"Successfully combined video and audio for final slide")
-            except ffmpeg.Error as e:
-                logger.error(f"FFmpeg error combining video and audio: {e}")
-                logger.error(f"FFmpeg stdout: {e.stdout.decode('utf-8') if e.stdout else 'None'}")
-                logger.error(f"FFmpeg stderr: {e.stderr.decode('utf-8') if e.stderr else 'None'}")
-                raise
+                # Copy the slide (which now already includes audio) to final location
+                import shutil
+                shutil.copy2(str(output_path), str(final_slide_path))
+                logger.info(f"Successfully created educational slide with TTS audio: {final_slide_path}")
+            except Exception as copy_error:
+                logger.error(f"Error copying slide to final location: {copy_error}")
+                # Return the temp file path as fallback
+                final_slide_path = output_path
             
             return str(final_slide_path)
             

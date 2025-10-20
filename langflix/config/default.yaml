@@ -89,10 +89,13 @@ video:
 # ============================================================================
 font:
   sizes:
-    default: 32          # Default font size
-    expression: 48       # Main expression text
-    translation: 40      # Translation text
-    similar: 32          # Similar expressions text
+    default: 32                  # Default font size
+    expression_dialogue: 40      # Full dialogue line containing expression
+    expression: 58               # Main expression/phrase (emphasized, larger)
+    expression_dialogue_trans: 36  # Translation of dialogue line
+    expression_trans: 48         # Translation of expression (emphasized)
+    translation: 40              # Legacy: Translation text (for backward compatibility)
+    similar: 32                  # Similar expressions text
   
   # Automatically detect platform-specific fonts
   auto_detect: true

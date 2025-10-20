@@ -17,8 +17,16 @@ class ExpressionAnalysis(BaseModel):
         description="Translations of all dialogue lines in the same order",
         min_length=1
     )
+    expression_dialogue: str = Field(
+        description="The complete dialogue line that contains the expression",
+        min_length=1
+    )
+    expression_dialogue_translation: str = Field(
+        description="Translation of the dialogue line containing the expression",
+        min_length=1
+    )
     expression: str = Field(
-        description="The main expression/phrase to learn",
+        description="The main expression/phrase to learn (key part extracted from expression_dialogue)",
         min_length=1
     )
     expression_translation: str = Field(
@@ -59,6 +67,8 @@ class ExpressionAnalysis(BaseModel):
                     "나는 당신에게 수백만 달러를 지불하고 있는데,",
                     "당신은 내가 속임을 당할 것이라고 말하고 있나요?"
                 ],
+                "expression_dialogue": "and you're telling me I'm gonna get screwed?",
+                "expression_dialogue_translation": "당신은 내가 속임을 당할 것이라고 말하고 있나요?",
                 "expression": "I'm gonna get screwed",
                 "expression_translation": "속임을 당할 것 같아요",
                 "context_start_time": "00:01:25,657",
@@ -93,6 +103,8 @@ class ExpressionAnalysisResponse(BaseModel):
                             "나는 당신에게 수백만 달러를 지불하고 있는데,",
                             "당신은 내가 속임을 당할 것이라고 말하고 있나요?"
                         ],
+                        "expression_dialogue": "and you're telling me I'm gonna get screwed?",
+                        "expression_dialogue_translation": "당신은 내가 속임을 당할 것이라고 말하고 있나요?",
                         "expression": "I'm gonna get screwed",
                         "expression_translation": "속임을 당할 것 같아요",
                         "context_start_time": "00:01:25,657",

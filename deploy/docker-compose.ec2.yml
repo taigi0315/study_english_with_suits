@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  langflix-ec2:
+    build: 
+      context: ..
+      dockerfile: Dockerfile.ec2
+    container_name: langflix-ec2-app
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LANGFLIX_LOG_LEVEL=INFO
+      - LANGFLIX_OUTPUT_DIR=/data/output
+    volumes:
+      # EBS volume mount (from host)
+      - /data:/data
+      # Application config
+      - ../config.yaml:/app/config.yaml:ro
+      - ../.env:/app/.env:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import langflix"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

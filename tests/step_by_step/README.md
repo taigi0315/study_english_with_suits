@@ -44,23 +44,7 @@ The testing scripts are designed to help debug the LangFlix pipeline by validati
 - **Input**: Results from Steps 3 and 5
 - **Output**: `test_output/step6/expression_XX_full_sequence.mkv`
 
-### Step 7: Final Concatenation (with Expression Transitions)
-- **Script**: `test_step7_final_concat.py`
-- **Purpose**: Concatenate all expression sequences into final educational video
-- **Input**: Results from Step 6
-- **Output**: `test_output/step7/final_educational_video_with_slides.mkv`
-
-### Step 8: Process Multiple
-- **Script**: `test_step8_process_multiple.py`
-- **Purpose**: Verify all expressions were processed through steps 2-7
-- **Input**: Results from all previous steps
-- **Output**: Comprehensive processing summary
-
-### Step 9: Final Concatenation
-- **Script**: `test_step9_final_concat.py`
-- **Purpose**: Concatenate all expression sequences into final educational video
-- **Input**: Results from Step 7
-- **Output**: `test_output/step9/final_educational_video_with_slides.mkv`
+**Note:** The step-by-step testing system focuses on the core 6-step workflow. Final concatenation is handled by the main pipeline (`langflix.main`) which produces the complete educational video in the production environment.
 
 ## Usage
 
@@ -111,17 +95,14 @@ test_output/
 ├── step5/
 │   ├── expression_01_*.mkv        # Educational slides
 │   └── test_results.json
-├── step6/
-│   ├── expression_01_*.mkv        # Slides with audio
-│   └── test_results.json
-├── step7/
-│   ├── expression_01_*.mkv        # Full sequences
-│   └── test_results.json
-├── step8/
-│   └── test_results.json          # Processing summary
-└── step9/
-    ├── final_educational_video_with_slides.mkv  # Final video
+└── step6/
+    ├── expression_01_*.mkv        # Combined context + slides
     └── test_results.json
+```
+
+**Complete Pipeline Output:** For the final educational video with all expressions combined, use the main pipeline:
+```bash
+python -m langflix.main --subtitle "file.srt"
 ```
 
 ## Validation
@@ -151,7 +132,7 @@ Each step includes comprehensive validation:
    - Check video codec compatibility
 
 4. **Step Dependencies**
-   - Steps 2-9 depend on previous steps
+   - Steps 2-6 depend on previous steps
    - Run steps sequentially or ensure required outputs exist
 
 ### Debugging Tips

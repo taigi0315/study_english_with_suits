@@ -27,6 +27,8 @@ langflix/
 │   ├── video_processor.py    # Video file processing & clip extraction
 │   ├── subtitle_processor.py # Subtitle processing & translation
 │   ├── prompts.py           # Advanced prompt engineering
+│   ├── templates/           # External prompt templates
+│   │   └── expression_analysis_prompt.txt
 │   ├── models.py            # Pydantic data models
 │   └── settings.py          # Configuration settings
 ├── tests/                   # Test suite
@@ -107,6 +109,7 @@ LangFlix uses YAML-based configuration files for easy customization. The system 
    - Video quality settings  
    - Font sizes
    - LLM parameters
+   - Expression limits (min/max per chunk)
    - Transition effects
 
 ### Configuration Structure
@@ -122,10 +125,20 @@ LangFlix loads configuration in this order (later overrides earlier):
 **LLM Settings:**
 ```yaml
 llm:
-  max_input_length: 10000
+  max_input_length: 1680      # Characters per chunk (optimized for API)
   target_language: "Spanish"
   default_language_level: "intermediate"
   temperature: 0.1
+  top_p: 0.8
+  top_k: 40
+  max_retries: 3              # API retry attempts
+```
+
+**Expression Limits:**
+```yaml
+processing:
+  min_expressions_per_chunk: 1   # Minimum expressions per chunk
+  max_expressions_per_chunk: 3   # Maximum expressions per chunk
 ```
 
 **Video Processing:**
@@ -157,6 +170,22 @@ transitions:
 ```
 
 For complete configuration options, see `config.example.yaml` which includes all available settings with descriptions.
+
+### Prompt Template Customization
+
+LangFlix uses external prompt templates for easy customization. The main prompt template is located at:
+
+```
+langflix/templates/expression_analysis_prompt.txt
+```
+
+You can edit this file to:
+- Modify expression selection criteria
+- Adjust language level requirements
+- Change output format instructions
+- Update quality guidelines
+
+The system automatically loads the template and applies your configuration variables (language level, expression limits, target language, etc.).
 
 ### Environment Variable Overrides
 
@@ -414,10 +443,24 @@ python run_tests.py all --coverage
 
 ## 📚 Documentation
 
+### User Guides
+- [User Manual](docs/USER_MANUAL.md) - Complete usage guide (English)
+- [User Manual 한국어](docs/USER_MANUAL_KOR.md) - 완전한 사용 가이드 (한국어)
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions (English)
+- [Troubleshooting Guide 한국어](docs/TROUBLESHOOTING_KOR.md) - 일반적인 문제와 해결책 (한국어)
 - [Setup Guide](SETUP_GUIDE.md) - Detailed installation instructions
+
+### Technical Documentation
+- [API Reference](docs/API_REFERENCE.md) - Programmatic usage guide (English)
+- [API Reference 한국어](docs/API_REFERENCE_KOR.md) - 프로그래밍 사용 가이드 (한국어)
 - [Development Diary](docs/development_diary.md) - Progress tracking
-- [Project Plan](docs/project_plan.md) - High-level project overview
 - [System Design](docs/system_design_and_development_plan.md) - Technical architecture
+
+### Advanced Topics
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production setup (English)
+- [Deployment Guide 한국어](docs/DEPLOYMENT_KOR.md) - 프로덕션 설정 (한국어)
+- [Performance Guide](docs/PERFORMANCE.md) - Optimization tips (English)
+- [Performance Guide 한국어](docs/PERFORMANCE_KOR.md) - 최적화 팁 (한국어)
 
 ## 🤝 Contributing
 

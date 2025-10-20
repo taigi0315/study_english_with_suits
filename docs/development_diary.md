@@ -1043,3 +1043,77 @@ Step 7: ✅ Final Assembly - 45.7s final video with 2 expressions (5.3MB)
 - Reliable regression testing for future updates
 
 **The step-by-step testing system represents a significant advancement in LangFlix's development workflow, providing unprecedented visibility into the educational video generation pipeline while ensuring robust, reliable operation! 🧪✨**
+
+---
+
+## 📅 2025-10-19 - Prompt Template Refactoring
+
+### 🎯 **Prompt Template Externalization**
+
+**Objective**: Improve maintainability and editability of LLM prompts by extracting hardcoded prompts into separate template files.
+
+#### ✅ **Implementation**
+
+**1. Template Directory Structure**
+- **Created**: `langflix/templates/` directory
+- **Added**: `expression_analysis_prompt.txt` - Main prompt template
+- **Added**: `__init__.py` for proper Python package structure
+
+**2. Code Refactoring**
+- **File**: `langflix/prompts.py`
+- **Enhancement**: Replaced 160+ lines of hardcoded f-string with template loading
+- **Added**: `_load_prompt_template()` function for file-based template loading
+- **Improved**: Error handling for missing template files
+
+**3. Benefits Achieved**
+- **Easy Editing**: Prompts can now be edited in plain text files
+- **Version Control**: Better git diff tracking for prompt changes  
+- **Maintainability**: Clear separation between code logic and prompt content
+- **Readability**: Proper formatting without escaped characters and string concatenation
+
+#### 🔧 **Technical Details**
+
+**Before (Hardcoded)**:
+```python
+prompt = f"""
+Here is a segment of dialogue from the TV show "Suits":
+{dialogues}
+[... 160+ lines of hardcoded prompt ...]
+"""
+```
+
+**After (Template-based)**:
+```python
+template = _load_prompt_template()
+prompt = template.format(
+    dialogues=dialogues,
+    level_description=level_description,
+    min_expressions=min_expressions,
+    max_expressions=max_expressions,
+    target_language=target_language
+)
+```
+
+**Template File Structure**:
+```
+langflix/templates/
+├── __init__.py
+└── expression_analysis_prompt.txt  # ← Easy to edit!
+```
+
+#### 🎯 **Configuration Integration**
+
+The template system seamlessly integrates with existing configuration:
+- Language level selection
+- Expression min/max limits  
+- Target language settings
+- All prompt variables are dynamically injected
+
+#### 📚 **Documentation Impact**
+
+This change supports the comprehensive documentation update initiative:
+- User manuals now reference the template customization feature
+- Troubleshooting guides include template editing instructions
+- API documentation covers the template system architecture
+
+**The prompt template refactoring represents a significant improvement in LangFlix's maintainability, making it much easier for users and developers to customize and improve the AI prompt engineering without touching Python code! 📝✨**

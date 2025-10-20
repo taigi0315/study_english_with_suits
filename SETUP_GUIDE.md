@@ -47,7 +47,20 @@ cp env.example .env
 # GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-### 4. Gemini API 키 발급
+### 5. YAML 설정 파일 구성
+```bash
+# 예제 설정 파일 복사
+cp config.example.yaml config.yaml
+
+# 필요한 경우 config.yaml 편집하여 다음 설정 조정:
+# - 대상 언어 (target_language)
+# - 비디오 품질 설정 (video codec, resolution, crf)
+# - 폰트 크기 (font sizes)
+# - LLM 매개변수 (temperature, max_input_length)
+# - 표현 제한 (min/max expressions per chunk)
+```
+
+### 6. Gemini API 키 발급
 1. [Google AI Studio](https://aistudio.google.com/) 방문
 2. Google 계정으로 로그인
 3. API 키 생성
@@ -135,20 +148,36 @@ python -m langflix.main --subtitle path/to/subtitle.srt --dry-run
 
 ## 문제 해결 (Troubleshooting)
 
-### API 키 오류
+### 기본 문제 해결
+
+자세한 문제 해결 가이드는 다음 문서를 참조하세요:
+- [TROUBLESHOOTING_KOR.md](docs/TROUBLESHOOTING_KOR.md) - 한국어 문제 해결 가이드
+- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - English troubleshooting guide
+
+### 자주 발생하는 문제
+
+**API 키 오류**
 ```
 Error: GEMINI_API_KEY not found
 ```
 → `.env` 파일에 올바른 API 키가 설정되어 있는지 확인
 
-### JSON 파싱 오류
+**JSON 파싱 오류**
 ```
 Error parsing JSON from LLM response
 ```
 → Gemini API 응답이 올바른 JSON 형식이 아닐 수 있음. 로그를 확인하여 원본 응답 확인
 
-### 의존성 오류
+**의존성 오류**
 ```
 Import "google.generativeai" could not be resolved
 ```
 → `pip install -r requirements.txt` 실행하여 의존성 재설치
+
+**비디오 파일을 찾을 수 없음**
+```
+Error: Could not find video file for subtitle
+```
+→ 비디오 및 자막 파일명이 일치하는지 확인, `--video-dir` 옵션 사용
+
+더 많은 문제와 해결책은 [문제 해결 가이드](docs/TROUBLESHOOTING_KOR.md)를 참조하세요.

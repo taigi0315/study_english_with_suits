@@ -97,8 +97,26 @@ class LemonFoxTTSClient(TTSClient):
         
         try:
             # Make API request
+            logger.info(f"Making API request to: {self.url}")
+            logger.info(f"Request data: {data}")
+            
             response = requests.post(self.url, headers=headers, json=data, timeout=30)
+            
+            # Debug response details
+            logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
+            logger.info(f"Response content length: {len(response.content)} bytes")
+            
+            # Check if we got a successful response
             response.raise_for_status()
+            
+            # Verify we got binary audio content (not error message)
+            content_type = response.headers.get('content-type', '').lower()
+            logger.info(f"Content-Type: {content_type}")
+            
+            if len(response.content) < 100:
+                logger.warning(f"Very small response content ({len(response.content)} bytes), might be error message:")
+                logger.warning(f"Content preview: {response.content[:200]}")
             
             # Determine output path
             if output_path is None:
@@ -118,8 +136,14 @@ class LemonFoxTTSClient(TTSClient):
             with open(output_path, "wb") as f:
                 f.write(response.content)
             
+            # Verify the saved file
+            file_size = output_path.stat().st_size
             logger.info(f"Successfully generated speech audio: {output_path}")
-            logger.info(f"Audio file size: {output_path.stat().st_size} bytes")
+            logger.info(f"Audio file size: {file_size} bytes")
+            
+            if file_size == 0:
+                logger.error(f"Generated audio file is empty!")
+                raise ValueError(f"Generated audio file is empty: {output_path}")
             
             return output_path
             
@@ -128,8 +152,11 @@ class LemonFoxTTSClient(TTSClient):
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"LemonFox API request failed: {e}")
-            if hasattr(e.response, 'text'):
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response status: {e.response.status_code}")
                 logger.error(f"API response: {e.response.text}")
+                if e.response.status_code == 401:
+                    logger.error("Invalid API key - please check your LEMONFOX_API_KEY environment variable")
             raise
         except Exception as e:
             logger.error(f"Unexpected error generating speech: {e}")

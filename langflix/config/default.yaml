@@ -132,8 +132,8 @@ tts:
   # LemonFox TTS Configuration
   lemonfox:
     # api_key: "set via LEMONFOX_API_KEY environment variable"
-    voice: "bella"
-    response_format: "wav"  # wav or mp3 (wav recommended for video processing)
+    voice: "sarah"
+    response_format: "mp3"  # mp3 format as requested
   
   # Future providers can be configured here
   # google:

@@ -394,7 +394,13 @@ class VideoEditor:
                 # Save TTS audio to permanent location for debugging
                 tts_audio_dir = self.output_dir.parent / "tts_audio"
                 tts_audio_dir.mkdir(exist_ok=True)
-                audio_filename = f"tts_single_{self._sanitize_filename(expression.expression)}.wav"
+                
+                # Get the file extension from the TTS client configuration
+                from . import settings
+                tts_config = settings.get_tts_config()
+                provider_config = tts_config.get(settings.get_tts_provider(), {})
+                audio_format = provider_config.get('response_format', 'mp3')
+                audio_filename = f"tts_single_{self._sanitize_filename(expression.expression)}.{audio_format}"
                 audio_path = tts_audio_dir / audio_filename
                 
                 # Copy from temp location to permanent location
@@ -430,7 +436,7 @@ class VideoEditor:
                 )
                 logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback")
             
-            # Create 3x repeated audio
+            # Create 3x repeated audio - use WAV for internal processing (better for FFmpeg)
             audio_3x_path = self.output_dir / f"temp_audio_3x_{self._sanitize_filename(expression.expression)}.wav"
             self._register_temp_file(audio_3x_path)
             slide_duration = expression_duration * 3 + 1.0 # 3x expression audio + 1 second padding
@@ -449,7 +455,7 @@ class VideoEditor:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Save 3x audio permanently for debugging
+                # Save 3x audio permanently for debugging (save as WAV since that's what we created)
                 audio_3x_filename = f"tts_3x_{self._sanitize_filename(expression.expression)}.wav"
                 audio_3x_permanent_path = tts_audio_dir / audio_3x_filename
                 

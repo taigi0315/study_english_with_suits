@@ -1,268 +1,256 @@
-# Settings for the LangFlix application
+"""
+Settings management for LangFlix application.
 
-import os
-import platform
+This module provides simple accessor functions for configuration values.
+All configuration is stored in YAML files (default.yaml, config.yaml).
+"""
+
 import logging
-from pathlib import Path
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional
 
 from .config import ConfigLoader
+from .config.font_utils import get_platform_default_font, get_font_file_for_language
 
 logger = logging.getLogger(__name__)
 
-def get_default_font():
-    """Get appropriate default font based on platform"""
-    system = platform.system()
-    
-    if system == "Darwin":  # macOS
-        return "/System/Library/Fonts/AppleSDGothicNeo.ttc"
-    elif system == "Linux":
-        # Try common Korean fonts on Linux
-        for font_path in [
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-        ]:
-            if os.path.exists(font_path):
-                return font_path
-        # Fallback to system default
-        return ""
-    elif system == "Windows":
-        # Try common Korean fonts on Windows
-        for font_path in [
-            "C:/Windows/Fonts/malgun.ttf",  # Malgun Gothic
-            "C:/Windows/Fonts/arial.ttf",   # Arial fallback
-        ]:
-            if os.path.exists(font_path):
-                return font_path
-        # Fallback to system default
-        return ""
-    else:
-        return ""
+# Single source of configuration
+_config_loader = ConfigLoader()
 
-# Initialize YAML configuration loader
-config_loader = ConfigLoader()
 
-# Get values from YAML config with fallbacks for backward compatibility
-DEFAULT_FONT_FILE = get_default_font()
+# ============================================================================
+# Section Accessors - Get entire configuration sections
+# ============================================================================
 
-# Font sizes - loaded from YAML config
-FONT_SIZE_DEFAULT = config_loader.get('font', 'sizes', 'default') or 32
-FONT_SIZE_EXPRESSION = config_loader.get('font', 'sizes', 'expression') or 55
-FONT_SIZE_TRANSLATION = config_loader.get('font', 'sizes', 'translation') or 55
-FONT_SIZE_SIMILAR = config_loader.get('font', 'sizes', 'similar') or 42
+def get_app_config() -> Dict[str, Any]:
+    """Get application settings"""
+    return _config_loader.get_section('app') or {}
 
-# LLM settings - loaded from YAML config  
-llm_config = config_loader.get('llm') or {}
-MAX_LLM_INPUT_LENGTH = llm_config.get('max_input_length') or 8000
-TARGET_LANGUAGE = llm_config.get('target_language') or "Korean"
-DEFAULT_LANGUAGE_LEVEL = llm_config.get('default_language_level') or "intermediate"
 
-# Language levels - loaded from YAML config with fallbacks
-_language_levels_fallback = {
-    "beginner": {
-        "description": "A1-A2 level. Focus on basic everyday expressions, simple phrasal verbs, and common conversational phrases used in daily life. Avoid complex idioms or advanced vocabulary.",
-        "examples": "Let's go, I'm sorry, How are you, Can you help me, What's up"
-    },
-    "intermediate": {
-        "description": "B1-B2 level. Focus on commonly used idiomatic expressions, standard phrasal verbs, and colloquial phrases that appear frequently in casual and professional contexts.",
-        "examples": "Get the ball rolling, Call it a day, Piece of cake, Break the ice, On the same page"
-    },
-    "advanced": {
-        "description": "C1-C2 level. Focus on sophisticated idioms, nuanced expressions, professional jargon, and complex colloquialisms that native speakers use in various contexts.",
-        "examples": "Read between the lines, Cut to the chase, Play devil's advocate, Bite off more than you can chew"
-    },
-    "mixed": {
-        "description": "All levels. Extract valuable expressions regardless of difficulty level, but prioritize practical, commonly-used phrases that appear in authentic conversations.",
-        "examples": "Any useful expression from basic to advanced"
-    }
-}
-LANGUAGE_LEVELS = config_loader.get('language_levels') or _language_levels_fallback
-
-# Video processing configuration - loaded from YAML config with fallbacks
-_video_config_fallback = {
-    "codec": "libx264",
-    "audio_codec": "aac", 
-    "preset": "fast",
-    "crf": 23,
-    "resolution": "1280x720",
-    "fps": 30,
-    "bitrate": "2000k",
-    "audio_bitrate": "128k"
-}
-VIDEO_CONFIG = config_loader.get('video') or _video_config_fallback
-
-# Configuration management - Updated to use YAML loader
-class ConfigManager:
-    """Configuration manager for LangFlix settings - Updated to use YAML"""
-    
-    def __init__(self, config_file: Optional[str] = None):
-        # Use the global config_loader for backward compatibility
-        self.config_loader = config_loader
-        
-    def get(self, section: str, key: Optional[str] = None, default: Optional[Union[str, int, float, bool, Dict, List]] = None) -> Union[str, int, float, bool, Dict, List, None]:
-        """Get a configuration value
-        
-        Maintains backward compatibility with old get(section, key, default) API
-        but also supports get(section) for full section access
-        """
-        if key is None:
-            # Return entire section
-            return self.config_loader.get_section(section)
-        else:
-            # Return specific key from section
-            return self.config_loader.get(section, key, default=default)
-    
-    def set(self, section: str, key: str, value: Union[str, int, float, bool, Dict, List]) -> None:
-        """Set a configuration value - Note: This modifies runtime config only"""
-        # For now, we'll update the config_loader's internal config
-        # In a full implementation, this would update the user config file
-        current_section = self.config_loader.get_section(section)
-        current_section[key] = value
-        logger.warning("Runtime config changes via set() are not persisted to YAML files")
-    
-    def save_config(self):
-        """Save current configuration to file"""
-        # This would need to be implemented to save back to config.yaml
-        logger.warning("save_config() not fully implemented for YAML config - use YAML files directly")
-
-# Global configuration instance - maintains backward compatibility
-config = ConfigManager()
-
-# Export commonly used settings with fallbacks to config
-def get_video_config(attribute: str = None):
-    """Get video processing configuration"""
-    video_config = config.get("video")
-    return video_config.get(attribute) if attribute and isinstance(video_config, dict) else video_config
-
-def get_font_size(size_type: str = "default") -> int:
-    """Get font size for different text types"""
-    try:
-        # Try to get from YAML config first
-        font_sizes = config_loader.get('font', 'sizes')
-        if isinstance(font_sizes, dict) and size_type in font_sizes:
-            return int(font_sizes[size_type])
-    except Exception as e:
-        logger.debug(f"Error getting font size from config: {e}")
-    
-    # Fallback to constants for backward compatibility
-    fallbacks = {
-        'default': FONT_SIZE_DEFAULT,
-        'expression': FONT_SIZE_EXPRESSION,
-        'translation': FONT_SIZE_TRANSLATION,
-        'similar': FONT_SIZE_SIMILAR
-    }
-    return fallbacks.get(size_type, FONT_SIZE_DEFAULT)
-
-def get_font_file(language_code: str = None) -> str:
-    """Get font file path for the given language or default"""
-    try:
-        # Import language_config here to avoid circular imports
-        from .language_config import LanguageConfig
-        
-        # If language code is provided, try to get language-specific font
-        if language_code:
-            try:
-                font_path = LanguageConfig.get_font_path(language_code)
-                if font_path and os.path.exists(font_path):
-                    logger.info(f"Using language-specific font for {language_code}: {font_path}")
-                    return font_path
-                else:
-                    logger.warning(f"Language-specific font not found for {language_code}, falling back to default")
-            except Exception as e:
-                logger.warning(f"Error getting font for language {language_code}: {e}")
-        
-        # Fallback to default font configuration
-        font_config = config.get("font")
-        if isinstance(font_config, dict):
-            font_file = font_config.get("default_file", DEFAULT_FONT_FILE)
-        else:
-            font_file = DEFAULT_FONT_FILE
-        
-        # Ensure we return a string
-        if isinstance(font_file, str):
-            return font_file
-        else:
-            return str(font_file) if font_file else DEFAULT_FONT_FILE
-    except Exception as e:
-        logger.warning(f"Error getting font file: {e}")
-        return DEFAULT_FONT_FILE
-
-def get_llm_config(key: str = None):
+def get_llm_config() -> Dict[str, Any]:
     """Get LLM configuration"""
-    llm_config = config.get("llm")
-    return llm_config.get(key) if key and isinstance(llm_config, dict) else llm_config
+    return _config_loader.get_section('llm') or {}
 
-def get_generation_config():
+
+def get_video_config() -> Dict[str, Any]:
+    """Get video processing configuration"""
+    return _config_loader.get_section('video') or {}
+
+
+def get_font_config() -> Dict[str, Any]:
+    """Get font configuration"""
+    return _config_loader.get_section('font') or {}
+
+
+def get_processing_config() -> Dict[str, Any]:
+    """Get processing configuration"""
+    return _config_loader.get_section('processing') or {}
+
+
+def get_tts_config() -> Dict[str, Any]:
+    """Get TTS configuration"""
+    return _config_loader.get_section('tts') or {}
+
+
+def get_short_video_config() -> Dict[str, Any]:
+    """Get short video configuration"""
+    return _config_loader.get_section('short_video') or {}
+
+
+def get_transitions_config() -> Dict[str, Any]:
+    """Get transitions configuration"""
+    return _config_loader.get_section('transitions') or {}
+
+
+def get_language_levels() -> Dict[str, Any]:
+    """Get language proficiency levels"""
+    return _config_loader.get_section('language_levels') or {}
+
+
+# ============================================================================
+# App Settings
+# ============================================================================
+
+def get_show_name() -> str:
+    """Get the TV show name from configuration"""
+    return get_app_config().get('show_name', 'Suits')
+
+
+def get_template_file() -> str:
+    """Get the template file name from configuration"""
+    return get_app_config().get('template_file', 'expression_analysis_prompt.txt')
+
+
+# ============================================================================
+# LLM Settings
+# ============================================================================
+
+def get_generation_config() -> Dict[str, Any]:
     """Get generation configuration for LLM API calls"""
-    llm_cfg = config.get("llm") or {}
+    llm_cfg = get_llm_config()
     return {
         "temperature": llm_cfg.get('temperature', 0.1),
         "top_p": llm_cfg.get('top_p', 0.8),
         "top_k": llm_cfg.get('top_k', 40),
     }
 
-def get_max_retries():
+
+def get_max_retries() -> int:
     """Get maximum retries for API calls"""
-    llm_cfg = config.get("llm") or {}
-    return llm_cfg.get('max_retries', 3)
+    return get_llm_config().get('max_retries', 3)
 
-def get_retry_backoff_seconds():
+
+def get_retry_backoff_seconds() -> list:
     """Get retry backoff times"""
-    llm_cfg = config.get("llm") or {}
-    return llm_cfg.get('retry_backoff_seconds', [3, 6, 12])
+    return get_llm_config().get('retry_backoff_seconds', [3, 6, 12])
 
-def get_min_expressions_per_chunk():
+
+# ============================================================================
+# Font Settings
+# ============================================================================
+
+def get_font_size(size_type: str = "default") -> int:
+    """
+    Get font size for different text types.
+    
+    Args:
+        size_type: Type of font size ('default', 'expression', 'translation', 'similar')
+        
+    Returns:
+        int: Font size in pixels
+    """
+    font_cfg = get_font_config()
+    sizes = font_cfg.get('sizes', {})
+    
+    # Default fallbacks if not in config
+    default_sizes = {
+        'default': 32,
+        'expression': 48,
+        'translation': 40,
+        'similar': 32
+    }
+    
+    return sizes.get(size_type, default_sizes.get(size_type, 32))
+
+
+def get_font_file(language_code: Optional[str] = None) -> str:
+    """
+    Get font file path for the given language or default.
+    
+    Args:
+        language_code: Optional language code (e.g., 'ko', 'ja', 'zh')
+        
+    Returns:
+        str: Path to appropriate font file
+    """
+    # Check if font config specifies a file
+    font_cfg = get_font_config()
+    if 'default_file' in font_cfg:
+        return str(font_cfg['default_file'])
+    
+    # Use font_utils for platform detection and language-specific fonts
+    return get_font_file_for_language(language_code)
+
+
+# ============================================================================
+# Processing Settings
+# ============================================================================
+
+def get_min_expressions_per_chunk() -> int:
     """Get minimum expressions per chunk"""
-    proc_cfg = config.get("processing") or {}
-    return proc_cfg.get('min_expressions_per_chunk', 1)
+    return get_processing_config().get('min_expressions_per_chunk', 1)
 
-def get_max_expressions_per_chunk():
+
+def get_max_expressions_per_chunk() -> int:
     """Get maximum expressions per chunk"""
-    proc_cfg = config.get("processing") or {}
-    return proc_cfg.get('max_expressions_per_chunk', 3)
+    return get_processing_config().get('max_expressions_per_chunk', 3)
 
-def get_tts_config() -> Dict[str, Any]:
-    """Get TTS configuration from YAML"""
-    tts_cfg = config.get("tts") or {}
-    return tts_cfg
+
+# ============================================================================
+# TTS Settings
+# ============================================================================
 
 def get_tts_provider() -> str:
     """Get TTS provider name"""
-    tts_cfg = get_tts_config()
-    return tts_cfg.get('provider', 'lemonfox')
+    return get_tts_config().get('provider', 'google')
+
 
 def is_tts_enabled() -> bool:
     """Check if TTS is enabled"""
-    tts_cfg = get_tts_config()
-    return tts_cfg.get('enabled', True)
+    return get_tts_config().get('enabled', True)
 
-def get_show_name() -> str:
-    """Get the TV show name from configuration"""
-    app_cfg = config.get("app") or {}
-    return app_cfg.get('show_name', 'Suits')
 
-def get_template_file() -> str:
-    """Get the template file name from configuration"""
-    app_cfg = config.get("app") or {}
-    return app_cfg.get('template_file', 'expression_analysis_prompt_v2.txt')
-
-def get_short_video_config() -> Dict[str, Any]:
-    """Get short video configuration"""
-    short_video_cfg = config.get("short_video") or {}
-    return short_video_cfg
+# ============================================================================
+# Short Video Settings
+# ============================================================================
 
 def is_short_video_enabled() -> bool:
     """Check if short video generation is enabled"""
-    short_video_cfg = get_short_video_config()
-    return short_video_cfg.get('enabled', True)
+    return get_short_video_config().get('enabled', True)
+
 
 def get_short_video_target_duration() -> float:
     """Get target duration for short video batches"""
-    short_video_cfg = get_short_video_config()
-    return short_video_cfg.get('target_duration', 120.0)
+    return float(get_short_video_config().get('target_duration', 120.0))
+
 
 def get_short_video_resolution() -> str:
     """Get short video resolution"""
-    short_video_cfg = get_short_video_config()
-    return short_video_cfg.get('resolution', '1080x1920')
+    return get_short_video_config().get('resolution', '1080x1920')
+
+
+# ============================================================================
+# Backward Compatibility - Deprecated but maintained for compatibility
+# ============================================================================
+
+# Legacy constants - use get_* functions instead
+DEFAULT_FONT_FILE = get_platform_default_font()
+FONT_SIZE_DEFAULT = get_font_size('default')
+FONT_SIZE_EXPRESSION = get_font_size('expression')
+FONT_SIZE_TRANSLATION = get_font_size('translation')
+FONT_SIZE_SIMILAR = get_font_size('similar')
+MAX_LLM_INPUT_LENGTH = get_llm_config().get('max_input_length', 1680)
+TARGET_LANGUAGE = get_llm_config().get('target_language', 'Korean')
+DEFAULT_LANGUAGE_LEVEL = get_llm_config().get('default_language_level', 'intermediate')
+LANGUAGE_LEVELS = get_language_levels()
+VIDEO_CONFIG = get_video_config()
+
+
+# Legacy ConfigManager class - use get_* functions instead
+class ConfigManager:
+    """
+    Legacy configuration manager for backward compatibility.
+    
+    Deprecated: Use get_* functions directly instead.
+    """
+    
+    def __init__(self, config_file: Optional[str] = None):
+        logger.warning("ConfigManager is deprecated. Use get_* functions directly.")
+        self.config_loader = _config_loader
+        
+    def get(self, section: str, key: Optional[str] = None, default: Any = None) -> Any:
+        """Get a configuration value"""
+        if key is None:
+            return self.config_loader.get_section(section)
+        else:
+            return self.config_loader.get(section, key, default=default)
+    
+    def set(self, section: str, key: str, value: Any) -> None:
+        """Set a configuration value (runtime only, not persisted)"""
+        logger.warning("ConfigManager.set() does not persist changes. Edit YAML files directly.")
+        
+    def save_config(self):
+        """Save configuration (not implemented)"""
+        logger.warning("ConfigManager.save_config() not implemented. Edit YAML files directly.")
+
+
+# Global config instance for backward compatibility
+config = ConfigManager()
+
+
+# Legacy functions - maintained for compatibility
+def get_video_config(attribute: str = None):
+    """Legacy: Get video processing configuration"""
+    video_cfg = get_video_config()
+    if attribute and isinstance(video_cfg, dict):
+        return video_cfg.get(attribute)
+    return video_cfg

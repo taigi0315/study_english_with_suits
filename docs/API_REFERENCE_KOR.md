@@ -44,7 +44,7 @@ LangFlixPipeline(
 
 #### 메서드
 
-##### `run(max_expressions=None, dry_run=False, language_level=None, save_llm_output=False, test_mode=False) -> Dict[str, Any]`
+##### `run(max_expressions=None, dry_run=False, language_level=None, save_llm_output=False, test_mode=False, no_shorts=False) -> Dict[str, Any]`
 
 전체 LangFlix 파이프라인을 실행합니다.
 
@@ -54,6 +54,7 @@ LangFlixPipeline(
 - `language_level` (str, 선택사항): 대상 언어 수준 ("beginner", "intermediate", "advanced", "mixed"). None이면 설정에서 기본값 사용.
 - `save_llm_output` (bool): True이면 검토를 위해 LLM 응답을 파일에 저장 (기본값: False)
 - `test_mode` (bool): True이면 테스트를 위해 첫 번째 청크만 처리 (기본값: False)
+- `no_shorts` (bool): True이면 숏폼 비디오 생성을 건너뜀 (기본값: False, 숏폼 비디오는 기본적으로 생성됨)
 
 **반환값:**
 - 처리 결과가 포함된 딕셔너리:

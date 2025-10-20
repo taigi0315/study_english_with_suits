@@ -1135,6 +1135,67 @@ class VideoEditor:
         
         return "\n".join(srt_content)
     
+    def _generate_single_tts(self, text: str, expression_index: int = 0) -> Tuple[str, float]:
+        """
+        Generate single TTS audio and return path + duration.
+        For short videos where we need to play TTS with custom timing.
+        
+        Args:
+            text: Text to convert to speech
+            expression_index: Index of expression (0-based) for voice alternation
+            
+        Returns:
+            Tuple of (tts_audio_path, duration)
+        """
+        try:
+            from .tts.factory import create_tts_client
+            from . import settings
+            
+            # Get TTS configuration
+            tts_config = settings.get_tts_config()
+            provider = tts_config.get('provider', 'google')
+            provider_config = tts_config.get(provider, {})
+            
+            # Get alternate voices from config
+            alternate_voices = provider_config.get('alternate_voices', ['en-US-Wavenet-D', 'en-US-Wavenet-A'])
+            if len(alternate_voices) < 2:
+                alternate_voices = ['en-US-Wavenet-D', 'en-US-Wavenet-A']
+            
+            # Select voice based on expression index
+            voice_index = expression_index % len(alternate_voices)
+            selected_voice = alternate_voices[voice_index]
+            voice_name = "Puck" if voice_index == 0 else "Leda"
+            
+            logger.info(f"Expression {expression_index}: Using voice {voice_name} ({selected_voice}) for short video TTS")
+            
+            # Generate TTS audio file
+            voice_config = provider_config.copy()
+            voice_config['voice_name'] = selected_voice
+            
+            tts_client = create_tts_client(provider, voice_config)
+            tts_path = tts_client.generate_speech(text)
+            
+            # Register for cleanup
+            self._register_temp_file(tts_path)
+            
+            # Get duration of the TTS file
+            try:
+                probe = ffmpeg.probe(str(tts_path))
+                if 'streams' in probe and len(probe['streams']) > 0 and 'duration' in probe['streams'][0]:
+                    tts_duration = float(probe['streams'][0]['duration'])
+                else:
+                    tts_duration = 2.0  # Fallback
+            except:
+                tts_duration = 2.0  # Fallback
+            
+            logger.info(f"Generated single TTS with {voice_name}: {tts_duration:.2f}s")
+            
+            return str(tts_path), tts_duration
+            
+        except Exception as e:
+            logger.error(f"Error in _generate_single_tts: {e}")
+            raise
+
     def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
         """
         Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
@@ -1276,6 +1337,8 @@ class VideoEditor:
                                   expression_index: int = 0) -> Tuple[str, float]:
         """
         Create vertical short-format video (9:16) with context video on top and slide on bottom.
+        Total duration = context_duration + (TTS_duration * 2) + 0.5s
+        Context video plays normally, then freezes on last frame while TTS plays twice.
         
         Args:
             context_video_path: Path to context video with subtitles
@@ -1302,8 +1365,17 @@ class VideoEditor:
                 logger.error(f"Error getting context video duration: {e}")
                 context_duration = 10.0  # Fallback duration
             
-            # Create silent slide with same duration as context video
-            slide_path = self._create_educational_slide_silent(expression, context_duration)
+            # Generate TTS audio for the expression
+            logger.info(f"Generating TTS for short video: '{expression.expression}'")
+            tts_audio_path, tts_duration = self._generate_single_tts(expression.expression, expression_index)
+            logger.info(f"TTS audio duration: {tts_duration:.2f}s")
+            
+            # Calculate total video duration: context + (TTS * 2) + 0.5s gap
+            total_duration = context_duration + (tts_duration * 2) + 0.5
+            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×2: {tts_duration * 2:.2f}s + gap: 0.5s)")
+            
+            # Create silent slide with total duration (displays throughout entire video)
+            slide_path = self._create_educational_slide_silent(expression, total_duration)
             
             # Get resolution from configuration
             resolution = settings.get_short_video_resolution()
@@ -1317,97 +1389,107 @@ class VideoEditor:
             context_input = ffmpeg.input(context_video_path)
             slide_input = ffmpeg.input(slide_path)
             
+            # Extend context video by freezing last frame
+            # Use tpad filter to clone the last frame for the extended duration
+            freeze_duration = total_duration - context_duration
+            logger.info(f"Extending context video by {freeze_duration:.2f}s with freeze frame")
+            context_extended = ffmpeg.filter(
+                context_input['v'],
+                'tpad',
+                stop_mode='clone',
+                stop_duration=freeze_duration
+            )
+            
             # Scale videos to half height for stacking
-            context_scaled = ffmpeg.filter(context_input['v'], 'scale', width, half_height)
+            context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
             slide_scaled = ffmpeg.filter(slide_input['v'], 'scale', width, half_height)
             
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Use only context video audio (no slide audio)
-            context_audio = context_input['a']
+            # Create combined audio: context_audio + TTS (twice with 0.5s gap)
+            logger.info("Creating combined audio timeline: context audio + TTS×2 with 0.5s gap")
             
-            # Create final video - use context video audio only (slide has no audio)
+            # Create audio timeline: context_audio + TTS×2 with 0.5s gap
+            # First, create TTS timeline (TTS + 0.5s silence + TTS)
             try:
-                # Check if context video has audio stream by probing
-                context_probe = ffmpeg.probe(context_video_path)
-                context_has_audio = any(stream['codec_type'] == 'audio' for stream in context_probe['streams'])
-                logger.info(f"Context video has audio: {context_has_audio}")
+                # Create silence for 0.5s gap
+                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
+                self._register_temp_file(silence_0_5s_path)
                 
-                if context_has_audio:
-                    # Process context audio to ensure compatibility (force stereo)
-                    # Use simpler approach - direct audio stream with output options
-                    
-                    # Use context video audio (slide is silent) with proper audio processing
-                    (
-                        ffmpeg
-                        .output(stacked_video, context_audio, str(output_path),
-                               vcodec='libx264',
-                               acodec='aac',
-                               preset='fast',
-                               crf=23,
-                               ac=2,  # Force 2 channels (stereo)
-                               ar=48000,  # Set sample rate
-                               t=context_duration)  # Duration matches context video
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                    logger.info("✅ Short video created with audio successfully")
-                else:
-                    # No audio in context video, create completely silent video
-                    logger.warning("Context video has no audio, creating silent short video")
-                    (
-                        ffmpeg
-                        .output(stacked_video, str(output_path),
-                               vcodec='libx264',
-                               preset='fast',
-                               crf=23,
-                               t=context_duration)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
+                 .output(str(silence_0_5s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Convert TTS to WAV with stereo for concatenation
+                tts_wav_path = self.output_dir / f"temp_tts_short_{safe_expression}.wav"
+                self._register_temp_file(tts_wav_path)
+                
+                (ffmpeg.input(str(tts_audio_path))
+                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Extract context audio to WAV
+                context_audio_path = self.output_dir / f"temp_context_audio_short_{safe_expression}.wav"
+                self._register_temp_file(context_audio_path)
+                
+                (ffmpeg.input(context_video_path)
+                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2, vn=None)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Create concat file for audio timeline: context_audio + TTS + 0.5s silence + TTS
+                audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
+                self._register_temp_file(audio_concat_file)
+                
+                with open(audio_concat_file, 'w') as f:
+                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")
+                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                    f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
+                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                
+                # Concatenate all audio segments
+                combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"
+                self._register_temp_file(combined_audio_path)
+                
+                (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
+                 .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                logger.info(f"✅ Combined audio timeline created: {total_duration:.2f}s")
+                
+                # Create final video with combined audio
+                combined_audio_input = ffmpeg.input(str(combined_audio_path))
+                
+                (
+                    ffmpeg
+                    .output(stacked_video, combined_audio_input['a'], str(output_path),
+                           vcodec='libx264',
+                           acodec='aac',
+                           preset='fast',
+                           crf=23,
+                           ac=2,
+                           ar=48000,
+                           t=total_duration)
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                
+                logger.info("✅ Short video created with extended audio successfully")
+                
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error creating short video: {e}")
                 logger.error(f"FFmpeg stderr: {e.stderr.decode() if e.stderr else 'No stderr'}")
-                # Try fallback with simpler audio processing
-                logger.info("Attempting fallback with simpler audio processing...")
-                try:
-                    # Try with direct audio stream and force stereo
-                    (
-                        ffmpeg
-                        .output(stacked_video, context_audio, str(output_path),
-                               vcodec='libx264',
-                               acodec='aac',
-                               preset='fast',
-                               crf=23,
-                               ac=2,  # Force stereo
-                               ar=48000,  # Sample rate
-                               t=context_duration)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                    logger.info("Fallback with audio successful")
-                except Exception as fallback_e:
-                    logger.warning(f"Audio fallback failed: {fallback_e}, trying without audio...")
-                    # Final fallback without audio
-                    try:
-                        (
-                            ffmpeg
-                            .output(stacked_video, str(output_path),
-                                   vcodec='libx264',
-                                   preset='fast',
-                                   crf=23,
-                                   t=context_duration)
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
-                        logger.warning("Final fallback successful - video created without audio")
-                    except Exception as final_e:
-                        logger.error(f"All attempts failed: {final_e}")
-                        raise
+                raise
+            except Exception as e:
+                logger.error(f"Error creating short video audio timeline: {e}")
+                raise
             
-            logger.info(f"✅ Short-format video created: {output_path} (duration: {context_duration:.2f}s)")
-            return str(output_path), context_duration
+            logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
+            return str(output_path), total_duration
             
         except Exception as e:
             logger.error(f"Error creating short-format video: {e}")

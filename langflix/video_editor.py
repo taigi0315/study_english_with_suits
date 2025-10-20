@@ -565,11 +565,16 @@ class VideoEditor:
                 return text.replace(":", "\\:").replace("'", "\\'")
             
             # Prepare text content with proper cleaning
+            # NEW: Add expression_dialogue and expression_dialogue_translation
+            expression_dialogue_raw = clean_text_for_slide(expression.expression_dialogue)
             expression_text_raw = clean_text_for_slide(expression.expression)
+            expression_dialogue_trans_raw = clean_text_for_slide(expression.expression_dialogue_translation)
             translation_text_raw = clean_text_for_slide(expression.expression_translation)
             
             # Escape for drawtext filter
+            expression_dialogue = escape_drawtext_string(expression_dialogue_raw)
             expression_text = escape_drawtext_string(expression_text_raw)
+            expression_dialogue_trans = escape_drawtext_string(expression_dialogue_trans_raw)
             translation_text = escape_drawtext_string(translation_text_raw)
             
             # Prepare similar expressions (max 2) - handle different data types safely

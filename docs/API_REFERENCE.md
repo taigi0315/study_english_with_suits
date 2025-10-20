@@ -1,7 +1,7 @@
 # LangFlix API Reference
 
 **Version:** 1.0  
-**Last Updated:** October 19, 2025
+**Last Updated:** January 2025
 
 This document provides comprehensive API documentation for all public classes and methods in LangFlix. Use this reference for programmatic access and integration.
 
@@ -404,48 +404,99 @@ for expr in expressions:
 ### `settings`
 
 Configuration management module providing access to application settings.
+All configuration is now stored in YAML files with clean accessor functions.
 
-#### Functions
+#### Section Accessors
+
+##### `get_app_config() -> Dict[str, Any]`
+
+Get application settings including show name and template file.
+
+##### `get_llm_config() -> Dict[str, Any]`
+
+Get LLM configuration including API settings and generation parameters.
+
+##### `get_video_config() -> Dict[str, Any]`
+
+Get video processing configuration including codecs and quality settings.
+
+##### `get_font_config() -> Dict[str, Any]`
+
+Get font configuration including sizes and file paths.
+
+##### `get_processing_config() -> Dict[str, Any]`
+
+Get processing configuration including chunk limits.
+
+##### `get_tts_config() -> Dict[str, Any]`
+
+Get TTS configuration including provider settings.
+
+##### `get_short_video_config() -> Dict[str, Any]`
+
+Get short video configuration including target duration and resolution.
+
+#### Specific Value Accessors
+
+##### `get_show_name() -> str`
+
+Get the TV show name from configuration.
+
+##### `get_template_file() -> str`
+
+Get the template file name for prompts.
 
 ##### `get_generation_config() -> Dict[str, Any]`
 
-Get LLM generation configuration.
+Get LLM generation configuration with temperature, top_p, top_k.
 
-**Returns:**
-- Dictionary with generation parameters (temperature, top_p, top_k)
+##### `get_font_size(size_type: str) -> int`
+
+Get font size for different text types (default, expression, translation, similar).
+
+##### `get_font_file(language_code: str = None) -> str`
+
+Get font file path for the given language or platform default.
 
 ##### `get_min_expressions_per_chunk() -> int`
 
 Get minimum expressions per chunk limit.
 
-**Returns:**
-- Minimum number of expressions to extract per chunk
-
 ##### `get_max_expressions_per_chunk() -> int`
 
 Get maximum expressions per chunk limit.
-
-**Returns:**
-- Maximum number of expressions to extract per chunk
 
 ##### `get_max_retries() -> int`
 
 Get maximum retry attempts for API calls.
 
-**Returns:**
-- Number of retry attempts
+##### `is_tts_enabled() -> bool`
+
+Check if TTS is enabled.
+
+##### `is_short_video_enabled() -> bool`
+
+Check if short video generation is enabled.
 
 **Example:**
 ```python
 from langflix import settings
 
-# Get configuration values
+# Get configuration values using new accessors
+show_name = settings.get_show_name()
+template_file = settings.get_template_file()
 gen_config = settings.get_generation_config()
-min_expr = settings.get_min_expressions_per_chunk()
-max_expr = settings.get_max_expressions_per_chunk()
+font_size = settings.get_font_size('expression')
+font_file = settings.get_font_file('ko')
 
-print(f"Temperature: {gen_config['temperature']}")
-print(f"Expression range: {min_expr}-{max_expr}")
+# Check feature flags
+tts_enabled = settings.is_tts_enabled()
+shorts_enabled = settings.is_short_video_enabled()
+
+print(f"Show: {show_name}")
+print(f"Template: {template_file}")
+print(f"Font size: {font_size}")
+print(f"TTS enabled: {tts_enabled}")
 ```
 
 ### `ConfigLoader`
@@ -457,6 +508,30 @@ from langflix.config.config_loader import ConfigLoader
 
 loader = ConfigLoader()
 config = loader.get('llm')  # Get LLM configuration section
+```
+
+### `font_utils`
+
+Platform-specific font detection utilities.
+
+#### Functions
+
+##### `get_platform_default_font() -> str`
+
+Get appropriate default font based on platform (macOS, Linux, Windows).
+
+##### `get_font_file_for_language(language_code: str = None) -> str`
+
+Get font file path for the given language or platform default.
+
+```python
+from langflix.config.font_utils import get_platform_default_font, get_font_file_for_language
+
+# Get platform-specific default font
+default_font = get_platform_default_font()
+
+# Get language-specific font
+korean_font = get_font_file_for_language('ko')
 ```
 
 ---

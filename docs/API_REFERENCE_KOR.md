@@ -1,7 +1,7 @@
 # LangFlix API 참조 문서
 
 **버전:** 1.0  
-**최종 업데이트:** 2025년 10월 19일
+**최종 업데이트:** 2025년 1월
 
 이 문서는 LangFlix의 모든 공개 클래스와 메서드에 대한 포괄적인 API 문서를 제공합니다. 프로그래밍 방식 접근 및 통합에 사용하세요.
 
@@ -338,48 +338,99 @@ for expr in expressions:
 ### `settings`
 
 애플리케이션 설정에 대한 접근을 제공하는 설정 관리 모듈입니다.
+모든 설정은 이제 YAML 파일에 저장되고 깔끔한 accessor 함수를 통해 접근할 수 있습니다.
 
-#### 함수
+#### 섹션 접근자
+
+##### `get_app_config() -> Dict[str, Any]`
+
+쇼 이름과 템플릿 파일을 포함한 애플리케이션 설정을 가져옵니다.
+
+##### `get_llm_config() -> Dict[str, Any]`
+
+API 설정과 생성 매개변수를 포함한 LLM 설정을 가져옵니다.
+
+##### `get_video_config() -> Dict[str, Any]`
+
+코덱과 품질 설정을 포함한 비디오 처리 설정을 가져옵니다.
+
+##### `get_font_config() -> Dict[str, Any]`
+
+크기와 파일 경로를 포함한 폰트 설정을 가져옵니다.
+
+##### `get_processing_config() -> Dict[str, Any]`
+
+청크 제한을 포함한 처리 설정을 가져옵니다.
+
+##### `get_tts_config() -> Dict[str, Any]`
+
+프로바이더 설정을 포함한 TTS 설정을 가져옵니다.
+
+##### `get_short_video_config() -> Dict[str, Any]`
+
+대상 지속시간과 해상도를 포함한 숏 비디오 설정을 가져옵니다.
+
+#### 특정 값 접근자
+
+##### `get_show_name() -> str`
+
+설정에서 TV 쇼 이름을 가져옵니다.
+
+##### `get_template_file() -> str`
+
+프롬프트용 템플릿 파일 이름을 가져옵니다.
 
 ##### `get_generation_config() -> Dict[str, Any]`
 
-LLM 생성 설정을 가져옵니다.
+temperature, top_p, top_k를 포함한 LLM 생성 설정을 가져옵니다.
 
-**반환값:**
-- 생성 매개변수가 포함된 딕셔너리 (temperature, top_p, top_k)
+##### `get_font_size(size_type: str) -> int`
+
+다양한 텍스트 유형(기본, 표현, 번역, 유사)에 대한 폰트 크기를 가져옵니다.
+
+##### `get_font_file(language_code: str = None) -> str`
+
+주어진 언어 또는 플랫폼 기본값에 대한 폰트 파일 경로를 가져옵니다.
 
 ##### `get_min_expressions_per_chunk() -> int`
 
 청크당 최소 표현 제한을 가져옵니다.
 
-**반환값:**
-- 청크당 추출할 최소 표현 수
-
 ##### `get_max_expressions_per_chunk() -> int`
 
 청크당 최대 표현 제한을 가져옵니다.
-
-**반환값:**
-- 청크당 추출할 최대 표현 수
 
 ##### `get_max_retries() -> int`
 
 API 호출 최대 재시도 횟수를 가져옵니다.
 
-**반환값:**
-- 재시도 횟수
+##### `is_tts_enabled() -> bool`
+
+TTS가 활성화되었는지 확인합니다.
+
+##### `is_short_video_enabled() -> bool`
+
+숏 비디오 생성이 활성화되었는지 확인합니다.
 
 **예제:**
 ```python
 from langflix import settings
 
-# 설정 값 가져오기
+# 새로운 accessor를 사용하여 설정 값 가져오기
+show_name = settings.get_show_name()
+template_file = settings.get_template_file()
 gen_config = settings.get_generation_config()
-min_expr = settings.get_min_expressions_per_chunk()
-max_expr = settings.get_max_expressions_per_chunk()
+font_size = settings.get_font_size('expression')
+font_file = settings.get_font_file('ko')
 
-print(f"Temperature: {gen_config['temperature']}")
-print(f"표현 범위: {min_expr}-{max_expr}")
+# 기능 플래그 확인
+tts_enabled = settings.is_tts_enabled()
+shorts_enabled = settings.is_short_video_enabled()
+
+print(f"쇼: {show_name}")
+print(f"템플릿: {template_file}")
+print(f"폰트 크기: {font_size}")
+print(f"TTS 활성화: {tts_enabled}")
 ```
 
 ### `ConfigLoader`
@@ -391,6 +442,30 @@ from langflix.config.config_loader import ConfigLoader
 
 loader = ConfigLoader()
 config = loader.get('llm')  # LLM 설정 섹션 가져오기
+```
+
+### `font_utils`
+
+플랫폼별 폰트 감지 유틸리티입니다.
+
+#### 함수
+
+##### `get_platform_default_font() -> str`
+
+플랫폼(macOS, Linux, Windows)에 따라 적절한 기본 폰트를 가져옵니다.
+
+##### `get_font_file_for_language(language_code: str = None) -> str`
+
+주어진 언어 또는 플랫폼 기본값에 대한 폰트 파일 경로를 가져옵니다.
+
+```python
+from langflix.config.font_utils import get_platform_default_font, get_font_file_for_language
+
+# 플랫폼별 기본 폰트 가져오기
+default_font = get_platform_default_font()
+
+# 언어별 폰트 가져오기
+korean_font = get_font_file_for_language('ko')
 ```
 
 ---

@@ -145,7 +145,7 @@ This documentation set includes:
 
 ---
 
-**Last Updated:** October 19, 2025  
+**Last Updated:** January 2025  
 **Version:** 1.0
 
 *This documentation index provides an overview of all available LangFlix documentation. For the most up-to-date information, always refer to the specific documents in your codebase.*

@@ -119,3 +119,25 @@ transitions:
     type: "fade"            # Options: fade, xfade, none
     duration: 0.5           # Duration in seconds
 
+# ============================================================================
+# Storage Configuration
+# ============================================================================
+storage:
+  # Storage backend: local or s3
+  backend: "local"
+  
+  # S3 configuration (only used when backend is 's3')
+  s3:
+    input_bucket: "langflix-input"
+    output_bucket: "langflix-output"
+    region: "us-east-1"
+    # Prefix paths within buckets
+    input_prefix: "videos/"
+    output_prefix: "processed/"
+  
+  # Local paths for temporary processing (on EBS)
+  local:
+    temp_dir: "/data/langflix/temp"
+    assets_dir: "/data/langflix/assets"
+    output_dir: "/data/langflix/output"
+

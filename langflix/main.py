@@ -20,6 +20,8 @@ from .video_editor import VideoEditor
 from .output_manager import OutputManager, create_output_structure
 from .models import ExpressionAnalysis
 from . import settings
+from .storage import get_storage_backend
+from .config.config_loader import ConfigLoader
 
 # Configure structured logging
 def setup_logging(verbose: bool = False):
@@ -174,10 +176,17 @@ class LangFlixPipeline:
             output_dir: Directory for output files
             language_code: Target language code (e.g., 'ko', 'ja', 'zh')
         """
-        self.subtitle_file = Path(subtitle_file)
-        self.video_dir = Path(video_dir)
-        self.output_dir = Path(output_dir)
+        self.original_subtitle_file = subtitle_file
+        self.original_video_dir = video_dir
         self.language_code = language_code
+        
+        # Initialize storage backend
+        self.storage = get_storage_backend()
+        logger.info(f"Initialized storage backend: {self.storage.backend_type}")
+        
+        # Handle input file downloads from S3 if needed
+        self.subtitle_file, self.video_dir = self._prepare_input_files(subtitle_file, video_dir, output_dir)
+        self.output_dir = Path(output_dir)
         
         # Create organized output structure
         self.paths = create_output_structure(str(self.subtitle_file), language_code, str(self.output_dir))
@@ -192,6 +201,7 @@ class LangFlixPipeline:
         self.chunks = []
         self.expressions = []
         self.processed_expressions = 0
+        self.temp_files_created = []  # Track temporary files for cleanup
         
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False) -> Dict[str, Any]:
         """
@@ -240,14 +250,18 @@ class LangFlixPipeline:
                 # Step 5: Create educational videos
                 logger.info("Step 5: Creating educational videos...")
                 self._create_educational_videos()
+                
+                # Step 6: Upload outputs to S3 if needed
+                logger.info("Step 6: Uploading outputs to storage...")
+                self._upload_outputs()
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             
-            # Step 5: Generate summary
+            # Step 7: Generate summary
             summary = self._generate_summary()
             
-            # Step 6: Cleanup temporary files
-            logger.info("Step 6: Cleaning up temporary files...")
+            # Step 8: Cleanup temporary files
+            logger.info("Step 8: Cleaning up temporary files...")
             self._cleanup_resources()
             
             logger.info("✅ Pipeline completed successfully!")
@@ -323,8 +337,8 @@ class LangFlixPipeline:
             try:
                 logger.info(f"Processing expression {i+1}/{len(self.expressions)}: {expression.expression}")
                 
-                # Find video file
-                video_file = self.video_processor.find_video_file(str(self.subtitle_file))
+                # Find video file (handle S3 if needed)
+                video_file = self._find_video_file_for_expression()
                 if not video_file:
                     logger.warning(f"No video file found for expression {i+1}")
                     continue
@@ -552,6 +566,164 @@ class LangFlixPipeline:
         sanitized = re.sub(r'[-\s]+', '_', sanitized)
         return sanitized[:50]
     
+    def _find_video_file_for_expression(self) -> Optional[Path]:
+        """
+        Find video file for processing, handling S3 downloads if needed
+        
+        Returns:
+            Path to local video file, or None if not found
+        """
+        try:
+            # First try to find video file using existing logic
+            video_file = self.video_processor.find_video_file(str(self.subtitle_file))
+            
+            if video_file and video_file.exists():
+                return video_file
+            
+            # If we have S3 video directory and no local file found, try to download from S3
+            if hasattr(self, 's3_video_dir') and self.s3_video_dir:
+                logger.info(f"Attempting to find video files in S3 directory: {self.s3_video_dir}")
+                
+                # Extract the base name from subtitle file
+                subtitle_name = Path(self.subtitle_file).stem
+                if subtitle_name.endswith('.en'):
+                    base_name = subtitle_name[:-3]
+                else:
+                    base_name = subtitle_name
+                
+                # Try to find and download the video file from S3
+                video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv']
+                
+                for ext in video_extensions:
+                    video_filename = f"{base_name}{ext}"
+                    s3_video_path = f"{self.s3_video_dir}/{video_filename}"
+                    
+                    # Check if video exists in S3
+                    if self.storage.is_s3_path(s3_video_path) and self.storage.exists(s3_video_path):
+                        # Download to local temp directory
+                        local_video_dir = self.video_processor.media_dir
+                        local_video_file = local_video_dir / video_filename
+                        
+                        logger.info(f"Downloading video from S3: {s3_video_path}")
+                        if self.storage.download_file(s3_video_path, local_video_file):
+                            self.temp_files_created.append(local_video_file)
+                            logger.info(f"Downloaded video: {local_video_file}")
+                            return local_video_file
+                        else:
+                            logger.warning(f"Failed to download video: {s3_video_path}")
+            
+            return video_file
+            
+        except Exception as e:
+            logger.error(f"Error finding video file: {e}")
+            return None
+    
+    def _prepare_input_files(self, subtitle_file: str, video_dir: str, output_dir: str):
+        """
+        Prepare input files by downloading from S3 if needed
+        
+        Args:
+            subtitle_file: Original subtitle file path (may be S3)
+            video_dir: Original video directory path (may be S3)
+            output_dir: Local output directory for temporary files
+            
+        Returns:
+            Tuple of (local_subtitle_file, local_video_dir)
+        """
+        try:
+            # Get config for temp directory setup
+            config_loader = ConfigLoader()
+            local_config = config_loader.get_section('storage').get('local', {})
+            
+            # Setup temp directories
+            temp_dir = Path(local_config.get('temp_dir', '/tmp/langflix'))
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Handle subtitle file
+            if self.storage.is_s3_path(subtitle_file):
+                logger.info(f"Downloading subtitle file from S3: {subtitle_file}")
+                subtitle_name = Path(subtitle_file).name
+                local_subtitle = temp_dir / "input" / subtitle_name
+                
+                if self.storage.download_file(subtitle_file, local_subtitle):
+                    self.temp_files_created.append(local_subtitle)
+                    local_subtitle_path = local_subtitle
+                else:
+                    raise ValueError(f"Failed to download subtitle file: {subtitle_file}")
+            else:
+                local_subtitle_path = Path(subtitle_file)
+            
+            # Handle video directory
+            if self.storage.is_s3_path(video_dir):
+                logger.info(f"Setting up for S3 video directory: {video_dir}")
+                # For S3, we'll download videos as needed during processing
+                # Create a temp directory for video files
+                local_video_dir = temp_dir / "videos"
+                local_video_dir.mkdir(parents=True, exist_ok=True)
+                self.temp_files_created.append(local_video_dir)
+                
+                # Store original S3 path for later use
+                self.s3_video_dir = video_dir
+            else:
+                local_video_dir = Path(video_dir)
+                self.s3_video_dir = None
+            
+            return local_subtitle_path, local_video_dir
+            
+        except Exception as e:
+            logger.error(f"Failed to prepare input files: {e}")
+            # Fallback to original paths
+            return Path(subtitle_file), Path(video_dir)
+    
+    def _upload_outputs(self):
+        """Upload processed outputs to S3 if using S3 storage"""
+        try:
+            if self.storage.backend_type != 's3':
+                logger.info("Using local storage - no upload needed")
+                return
+            
+            # Get S3 config
+            config_loader = ConfigLoader()
+            s3_config = config_loader.get_section('storage').get('s3', {})
+            output_bucket = s3_config.get('output_bucket', 'langflix-output')
+            output_prefix = s3_config.get('output_prefix', 'processed/')
+            
+            # Create S3 storage instance for output bucket
+            from .storage.s3 import S3Storage
+            output_storage = S3Storage(bucket=output_bucket, region=s3_config.get('region', 'us-east-1'))
+            
+            # Upload final videos
+            final_videos_dir = self.paths['language']['final_videos']
+            if final_videos_dir.exists():
+                for video_file in final_videos_dir.glob('*.mkv'):
+                    if video_file.is_file() and video_file.stat().st_size > 0:
+                        s3_key = f"{output_prefix}{video_file.name}"
+                        logger.info(f"Uploading {video_file} to s3://{output_bucket}/{s3_key}")
+                        
+                        if output_storage.upload_file(video_file, s3_key):
+                            logger.info(f"✅ Uploaded {video_file.name}")
+                        else:
+                            logger.error(f"❌ Failed to upload {video_file.name}")
+            
+            # Upload subtitle files
+            subtitles_dir = self.paths['language']['subtitles']
+            if subtitles_dir.exists():
+                for subtitle_file in subtitles_dir.glob('*.srt'):
+                    if subtitle_file.is_file():
+                        s3_key = f"{output_prefix}{subtitle_file.name}"
+                        logger.info(f"Uploading {subtitle_file} to s3://{output_bucket}/{s3_key}")
+                        
+                        if output_storage.upload_file(subtitle_file, s3_key):
+                            logger.info(f"✅ Uploaded {subtitle_file.name}")
+                        else:
+                            logger.error(f"❌ Failed to upload {subtitle_file.name}")
+            
+            logger.info("✅ All outputs uploaded to S3")
+            
+        except Exception as e:
+            logger.error(f"Failed to upload outputs to S3: {e}")
+            # Don't raise - this shouldn't stop the pipeline
+    
     def _cleanup_resources(self):
         """Clean up temporary files and resources"""
         try:
@@ -559,8 +731,24 @@ class LangFlixPipeline:
             if hasattr(self, 'video_editor'):
                 self.video_editor._cleanup_temp_files()
                 logger.info("✅ VideoEditor temporary files cleaned up")
+            
+            # Clean up downloaded temporary files
+            for temp_file in self.temp_files_created:
+                try:
+                    if temp_file.is_file() and temp_file.exists():
+                        temp_file.unlink()
+                        logger.debug(f"Deleted temp file: {temp_file}")
+                    elif temp_file.is_dir() and temp_file.exists():
+                        import shutil
+                        shutil.rmtree(temp_file, ignore_errors=True)
+                        logger.debug(f"Deleted temp directory: {temp_file}")
+                except Exception as e:
+                    logger.warning(f"Could not delete temp file {temp_file}: {e}")
+            
+            logger.info("✅ Temporary files cleaned up")
+            
         except Exception as e:
-            logger.warning(f"Failed to cleanup VideoEditor resources: {e}")
+            logger.warning(f"Failed to cleanup resources: {e}")
     
     def _generate_summary(self) -> Dict[str, Union[int, str]]:
         """Generate processing summary"""

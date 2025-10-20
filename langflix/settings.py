@@ -221,3 +221,18 @@ def get_max_expressions_per_chunk():
     """Get maximum expressions per chunk"""
     proc_cfg = config.get("processing") or {}
     return proc_cfg.get('max_expressions_per_chunk', 3)
+
+def get_tts_config() -> Dict[str, Any]:
+    """Get TTS configuration from YAML"""
+    tts_cfg = config.get("tts") or {}
+    return tts_cfg
+
+def get_tts_provider() -> str:
+    """Get TTS provider name"""
+    tts_cfg = get_tts_config()
+    return tts_cfg.get('provider', 'lemonfox')
+
+def is_tts_enabled() -> bool:
+    """Check if TTS is enabled"""
+    tts_cfg = get_tts_config()
+    return tts_cfg.get('enabled', True)

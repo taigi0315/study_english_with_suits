@@ -119,3 +119,30 @@ transitions:
     type: "fade"            # Options: fade, xfade, none
     duration: 0.5           # Duration in seconds
 
+# ============================================================================
+# Text-to-Speech (TTS) Settings
+# ============================================================================
+tts:
+  # Enable TTS for expression audio
+  enabled: true
+  
+  # TTS provider (lemonfox, google, aws, etc.)
+  provider: "lemonfox"
+  
+  # LemonFox TTS Configuration
+  lemonfox:
+    api_key: "XqovmVk0O3QLEfUHEurTQQKXX8PrQLmd"
+    voice: "bella"
+    response_format: "wav"  # wav or mp3 (wav recommended for video processing)
+  
+  # Future providers can be configured here
+  # google:
+  #   credentials_path: "path/to/credentials.json"
+  #   voice_name: "en-US-Standard-A"
+  #   language_code: "en-US"
+  # 
+  # aws:
+  #   region: "us-east-1"
+  #   voice_id: "Joanna"
+  #   engine: "neural"
+

@@ -362,7 +362,7 @@ class VideoEditor:
             raise
     
     def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis) -> str:
-        """Create educational slide with background image, text, and expression audio 3x"""
+        """Create educational slide with background image, text, and TTS audio 3x"""
         try:
             output_path = self.output_dir / f"temp_slide_{self._sanitize_filename(expression.expression)}.mkv"
             self._register_temp_file(output_path)
@@ -370,58 +370,48 @@ class VideoEditor:
             # Get background configuration with proper fallbacks
             background_input, input_type = self._get_background_config()
             
-            # Extract ONLY the expression audio from original video using expression timing
-            audio_path = self.output_dir / f"temp_audio_{self._sanitize_filename(expression.expression)}.wav"
-            self._register_temp_file(audio_path)
+            # Generate TTS audio for expression text only
+            logger.info(f"Generating TTS audio for expression: '{expression.expression}'")
             
-            expression_duration = 3.0 # Default fallback 
+            from .tts.factory import create_tts_client
+            from . import settings
             
-            if (hasattr(expression, 'expression_start_time') and hasattr(expression, 'expression_end_time') and 
-                expression.expression_start_time and expression.expression_end_time):
+            tts_config = settings.get_tts_config()
+            provider = settings.get_tts_provider()
+            provider_config = tts_config.get(provider, {})
+            
+            try:
+                # Create TTS client
+                tts_client = create_tts_client(provider, provider_config)
                 
-                try:
-                    # Extract expression audio only from the source video
-                    start_time = expression.expression_start_time.replace(',', '.')
-                    end_time = expression.expression_end_time.replace(',', '.')
-                    
-                    # Calculate duration
-                    start_seconds = self._time_to_seconds(start_time)
-                    end_seconds = self._time_to_seconds(end_time)
-                    expression_duration = end_seconds - start_seconds
-                    
-                    logger.info(f"Extracting expression audio: {start_time} to {end_time} ({expression_duration:.2f}s)")
-                    
-                    # Extract only the expression part from the original video
-                    (
-                        ffmpeg
-                        .input(expression_source_video, ss=start_seconds, t=expression_duration)
-                        .output(str(audio_path), acodec='pcm_s16le')
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                    
-                    logger.info(f"Successfully extracted expression audio: {expression_duration:.2f}s")
-                    
-                except Exception as timing_error:
-                    logger.warning(f"Could not extract expression timing: {timing_error}, using full audio")
-                    # Fallback: extract full audio from the source video
-                    (
-                        ffmpeg
-                        .input(expression_source_video)
-                        .output(str(audio_path), acodec='pcm_s16le')
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-            else:
-                logger.warning("No expression timing available, extracting full audio")
-                # Extract full audio from the source video
+                # Generate single audio from expression text
+                audio_path = tts_client.generate_speech(expression.expression)
+                self._register_temp_file(audio_path)
+                
+                logger.info(f"Successfully generated TTS audio: {audio_path}")
+                
+                # Get audio duration using ffmpeg probe
+                probe = ffmpeg.probe(str(audio_path))
+                expression_duration = float(probe['streams'][0]['duration'])
+                
+                logger.info(f"TTS audio duration: {expression_duration:.2f}s")
+                
+            except Exception as tts_error:
+                logger.error(f"Error generating TTS audio: {tts_error}")
+                # Fallback: create silence as placeholder
+                expression_duration = 2.0  # Default 2 seconds
+                audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
+                self._register_temp_file(audio_path)
+                
+                # Generate 2 seconds of silence as fallback
                 (
                     ffmpeg
-                    .input(expression_source_video)
+                    .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
                     .output(str(audio_path), acodec='pcm_s16le')
                     .overwrite_output()
                     .run(quiet=True)
                 )
+                logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback")
             
             # Create 3x repeated audio
             audio_3x_path = self.output_dir / f"temp_audio_3x_{self._sanitize_filename(expression.expression)}.wav"
@@ -432,7 +422,7 @@ class VideoEditor:
                 temp_audio_path = self.output_dir / f"temp_3x_{self._sanitize_filename(expression.expression)}.wav"
                 self._register_temp_file(temp_audio_path)
                 
-                # First create 3x repeated audio
+                # Create 3x repeated audio using ffmpeg aloop filter
                 (
                     ffmpeg
                     .input(str(audio_path))
@@ -442,10 +432,10 @@ class VideoEditor:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Copy temp file to final location (no additional padding needed)
+                # Copy temp file to final location
                 import shutil
                 shutil.copy2(str(temp_audio_path), str(audio_3x_path))
-                logger.info(f"Successfully created 3x repeated audio: {expression_duration * 3:.2f}s")
+                logger.info(f"Successfully created 3x repeated TTS audio: {expression_duration * 3:.2f}s")
             except ffmpeg.Error as e:
                 logger.error(f"Error creating 3x audio: {e}")
                 logger.error(f"FFmpeg stdout: {e.stdout.decode('utf-8') if e.stdout else 'None'}")

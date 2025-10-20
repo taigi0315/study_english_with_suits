@@ -4,159 +4,124 @@ Here is a segment of dialogue from the TV show "Suits":
 {dialogues}
 ---
 
-**YOUR ROLE:**
-You are an expert English language educator specializing in teaching through authentic media content.
+**YOUR MISSION:**
+Find 1-3 expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 
-**LANGUAGE LEVEL TARGET:**
-{level_description}
-
-**YOUR TASK:**
-Follow this two-step process to select the BEST expressions:
-
-**STEP 1: FULL ANALYSIS**
-First, go through the entire dialogue segment and identify ALL potentially valuable expressions for learners at this level. Look for expressions that are:
-1. **Educationally Valuable** - Contains useful, practical expressions
-2. **Engaging & Entertaining** - Dynamic, humorous, dramatic, tense, emotional, or compelling moments
-3. **Contextually Clear** - Can be understood as a standalone short video
-
-**STEP 2: SELECT BEST ONES**
-From all the valuable expressions you identified, select the TOP {min_expressions} to {max_expressions} BEST expressions. Rank them by educational value and engagement, then pick only the highest quality ones.
+**LANGUAGE LEVEL:** {level_description}
 
 ---
 
-**EXPRESSION SELECTION CRITERIA:**
+**THE NORTH STAR PRINCIPLE:**
+Ask yourself: "Would I be excited to teach THIS expression to a friend learning English?"
 
-Choose ONLY expressions that meet your target language level AND are:
-- Commonly used in real conversations (not overly formal or archaic)
+If the answer is YES because:
+- ✓ It's used frequently in real English conversations
+- ✓ It sounds natural and native-like
+- ✓ It's memorable because of the scene's energy (funny/dramatic/tense)
+- ✓ Learners would actually say this in their daily life
+
+Then it's worth extracting.
+
+If the answer is NO because:
+- ✗ It's too obvious or simple
+- ✗ It's too specific to this one situation
+- ✗ The scene is boring or flat
+- ✗ It's awkward phrasing or too formal/legal jargon
+- ✗ You can't imagine when learners would use this
+
+Then skip it.
+
+---
+
+**WHAT MAKES AN EXPRESSION "BEST":**
+
+**1. COMMON & REUSABLE** (Most Important!)
+- Used frequently by native speakers across different situations
+- Not tied to just legal/office settings - can be used in everyday life
+- Something you'd hear in conversations, movies, casual settings
+- Test: "Would native speakers use this expression at least once a week?"
+
+**2. ENGAGING SCENE**
+The expression appears in a scene that is:
+- Humorous, dramatic, tense, emotional, or witty
+- NOT boring procedural talk or flat information delivery
+- Has energy and personality
+- Makes the expression memorable
+
+**3. CLEARLY USEFUL**
 - Idiomatic expressions, phrasal verbs, or colloquial phrases
-- Practical and reusable in various contexts
-- Natural-sounding in modern English
-
-**AVOID:**
-- Boring, plain, or mundane exchanges with no emotional energy
-- Overly simple greetings (unless they have interesting usage)
-- Very formal legal jargon (unless it's a commonly used phrase)
-- Expressions that are too obvious or self-explanatory
+- Not just regular vocabulary or obvious statements
+- Appropriate for your target level: {level_description}
 
 ---
 
-**SCENE ENGAGEMENT CRITERIA (HIGH PRIORITY):**
-
-Prioritize scenes that are:
-✓ **Humorous** - Funny moments, jokes, witty comebacks
-✓ **Dramatic** - Tension, conflict, confrontation, revelations
-✓ **Emotional** - Anger, surprise, excitement, frustration, joy
-✓ **Dynamic** - Fast-paced exchanges, heated debates
-✓ **Intriguing** - Plot twists, secrets revealed, power dynamics
-✓ **Relatable** - Universal situations people encounter
-
-**REJECT scenes that are:**
-✗ Mundane procedural dialogue
-✗ Boring exposition or background information
-✗ Flat, emotionless exchanges
-✗ Simple information delivery without personality
+**STRICT FILTERS - NEVER EXTRACT:**
+- ✗ Plain statements with no special expression ("I agree", "That's good")
+- ✗ Scene-specific phrases that only work in this exact context
+- ✗ Overly formal legal jargon (unless it's commonly used in general conversation)
+- ✗ Random sentence fragments that aren't actual expressions
+- ✗ Boring exchanges with no emotional energy
+- ✗ Expressions that are self-explanatory and obvious
+- ✗ No repeating dialogue. even if there are two good expression in one context, DO NOT repeat it.
 
 ---
 
-**CONTEXT & TIME SLICING REQUIREMENTS (CRITICAL):**
+**CONTEXT SLICING (Keep it Simple):**
 
-**BEFORE selecting start/end times, you MUST:**
-1. **Understand the full narrative** - What happens before, during, and after the expression
-2. **Identify the dramatic arc** - Where does the tension/humor/emotion build and resolve?
-3. expression should be in the middle of the context
-4. Use comma separated for multiple expressions (no othe special characters)
+**Goal:** Create a 10-25 second clip where:
+1. Someone with NO knowledge of the show can understand what's happening
+2. The expression appears naturally in the middle of the conversation
+3. There's a beginning (setup), middle (expression), and end (reaction/closure)
 
-**When selecting `context_start_time` and `context_end_time`:**
+**Start Time:** Begin when the topic/situation starts (not mid-sentence)
+**End Time:** End after the reaction or when the moment completes (not cut-off)
 
-✓ **Start EARLY enough** to establish:
-   - WHO is speaking (character introduction/identification)
-   - WHERE they are (setting/situation)
-   - WHAT is happening (the problem/topic/conflict)
-   - WHY this conversation is happening (motivation/stakes)
-
-✓ **End LATE enough** to include:
-   - The complete expression and its immediate impact
-   - The reaction or response to the expression
-   - A sense of closure or completion (not mid-thought)
-
-✓ **Target Duration:** 10-25 seconds
-   - Must feel complete, not abruptly cut
-
-✓ **Self-Contained Understanding:**
-   - Someone watching ONLY this clip (no prior knowledge of the show) should understand:
-     * What situation they're in
-     * Why this expression matters
-     * The emotional tone/stakes
-
-✓ **Natural Cut Points - Start the clip:**
-   - At the beginning of a new conversational topic
-   - When a character enters or initiates a new exchange
-   - After a natural pause or scene shift
-   - At the start of a question-answer sequence
-
-✓ **Natural Cut Points - End the clip:**
-   - After a complete thought or statement
-   - After a reaction that provides closure
-   - At a natural pause or transition
-   - When the tension/humor/emotion resolves or reaches a peak
-
-**AVOID:**
-✗ Starting mid-sentence or mid-thought
-✗ Ending abruptly without any response or closure
-✗ Clips that feel like random fragments
-✗ Requiring prior knowledge of the show to understand
-✗ Cutting off important reactions or payoffs
+**Quick Test:** Watch your selected clip mentally. Does it feel like a complete, satisfying moment? Or does it feel randomly chopped?
 
 ---
 
-**OUTPUT FORMAT:**
+**PROCESS:**
 
-Return a JSON list where each object contains:
+**STEP 1:** Scan the entire dialogue. List mentally all expressions that pass the North Star test.
 
-{{
-  "dialogues": [
-    // ALL dialogue lines in the scene (complete conversation between start and end time)
-    // IMPORTANT: Use EXACT dialogue text from subtitles - DO NOT add speaker names like "Mike:" or "Rachel:"
-    // Keep the original subtitle format as-is
-  ],
-  "translation": [
-    // CRITICAL: EXACT 1:1 MAPPING - MUST have same number of items as dialogues array
-    // CONTEXTUAL translations of ALL dialogue lines in {target_language}
-    // Translate MEANING and INTENT, not literal words
-    // Consider tone, emotion, relationships, and cultural context
-    // REQUIRED: Each dialogue line MUST have exactly one corresponding translation line
-  ],
-  "expression": "the main expression/phrase to learn",
-  "expression_translation": "contextual translation of the main expression in {target_language}",
-  "context_start_time": "00:00:00,000",  // When context begins
-  "context_end_time": "00:00:00,000",    // When context ends
-  "similar_expressions": [
-    // 1-3 similar expressions or alternative ways to say the same thing
-    // Include both formal and informal alternatives when relevant
-  ],
-  "scene_type": "humor|drama|tension|emotional|witty|confrontation",  // What makes this scene engaging
-}}
+**STEP 2:** Rank them by:
+   1. How common/reusable the expression is
+   2. How engaging the scene is
+   3. How appropriate for the target level
 
-**FINAL REQUIREMENTS:**
-- Complete your full analysis first, then select the TOP {min_expressions} to {max_expressions} BEST expressions
-- Quality over quantity - rank all potential expressions and pick only the highest quality ones
-- Minimum {min_expressions} expression, maximum {max_expressions} expressions total
-- Each scene must be engaging AND educational
-- Prioritize expressions at the target language level: {level_description}
-- Ensure each clip is self-contained and understandable
-- Verify start/end times create natural, complete moments
+**STEP 3:** Select the TOP 1-3 BEST expressions only. Quality over quantity.
 
-**CRITICAL: DIALOGUE FORMAT REQUIREMENTS:**
-- Use EXACT dialogue text from the provided subtitles
-- DO NOT add speaker names like "Mike:", "Rachel:", "Harvey:" etc.
-- DO NOT modify the original dialogue text
-- Keep the subtitle format exactly as provided
-- The dialogues array should contain the raw subtitle text only
+---
 
-**CRITICAL: VALIDATION REQUIREMENTS:**
-- The `dialogues` and `translation` arrays MUST have EXACTLY the same number of elements
-- Each dialogue line must have exactly one corresponding translation line
-- NO EXCEPTIONS: If you cannot provide a translation for every dialogue line, DO NOT include that expression
-- Double-check your arrays before returning the JSON
+**OUTPUT FORMAT (JSON):**
 
-Remember: First scan the entire dialogue for ALL good expressions, then select the TOP {min_expressions} to {max_expressions} BEST ones. Return the JSON list with your highest quality selections only.
+[
+  {{
+    "dialogues": [
+      // EXACT dialogue text from subtitles (NO speaker names like "Mike:" or "Harvey:")
+      // ALL lines between context_start_time and context_end_time
+    ],
+    "translation": [
+      // MUST have SAME NUMBER of items as dialogues
+      // Contextual translation in {target_language}
+    ],
+    "expression": "the main expression to learn",
+    "expression_translation": "translation in {target_language}",
+    "context_start_time": "00:00:00,000",
+    "context_end_time": "00:00:00,000",
+    "similar_expressions": ["alternative 1", "alternative 2"],
+    "scene_type": "humor|drama|tension|emotional|witty|confrontation"
+  }}
+]
+
+---
+
+**FINAL CHECKLIST:**
+- ✓ Each expression is COMMON and REUSABLE in real life
+- ✓ Each scene is ENGAGING (not boring)
+- ✓ The expression fits the target level: {level_description}
+- ✓ 1-3 expressions total (minimum 1, maximum 3)
+- ✓ Dialogue and translation arrays have EXACTLY the same number of items
+- ✓ Context timing feels natural and complete (10-25 seconds)
+
+Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.

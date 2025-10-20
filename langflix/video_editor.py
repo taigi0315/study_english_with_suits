@@ -373,6 +373,10 @@ class VideoEditor:
             # Generate TTS audio for expression text only
             logger.info(f"Generating TTS audio for expression: '{expression.expression}'")
             
+            # Create TTS audio directory for permanent storage (for debugging)
+            tts_audio_dir = self.output_dir.parent / "tts_audio"
+            tts_audio_dir.mkdir(exist_ok=True)
+            
             from .tts.factory import create_tts_client
             from . import settings
             
@@ -385,8 +389,21 @@ class VideoEditor:
                 tts_client = create_tts_client(provider, provider_config)
                 
                 # Generate single audio from expression text
-                audio_path = tts_client.generate_speech(expression.expression)
-                self._register_temp_file(audio_path)
+                temp_audio_path = tts_client.generate_speech(expression.expression)
+                
+                # Save TTS audio to permanent location for debugging
+                tts_audio_dir = self.output_dir.parent / "tts_audio"
+                tts_audio_dir.mkdir(exist_ok=True)
+                audio_filename = f"tts_single_{self._sanitize_filename(expression.expression)}.wav"
+                audio_path = tts_audio_dir / audio_filename
+                
+                # Copy from temp location to permanent location
+                import shutil
+                shutil.copy2(str(temp_audio_path), str(audio_path))
+                logger.info(f"TTS audio saved permanently: {audio_path}")
+                
+                # Still register temp file for cleanup
+                self._register_temp_file(temp_audio_path)
                 
                 logger.info(f"Successfully generated TTS audio: {audio_path}")
                 
@@ -432,10 +449,16 @@ class VideoEditor:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Copy temp file to final location
+                # Save 3x audio permanently for debugging
+                audio_3x_filename = f"tts_3x_{self._sanitize_filename(expression.expression)}.wav"
+                audio_3x_permanent_path = tts_audio_dir / audio_3x_filename
+                
+                # Copy temp file to final location and permanent location
                 import shutil
                 shutil.copy2(str(temp_audio_path), str(audio_3x_path))
+                shutil.copy2(str(temp_audio_path), str(audio_3x_permanent_path))
                 logger.info(f"Successfully created 3x repeated TTS audio: {expression_duration * 3:.2f}s")
+                logger.info(f"3x TTS audio saved permanently: {audio_3x_permanent_path}")
             except ffmpeg.Error as e:
                 logger.error(f"Error creating 3x audio: {e}")
                 logger.error(f"FFmpeg stdout: {e.stdout.decode('utf-8') if e.stdout else 'None'}")
@@ -602,22 +625,46 @@ class VideoEditor:
                 else:
                     video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
                 
+                # Debug: Check if audio file exists and has content
+                if not audio_3x_path.exists():
+                    logger.error(f"3x audio file does not exist: {audio_3x_path}")
+                    raise FileNotFoundError(f"3x audio file missing: {audio_3x_path}")
+                
+                audio_file_size = audio_3x_path.stat().st_size
+                logger.info(f"Using 3x audio file: {audio_3x_path} (size: {audio_file_size} bytes)")
+                
                 # Add the 3x TTS audio input
                 audio_input = ffmpeg.input(str(audio_3x_path))
                 
+                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_3x_path}")
+                
                 # Create the slide with both video and audio directly
-                (
-                    ffmpeg
-                    .output(video_input['v'], audio_input['a'], str(output_path),
-                           vf=f"scale=1280:720,{video_filter}",
-                           vcodec='libx264',
-                           acodec='aac',
-                           t=slide_duration,
-                           preset='fast',
-                           crf=23)
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
+                try:
+                    (
+                        ffmpeg
+                        .output(video_input['v'], audio_input['a'], str(output_path),
+                               vf=f"scale=1280:720,{video_filter}",
+                               vcodec='libx264',
+                               acodec='aac',
+                               t=slide_duration,
+                               preset='fast',
+                               crf=23)
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                    logger.info(f"Successfully created slide with audio: {output_path}")
+                    
+                    # Verify the output file has audio streams
+                    import subprocess
+                    result = subprocess.run(['ffprobe', '-v', 'quiet', '-select_streams', 'a', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', str(output_path)], capture_output=True, text=True)
+                    if result.stdout.strip():
+                        logger.info(f"Slide video has audio stream: {result.stdout.strip()}")
+                    else:
+                        logger.warning(f"Slide video may not have audio stream: {output_path}")
+                        
+                except Exception as ffmpeg_error:
+                    logger.error(f"FFmpeg error creating slide: {ffmpeg_error}")
+                    raise
                 
                 logger.info("Educational slide created successfully with text overlay")
                     

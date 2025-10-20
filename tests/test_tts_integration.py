@@ -24,6 +24,14 @@ def test_tts_configuration():
     """Test that TTS configuration is loaded correctly"""
     print("Testing TTS configuration...")
     
+    # Check environment variable first
+    api_key = os.getenv("LEMONFOX_API_KEY")
+    if api_key:
+        print(f"✅ LEMONFOX_API_KEY found: {'*' * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else '****'}")
+    else:
+        print("⚠️  LEMONFOX_API_KEY environment variable not set")
+        print("   Please set it with: export LEMONFOX_API_KEY='your_api_key_here'")
+    
     tts_config = settings.get_tts_config()
     print(f"TTS Config: {tts_config}")
     

@@ -8,7 +8,7 @@ import ffmpeg
 import logging
 import os
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from .models import ExpressionAnalysis
 from . import settings
 
@@ -34,7 +34,8 @@ class VideoEditor:
         
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
-                                  expression_video_path: str) -> str:
+                                  expression_video_path: str, 
+                                  expression_index: int = 0) -> str:
         """
         Create educational video sequence:
         1. Context video with subtitles (top: original, bottom: translation)
@@ -44,6 +45,7 @@ class VideoEditor:
             expression: ExpressionAnalysis object
             context_video_path: Path to context video
             expression_video_path: Path to expression video
+            expression_index: Index of expression (for voice alternation)
             
         Returns:
             Path to created educational video
@@ -63,7 +65,7 @@ class VideoEditor:
             
             # Step 2: Create educational slide with background and 3x audio
             educational_slide = self._create_educational_slide(
-                expression_video_path, expression  # Use original video for expression audio
+                expression_video_path, expression, expression_index  # Use original video for expression audio and pass index
             )
             
             # Step 3: Concatenate the two parts
@@ -361,7 +363,7 @@ class VideoEditor:
             logger.error(f"Error creating expression clip: {e}")
             raise
     
-    def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis) -> str:
+    def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis, expression_index: int = 0) -> str:
         """Create educational slide with background image, text, and TTS audio 3x"""
         try:
             output_path = self.output_dir / f"temp_slide_{self._sanitize_filename(expression.expression)}.mkv"
@@ -373,132 +375,103 @@ class VideoEditor:
             # Generate TTS audio for expression text only
             logger.info(f"Generating TTS audio for expression: '{expression.expression}'")
             
-            # Create TTS audio directory for permanent storage (for debugging)
-            tts_audio_dir = self.output_dir.parent / "tts_audio"
-            tts_audio_dir.mkdir(exist_ok=True)
-            
+            # Import TTS modules
             from .tts.factory import create_tts_client
             from . import settings
             
+            # Get TTS configuration with validation
             tts_config = settings.get_tts_config()
+            if not tts_config:
+                raise ValueError("TTS configuration is not available")
+            
             provider = settings.get_tts_provider()
+            if not provider:
+                raise ValueError("TTS provider is not configured")
+            
             provider_config = tts_config.get(provider, {})
+            if not provider_config:
+                raise ValueError(f"Configuration for TTS provider '{provider}' is not found")
+            
+            logger.info(f"Using TTS provider: {provider}")
+            logger.info(f"Provider config keys: {list(provider_config.keys())}")
+            
+            # Create TTS audio directory for permanent storage
+            tts_audio_dir = self.output_dir.parent / "tts_audio"
+            tts_audio_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"TTS audio directory: {tts_audio_dir}")
             
             try:
-                # Create TTS client
+                # Create and validate TTS client
+                logger.info("Creating TTS client...")
                 tts_client = create_tts_client(provider, provider_config)
                 
-                # Generate single audio from expression text
-                temp_audio_path = tts_client.generate_speech(expression.expression)
+                # Test if TTS is enabled
+                if not settings.is_tts_enabled():
+                    logger.warning("TTS is disabled in configuration, using fallback")
+                    raise ValueError("TTS is disabled")
                 
-                # Save ORIGINAL TTS audio to permanent location for debugging
-                # self.output_dir points to final_videos, parent is language dir (ko)
-                tts_audio_dir = self.output_dir.parent / "tts_audio"
-                logger.info(f"VideoEditor output_dir: {self.output_dir}")
-                logger.info(f"Creating tts_audio directory at: {tts_audio_dir}")
-                tts_audio_dir.mkdir(exist_ok=True)
-                logger.info(f"TTS audio directory created: {tts_audio_dir.exists()}")
+                # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+                logger.info(f"Generating TTS timeline for: '{expression.expression}' (expression index: {expression_index})")
+                audio_path, expression_duration = self._generate_tts_timeline(
+                    expression.expression, tts_client, provider_config, tts_audio_dir, expression_index
+                )
                 
-                # Get the file extension from the TTS client configuration
-                from . import settings
-                tts_config = settings.get_tts_config()
-                provider_config = tts_config.get(settings.get_tts_provider(), {})
-                audio_format = provider_config.get('response_format', 'mp3')
-                original_audio_filename = f"tts_original_{self._sanitize_filename(expression.expression)}.{audio_format}"
-                original_audio_path = tts_audio_dir / original_audio_filename
-                
-                # Validate the original TTS audio is not empty before saving
-                temp_file_size = temp_audio_path.stat().st_size
-                logger.info(f"Generated TTS audio file size: {temp_file_size} bytes")
-                
-                if temp_file_size == 0:
-                    raise ValueError(f"Generated TTS audio file is empty: {temp_audio_path}")
-                
-                # Copy original TTS audio to permanent location and keep using temp for processing
-                import shutil
-                logger.info(f"Copying TTS audio from temp: {temp_audio_path}")
-                logger.info(f"Copying TTS audio to permanent: {original_audio_path}")
-                shutil.copy2(str(temp_audio_path), str(original_audio_path))
-                
-                # Verify the permanent copy is also not empty
-                permanent_file_size = original_audio_path.stat().st_size
-                logger.info(f"Original TTS audio saved permanently: {original_audio_path}")
-                logger.info(f"Permanent file size: {permanent_file_size} bytes")
-                logger.info(f"Permanent file exists: {original_audio_path.exists()}")
-                
-                if permanent_file_size == 0:
-                    raise ValueError(f"Permanent TTS audio file is empty: {original_audio_path}")
-                
-                # Use the temp file for processing (this ensures we're using the original file)
-                audio_path = temp_audio_path
-                
-                # Register temp file for cleanup but keep original permanently
-                self._register_temp_file(temp_audio_path)
-                
-                logger.info(f"Successfully generated TTS audio: {original_audio_path}")
-                
-                # Get audio duration using ffmpeg probe from the original file
-                probe = ffmpeg.probe(str(audio_path))
-                expression_duration = float(probe['streams'][0]['duration'])
-                
-                logger.info(f"Original TTS audio duration: {expression_duration:.2f}s")
+                logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
                 
             except Exception as tts_error:
                 logger.error(f"Error generating TTS audio: {tts_error}")
-                # Fallback: create silence as placeholder AND save to permanent directory
+                logger.error(f"TTS Error details: {tts_error}")
+                
+                # Use the configured audio format for fallback as well
+                audio_format = provider_config.get('response_format', 'mp3')
+                logger.info(f"Using {audio_format} format for fallback audio")
+                
                 expression_duration = 2.0  # Default 2 seconds
-                audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
-                self._register_temp_file(audio_path)
                 
-                # Generate 2 seconds of silence as fallback
-                (
-                    ffmpeg
-                    .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
-                    .output(str(audio_path), acodec='pcm_s16le')
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
-                logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback")
+                # Create fallback with same format as configured
+                if audio_format.lower() == 'mp3':
+                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.mp3"
+                    self._register_temp_file(audio_path)
+                    
+                    # Generate 2 seconds of silence as MP3 fallback
+                    (
+                        ffmpeg
+                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
+                        .output(str(audio_path), acodec='libmp3lame', ar=44100)
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                else:
+                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
+                    self._register_temp_file(audio_path)
+                    
+                    # Generate 2 seconds of silence as WAV fallback
+                    (
+                        ffmpeg
+                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
+                        .output(str(audio_path), acodec='pcm_s16le')
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
                 
-                # Still save the fallback file to permanent tts_audio directory
+                logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback in {audio_format} format")
+                
+                # Save the fallback file to permanent tts_audio directory with correct format
                 tts_audio_dir = self.output_dir.parent / "tts_audio"
                 tts_audio_dir.mkdir(exist_ok=True)
-                fallback_filename = f"tts_fallback_{self._sanitize_filename(expression.expression)}.wav"
+                fallback_filename = f"tts_fallback_{self._sanitize_filename(expression.expression)}.{audio_format}"
                 fallback_permanent_path = tts_audio_dir / fallback_filename
                 
                 import shutil
                 shutil.copy2(str(audio_path), str(fallback_permanent_path))
                 logger.warning(f"Fallback silence audio saved to: {fallback_permanent_path}")
             
-            # Create 3x repeated audio - use WAV for internal processing (better for FFmpeg)
-            audio_3x_path = self.output_dir / f"temp_audio_3x_{self._sanitize_filename(expression.expression)}.wav"
-            self._register_temp_file(audio_3x_path)
-            slide_duration = expression_duration * 3 + 1.0 # 3x expression audio + 1 second padding
+            # Use the timeline audio directly (no need for 3x conversion since timeline is already complete)
+            audio_3x_path = audio_path  # The timeline already includes 3 TTS segments with pauses
+            slide_duration = expression_duration + 0.5  # Add small padding for slide
             
-            try:
-                temp_audio_path = self.output_dir / f"temp_3x_{self._sanitize_filename(expression.expression)}.wav"
-                self._register_temp_file(temp_audio_path)
-                
-                # Create 3x repeated audio using ffmpeg aloop filter (temporary only)
-                (
-                    ffmpeg
-                    .input(str(audio_path))
-                    .filter('aloop', loop=2, size=2e+09)  # Loop 2 more times (total 3x)
-                    .output(str(temp_audio_path), acodec='pcm_s16le')
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
-                
-                # Copy temp 3x file to final audio_3x_path for slide creation (no permanent save)
-                import shutil
-                shutil.copy2(str(temp_audio_path), str(audio_3x_path))
-                logger.info(f"Successfully created 3x repeated TTS audio temporarily: {expression_duration * 3:.2f}s")
-                logger.info("Note: 3x audio is temporary - only original TTS audio is saved permanently")
-            except ffmpeg.Error as e:
-                logger.error(f"Error creating 3x audio: {e}")
-                logger.error(f"FFmpeg stdout: {e.stdout.decode('utf-8') if e.stdout else 'None'}")
-                logger.error(f"FFmpeg stderr: {e.stderr.decode('utf-8') if e.stderr else 'None'}")
-                raise
+            logger.info(f"Using timeline audio directly: {audio_3x_path}")
+            logger.info(f"Timeline duration: {expression_duration:.2f}s")
             
             # Clean text properly for educational slide (remove special characters including underscores)
             def clean_text_for_slide(text):
@@ -915,12 +888,150 @@ class VideoEditor:
             srt_content.append("")
         
         return "\n".join(srt_content)
+    
+    def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
+        """
+        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+        Uses alternating voices between expressions (not within the same expression).
+        
+        Args:
+            text: Text to convert to speech
+            tts_client: TTS client instance
+            provider_config: TTS provider configuration
+            tts_audio_dir: Directory to save audio files
+            expression_index: Index of expression (0-based) for voice alternation
+            
+        Returns:
+            Tuple of (final_audio_path, total_duration)
+        """
+        try:
+            import tempfile
+            import shutil
+            
+            # Get alternate voices from config
+            alternate_voices = provider_config.get('alternate_voices', ['en-US-Wavenet-D', 'en-US-Wavenet-A'])
+            if len(alternate_voices) < 2:
+                alternate_voices = ['en-US-Wavenet-D', 'en-US-Wavenet-A']  # Puck and Leda
+            
+            # Select voice based on expression index (alternate between expressions)
+            voice_index = expression_index % len(alternate_voices)
+            selected_voice = alternate_voices[voice_index]
+            voice_name = "Puck" if voice_index == 0 else "Leda"
+            
+            logger.info(f"Expression {expression_index}: Using voice {voice_name} ({selected_voice})")
+            
+            # Generate ONE TTS audio file with the selected voice
+            from .tts.factory import create_tts_client
+            voice_config = provider_config.copy()
+            voice_config['voice_name'] = selected_voice
+            
+            voice_client = create_tts_client('google', voice_config)
+            temp_tts_path = voice_client.generate_speech(text)
+            
+            # Register for cleanup
+            self._register_temp_file(temp_tts_path)
+            
+            # Get duration of the single TTS file
+            try:
+                probe = ffmpeg.probe(str(temp_tts_path))
+                if 'streams' in probe and len(probe['streams']) > 0 and 'duration' in probe['streams'][0]:
+                    tts_duration = float(probe['streams'][0]['duration'])
+                else:
+                    tts_duration = 2.0  # Fallback
+            except:
+                tts_duration = 2.0  # Fallback
+            
+            logger.info(f"Generated TTS with {voice_name}: {tts_duration:.2f}s")
+            
+            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause
+            timeline_path = self.output_dir / f"temp_timeline_{self._sanitize_filename(text)}.wav"
+            self._register_temp_file(timeline_path)
+            
+            try:
+                # Create silence segments
+                silence_1s_path = self.output_dir / f"temp_silence_1s_{self._sanitize_filename(text)}.wav"
+                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_{self._sanitize_filename(text)}.wav"
+                
+                self._register_temp_file(silence_1s_path)
+                self._register_temp_file(silence_0_5s_path)
+                
+                # Generate silence files
+                (ffmpeg.input('anullsrc=r=44100:cl=mono', f='lavfi', t=1.0)
+                 .output(str(silence_1s_path), acodec='pcm_s16le')
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                (ffmpeg.input('anullsrc=r=44100:cl=mono', f='lavfi', t=0.5)
+                 .output(str(silence_0_5s_path), acodec='pcm_s16le')
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Convert the single TTS file to WAV for concatenation
+                tts_wav_path = self.output_dir / f"temp_tts_{self._sanitize_filename(text)}.wav"
+                self._register_temp_file(tts_wav_path)
+                
+                (ffmpeg.input(str(temp_tts_path))
+                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=44100, ac=1)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_0.5s + tts + silence_1s
+                input_files = [
+                    str(silence_1s_path),
+                    str(tts_wav_path),      # First TTS
+                    str(silence_0_5s_path),
+                    str(tts_wav_path),      # Second TTS (same file)
+                    str(silence_0_5s_path),
+                    str(tts_wav_path),      # Third TTS (same file)
+                    str(silence_1s_path)
+                ]
+                
+                # Create concat file
+                concat_file = self.output_dir / f"temp_concat_timeline_{self._sanitize_filename(text)}.txt"
+                self._register_temp_file(concat_file)
+                
+                with open(concat_file, 'w') as f:
+                    for file_path in input_files:
+                        f.write(f"file '{Path(file_path).absolute()}'\n")
+                
+                # Concatenate all audio segments
+                (ffmpeg.input(str(concat_file), format='concat', safe=0)
+                 .output(str(timeline_path), acodec='pcm_s16le', ar=44100, ac=1)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Calculate total duration: 1 + tts + 0.5 + tts + 0.5 + tts + 1 = 3 + (tts * 3)
+                total_duration = 3.0 + (tts_duration * 3)
+                
+                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 3 repetitions)")
+                
+                # Save the original TTS file permanently (for reference)
+                audio_format = provider_config.get('response_format', 'mp3')
+                if audio_format:
+                    original_audio_filename = f"tts_original_{self._sanitize_filename(text)}.{audio_format}"
+                    original_audio_path = tts_audio_dir / original_audio_filename
+                    
+                    # Copy the TTS file as the "original"
+                    shutil.copy2(str(temp_tts_path), str(original_audio_path))
+                    logger.info(f"Saved original TTS file to: {original_audio_path}")
+                
+                return timeline_path, total_duration
+                
+            except Exception as timeline_error:
+                logger.error(f"Error creating TTS timeline: {timeline_error}")
+                # Fallback to simple single TTS
+                return temp_tts_path, tts_duration
+                
+        except Exception as e:
+            logger.error(f"Error in _generate_tts_timeline: {e}")
+            raise
 
 
 def create_educational_video(expression: ExpressionAnalysis, 
                            context_video_path: str, 
                            expression_video_path: str,
-                           output_dir: str = "output") -> str:
+                           output_dir: str = "output",
+                           expression_index: int = 0) -> str:
     """
     Convenience function to create educational video
     
@@ -929,9 +1040,10 @@ def create_educational_video(expression: ExpressionAnalysis,
         context_video_path: Path to context video
         expression_video_path: Path to expression video
         output_dir: Output directory
+        expression_index: Index of expression (for voice alternation)
         
     Returns:
         Path to created educational video
     """
     editor = VideoEditor(output_dir)
-    return editor.create_educational_sequence(expression, context_video_path, expression_video_path)
+    return editor.create_educational_sequence(expression, context_video_path, expression_video_path, expression_index)

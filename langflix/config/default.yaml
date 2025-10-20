@@ -112,12 +112,13 @@ transitions:
   context_to_slide:
     type: "xfade"           # Options: xfade, fade, none
     effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
-    duration: 0.5           # Duration in seconds
+    duration: 0.3           # Duration in seconds
   
   # Transition between different expressions
   expression_to_expression:
-    type: "fade"            # Options: fade, xfade, none
-    duration: 0.5           # Duration in seconds
+    type: "xfade"            # Options: fade, xfade, none
+    effect: "slideleft"
+    duration: 0.3           # Duration in seconds
 
 # ============================================================================
 # Text-to-Speech (TTS) Settings
@@ -127,19 +128,25 @@ tts:
   enabled: true
   
   # TTS provider (lemonfox, google, aws, etc.)
-  provider: "lemonfox"
+  provider: "google"
   
-  # LemonFox TTS Configuration
+  # Google Cloud TTS Configuration
+  google:
+    # api_key: "set via GOOGLE_API_KEY or GOOGLE_API_KEY_1 environment variable"
+    language_code: "en-US"  # Original language (English) for audio generation
+    voice_name: "en-US-Wavenet-D"  # Default voice (Puck - will alternate with Leda)
+    response_format: "mp3"  # Google Cloud TTS uses MP3 format
+    speaking_rate: 0.75  # 85% speed (slower)
+    # Alternative voices for alternation (English - original language)
+    # Puck: en-US-Wavenet-D (male, neutral tone)
+    # Leda: en-US-Wavenet-A (female, neutral tone)
+    alternate_voices: ["en-US-Wavenet-D", "en-US-Wavenet-A"]
+  
+  # LemonFox TTS Configuration (fallback)
   lemonfox:
     # api_key: "set via LEMONFOX_API_KEY environment variable"
     voice: "sarah"
     response_format: "mp3"  # mp3 format as requested
-  
-  # Future providers can be configured here
-  # google:
-  #   credentials_path: "path/to/credentials.json"
-  #   voice_name: "en-US-Standard-A"
-  #   language_code: "en-US"
   # 
   # aws:
   #   region: "us-east-1"

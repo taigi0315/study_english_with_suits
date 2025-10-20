@@ -11,6 +11,13 @@ from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 import ffmpeg
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Import our modules
 from .subtitle_parser import parse_srt_file, chunk_subtitles
 from .expression_analyzer import analyze_chunk
@@ -403,11 +410,12 @@ class LangFlixPipeline:
                     logger.info(f"Using context video: {context_video}")
                     logger.info(f"Using original video for expression audio: {expression_source_video}")
                     
-                    # Create educational sequence
+                    # Create educational sequence with expression index for voice alternation
                     educational_video = self.video_editor.create_educational_sequence(
                         expression, 
                         str(context_video), 
-                        expression_source_video  # Pass original video for expression audio
+                        expression_source_video,  # Pass original video for expression audio
+                        expression_index=i  # Pass index for voice alternation
                     )
                     
                     educational_videos.append(educational_video)

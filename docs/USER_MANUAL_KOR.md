@@ -348,6 +348,35 @@ transitions:
     duration: 0.5               # 지속 시간(초)
 ```
 
+#### 6. 텍스트-음성 변환 (TTS)
+
+LangFlix는 발음 오디오 생성에 Google Cloud Text-to-Speech를 사용합니다:
+
+```yaml
+tts:
+  enabled: true                  # TTS 오디오 생성 활성화/비활성화
+  provider: "google"             # TTS 제공업체 (google, lemonfox)
+  
+  google:
+    language_code: "en-US"       # 오디오용 원본 언어 (영어)
+    voice_name: "en-US-Wavenet-D" # 기본 음성 (Puck)
+    response_format: "mp3"       # 오디오 포맷 (mp3, wav)
+    speaking_rate: 0.75          # 말하기 속도 (0.75 = 75% 속도, 느림)
+    alternate_voices:            # 표현 간 음성 교대
+      - "en-US-Wavenet-D"        # Puck (남성, 중립적 톤)
+      - "en-US-Wavenet-A"        # Leda (여성, 중립적 톤)
+```
+
+**TTS 기능:**
+- **음성 교대**: 각 표현마다 Puck과 Leda 음성 자동 전환
+- **타임라인 구조**: 1초 일시정지 - TTS - 0.5초 일시정지 - TTS - 0.5초 일시정지 - TTS - 1초 일시정지
+- **말하기 속도**: 더 나은 학습을 위한 설정 가능한 느린 말하기 (75% 속도)
+- **원본 언어**: 대상 언어가 아닌 영어(원본 언어)를 오디오 생성에 사용
+
+**설정 요구사항:**
+- 환경 변수의 Google Cloud TTS API 키: `GOOGLE_API_KEY_1=your_key_here`
+- 프로젝트 루트의 `.env` 파일에 추가
+
 ### 환경 변수
 
 환경 변수로 설정을 재정의할 수 있습니다:

@@ -331,11 +331,17 @@ class LangFlixPipeline:
                 
                 # Create output filenames using organized structure
                 safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                # Use proper filename sanitization for file system safety
+                safe_filename = self._sanitize_filename(expression.expression)
+                
                 # Don't save raw clips - use temp directory
                 import tempfile
                 temp_dir = Path(tempfile.gettempdir())
-                video_output = temp_dir / f"temp_expression_{i+1:02d}_{safe_expression[:30]}.mkv"
-                subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_expression[:30]}.srt"
+                video_output = temp_dir / f"temp_expression_{i+1:02d}_{safe_filename[:30]}.mkv"
+                subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_filename[:30]}.srt"
+                
+                # Ensure the subtitle directory exists
+                subtitle_output.parent.mkdir(parents=True, exist_ok=True)
                 
                 # Extract video clip to temp location
                 success = self.video_processor.extract_clip(

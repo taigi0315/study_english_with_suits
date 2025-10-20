@@ -445,7 +445,7 @@ class VideoEditor:
                 
             except Exception as tts_error:
                 logger.error(f"Error generating TTS audio: {tts_error}")
-                # Fallback: create silence as placeholder
+                # Fallback: create silence as placeholder AND save to permanent directory
                 expression_duration = 2.0  # Default 2 seconds
                 audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
                 self._register_temp_file(audio_path)
@@ -459,6 +459,16 @@ class VideoEditor:
                     .run(quiet=True)
                 )
                 logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback")
+                
+                # Still save the fallback file to permanent tts_audio directory
+                tts_audio_dir = self.output_dir.parent / "tts_audio"
+                tts_audio_dir.mkdir(exist_ok=True)
+                fallback_filename = f"tts_fallback_{self._sanitize_filename(expression.expression)}.wav"
+                fallback_permanent_path = tts_audio_dir / fallback_filename
+                
+                import shutil
+                shutil.copy2(str(audio_path), str(fallback_permanent_path))
+                logger.warning(f"Fallback silence audio saved to: {fallback_permanent_path}")
             
             # Create 3x repeated audio - use WAV for internal processing (better for FFmpeg)
             audio_3x_path = self.output_dir / f"temp_audio_3x_{self._sanitize_filename(expression.expression)}.wav"

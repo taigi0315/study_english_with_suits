@@ -11,14 +11,15 @@ This guide helps you diagnose and fix common issues when using LangFlix.
 
 1. [Installation Issues](#installation-issues)
 2. [API and LLM Issues](#api-and-llm-issues)
-3. [Video Processing Issues](#video-processing-issues)
-4. [Subtitle Processing Issues](#subtitle-processing-issues)
-5. [Performance and Resource Issues](#performance-and-resource-issues)
-6. [Output and Quality Issues](#output-and-quality-issues)
-7. [Configuration Issues](#configuration-issues)
-8. [Debugging Tips](#debugging-tips)
-9. [Error Messages Reference](#error-messages-reference)
-10. [FAQ](#faq)
+3. [TTS (Text-to-Speech) Issues](#tts-text-to-speech-issues)
+4. [Video Processing Issues](#video-processing-issues)
+5. [Subtitle Processing Issues](#subtitle-processing-issues)
+6. [Performance and Resource Issues](#performance-and-resource-issues)
+7. [Output and Quality Issues](#output-and-quality-issues)
+8. [Configuration Issues](#configuration-issues)
+9. [Debugging Tips](#debugging-tips)
+10. [Error Messages Reference](#error-messages-reference)
+11. [FAQ](#faq)
 
 ---
 
@@ -261,6 +262,104 @@ Quota exceeded for metric
    ```
 
 4. **Upgrade API plan** if using free tier extensively
+
+---
+
+## TTS (Text-to-Speech) Issues
+
+### Problem: "Google Cloud API key is required"
+
+**Symptoms:**
+```
+Error: Google Cloud API key is required. Set GOOGLE_API_KEY environment variable
+```
+
+**Solutions:**
+1. **Add API key to `.env` file:**
+   ```bash
+   GOOGLE_API_KEY_1=your_google_cloud_api_key_here
+   ```
+
+2. **Verify key is loaded:**
+   ```bash
+   cat .env | grep GOOGLE_API_KEY
+   ```
+
+3. **Test API key:**
+   ```bash
+   python -c "import os; from dotenv import load_dotenv; load_dotenv(); print('API Key:', os.getenv('GOOGLE_API_KEY_1')[:10] + '...' if os.getenv('GOOGLE_API_KEY_1') else 'Not found')"
+   ```
+
+### Problem: "TTS audio not generating or playing"
+
+**Symptoms:**
+- No audio in educational slides
+- Silent files generated
+- Audio files created but empty/not playing
+
+**Solutions:**
+1. **Check TTS configuration in `default.yaml`:**
+   ```yaml
+   tts:
+     enabled: true
+     provider: "google"
+     google:
+       language_code: "en-US"
+       response_format: "mp3"
+   ```
+
+2. **Verify API key format:**
+   - Google Cloud API key should start with `AIza`
+   - No quotes or spaces around the key in `.env`
+
+3. **Test TTS directly:**
+   ```bash
+   python tests/test_tts_integration.py
+   ```
+
+4. **Check logs for TTS errors:**
+   ```bash
+   python -m langflix.main --verbose --test-mode
+   ```
+
+### Problem: "ModuleNotFoundError: No module named 'google.cloud'"
+
+**Symptoms:**
+```
+ModuleNotFoundError: No module named 'google.cloud'
+```
+
+**Solutions:**
+```bash
+pip install google-cloud-texttospeech>=2.16.0
+```
+
+### Problem: TTS audio quality issues
+
+**Symptoms:**
+- Audio too fast/slow
+- Unclear pronunciation
+- Wrong voice used
+
+**Solutions:**
+1. **Adjust speaking rate in config:**
+   ```yaml
+   tts:
+     google:
+       speaking_rate: 0.75  # 75% speed (slower)
+   ```
+
+2. **Change voice:**
+   ```yaml
+   tts:
+     google:
+       voice_name: "en-US-Wavenet-A"  # Try different voices
+       alternate_voices: ["en-US-Wavenet-A", "en-US-Wavenet-D"]
+   ```
+
+3. **Check text sanitization:**
+   - Expression text should be clean English
+   - No special characters or symbols
 
 ---
 

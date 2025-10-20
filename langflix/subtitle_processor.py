@@ -401,15 +401,27 @@ class SubtitleProcessor:
             # Create dual-language SRT content
             srt_content = self._generate_dual_language_srt(subtitles, expression)
             
-            # Write to file
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(srt_content)
+            # Ensure the output directory exists
+            from pathlib import Path
+            output_path_obj = Path(output_path)
+            output_path_obj.parent.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"Created dual-language subtitle file: {output_path}")
-            return True
+            # Write to file
+            try:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(srt_content)
+                
+                logger.info(f"Created dual-language subtitle file: {output_path}")
+                return True
+            except Exception as write_error:
+                logger.error(f"Failed to write subtitle file to {output_path}: {write_error}")
+                logger.error(f"Directory exists: {output_path_obj.parent.exists()}")
+                logger.error(f"Directory is writable: {output_path_obj.parent.is_dir()}")
+                raise write_error
             
         except Exception as e:
-            logger.error(f"Error creating dual-language subtitle file: {e}")
+            logger.error(f"Error creating dual-language subtitle file for expression '{expression.expression}': {e}")
+            logger.error(f"Output path: {output_path}")
             return False
     
     def _generate_dual_language_srt(self, subtitles: List[Dict[str, Any]], 

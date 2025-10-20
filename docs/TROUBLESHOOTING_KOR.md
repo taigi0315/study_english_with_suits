@@ -11,14 +11,15 @@
 
 1. [설치 문제](#설치-문제)
 2. [API 및 LLM 문제](#api-및-llm-문제)
-3. [비디오 처리 문제](#비디오-처리-문제)
-4. [자막 처리 문제](#자막-처리-문제)
-5. [성능 및 리소스 문제](#성능-및-리소스-문제)
-6. [출력 및 품질 문제](#출력-및-품질-문제)
-7. [설정 문제](#설정-문제)
-8. [디버깅 팁](#디버깅-팁)
-9. [에러 메시지 참조](#에러-메시지-참조)
-10. [자주 묻는 질문](#자주-묻는-질문)
+3. [TTS (텍스트-음성 변환) 문제](#tts-텍스트-음성-변환-문제)
+4. [비디오 처리 문제](#비디오-처리-문제)
+5. [자막 처리 문제](#자막-처리-문제)
+6. [성능 및 리소스 문제](#성능-및-리소스-문제)
+7. [출력 및 품질 문제](#출력-및-품질-문제)
+8. [설정 문제](#설정-문제)
+9. [디버깅 팁](#디버깅-팁)
+10. [에러 메시지 참조](#에러-메시지-참조)
+11. [자주 묻는 질문](#자주-묻는-질문)
 
 ---
 
@@ -261,6 +262,104 @@ Quota exceeded for metric
    ```
 
 4. **무료 티어를 많이 사용하는 경우 API 플랜 업그레이드**
+
+---
+
+## TTS (텍스트-음성 변환) 문제
+
+### 문제: "Google Cloud API 키가 필요합니다"
+
+**증상:**
+```
+Error: Google Cloud API key is required. Set GOOGLE_API_KEY environment variable
+```
+
+**해결 방법:**
+1. **`.env` 파일에 API 키 추가:**
+   ```bash
+   GOOGLE_API_KEY_1=your_google_cloud_api_key_here
+   ```
+
+2. **키가 로드되었는지 확인:**
+   ```bash
+   cat .env | grep GOOGLE_API_KEY
+   ```
+
+3. **API 키 테스트:**
+   ```bash
+   python -c "import os; from dotenv import load_dotenv; load_dotenv(); print('API Key:', os.getenv('GOOGLE_API_KEY_1')[:10] + '...' if os.getenv('GOOGLE_API_KEY_1') else 'Not found')"
+   ```
+
+### 문제: "TTS 오디오 생성 또는 재생 안됨"
+
+**증상:**
+- 교육 슬라이드에 오디오 없음
+- 무음 파일 생성됨
+- 오디오 파일 생성되었지만 비어있거나 재생 안됨
+
+**해결 방법:**
+1. **`default.yaml`에서 TTS 설정 확인:**
+   ```yaml
+   tts:
+     enabled: true
+     provider: "google"
+     google:
+       language_code: "en-US"
+       response_format: "mp3"
+   ```
+
+2. **API 키 형식 확인:**
+   - Google Cloud API 키는 `AIza`로 시작해야 함
+   - `.env` 파일에서 키 주변에 따옴표나 공백 없음
+
+3. **TTS 직접 테스트:**
+   ```bash
+   python tests/test_tts_integration.py
+   ```
+
+4. **로그에서 TTS 에러 확인:**
+   ```bash
+   python -m langflix.main --verbose --test-mode
+   ```
+
+### 문제: "ModuleNotFoundError: No module named 'google.cloud'"
+
+**증상:**
+```
+ModuleNotFoundError: No module named 'google.cloud'
+```
+
+**해결 방법:**
+```bash
+pip install google-cloud-texttospeech>=2.16.0
+```
+
+### 문제: TTS 오디오 품질 문제
+
+**증상:**
+- 오디오가 너무 빠르거나 느림
+- 발음이 불분명함
+- 잘못된 음성 사용됨
+
+**해결 방법:**
+1. **설정에서 말하기 속도 조정:**
+   ```yaml
+   tts:
+     google:
+       speaking_rate: 0.75  # 75% 속도 (느림)
+   ```
+
+2. **음성 변경:**
+   ```yaml
+   tts:
+     google:
+       voice_name: "en-US-Wavenet-A"  # 다른 음성 시도
+       alternate_voices: ["en-US-Wavenet-A", "en-US-Wavenet-D"]
+   ```
+
+3. **텍스트 정리 확인:**
+   - 표현 텍스트가 깔끔한 영어여야 함
+   - 특수 문자나 기호 없음
 
 ---
 

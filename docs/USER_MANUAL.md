@@ -348,6 +348,35 @@ transitions:
     duration: 0.5               # Duration in seconds
 ```
 
+#### 6. Text-to-Speech (TTS)
+
+LangFlix uses Google Cloud Text-to-Speech for pronunciation audio generation:
+
+```yaml
+tts:
+  enabled: true                  # Enable/disable TTS audio generation
+  provider: "google"             # TTS provider (google, lemonfox)
+  
+  google:
+    language_code: "en-US"       # Original language for audio (English)
+    voice_name: "en-US-Wavenet-D" # Default voice (Puck)
+    response_format: "mp3"       # Audio format (mp3, wav)
+    speaking_rate: 0.75          # Speech speed (0.75 = 75% speed, slower)
+    alternate_voices:            # Voice alternation between expressions
+      - "en-US-Wavenet-D"        # Puck (male, neutral tone)
+      - "en-US-Wavenet-A"        # Leda (female, neutral tone)
+```
+
+**TTS Features:**
+- **Voice Alternation**: Automatically switches between Puck and Leda voices for each expression
+- **Timeline Structure**: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause
+- **Speech Speed**: Configurable slower speech for better learning (75% speed)
+- **Original Language**: Uses English (original language) for audio generation, not target language
+
+**Setup Requirements:**
+- Google Cloud TTS API key in environment: `GOOGLE_API_KEY_1=your_key_here`
+- Add to `.env` file in project root
+
 ### Environment Variables
 
 Override configuration with environment variables:

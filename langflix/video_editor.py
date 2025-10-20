@@ -392,8 +392,12 @@ class VideoEditor:
                 temp_audio_path = tts_client.generate_speech(expression.expression)
                 
                 # Save ORIGINAL TTS audio to permanent location for debugging
+                # self.output_dir points to final_videos, parent is language dir (ko)
                 tts_audio_dir = self.output_dir.parent / "tts_audio"
+                logger.info(f"VideoEditor output_dir: {self.output_dir}")
+                logger.info(f"Creating tts_audio directory at: {tts_audio_dir}")
                 tts_audio_dir.mkdir(exist_ok=True)
+                logger.info(f"TTS audio directory created: {tts_audio_dir.exists()}")
                 
                 # Get the file extension from the TTS client configuration
                 from . import settings
@@ -412,12 +416,15 @@ class VideoEditor:
                 
                 # Copy original TTS audio to permanent location and keep using temp for processing
                 import shutil
+                logger.info(f"Copying TTS audio from temp: {temp_audio_path}")
+                logger.info(f"Copying TTS audio to permanent: {original_audio_path}")
                 shutil.copy2(str(temp_audio_path), str(original_audio_path))
                 
                 # Verify the permanent copy is also not empty
                 permanent_file_size = original_audio_path.stat().st_size
                 logger.info(f"Original TTS audio saved permanently: {original_audio_path}")
                 logger.info(f"Permanent file size: {permanent_file_size} bytes")
+                logger.info(f"Permanent file exists: {original_audio_path.exists()}")
                 
                 if permanent_file_size == 0:
                     raise ValueError(f"Permanent TTS audio file is empty: {original_audio_path}")

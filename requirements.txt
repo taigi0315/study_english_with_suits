@@ -32,3 +32,8 @@ inflect>=6.0.0
 # Video processing
 ffmpeg-python>=0.2.0
 Pillow>=10.2.0
+
+# API dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6

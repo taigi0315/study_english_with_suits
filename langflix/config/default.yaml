@@ -90,11 +90,10 @@ video:
 font:
   sizes:
     default: 36                  # Default font size (increased from 32)
-    expression_dialogue: 48      # Full dialogue line containing expression (increased from 40)
-    expression: 72               # Main expression/phrase (emphasized, larger) (increased from 58)
-    expression_dialogue_trans: 44  # Translation of dialogue line (increased from 36)
-    expression_trans: 60         # Translation of expression (emphasized) (increased from 48)
-    translation: 48              # Legacy: Translation text (for backward compatibility) (increased from 40)
+    expression_dialogue: 42      # Full dialogue line containing expression (increased from 40)
+    expression: 48               # Main expression/phrase (emphasized, larger) (increased from 58)
+    expression_dialogue_trans: 42  # Translation of dialogue line (increased from 36)
+    expression_trans: 48         # Translation of expression (emphasized) (increased from 48)    
     similar: 42                  # Similar expressions text (increased from 32)
   
   # Automatically detect platform-specific fonts
@@ -143,6 +142,9 @@ tts:
   # TTS provider (lemonfox, google, aws, etc.)
   provider: "google"
   
+  # Number of times to repeat TTS audio for educational slides and short videos
+  repeat_count: 2
+  
   # Gemini TTS Configuration (Google GenAI library)
   google:
     # api_key: "set via GEMINI_API_KEY environment variable"
@@ -150,7 +152,7 @@ tts:
     model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model for high-quality synthesis
     response_format: "wav"  # Audio format (WAV for new API)
     # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
-    speaking_rate: "slow"  # SSML rate for slower, clearer speech
+    speaking_rate: "medium" 
     # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%" or semitones like "-2st"
     pitch: "-2st"  # SSML pitch: one semitone lower for more natural sound
     # Voice selection for TTS generation (uses Gemini voices from https://ai.google.dev/gemini-api/docs/speech-generation#voices)

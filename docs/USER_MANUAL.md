@@ -356,6 +356,7 @@ LangFlix uses Gemini TTS for pronunciation audio generation:
 tts:
   enabled: true                  # Enable/disable TTS audio generation
   provider: "google"             # TTS provider (google, lemonfox)
+  repeat_count: 2                # Number of times to repeat TTS audio
   
   google:
     language_code: "en-us"       # Original language for audio (English)
@@ -372,7 +373,8 @@ tts:
 
 **TTS Features:**
 - **Voice Alternation**: Automatically switches between configured voices for each expression
-- **Timeline Structure**: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause (3 repetitions)
+- **Timeline Structure**: 1s pause - TTS - 0.5s pause - TTS - ... - 1s pause (configurable repetitions)
+- **Repeat Count**: Configurable via `repeat_count` setting (default: 2)
 - **SSML Control**: Direct SSML rate and pitch control for natural speech
 - **Original Language**: Uses English (original language) for audio generation, not target language
 

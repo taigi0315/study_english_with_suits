@@ -286,26 +286,70 @@ class VideoEditor:
             
             # Build exact path based on output structure
             # Format: output/Series/Episode/translations/{lang}/subtitles/expression_XX_{expression}.srt
+            # self.output_dir is translations/{lang}/final_videos, so subtitles is at self.output_dir.parent / "subtitles"
             subtitle_dir = self.output_dir.parent / "subtitles"
+            
+            logger.info(f"Looking for subtitle files in: {subtitle_dir}")
+            logger.info(f"Expression: '{expression.expression}'")
+            logger.info(f"Safe expression: '{safe_expression}'")
+            
+            # Check if subtitle directory exists
+            if not subtitle_dir.exists():
+                logger.warning(f"Subtitle directory does not exist: {subtitle_dir}")
+                return None
+            
+            # List all subtitle files in the directory for debugging
+            try:
+                all_subtitle_files = list(subtitle_dir.glob("*.srt"))
+                logger.info(f"Available subtitle files: {[f.name for f in all_subtitle_files]}")
+            except Exception as e:
+                logger.warning(f"Could not list subtitle files: {e}")
             
             # Search for files that match the expected pattern
             import glob
+            import re
+            
+            # Create multiple search strategies
+            sanitized_expr = self._sanitize_filename(expression.expression)
             patterns = [
-                # Try with index prefix: expression_01_, expression_02_, etc.
+                # Strategy 1: Try exact match with index prefix
                 str(subtitle_dir / f"expression_*_{safe_expression[:30]}.srt"),
-                # Try without index: expression_{expression}.srt  
+                # Strategy 2: Try exact match without index
                 str(subtitle_dir / f"expression_{safe_expression[:30]}.srt"),
-                # Try with sanitized name as fallback
-                str(subtitle_dir / f"expression_*_{self._sanitize_filename(expression.expression)}.srt"),
+                # Strategy 3: Try sanitized name with index
+                str(subtitle_dir / f"expression_*_{sanitized_expr}.srt"),
+                # Strategy 4: Try sanitized name without index
+                str(subtitle_dir / f"expression_{sanitized_expr}.srt"),
             ]
+            
+            # Strategy 5: Try partial matching for cases where filename is truncated
+            # Look for files that contain a significant part of the expression
+            all_files = list(subtitle_dir.glob("expression_*.srt"))
+            for file_path in all_files:
+                filename_without_ext = file_path.stem
+                # Extract the expression part after "expression_XX_"
+                match = re.match(r'expression_\d+_(.+)', filename_without_ext)
+                if match:
+                    file_expr_part = match.group(1)
+                    # Check if the file expression is a significant substring of our expression
+                    if (file_expr_part in safe_expression or 
+                        safe_expression[:len(file_expr_part)] == file_expr_part or
+                        file_expr_part in sanitized_expr or
+                        sanitized_expr[:len(file_expr_part)] == file_expr_part):
+                        logger.info(f"Found potential match via partial matching: {file_path}")
+                        return str(file_path)
+            
+            logger.info(f"Search patterns: {patterns}")
             
             for pattern in patterns:
                 matches = glob.glob(pattern)
+                logger.info(f"Pattern '{pattern}' found matches: {matches}")
                 if matches:
                     # Return the first match, prefer numbered ones
                     matches.sort()  # This will put expression_01 before expression_02, etc.
-                    logger.info(f"Found subtitle file: {matches[0]}")
-                    return matches[0]
+                    selected_file = matches[0]
+                    logger.info(f"Selected subtitle file: {selected_file}")
+                    return selected_file
             
             logger.warning(f"Could not find subtitle file for expression: {expression.expression}")
             logger.warning(f"Searched in: {subtitle_dir}")
@@ -1334,8 +1378,9 @@ class VideoEditor:
 
     def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
         """
-        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
         Uses alternating voices between expressions (not within the same expression).
+        Repeat count is configurable via settings.
         
         Args:
             text: Text to convert to speech
@@ -1385,7 +1430,11 @@ class VideoEditor:
             
             logger.info(f"Generated TTS with {selected_voice}: {tts_duration:.2f}s")
             
-            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause (3 repetitions)
+            # Get repeat count from settings
+            repeat_count = settings.get_tts_repeat_count()
+            logger.info(f"Using TTS repeat count: {repeat_count}")
+            
+            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - ... - 1s pause (repeat_count repetitions)
             timeline_path = self.output_dir / f"temp_timeline_{self._sanitize_filename(text)}.wav"
             self._register_temp_file(timeline_path)
             
@@ -1417,16 +1466,16 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_0.5s + tts + silence_1s (3 repetitions)
-                input_files = [
-                    str(silence_1s_path),
-                    str(tts_wav_path),      # First TTS
-                    str(silence_0_5s_path),
-                    str(tts_wav_path),      # Second TTS (same file)
-                    str(silence_0_5s_path),
-                    str(tts_wav_path),      # Third TTS (same file)
-                    str(silence_1s_path)
-                ]
+                # Build dynamic input files based on repeat_count: silence_1s + (tts + silence_0.5s) * repeat_count + silence_1s
+                input_files = [str(silence_1s_path)]  # Start with 1s silence
+                
+                # Add TTS segments with 0.5s silence between them
+                for i in range(repeat_count):
+                    input_files.append(str(tts_wav_path))  # TTS audio
+                    if i < repeat_count - 1:  # Don't add silence after the last TTS
+                        input_files.append(str(silence_0_5s_path))  # 0.5s silence
+                
+                input_files.append(str(silence_1s_path))  # End with 1s silence
                 
                 # Create concat file
                 concat_file = self.output_dir / f"temp_concat_timeline_{self._sanitize_filename(text)}.txt"
@@ -1442,10 +1491,10 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Calculate total duration: 1 + tts + 0.5 + tts + 0.5 + tts + 1 = 3.0 + (tts * 3)
-                total_duration = 3.0 + (tts_duration * 3)
+                # Calculate total duration: 1s start + (tts_duration + 0.5s) * repeat_count - 0.5s + 1s end
+                total_duration = 2.0 + (tts_duration * repeat_count) + (0.5 * (repeat_count - 1))
                 
-                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 3 repetitions)")
+                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, {repeat_count} repetitions)")
                 
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
@@ -1472,8 +1521,8 @@ class VideoEditor:
                                   expression_index: int = 0) -> Tuple[str, float]:
         """
         Create vertical short-format video (9:16) with context video on top and slide on bottom.
-        Total duration = context_duration + (TTS_duration * 2) + 0.5s
-        Context video plays normally, then freezes on last frame while TTS plays twice.
+        Total duration = context_duration + (TTS_duration * repeat_count) + (0.5s * (repeat_count - 1))
+        Context video plays normally, then freezes on last frame while TTS plays repeat_count times.
         
         Args:
             context_video_path: Path to context video with subtitles
@@ -1516,9 +1565,13 @@ class VideoEditor:
             tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
             logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             
-            # Calculate total video duration: context + (TTS * 3) + (0.5s gaps * 2)
-            total_duration = context_duration + (tts_duration * 3) + 1.0
-            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×3: {tts_duration * 3:.2f}s + gaps: 1.0s)")
+            # Get repeat count from settings
+            repeat_count = settings.get_tts_repeat_count()
+            
+            # Calculate total video duration: context + (TTS * repeat_count) + (0.5s gaps * (repeat_count - 1))
+            gap_duration = 0.5 * (repeat_count - 1) if repeat_count > 1 else 0.0
+            total_duration = context_duration + (tts_duration * repeat_count) + gap_duration
+            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×{repeat_count}: {tts_duration * repeat_count:.2f}s + gaps: {gap_duration:.2f}s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -1553,11 +1606,11 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Create combined audio: context_audio + TTS (three times with 0.5s gaps)
-            logger.info("Creating combined audio timeline: context audio + TTS×3 with 0.5s gaps")
+            # Create combined audio: context_audio + TTS (repeat_count times with 0.5s gaps)
+            logger.info(f"Creating combined audio timeline: context audio + TTS×{repeat_count} with 0.5s gaps")
             
-            # Create audio timeline: context_audio + TTS×3 with 0.5s gaps
-            # Timeline: context_audio + TTS + 0.5s silence + TTS + 0.5s silence + TTS
+            # Create audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
+            # Timeline: context_audio + TTS + 0.5s silence + TTS + ... (repeat_count times)
             try:
                 # Create silence for 0.5s gap
                 silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
@@ -1586,17 +1639,19 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Create concat file for audio timeline: context_audio + TTS + 0.5s silence + TTS + 0.5s silence + TTS
+                # Create concat file for audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
                 audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
                 self._register_temp_file(audio_concat_file)
                 
                 with open(audio_concat_file, 'w') as f:
+                    # Start with context audio
                     f.write(f"file '{Path(context_audio_path).absolute()}'\n")
-                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
-                    f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
-                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
-                    f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
-                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                    
+                    # Add TTS segments with 0.5s silence between them
+                    for i in range(repeat_count):
+                        f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                        if i < repeat_count - 1:  # Don't add silence after the last TTS
+                            f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
                 
                 # Concatenate all audio segments
                 combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"

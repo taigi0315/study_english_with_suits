@@ -592,6 +592,46 @@ Skipping expression: [expression text]
 
 ---
 
+### Problem: Subtitles not appearing in some context videos
+
+**Symptoms:**
+- Some context videos show no subtitles while others display correctly
+- Subtitle files exist in `translations/{lang}/subtitles/` directory
+- Error logs show "Could not find subtitle file for expression"
+
+**Causes:**
+- Subtitle file naming mismatch due to filename truncation
+- Expression text is longer than filename allows (e.g., `get_to_someone_through_someone_else` becomes `expression_01_get_to_someone_through_someone.srt`)
+
+**Solutions:**
+
+1. **System handles this automatically** - LangFlix uses smart partial matching to find subtitle files even when names are truncated
+
+2. **If issues persist, check subtitle file matching:**
+   ```bash
+   # Check available subtitle files
+   ls -la output/Series/Episode/translations/{lang}/subtitles/
+   
+   # Verify file naming pattern matches expression
+   # Pattern: expression_XX_{expression_text}.srt
+   ```
+
+3. **For debugging, enable verbose logging:**
+   Look for these log messages:
+   ```
+   INFO | Looking for subtitle files in: {directory}
+   INFO | Available subtitle files: [...]
+   INFO | Found potential match via partial matching: {file_path}
+   ```
+
+**Technical Details:**
+The system uses multiple matching strategies:
+- Exact match with expression text
+- Partial matching for truncated filenames  
+- Pattern matching with indexed prefixes (expression_01_, expression_02_, etc.)
+
+---
+
 ## Performance and Resource Issues
 
 ### Problem: Processing is very slow

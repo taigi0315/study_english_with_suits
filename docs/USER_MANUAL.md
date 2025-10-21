@@ -438,10 +438,13 @@ Each educational video follows this sequence:
    - Expression appears in middle
 
 2. **Educational Slide** (varies)
-   - Expression in English (top, 48px)
-   - Translation (middle, 40px)
-   - Similar expressions (bottom, 32px, max 2)
-   - Audio: Expression repeated 3 times
+   - **NEW 5-Section Layout:**
+     1. Expression Dialogue (top, 40px) - Full sentence containing the expression
+     2. Expression (below dialogue, 58px, yellow highlight) - Key expression/phrase to learn
+     3. Expression Dialogue Translation (middle, 36px) - Translation of full sentence
+     4. Expression Translation (below dialogue translation, 48px, yellow highlight) - Key phrase translation
+     5. Similar Expressions (bottom, 32px, max 2) - Alternative ways to say the same thing
+   - Audio: Full dialogue + expression repeated 3 times
 
 3. **Next Expression** (repeat pattern)
 
@@ -457,7 +460,7 @@ Short format videos are optimized for social media platforms and follow this str
      - Plays normally for original context duration
      - Freezes on last frame for remaining duration
    - **Bottom half**: Educational slide (silent, displays throughout entire video)
-     - Shows expression, translation, and similar expressions
+     - **NEW 5-Section Layout:** Expression dialogue, highlighted expression, dialogue translation, highlighted expression translation, and similar expressions
      - No audio (context audio + TTS audio only)
 
 3. **Audio Timeline**:

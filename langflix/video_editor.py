@@ -114,7 +114,7 @@ class VideoEditor:
                 context_video_path, expression
             )
             
-            # Step 2: Create educational slide with background and 3x audio
+            # Step 2: Create educational slide with background and 2x audio
             educational_slide = self._create_educational_slide(
                 expression_video_path, expression, expression_index  # Use original video for expression audio and pass index
             )
@@ -415,7 +415,7 @@ class VideoEditor:
             raise
     
     def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis, expression_index: int = 0) -> str:
-        """Create educational slide with background image, text, and TTS audio 3x"""
+        """Create educational slide with background image, text, and TTS audio 2x"""
         try:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
@@ -532,11 +532,11 @@ class VideoEditor:
                 shutil.copy2(str(audio_path), str(fallback_permanent_path))
                 logger.warning(f"Fallback silence audio saved to: {fallback_permanent_path}")
             
-            # Use the timeline audio directly (no need for 3x conversion since timeline is already complete)
-            audio_3x_path = audio_path  # The timeline already includes 3 TTS segments with pauses
+            # Use the timeline audio directly (no need for 2x conversion since timeline is already complete)
+            audio_2x_path = audio_path  # The timeline already includes 2 TTS segments with pauses
             slide_duration = expression_duration + 0.5  # Add small padding for slide
             
-            logger.info(f"Using timeline audio directly: {audio_3x_path}")
+            logger.info(f"Using timeline audio directly: {audio_2x_path}")
             logger.info(f"Timeline duration: {expression_duration:.2f}s")
             
             # Clean text properly for educational slide (remove special characters including underscores)
@@ -659,7 +659,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_dialogue}':fontsize={dialogue_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-280:"
+                        f"x=(w-text_w)/2:y=h/2-220:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -668,7 +668,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-210:"
+                        f"x=(w-text_w)/2:y=h/2-150:"
                         f"borderw=3:bordercolor=black"
                     )
                 
@@ -677,7 +677,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_dialogue_trans}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-60:"
+                        f"x=(w-text_w)/2:y=h/2:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -686,7 +686,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2+10:"
+                        f"x=(w-text_w)/2:y=h/2+70:"
                         f"borderw=3:bordercolor=black"
                     )
                 
@@ -716,7 +716,7 @@ class VideoEditor:
                         similar_font_size = 32
                     
                     # Add each similar expression as a separate drawtext for proper line spacing
-                    base_y = 130  # Distance from bottom
+                    base_y = 160  # Distance from bottom (moved 3% lower: 130 -> 160)
                     line_spacing = 40  # Space between lines
                     
                     for i, similar_text in enumerate(safe_similar[:2]):  # Limit to 2 expressions
@@ -742,17 +742,17 @@ class VideoEditor:
                     video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
                 
                 # Debug: Check if audio file exists and has content
-                if not audio_3x_path.exists():
-                    logger.error(f"3x audio file does not exist: {audio_3x_path}")
-                    raise FileNotFoundError(f"3x audio file missing: {audio_3x_path}")
+                if not audio_2x_path.exists():
+                    logger.error(f"2x audio file does not exist: {audio_2x_path}")
+                    raise FileNotFoundError(f"2x audio file missing: {audio_2x_path}")
                 
-                audio_file_size = audio_3x_path.stat().st_size
-                logger.info(f"Using 3x audio file: {audio_3x_path} (size: {audio_file_size} bytes)")
+                audio_file_size = audio_2x_path.stat().st_size
+                logger.info(f"Using 2x audio file: {audio_2x_path} (size: {audio_file_size} bytes)")
                 
-                # Add the 3x TTS audio input
-                audio_input = ffmpeg.input(str(audio_3x_path))
+                # Add the 2x TTS audio input
+                audio_input = ffmpeg.input(str(audio_2x_path))
                 
-                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_3x_path}")
+                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path}")
                 
                 # Create the slide with both video and audio directly
                 try:
@@ -796,7 +796,7 @@ class VideoEditor:
                     else:
                         video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
                     
-                    audio_input = ffmpeg.input(str(audio_3x_path))
+                    audio_input = ffmpeg.input(str(audio_2x_path))
                     
                     (
                         ffmpeg
@@ -815,7 +815,7 @@ class VideoEditor:
                     # Final emergency fallback - basic slide with audio
                     try:
                         video_input = ffmpeg.input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
-                        audio_input = ffmpeg.input(str(audio_3x_path))
+                        audio_input = ffmpeg.input(str(audio_2x_path))
                         
                         (
                             ffmpeg
@@ -990,7 +990,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_dialogue}':fontsize={dialogue_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-280:"
+                        f"x=(w-text_w)/2:y=h/2-220:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -999,7 +999,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-210:"
+                        f"x=(w-text_w)/2:y=h/2-150:"
                         f"borderw=3:bordercolor=black"
                     )
                 
@@ -1008,7 +1008,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_dialogue_trans}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-60:"
+                        f"x=(w-text_w)/2:y=h/2:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -1017,7 +1017,7 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2+10:"
+                        f"x=(w-text_w)/2:y=h/2+70:"
                         f"borderw=3:bordercolor=black"
                     )
                 
@@ -1047,7 +1047,7 @@ class VideoEditor:
                         similar_font_size = 32
                     
                     # Add each similar expression as a separate drawtext for proper line spacing
-                    base_y = 130  # Distance from bottom
+                    base_y = 160  # Distance from bottom (moved 3% lower: 130 -> 160)
                     line_spacing = 40  # Space between lines
                     
                     for i, similar_text in enumerate(safe_similar[:2]):  # Limit to 2 expressions
@@ -1392,7 +1392,7 @@ class VideoEditor:
             
             logger.info(f"Generated TTS with {voice_name}: {tts_duration:.2f}s")
             
-            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause
+            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 1s pause (2 repetitions)
             timeline_path = self.output_dir / f"temp_timeline_{self._sanitize_filename(text)}.wav"
             self._register_temp_file(timeline_path)
             
@@ -1424,14 +1424,12 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_0.5s + tts + silence_1s
+                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_1s (2 repetitions)
                 input_files = [
                     str(silence_1s_path),
                     str(tts_wav_path),      # First TTS
                     str(silence_0_5s_path),
                     str(tts_wav_path),      # Second TTS (same file)
-                    str(silence_0_5s_path),
-                    str(tts_wav_path),      # Third TTS (same file)
                     str(silence_1s_path)
                 ]
                 
@@ -1449,10 +1447,10 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Calculate total duration: 1 + tts + 0.5 + tts + 0.5 + tts + 1 = 3 + (tts * 3)
-                total_duration = 3.0 + (tts_duration * 3)
+                # Calculate total duration: 1 + tts + 0.5 + tts + 1 = 2.5 + (tts * 2)
+                total_duration = 2.5 + (tts_duration * 2)
                 
-                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 3 repetitions)")
+                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 2 repetitions)")
                 
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
@@ -1498,6 +1496,9 @@ class VideoEditor:
             
             logger.info(f"Creating short-format video for: {expression.expression}")
             
+            # Ensure backward compatibility for expression_dialogue fields
+            expression = self._ensure_expression_dialogue(expression)
+            
             # Get context video duration
             try:
                 context_probe = ffmpeg.probe(context_video_path)
@@ -1507,9 +1508,22 @@ class VideoEditor:
                 logger.error(f"Error getting context video duration: {e}")
                 context_duration = 10.0  # Fallback duration
             
-            # Generate TTS audio for the expression
-            logger.info(f"Generating TTS for short video: '{expression.expression}'")
-            tts_audio_path, tts_duration = self._generate_single_tts(expression.expression, expression_index)
+            # Generate TTS audio using the same logic as educational slide (dialogue + expression)
+            # Edge case: If expression is same as dialogue, only read once
+            if (expression.expression.strip() == expression.expression_dialogue.strip()):
+                tts_text = expression.expression_dialogue  # Only read once to avoid duplication
+                logger.info(f"Expression same as dialogue, TTS will read once: '{tts_text}'")
+            else:
+                tts_text = f"{expression.expression_dialogue}. {expression.expression}"
+                logger.info(f"Generating TTS audio for short video: '{tts_text}'")
+            
+            # Edge case: Truncate if too long for TTS provider
+            MAX_TTS_CHARS = 500  # Adjust based on provider
+            if len(tts_text) > MAX_TTS_CHARS:
+                logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
+                tts_text = tts_text[:MAX_TTS_CHARS]
+            
+            tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
             logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             
             # Calculate total video duration: context + (TTS * 2) + 0.5s gap

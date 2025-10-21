@@ -1,22 +1,30 @@
 """
-Common models for LangFlix API.
-
-This module defines shared Pydantic models used across the API.
+Common models for LangFlix API
 """
 
 from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
 from datetime import datetime
-from typing import Optional, Dict, Any
 
 class HealthResponse(BaseModel):
-    """Response model for health check."""
+    """Basic health check response."""
+    
     status: str = Field(..., description="Service status")
-    timestamp: str = Field(..., description="Current timestamp")
+    timestamp: datetime = Field(..., description="Response timestamp")
     service: str = Field(..., description="Service name")
-    version: str = Field(..., description="Service version")
 
 class DetailedHealthResponse(BaseModel):
-    """Response model for detailed health check."""
-    status: str = Field(..., description="Overall service status")
-    timestamp: str = Field(..., description="Current timestamp")
-    components: Dict[str, str] = Field(..., description="Component status")
+    """Detailed health check response."""
+    
+    status: str = Field(..., description="Service status")
+    timestamp: datetime = Field(..., description="Response timestamp")
+    service: str = Field(..., description="Service name")
+    version: str = Field(..., description="Service version")
+    components: Dict[str, str] = Field(..., description="Component health status")
+
+class ErrorResponse(BaseModel):
+    """Error response model."""
+    
+    error: str = Field(..., description="Error message")
+    status_code: int = Field(..., description="HTTP status code")
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")

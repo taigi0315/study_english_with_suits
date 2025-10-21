@@ -1,17 +1,10 @@
 """
-API models for LangFlix.
-
-This module contains Pydantic models for API request and response validation.
+API models for LangFlix
 """
 
 from .requests import JobCreateRequest, FileUploadRequest
-from .responses import (
-    JobStatusResponse, 
-    ExpressionResponse, 
-    JobExpressionsResponse, 
-    ErrorResponse
-)
-from .common import HealthResponse
+from .responses import JobStatusResponse, ExpressionResponse, JobExpressionsResponse
+from .common import HealthResponse, DetailedHealthResponse, ErrorResponse
 
 __all__ = [
     'JobCreateRequest',
@@ -19,6 +12,7 @@ __all__ = [
     'JobStatusResponse',
     'ExpressionResponse',
     'JobExpressionsResponse',
-    'ErrorResponse',
-    'HealthResponse'
+    'HealthResponse',
+    'DetailedHealthResponse',
+    'ErrorResponse'
 ]

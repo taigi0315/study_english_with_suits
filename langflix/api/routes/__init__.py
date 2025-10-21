@@ -1,7 +1,7 @@
 """
-API routes for LangFlix.
+LangFlix API Routes
 
-This module contains all API route definitions organized by functionality.
+This module contains all API route definitions.
 """
 
 from . import health, jobs, files

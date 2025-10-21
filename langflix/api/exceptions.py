@@ -1,13 +1,9 @@
 """
-Custom exceptions and handlers for LangFlix API.
-
-This module defines custom exception classes and handlers for API error management.
+Custom API exceptions for LangFlix
 """
 
-from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any
-from .models.responses import ErrorResponse
+from fastapi import HTTPException
+from typing import Any, Dict, Optional
 
 class APIException(Exception):
     """Base API exception."""
@@ -18,54 +14,54 @@ class APIException(Exception):
         super().__init__(self.message)
 
 class ValidationError(APIException):
-    """Validation error."""
+    """Validation error exception."""
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(message, 400, details)
+        super().__init__(message, 422, details)
 
 class NotFoundError(APIException):
-    """Resource not found error."""
+    """Not found error exception."""
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(message, 404, details)
 
 class ProcessingError(APIException):
-    """Video processing error."""
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(message, 422, details)
-
-class StorageError(APIException):
-    """Storage operation error."""
+    """Processing error exception."""
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(message, 500, details)
 
-async def api_exception_handler(request: Request, exc: APIException):
-    """Handle custom API exceptions."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error=exc.__class__.__name__,
-            message=exc.message,
-            details=exc.details
-        ).dict()
-    )
+class StorageError(APIException):
+    """Storage error exception."""
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, 500, details)
 
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error="HTTPException",
-            message=exc.detail,
-            details={"status_code": exc.status_code}
-        ).dict()
-    )
-
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions."""
-    return JSONResponse(
-        status_code=500,
-        content=ErrorResponse(
-            error="InternalServerError",
-            message="An internal server error occurred",
-            details={"exception": str(exc)}
-        ).dict()
-    )
+def api_exception_handler(request, exc):
+    """Handle API exceptions."""
+    from fastapi.responses import JSONResponse
+    from fastapi import HTTPException
+    
+    if isinstance(exc, APIException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": exc.message,
+                "status_code": exc.status_code,
+                "details": exc.details
+            }
+        )
+    elif isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": exc.detail,
+                "status_code": exc.status_code,
+                "details": {}
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": str(exc),
+                "status_code": 500,
+                "details": {}
+            }
+        )

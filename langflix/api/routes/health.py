@@ -1,38 +1,33 @@
 """
-Health check routes for LangFlix API.
-
-This module provides health check endpoints for monitoring service status.
+Health check endpoints for LangFlix API
 """
 
 from fastapi import APIRouter
 from datetime import datetime, timezone
-from ..models.common import HealthResponse, DetailedHealthResponse
+from typing import Dict, Any
 
 router = APIRouter()
 
-@router.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        service="LangFlix API",
-        version="1.0.0"
-    )
+@router.get("/health")
+async def health_check() -> Dict[str, Any]:
+    """Basic health check endpoint."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "LangFlix API"
+    }
 
-@router.get("/health/detailed", response_model=DetailedHealthResponse)
-async def detailed_health_check():
-    """Detailed health check with component status."""
-    # TODO: Check database connection
-    # TODO: Check storage backends
-    # TODO: Check external services
-    
-    return DetailedHealthResponse(
-        status="healthy",
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        components={
-            "database": "healthy",
-            "storage": "healthy",
-            "llm": "healthy"
+@router.get("/health/detailed")
+async def detailed_health_check() -> Dict[str, Any]:
+    """Detailed health check endpoint."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "LangFlix API",
+        "version": "1.0.0",
+        "components": {
+            "database": "connected",  # TODO: Implement actual health checks
+            "storage": "available",
+            "tts": "ready"
         }
-    )
+    }

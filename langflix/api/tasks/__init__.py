@@ -1,7 +1,5 @@
 """
-Background tasks for LangFlix API.
-
-This module provides background task processing for video analysis.
+Background tasks for LangFlix API
 """
 
 from .processing import process_video_task

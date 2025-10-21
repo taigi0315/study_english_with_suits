@@ -14,8 +14,9 @@
 3. [비디오 처리](#비디오-처리)
 4. [자막 처리](#자막-처리)
 5. [표현 분석](#표현-분석)
-6. [설정](#설정)
-7. [유틸리티 함수](#유틸리티-함수)
+6. [TTS 통합](#tts-통합)
+7. [설정](#설정)
+8. [유틸리티 함수](#유틸리티-함수)
 
 ---
 
@@ -295,6 +296,73 @@ success = processor.create_dual_language_subtitle_file(
     expression,
     "output/expression_subtitles.srt"
 )
+```
+
+---
+
+## TTS 통합
+
+### TTS 클라이언트 팩토리
+
+TTS 클라이언트 인스턴스를 생성하는 팩토리 패턴입니다.
+
+```python
+from langflix.tts.factory import create_tts_client
+
+# TTS 클라이언트 생성
+tts_client = create_tts_client(
+    provider="google",  # 또는 "lemonfox"
+    provider_config={
+        "language_code": "en-us",
+        "model_name": "gemini-2.5-flash-preview-tts",
+        "response_format": "wav",
+        "speaking_rate": "slow",
+        "pitch": "-4st",
+        "alternate_voices": ["Despina", "Puck"]
+    }
+)
+```
+
+### Gemini TTS 클라이언트
+
+SSML 지원이 있는 Google Gemini TTS 구현입니다.
+
+```python
+from langflix.tts.gemini_client import GeminiTTSClient
+
+client = GeminiTTSClient(
+    api_key="your_gemini_api_key",
+    voice_name="Kore",
+    language_code="en-us",
+    speaking_rate="slow",
+    pitch="-4st",
+    model_name="gemini-2.5-flash-preview-tts"
+)
+
+# 음성 생성
+audio_path = client.generate_speech(
+    text="Hello, this is a test",
+    output_path="output/audio.wav"
+)
+```
+
+**기능:**
+- SSML 속도 및 피치 제어
+- 다중 음성 지원
+- WAV 출력 포맷
+- 폴백이 있는 오류 처리
+
+### TTS 베이스 클라이언트
+
+모든 TTS 구현을 위한 추상 기본 클래스입니다.
+
+```python
+from langflix.tts.base import TTSClient
+
+class CustomTTSClient(TTSClient):
+    def generate_speech(self, text: str, output_path: Path = None) -> Path:
+        # 구현
+        pass
 ```
 
 ---

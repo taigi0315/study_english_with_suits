@@ -426,14 +426,9 @@ class VideoEditor:
             # Get background configuration with proper fallbacks
             background_input, input_type = self._get_background_config()
             
-            # Generate TTS audio for dialogue + expression with edge case handling
-            # Edge case: If expression is same as dialogue, only read once
-            if (expression.expression.strip() == expression.expression_dialogue.strip()):
-                tts_text = expression.expression_dialogue  # Only read once to avoid duplication
-                logger.info(f"Expression same as dialogue, TTS will read once: '{tts_text}'")
-            else:
-                tts_text = f"{expression.expression_dialogue}. {expression.expression}"
-                logger.info(f"Generating TTS audio for: '{tts_text}'")
+            # Generate TTS audio using only expression_dialogue
+            tts_text = expression.expression_dialogue
+            logger.info(f"Generating TTS audio for: '{tts_text}'")
             
             # Edge case: Truncate if too long for TTS provider
             MAX_TTS_CHARS = 500  # Adjust based on provider
@@ -1298,17 +1293,16 @@ class VideoEditor:
             provider = tts_config.get('provider', 'google')
             provider_config = tts_config.get(provider, {})
             
-            # Get alternate voices from config
-            alternate_voices = provider_config.get('alternate_voices', ['en-US-Wavenet-D', 'en-US-Wavenet-A'])
-            if len(alternate_voices) < 2:
-                alternate_voices = ['en-US-Wavenet-D', 'en-US-Wavenet-A']
+            # Get alternate voices from config - this is the single source of truth for voice selection
+            alternate_voices = provider_config.get('alternate_voices', ['Laomedeia'])
+            if not alternate_voices:
+                raise ValueError("No alternate_voices configured in TTS config. This is required for voice selection.")
             
             # Select voice based on expression index
             voice_index = expression_index % len(alternate_voices)
             selected_voice = alternate_voices[voice_index]
-            voice_name = "Puck" if voice_index == 0 else "Leda"
             
-            logger.info(f"Expression {expression_index}: Using voice {voice_name} ({selected_voice}) for short video TTS")
+            logger.info(f"Expression {expression_index}: Using voice '{selected_voice}' for short video TTS (from alternate_voices: {alternate_voices})")
             
             # Generate TTS audio file
             voice_config = provider_config.copy()
@@ -1330,7 +1324,7 @@ class VideoEditor:
             except:
                 tts_duration = 2.0  # Fallback
             
-            logger.info(f"Generated single TTS with {voice_name}: {tts_duration:.2f}s")
+            logger.info(f"Generated single TTS with {selected_voice}: {tts_duration:.2f}s")
             
             return str(tts_path), tts_duration
             
@@ -1340,7 +1334,7 @@ class VideoEditor:
 
     def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
         """
-        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
         Uses alternating voices between expressions (not within the same expression).
         
         Args:
@@ -1357,17 +1351,16 @@ class VideoEditor:
             import tempfile
             import shutil
             
-            # Get alternate voices from config
-            alternate_voices = provider_config.get('alternate_voices', ['en-US-Wavenet-D', 'en-US-Wavenet-A'])
-            if len(alternate_voices) < 2:
-                alternate_voices = ['en-US-Wavenet-D', 'en-US-Wavenet-A']  # Puck and Leda
+            # Get alternate voices from config - this is the single source of truth for voice selection
+            alternate_voices = provider_config.get('alternate_voices', ['Laomedeia'])
+            if not alternate_voices:
+                raise ValueError("No alternate_voices configured in TTS config. This is required for voice selection.")
             
             # Select voice based on expression index (alternate between expressions)
             voice_index = expression_index % len(alternate_voices)
             selected_voice = alternate_voices[voice_index]
-            voice_name = "Puck" if voice_index == 0 else "Leda"
             
-            logger.info(f"Expression {expression_index}: Using voice {voice_name} ({selected_voice})")
+            logger.info(f"Expression {expression_index}: Using voice '{selected_voice}' (from alternate_voices: {alternate_voices})")
             
             # Generate ONE TTS audio file with the selected voice
             from .tts.factory import create_tts_client
@@ -1390,9 +1383,9 @@ class VideoEditor:
             except:
                 tts_duration = 2.0  # Fallback
             
-            logger.info(f"Generated TTS with {voice_name}: {tts_duration:.2f}s")
+            logger.info(f"Generated TTS with {selected_voice}: {tts_duration:.2f}s")
             
-            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 1s pause (2 repetitions)
+            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause (3 repetitions)
             timeline_path = self.output_dir / f"temp_timeline_{self._sanitize_filename(text)}.wav"
             self._register_temp_file(timeline_path)
             
@@ -1424,12 +1417,14 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_1s (2 repetitions)
+                # Concatenate: silence_1s + tts + silence_0.5s + tts + silence_0.5s + tts + silence_1s (3 repetitions)
                 input_files = [
                     str(silence_1s_path),
                     str(tts_wav_path),      # First TTS
                     str(silence_0_5s_path),
                     str(tts_wav_path),      # Second TTS (same file)
+                    str(silence_0_5s_path),
+                    str(tts_wav_path),      # Third TTS (same file)
                     str(silence_1s_path)
                 ]
                 
@@ -1447,10 +1442,10 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Calculate total duration: 1 + tts + 0.5 + tts + 1 = 2.5 + (tts * 2)
-                total_duration = 2.5 + (tts_duration * 2)
+                # Calculate total duration: 1 + tts + 0.5 + tts + 0.5 + tts + 1 = 3.0 + (tts * 3)
+                total_duration = 3.0 + (tts_duration * 3)
                 
-                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 2 repetitions)")
+                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, 3 repetitions)")
                 
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
@@ -1508,14 +1503,9 @@ class VideoEditor:
                 logger.error(f"Error getting context video duration: {e}")
                 context_duration = 10.0  # Fallback duration
             
-            # Generate TTS audio using the same logic as educational slide (dialogue + expression)
-            # Edge case: If expression is same as dialogue, only read once
-            if (expression.expression.strip() == expression.expression_dialogue.strip()):
-                tts_text = expression.expression_dialogue  # Only read once to avoid duplication
-                logger.info(f"Expression same as dialogue, TTS will read once: '{tts_text}'")
-            else:
-                tts_text = f"{expression.expression_dialogue}. {expression.expression}"
-                logger.info(f"Generating TTS audio for short video: '{tts_text}'")
+            # Generate TTS audio using only expression_dialogue
+            tts_text = expression.expression_dialogue
+            logger.info(f"Generating TTS audio for short video: '{tts_text}'")
             
             # Edge case: Truncate if too long for TTS provider
             MAX_TTS_CHARS = 500  # Adjust based on provider
@@ -1526,9 +1516,9 @@ class VideoEditor:
             tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
             logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             
-            # Calculate total video duration: context + (TTS * 2) + 0.5s gap
-            total_duration = context_duration + (tts_duration * 2) + 0.5
-            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×2: {tts_duration * 2:.2f}s + gap: 0.5s)")
+            # Calculate total video duration: context + (TTS * 3) + (0.5s gaps * 2)
+            total_duration = context_duration + (tts_duration * 3) + 1.0
+            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×3: {tts_duration * 3:.2f}s + gaps: 1.0s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -1563,11 +1553,11 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Create combined audio: context_audio + TTS (twice with 0.5s gap)
-            logger.info("Creating combined audio timeline: context audio + TTS×2 with 0.5s gap")
+            # Create combined audio: context_audio + TTS (three times with 0.5s gaps)
+            logger.info("Creating combined audio timeline: context audio + TTS×3 with 0.5s gaps")
             
-            # Create audio timeline: context_audio + TTS×2 with 0.5s gap
-            # First, create TTS timeline (TTS + 0.5s silence + TTS)
+            # Create audio timeline: context_audio + TTS×3 with 0.5s gaps
+            # Timeline: context_audio + TTS + 0.5s silence + TTS + 0.5s silence + TTS
             try:
                 # Create silence for 0.5s gap
                 silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
@@ -1596,12 +1586,14 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Create concat file for audio timeline: context_audio + TTS + 0.5s silence + TTS
+                # Create concat file for audio timeline: context_audio + TTS + 0.5s silence + TTS + 0.5s silence + TTS
                 audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
                 self._register_temp_file(audio_concat_file)
                 
                 with open(audio_concat_file, 'w') as f:
                     f.write(f"file '{Path(context_audio_path).absolute()}'\n")
+                    f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
+                    f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
                     f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
                     f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
                     f.write(f"file '{Path(tts_wav_path).absolute()}'\n")

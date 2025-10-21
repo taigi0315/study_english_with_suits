@@ -1,776 +1,261 @@
-# LangFlix API 참조 문서
+# LangFlix API 참조
 
-**버전:** 1.0  
-**최종 업데이트:** 2025년 1월
+## 개요
 
-이 문서는 LangFlix의 모든 공개 클래스와 메서드에 대한 포괄적인 API 문서를 제공합니다. 프로그래밍 방식 접근 및 통합에 사용하세요.
+LangFlix API는 비디오 처리, 작업 관리, 결과 검색을 위한 RESTful 엔드포인트를 제공합니다. API는 FastAPI로 구축되었으며 자동 OpenAPI 문서를 제공합니다.
 
----
+## 기본 URL
 
-## 목차
-
-1. [핵심 파이프라인](#핵심-파이프라인)
-2. [데이터 모델](#데이터-모델)
-3. [비디오 처리](#비디오-처리)
-4. [자막 처리](#자막-처리)
-5. [표현 분석](#표현-분석)
-6. [TTS 통합](#tts-통합)
-7. [설정](#설정)
-8. [유틸리티 함수](#유틸리티-함수)
-
----
-
-## 핵심 파이프라인
-
-### `LangFlixPipeline`
-
-전체 LangFlix 워크플로우를 조정하는 메인 오케스트레이터 클래스입니다.
-
-#### 생성자
-
-```python
-LangFlixPipeline(
-    subtitle_file: str,
-    video_dir: str = "assets/media",
-    output_dir: str = "output",
-    language_code: str = "ko"
-)
+```
+http://localhost:8000
 ```
 
-**매개변수:**
-- `subtitle_file` (str): 자막 파일 경로 (.srt)
-- `video_dir` (str): 비디오 파일이 포함된 디렉토리 (기본값: "assets/media")
-- `output_dir` (str): 출력 파일 디렉토리 (기본값: "output")
-- `language_code` (str): 대상 언어 코드 (기본값: "ko")
+## 인증
 
-#### 메서드
+현재 API는 인증이 필요하지 않습니다. 인증은 Phase 2에서 추가될 예정입니다.
 
-##### `run(max_expressions=None, dry_run=False, language_level=None, save_llm_output=False, test_mode=False, no_shorts=False) -> Dict[str, Any]`
+## API 엔드포인트
 
-전체 LangFlix 파이프라인을 실행합니다.
+### 상태 확인
 
-**매개변수:**
-- `max_expressions` (int, 선택사항): 처리할 최대 표현 수. None이면 발견된 모든 표현을 처리합니다.
-- `dry_run` (bool): True이면 비디오 파일을 만들지 않고 분석만 수행 (기본값: False)
-- `language_level` (str, 선택사항): 대상 언어 수준 ("beginner", "intermediate", "advanced", "mixed"). None이면 설정에서 기본값 사용.
-- `save_llm_output` (bool): True이면 검토를 위해 LLM 응답을 파일에 저장 (기본값: False)
-- `test_mode` (bool): True이면 테스트를 위해 첫 번째 청크만 처리 (기본값: False)
-- `no_shorts` (bool): True이면 숏폼 비디오 생성을 건너뜀 (기본값: False, 숏폼 비디오는 기본적으로 생성됨)
+#### GET /health
 
-**반환값:**
-- 처리 결과가 포함된 딕셔너리:
-  ```python
-  {
-      "total_subtitles": int,
-      "total_chunks": int,
-      "total_expressions": int,
-      "processed_expressions": int,
-      "output_directory": str,
-      "series_name": str,
-      "episode_name": str,
-      "language_code": str,
-      "timestamp": str
+API 서비스의 상태를 확인합니다.
+
+**응답:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-10-21T10:00:00Z",
+  "service": "LangFlix API",
+  "version": "1.0.0"
+}
+```
+
+#### GET /health/detailed
+
+컴포넌트 상태를 포함한 상세한 상태 정보를 가져옵니다.
+
+**응답:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-10-21T10:00:00Z",
+  "components": {
+    "database": "healthy",
+    "storage": "healthy",
+    "llm": "healthy"
   }
-  ```
-
-**예제:**
-```python
-from langflix.main import LangFlixPipeline
-
-pipeline = LangFlixPipeline(
-    subtitle_file="assets/media/Suits/Suits.S01E01.srt",
-    video_dir="assets/media",
-    output_dir="output",
-    language_code="ko"
-)
-
-results = pipeline.run(
-    max_expressions=5,
-    language_level="intermediate",
-    dry_run=False
-)
-
-print(f"처리된 표현 수: {results['processed_expressions']}")
+}
 ```
 
----
+### 작업 관리
 
-## 데이터 모델
+#### POST /api/v1/jobs
 
-### `ExpressionAnalysis`
+새로운 비디오 처리 작업을 생성합니다.
 
-단일 분석된 표현을 나타내는 Pydantic 모델입니다.
+**요청:**
+- Content-Type: `multipart/form-data`
+- 매개변수:
+  - `video_file`: 비디오 파일 (MP4, MKV, AVI)
+  - `subtitle_file`: 자막 파일 (SRT, VTT)
+  - `language_code`: 언어 코드 (예: "en", "ko")
+  - `show_name`: TV 프로그램 이름
+  - `episode_name`: 에피소드 이름
+  - `max_expressions`: 최대 표현식 수 (기본값: 10)
+  - `language_level`: 숙련도 수준 (beginner, intermediate, advanced, mixed)
+  - `test_mode`: 테스트 모드 활성화 (기본값: false)
+  - `no_shorts`: 숏 비디오 생성 건너뛰기 (기본값: false)
 
-```python
-class ExpressionAnalysis(BaseModel):
-    dialogues: List[str]
-    translation: List[str]
-    expression_dialogue: str
-    expression_dialogue_translation: str
-    expression: str
-    expression_translation: str
-    context_start_time: str
-    context_end_time: str
-    expression_start_time: Optional[str] = None
-    expression_end_time: Optional[str] = None
-    similar_expressions: List[str]
+**응답:**
+```json
+{
+  "job_id": "uuid",
+  "status": "PENDING",
+  "progress": 0,
+  "created_at": "2025-10-21T10:00:00Z"
+}
 ```
 
-**필드:**
-- `dialogues` (List[str]): 장면의 전체 대화 라인
-- `translation` (List[str]): 모든 대화 라인의 번역 (동일한 순서)
-- `expression_dialogue` (str): **NEW** - 표현이 포함된 완전한 대화 문장 (자막의 전체 문장)
-- `expression_dialogue_translation` (str): **NEW** - 표현이 포함된 완전한 대화 문장의 번역
-- `expression` (str): 학습할 메인 표현/구문 (`expression_dialogue`에서 추출한 핵심 부분)
-- `expression_translation` (str): 메인 표현의 번역 (핵심 부분의 번역)
-- `context_start_time` (str): 대화 컨텍스트가 시작되어야 하는 타임스탬프 (형식: "HH:MM:SS,mmm")
-- `context_end_time` (str): 대화 컨텍스트가 끝나야 하는 타임스탬프 (형식: "HH:MM:SS,mmm")
-- `expression_start_time` (str, 선택사항): 표현 구문이 시작되는 정확한 타임스탬프
-- `expression_end_time` (str, 선택사항): 표현 구문이 끝나는 정확한 타임스탬프
-- `similar_expressions` (List[str]): 1-3개의 유사한 표현 또는 대안
+#### GET /api/v1/jobs/{job_id}
 
-**필드 관계:**
-- `expression_dialogue`는 표현이 나타나는 **전체 문장**을 포함합니다
-- `expression`은 `expression_dialogue`에서 추출한 **핵심 구문/관용구**로 집중 학습을 위한 것입니다
-- `expression_dialogue_translation`은 전체 문장을 번역합니다
-- `expression_translation`은 핵심 표현 부분만 번역합니다
+처리 작업의 상태를 가져옵니다.
 
-**예제:**
-```python
-from langflix.models import ExpressionAnalysis
-
-expr = ExpressionAnalysis(
-    dialogues=["I'm paying you millions,", "and you're telling me I'm gonna get screwed?"],
-    translation=["나는 당신에게 수백만 달러를 지불하고 있는데,", "당신은 내가 속임을 당할 것이라고 말하고 있나요?"],
-    expression_dialogue="and you're telling me I'm gonna get screwed?",
-    expression_dialogue_translation="당신은 내가 속임을 당할 것이라고 말하고 있나요?",
-    expression="I'm gonna get screwed",
-    expression_translation="속임을 당할 것 같아요",
-    context_start_time="00:01:25,657",
-    context_end_time="00:01:32,230",
-    similar_expressions=["I'm going to be cheated", "I'm getting the short end of the stick"]
-)
+**응답:**
+```json
+{
+  "job_id": "uuid",
+  "status": "PROCESSING",
+  "progress": 75,
+  "created_at": "2025-10-21T10:00:00Z",
+  "started_at": "2025-10-21T10:01:00Z",
+  "completed_at": null,
+  "error_message": null
+}
 ```
 
-### `ExpressionAnalysisResponse`
+**상태 값:**
+- `PENDING`: 작업 생성됨, 시작되지 않음
+- `PROCESSING`: 현재 처리 중
+- `COMPLETED`: 성공적으로 완료됨
+- `FAILED`: 오류 발생
 
-여러 표현 분석을 담는 컨테이너입니다.
+#### GET /api/v1/jobs/{job_id}/expressions
 
-```python
-class ExpressionAnalysisResponse(BaseModel):
-    expressions: List[ExpressionAnalysis]
-```
+완료된 작업의 표현식을 가져옵니다.
 
----
-
-## 비디오 처리
-
-### `VideoProcessor`
-
-비디오 파일 로딩, 검증, 클립 추출을 포함한 비디오 파일 작업을 처리합니다.
-
-#### 생성자
-
-```python
-VideoProcessor(media_dir: str = "assets/media")
-```
-
-**매개변수:**
-- `media_dir` (str): 비디오 파일이 포함된 디렉토리
-
-#### 메서드
-
-##### `find_video_file(subtitle_file_path: str) -> Optional[Path]`
-
-자막 파일에 해당하는 비디오 파일을 찾습니다.
-
-**매개변수:**
-- `subtitle_file_path` (str): 자막 파일 경로
-
-**반환값:**
-- `Optional[Path]`: 해당하는 비디오 파일의 경로, 없으면 None
-
-##### `extract_clip(video_path: str, start_time: str, end_time: str, output_path: str) -> bool`
-
-지정된 타임스탬프 간의 비디오 클립을 추출합니다.
-
-**매개변수:**
-- `video_path` (str): 소스 비디오 파일 경로
-- `start_time` (str): 시작 타임스탬프 (형식: "HH:MM:SS,mmm")
-- `end_time` (str): 끝 타임스탬프 (형식: "HH:MM:SS,mmm")
-- `output_path` (str): 출력 클립 경로
-
-**반환값:**
-- `bool`: 추출이 성공하면 True, 그렇지 않으면 False
-
-##### `get_video_info(video_path: str) -> Dict[str, Any]`
-
-비디오 파일 메타데이터 및 속성을 가져옵니다.
-
-**매개변수:**
-- `video_path` (str): 비디오 파일 경로
-
-**반환값:**
-- 비디오 정보를 포함한 딕셔너리 (지속시간, 해상도, 코덱 등)
-
-**예제:**
-```python
-from langflix.video_processor import VideoProcessor
-
-processor = VideoProcessor("assets/media")
-
-# 비디오 파일 찾기
-video_path = processor.find_video_file("assets/media/Suits/Suits.S01E01.srt")
-if video_path:
-    # 클립 추출
-    success = processor.extract_clip(
-        str(video_path),
-        "00:01:25,657",
-        "00:01:32,230",
-        "output/clip.mkv"
-    )
-    
-    # 비디오 정보 가져오기
-    info = processor.get_video_info(str(video_path))
-    print(f"지속시간: {info.get('duration')}")
-```
-
----
-
-## 자막 처리
-
-### `SubtitleProcessor`
-
-자막 파일 작업 및 처리를 담당합니다.
-
-#### 생성자
-
-```python
-SubtitleProcessor(subtitle_file: str)
-```
-
-**매개변수:**
-- `subtitle_file` (str): 자막 파일 경로 (.srt)
-
-#### 메서드
-
-##### `find_expression_timing(expression_text: str, start_time: str, end_time: str) -> Dict[str, str]`
-
-시간 범위 내에서 표현의 정확한 타이밍을 찾습니다.
-
-**매개변수:**
-- `expression_text` (str): 타이밍을 찾을 표현 텍스트
-- `start_time` (str): 검색 범위 시작
-- `end_time` (str): 검색 범위 끝
-
-**반환값:**
-- `start_time`과 `end_time` 키를 포함한 딕셔너리. 정확한 타임스탬프를 담고 있습니다.
-
-##### `create_dual_language_subtitle_file(expression: ExpressionAnalysis, output_path: str) -> bool`
-
-표현에 대한 이중 언어 자막 파일을 생성합니다.
-
-**매개변수:**
-- `expression` (ExpressionAnalysis): 대화와 번역을 포함한 표현 데이터
-- `output_path` (str): 출력 자막 파일 경로
-
-**반환값:**
-- `bool`: 성공하면 True, 그렇지 않으면 False
-
-**예제:**
-```python
-from langflix.subtitle_processor import SubtitleProcessor
-from langflix.models import ExpressionAnalysis
-
-processor = SubtitleProcessor("assets/media/Suits/Suits.S01E01.srt")
-
-# 표현 타이밍 찾기
-timing = processor.find_expression_timing(
-    "I'm gonna get screwed",
-    "00:01:25,657",
-    "00:01:32,230"
-)
-
-# 이중 언어 자막 생성
-success = processor.create_dual_language_subtitle_file(
-    expression,
-    "output/expression_subtitles.srt"
-)
-```
-
----
-
-## TTS 통합
-
-### TTS 클라이언트 팩토리
-
-TTS 클라이언트 인스턴스를 생성하는 팩토리 패턴입니다.
-
-```python
-from langflix.tts.factory import create_tts_client
-
-# TTS 클라이언트 생성
-tts_client = create_tts_client(
-    provider="google",  # 또는 "lemonfox"
-    provider_config={
-        "language_code": "en-us",
-        "model_name": "gemini-2.5-flash-preview-tts",
-        "response_format": "wav",
-        "speaking_rate": "slow",
-        "pitch": "-4st",
-        "alternate_voices": ["Despina", "Puck"]
+**응답:**
+```json
+{
+  "job_id": "uuid",
+  "expressions": [
+    {
+      "id": "uuid",
+      "expression": "get the ball rolling",
+      "translation": "일을 시작하다",
+      "dialogue": "Let's get the ball rolling on this project",
+      "dialogue_translation": "이 프로젝트를 시작해보자",
+      "similar_expressions": ["start working", "begin"],
+      "context_start_time": "00:01:23,456",
+      "context_end_time": "00:01:25,789",
+      "scene_type": "dialogue"
     }
-)
+  ],
+  "total": 1
+}
 ```
 
-### Gemini TTS 클라이언트
+#### GET /api/v1/jobs
 
-SSML 지원이 있는 Google Gemini TTS 구현입니다.
+선택적 필터링으로 작업 목록을 가져옵니다.
 
-```python
-from langflix.tts.gemini_client import GeminiTTSClient
+**쿼리 매개변수:**
+- `status`: 작업 상태로 필터링
+- `limit`: 최대 작업 수 (기본값: 50)
+- `offset`: 건너뛸 작업 수 (기본값: 0)
 
-client = GeminiTTSClient(
-    api_key="your_gemini_api_key",
-    voice_name="Kore",
-    language_code="en-us",
-    speaking_rate="slow",
-    pitch="-4st",
-    model_name="gemini-2.5-flash-preview-tts"
-)
-
-# 음성 생성
-audio_path = client.generate_speech(
-    text="Hello, this is a test",
-    output_path="output/audio.wav"
-)
-```
-
-**기능:**
-- SSML 속도 및 피치 제어
-- 다중 음성 지원
-- WAV 출력 포맷
-- 폴백이 있는 오류 처리
-
-### TTS 베이스 클라이언트
-
-모든 TTS 구현을 위한 추상 기본 클래스입니다.
-
-```python
-from langflix.tts.base import TTSClient
-
-class CustomTTSClient(TTSClient):
-    def generate_speech(self, text: str, output_path: Path = None) -> Path:
-        # 구현
-        pass
-```
-
----
-
-## 표현 분석
-
-### `analyze_chunk`
-
-LLM으로 자막 청크를 분석하는 함수입니다.
-
-```python
-def analyze_chunk(
-    subtitle_chunk: List[dict],
-    language_level: str = None,
-    language_code: str = "ko",
-    max_retries: int = 3
-) -> List[ExpressionAnalysis]
-```
-
-**매개변수:**
-- `subtitle_chunk` (List[dict]): 'start_time', 'end_time', 'text' 키를 포함한 자막 딕셔너리 목록
-- `language_level` (str, 선택사항): 대상 언어 수준
-- `language_code` (str): 대상 언어 코드 (기본값: "ko")
-- `max_retries` (int): API 호출 최대 재시도 횟수 (기본값: 3)
-
-**반환값:**
-- `List[ExpressionAnalysis]`: 분석된 표현 목록
-
-**예제:**
-```python
-from langflix.expression_analyzer import analyze_chunk
-
-chunk = [
-    {"start_time": "00:01:25,657", "end_time": "00:01:28,200", "text": "I'm paying you millions,"},
-    {"start_time": "00:01:28,200", "end_time": "00:01:32,230", "text": "and you're telling me I'm gonna get screwed?"}
+**응답:**
+```json
+[
+  {
+    "job_id": "uuid",
+    "status": "COMPLETED",
+    "progress": 100,
+    "created_at": "2025-10-21T10:00:00Z",
+    "started_at": "2025-10-21T10:01:00Z",
+    "completed_at": "2025-10-21T10:05:00Z",
+    "error_message": null
+  }
 ]
-
-expressions = analyze_chunk(
-    chunk,
-    language_level="intermediate",
-    language_code="ko"
-)
-
-for expr in expressions:
-    print(f"표현: {expr.expression}")
-    print(f"번역: {expr.expression_translation}")
 ```
 
----
+### 파일 관리
 
-## 설정
+#### GET /api/v1/files/{file_id}
 
-### `settings`
+ID로 파일을 다운로드합니다.
 
-애플리케이션 설정에 대한 접근을 제공하는 설정 관리 모듈입니다.
-모든 설정은 이제 YAML 파일에 저장되고 깔끔한 accessor 함수를 통해 접근할 수 있습니다.
+**응답:**
+- 파일 내용 (바이너리)
 
-#### 섹션 접근자
+#### GET /api/v1/files
 
-##### `get_app_config() -> Dict[str, Any]`
+선택적 필터링으로 파일 목록을 가져옵니다.
 
-쇼 이름과 템플릿 파일을 포함한 애플리케이션 설정을 가져옵니다.
+**쿼리 매개변수:**
+- `job_id`: 작업 ID로 필터링
+- `file_type`: 파일 유형으로 필터링
 
-##### `get_llm_config() -> Dict[str, Any]`
-
-API 설정과 생성 매개변수를 포함한 LLM 설정을 가져옵니다.
-
-##### `get_video_config() -> Dict[str, Any]`
-
-코덱과 품질 설정을 포함한 비디오 처리 설정을 가져옵니다.
-
-##### `get_font_config() -> Dict[str, Any]`
-
-크기와 파일 경로를 포함한 폰트 설정을 가져옵니다.
-
-##### `get_processing_config() -> Dict[str, Any]`
-
-청크 제한을 포함한 처리 설정을 가져옵니다.
-
-##### `get_tts_config() -> Dict[str, Any]`
-
-프로바이더 설정을 포함한 TTS 설정을 가져옵니다.
-
-##### `get_short_video_config() -> Dict[str, Any]`
-
-대상 지속시간과 해상도를 포함한 숏 비디오 설정을 가져옵니다.
-
-#### 특정 값 접근자
-
-##### `get_show_name() -> str`
-
-설정에서 TV 쇼 이름을 가져옵니다.
-
-##### `get_template_file() -> str`
-
-프롬프트용 템플릿 파일 이름을 가져옵니다.
-
-##### `get_generation_config() -> Dict[str, Any]`
-
-temperature, top_p, top_k를 포함한 LLM 생성 설정을 가져옵니다.
-
-##### `get_font_size(size_type: str) -> int`
-
-다양한 텍스트 유형(기본, 표현, 번역, 유사)에 대한 폰트 크기를 가져옵니다.
-
-##### `get_font_file(language_code: str = None) -> str`
-
-주어진 언어 또는 플랫폼 기본값에 대한 폰트 파일 경로를 가져옵니다.
-
-##### `get_min_expressions_per_chunk() -> int`
-
-청크당 최소 표현 제한을 가져옵니다.
-
-##### `get_max_expressions_per_chunk() -> int`
-
-청크당 최대 표현 제한을 가져옵니다.
-
-##### `get_max_retries() -> int`
-
-API 호출 최대 재시도 횟수를 가져옵니다.
-
-##### `is_tts_enabled() -> bool`
-
-TTS가 활성화되었는지 확인합니다.
-
-##### `is_short_video_enabled() -> bool`
-
-숏 비디오 생성이 활성화되었는지 확인합니다.
-
-**예제:**
-```python
-from langflix import settings
-
-# 새로운 accessor를 사용하여 설정 값 가져오기
-show_name = settings.get_show_name()
-template_file = settings.get_template_file()
-gen_config = settings.get_generation_config()
-font_size = settings.get_font_size('expression')
-font_file = settings.get_font_file('ko')
-
-# 기능 플래그 확인
-tts_enabled = settings.is_tts_enabled()
-shorts_enabled = settings.is_short_video_enabled()
-
-print(f"쇼: {show_name}")
-print(f"템플릿: {template_file}")
-print(f"폰트 크기: {font_size}")
-print(f"TTS 활성화: {tts_enabled}")
+**응답:**
+```json
+{
+  "files": [
+    {
+      "file_id": "uuid",
+      "job_id": "uuid",
+      "file_type": "video",
+      "filename": "context_video.mkv",
+      "size": 1024000,
+      "created_at": "2025-10-21T10:00:00Z"
+    }
+  ]
+}
 ```
 
-### `ConfigLoader`
+#### DELETE /api/v1/files/{file_id}
 
-YAML 기반 설정용 설정 로더입니다.
+ID로 파일을 삭제합니다.
 
-```python
-from langflix.config.config_loader import ConfigLoader
-
-loader = ConfigLoader()
-config = loader.get('llm')  # LLM 설정 섹션 가져오기
+**응답:**
+```json
+{
+  "message": "File deleted successfully"
+}
 ```
-
-### `font_utils`
-
-플랫폼별 폰트 감지 유틸리티입니다.
-
-#### 함수
-
-##### `get_platform_default_font() -> str`
-
-플랫폼(macOS, Linux, Windows)에 따라 적절한 기본 폰트를 가져옵니다.
-
-##### `get_font_file_for_language(language_code: str = None) -> str`
-
-주어진 언어 또는 플랫폼 기본값에 대한 폰트 파일 경로를 가져옵니다.
-
-```python
-from langflix.config.font_utils import get_platform_default_font, get_font_file_for_language
-
-# 플랫폼별 기본 폰트 가져오기
-default_font = get_platform_default_font()
-
-# 언어별 폰트 가져오기
-korean_font = get_font_file_for_language('ko')
-```
-
----
-
-## 유틸리티 함수
-
-### 자막 파싱
-
-```python
-from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-
-# SRT 파일 파싱
-subtitles = parse_srt_file("path/to/subtitle.srt")
-
-# 처리용 자막 청킹
-chunks = chunk_subtitles(subtitles)
-```
-
-**반환값:**
-- `parse_srt_file()`: 자막 딕셔너리 목록
-- `chunk_subtitles()`: 청킹된 자막 목록의 목록
-
-### 출력 관리
-
-```python
-from langflix.output_manager import create_output_structure
-
-# 구성된 출력 디렉토리 구조 생성
-paths = create_output_structure(
-    subtitle_file="assets/media/Suits/Suits.S01E01.srt",
-    language_code="ko",
-    output_dir="output"
-)
-```
-
-**반환값:**
-- 다양한 파일 유형에 대한 구성된 출력 경로가 포함된 딕셔너리
-
-### 프롬프트 생성
-
-```python
-from langflix.prompts import get_prompt_for_chunk
-
-# 자막 청크에 대한 LLM 프롬프트 생성
-prompt = get_prompt_for_chunk(
-    subtitle_chunk,
-    language_level="intermediate",
-    language_code="ko"
-)
-```
-
-**반환값:**
-- LLM 처리용 형식화된 프롬프트 문자열
-
----
 
 ## 오류 처리
 
-### 예외 유형
+API는 표준 HTTP 상태 코드를 사용하며 일관된 형식으로 오류 정보를 반환합니다.
 
-**`ValueError`**: 잘못된 입력 매개변수, 누락된 파일, 또는 처리 실패에 대해 발생됩니다.
+### 오류 응답 형식
 
-**`FileNotFoundError`**: 필요한 파일(비디오, 자막)을 찾을 수 없을 때 발생됩니다.
-
-**`APIError`**: LLM API 관련 실패(타임아웃, 할당량 초과 등)에 대해 발생됩니다.
-
-### 예제 오류 처리
-
-```python
-from langflix.main import LangFlixPipeline
-import logging
-
-logger = logging.getLogger(__name__)
-
-try:
-    pipeline = LangFlixPipeline("subtitle.srt")
-    results = pipeline.run()
-except ValueError as e:
-    logger.error(f"잘못된 입력: {e}")
-except FileNotFoundError as e:
-    logger.error(f"파일을 찾을 수 없음: {e}")
-except Exception as e:
-    logger.error(f"예상치 못한 오류: {e}")
+```json
+{
+  "error": "ErrorType",
+  "message": "사람이 읽을 수 있는 오류 메시지",
+  "details": {
+    "additional": "오류 세부사항"
+  }
+}
 ```
 
----
+### 일반적인 오류 코드
 
-## 모범 사례
+- `400 Bad Request`: 잘못된 요청 매개변수
+- `404 Not Found`: 리소스를 찾을 수 없음
+- `422 Unprocessable Entity`: 처리 오류
+- `500 Internal Server Error`: 서버 오류
 
-### 1. 리소스 관리
+## API 문서
 
-비디오 처리에 항상 컨텍스트 매니저 또는 적절한 정리를 사용하세요:
+대화형 API 문서는 다음에서 사용할 수 있습니다:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
-```python
-# 좋은 예: 파이프라인이 자동으로 정리하도록 함
-pipeline = LangFlixPipeline("subtitle.srt")
-results = pipeline.run(max_expressions=5)
+## 예제
 
-# 수동 처리를 위해 적절한 정리 보장
-try:
-    processor = VideoProcessor()
-    success = processor.extract_clip(video_path, start, end, output)
-finally:
-    # 필요시 정리
-    pass
+### 작업 생성
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/jobs" \
+  -F "video_file=@video.mp4" \
+  -F "subtitle_file=@subtitles.srt" \
+  -F "language_code=en" \
+  -F "show_name=Suits" \
+  -F "episode_name=S01E01"
 ```
 
-### 2. 설정
+### 작업 상태 확인
 
-하드코딩된 값 대신 설정 시스템을 사용하세요:
-
-```python
-# 좋은 예: 설정 사용
-from langflix import settings
-
-max_retries = settings.get_max_retries()
-gen_config = settings.get_generation_config()
-
-# 피해야 할 것: 하드코딩된 값
-max_retries = 3  # 나쁨
+```bash
+curl -X GET "http://localhost:8000/api/v1/jobs/{job_id}"
 ```
 
-### 3. 오류 처리
+### 작업 결과 가져오기
 
-잠재적인 실패를 항상 우아하게 처리하세요:
-
-```python
-processor = VideoProcessor()
-video_path = processor.find_video_file("subtitle.srt")
-
-if video_path is None:
-    logger.error("비디오 파일을 찾을 수 없음")
-    return False
-
-try:
-    success = processor.extract_clip(str(video_path), start, end, output)
-    if not success:
-        logger.error("비디오 추출 실패")
-except Exception as e:
-    logger.error(f"추출 중 예상치 못한 오류: {e}")
+```bash
+curl -X GET "http://localhost:8000/api/v1/jobs/{job_id}/expressions"
 ```
 
-### 4. 로깅
+## 속도 제한
 
-디버깅을 위해 구조화된 로깅을 사용하세요:
+현재 속도 제한이 없습니다. 속도 제한은 Phase 2에서 구현될 예정입니다.
 
-```python
-import logging
+## 버전 관리
 
-logger = logging.getLogger(__name__)
+API는 URL 버전 관리를 사용합니다. 현재 버전은 v1입니다.
 
-# 중요한 작업 로깅
-logger.info(f"{len(expressions)}개 표현 처리 중")
-logger.debug(f"표현 세부사항: {expression.expression}")
-logger.error(f"표현 처리 실패: {error}")
-```
+## 지원
 
----
-
-## 통합 예제
-
-### 기본 파이프라인 통합
-
-```python
-from langflix.main import LangFlixPipeline
-from langflix.models import ExpressionAnalysis
-
-def process_episode(subtitle_path: str, max_expressions: int = 10):
-    """단일 에피소드를 처리하고 결과를 반환합니다."""
-    pipeline = LangFlixPipeline(
-        subtitle_file=subtitle_path,
-        language_code="ko"
-    )
-    
-    results = pipeline.run(
-        max_expressions=max_expressions,
-        language_level="intermediate",
-        dry_run=False
-    )
-    
-    return {
-        "success": results["processed_expressions"] > 0,
-        "expressions_count": results["processed_expressions"],
-        "output_dir": results["output_directory"]
-    }
-
-# 사용법
-result = process_episode("assets/media/Suits/Suits.S01E01.srt")
-```
-
-### 사용자 정의 표현 처리
-
-```python
-from langflix.expression_analyzer import analyze_chunk
-from langflix.video_processor import VideoProcessor
-from langflix.subtitle_processor import SubtitleProcessor
-
-def custom_expression_processing(subtitle_path: str, video_dir: str):
-    """사용자 정의 처리 워크플로우."""
-    # 프로세서 초기화
-    video_processor = VideoProcessor(video_dir)
-    subtitle_processor = SubtitleProcessor(subtitle_path)
-    
-    # 파싱 및 분석 (간소화됨)
-    from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-    
-    subtitles = parse_srt_file(subtitle_path)
-    chunks = chunk_subtitles(subtitles)
-    
-    all_expressions = []
-    for chunk in chunks:
-        expressions = analyze_chunk(chunk)
-        all_expressions.extend(expressions)
-    
-    return all_expressions
-```
-
----
-
-**이 API 참조 문서의 영어 버전은 [API_REFERENCE.md](API_REFERENCE.md)를 참조하세요**
-
-**관련 문서:**
-- [사용자 매뉴얼](USER_MANUAL_KOR.md) - 완전한 사용 가이드
-- [문제 해결 가이드](TROUBLESHOOTING_KOR.md) - 일반적인 문제와 해결책
-
----
-
-*이 API 참조 문서는 각 릴리스마다 자동으로 업데이트됩니다. 최신 정보는 항상 코드베이스의 버전을 참조하세요.*
+API 지원 및 질문은 메인 문서를 참조하거나 저장소에 이슈를 생성해 주세요.

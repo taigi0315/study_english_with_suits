@@ -377,6 +377,7 @@ tts:
 - **반복 횟수**: `repeat_count` 설정으로 조정 가능 (기본값: 2회)
 - **SSML 제어**: 자연스러운 발음을 위한 직접적인 SSML 속도 및 피치 제어
 - **원본 언어**: 대상 언어가 아닌 영어(원본 언어)를 오디오 생성에 사용
+- **전체 대화 맥락**: 더 자연스러운 발음을 위해 완전한 대화 문장 사용
 
 **설정 요구사항:**
 - 환경 변수의 Gemini API 키: `GEMINI_API_KEY=your_key_here`
@@ -532,7 +533,54 @@ python -m langflix.main \
 
 ---
 
-## 모범 사례
+## 8. 숏 비디오 생성
+
+### 개요
+LangFlix는 Instagram, TikTok, YouTube Shorts와 같은 소셜 미디어 플랫폼에 최적화된 숏 포맷 비디오를 생성할 수 있습니다.
+
+### 기능
+- **세로 포맷**: 9:16 화면 비율 (1080x1920)
+- **자동 배치**: 여러 표현을 ~120초 비디오로 결합
+- **컨텍스트 + 교육**: 상단 절반은 컨텍스트 비디오, 하단 절반은 교육 슬라이드 표시
+- **소셜 미디어 준비**: 모바일 시청 및 공유에 최적화
+
+### 설정
+```yaml
+short_video:
+  enabled: true                  # 숏 비디오 생성 활성화/비활성화
+  resolution: "1080x1920"       # 9:16 세로 포맷
+  target_duration: 120         # 배치당 목표 지속 시간 (초)
+  duration_variance: 10        # ±10초 허용
+```
+
+### 사용법
+```bash
+# 기본: 숏 비디오 활성화
+python -m langflix.main --subtitle "file.srt"
+
+# 숏 비디오 생성 건너뛰기
+python -m langflix.main --subtitle "file.srt" --no-shorts
+```
+
+### 출력 구조
+```
+output/Series/Episode/translations/ko/
+├── context_slide_combined/     # 교육 비디오 (컨텍스트 + 슬라이드)
+│   ├── educational_expression_01.mkv
+│   └── educational_expression_02.mkv
+└── short_videos/              # 숏 포맷 배치 비디오
+    ├── batch_01_120s.mkv      # ~120초, 여러 표현
+    ├── batch_02_115s.mkv
+    └── batch_03_95s.mkv
+```
+
+### 비디오 레이아웃
+- **상단 절반**: 대상 언어 자막이 있는 컨텍스트 비디오
+- **하단 절반**: 교육 슬라이드 (오디오 없음)
+- **오디오**: 컨텍스트 오디오 + TTS 오디오 (`repeat_count`에 따라 반복)
+- **프리즈 프레임**: TTS 재생 중 컨텍스트 비디오가 마지막 프레임 유지
+
+## 9. 모범 사례
 
 ### 1. 작게 시작하기
 

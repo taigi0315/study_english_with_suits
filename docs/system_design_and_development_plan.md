@@ -1,4 +1,91 @@
-# LangFlix — Final System Design & Development Plan
+# LangFlix System Design and Development Plan
+
+## Overview
+LangFlix is a comprehensive language learning platform that processes video content to extract educational expressions and creates structured learning materials. The system is currently undergoing a transformation from a CLI-only tool to a scalable web service platform.
+
+## Current Architecture (CLI Mode)
+
+### Core Components
+- **VideoProcessor**: Handles video file processing and clip extraction
+- **ExpressionAnalyzer**: LLM integration for expression analysis
+- **VideoEditor**: Creates educational slides and videos
+- **OutputManager**: Manages organized output directory structure
+- **ConfigurationManager**: Handles YAML-based configuration
+
+### Data Flow
+```
+Video Input → VideoProcessor → ExpressionAnalyzer → VideoEditor → File Output
+```
+
+## Service Architecture Transformation
+
+### Phase 0: Foundation & Planning ✅
+- **Status**: In Progress
+- **Branch**: `phase-0-foundation`
+- **Objective**: Design service architecture and create comprehensive ADRs
+
+**Key Deliverables:**
+- ADR-009: Service Architecture Foundation
+- ADR-010: Database Schema Design
+- ADR-011: Storage Abstraction Layer
+- ADR-012: Migration Strategy
+- Updated development guidelines
+
+### Phase 1: Core Service Components
+**Target**: Transform CLI into dual-mode system (CLI + API)
+
+#### Phase 1a: Database Integration
+- **Branch**: `phase-1a-db-schema`
+- **Objective**: Add PostgreSQL database for metadata storage
+- **Key Features**:
+  - SQLAlchemy models for Media, Expression, ProcessingJob
+  - Alembic migrations
+  - Parallel operation (files + database)
+
+#### Phase 1b: Storage Abstraction Layer
+- **Branch**: `phase-1b-storage-abstraction`
+- **Objective**: Abstract storage operations for multiple backends
+- **Key Features**:
+  - LocalStorage backend (CLI default)
+  - GoogleCloudStorage backend (API default)
+  - Unified storage interface
+
+#### Phase 1c: FastAPI Application Scaffold
+- **Branch**: `phase-1c-api-scaffold`
+- **Objective**: Create web API structure
+- **Key Features**:
+  - FastAPI application with endpoints
+  - Request/response models
+  - OpenAPI documentation
+
+#### Phase 1d: Background Task Processing
+- **Branch**: `phase-1d-background-tasks`
+- **Objective**: Implement asynchronous processing
+- **Key Features**:
+  - FastAPI BackgroundTasks integration
+  - Job status tracking
+  - Full pipeline integration
+
+### Future Phases (Preview)
+
+#### Phase 2: Frontend & Authentication
+- React-based web interface
+- User authentication system
+- User account management
+
+#### Phase 3: Advanced Features
+- User accounts and saved content
+- Spaced Repetition System (SRS)
+- Progress tracking
+
+#### Phase 4: Content Discovery
+- Search and discovery features
+- Pre-processed content library
+- Community features
+
+---
+
+## Original System Design (Legacy)
 
 > Consolidated and finalised system design and phased development plan for the LangFlix educational video pipeline. This document synthesises the provided English and Korean plans and the Educational Video Terminology into one actionable plan.
 

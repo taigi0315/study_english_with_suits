@@ -1,151 +1,166 @@
 # LangFlix Documentation
 
-Welcome to the LangFlix documentation! This is the central hub for all documentation related to LangFlix, an application for learning English expressions from TV shows.
+This directory contains all documentation for the LangFlix project, organized by language and type.
 
----
+## 📁 Directory Structure
 
-## 📚 Documentation Structure
+```
+docs/
+├── en/                     # English documentation
+│   ├── USER_MANUAL.md      # Complete usage guide
+│   ├── API_REFERENCE.md    # Developer API reference
+│   ├── TROUBLESHOOTING.md  # Common issues and solutions
+│   ├── DEPLOYMENT.md       # Production setup guide
+│   ├── PERFORMANCE.md      # Optimization tips
+│   └── CONTRIBUTING.md     # Contribution guidelines
+├── ko/                     # Korean documentation (한국어)
+│   ├── USER_MANUAL_KOR.md      # 완전한 사용 가이드
+│   ├── API_REFERENCE_KOR.md    # 개발자 API 참조
+│   ├── TROUBLESHOOTING_KOR.md  # 일반적인 문제와 해결책
+│   ├── DEPLOYMENT_KOR.md       # 프로덕션 설정 가이드
+│   ├── PERFORMANCE_KOR.md      # 최적화 팁
+│   └── CONTRIBUTING_KOR.md     # 기여 가이드라인
+├── adr/                    # Architecture Decision Records
+│   ├── ADR-005-gemini-tts-integration.md
+│   ├── ADR-006-short-video-architecture.md
+│   ├── ADR-007-direct-ssml-configuration.md
+│   └── ADR-008-cursor-build-mode-instructions.md
+├── development_diary.md    # Project development history
+├── system_design_and_development_plan.md  # Technical architecture
+└── README.md              # This file
+```
 
-### 🚀 Getting Started
-- **[README](../README.md)** - Project overview and quick start
-- **[Setup Guide](SETUP_GUIDE.md)** - Complete installation and configuration guide
-- **[Setup Guide (Korean)](SETUP_GUIDE.md#korean)** - 설치 및 설정 가이드 (한국어)
+## 📚 Documentation Types
 
-### 📖 User Documentation
-- **[User Manual](USER_MANUAL.md)** - Complete usage guide with examples
-- **[User Manual (Korean)](USER_MANUAL_KOR.md)** - 전체 사용법 가이드 (한국어)
+### User Documentation
+- **User Manual**: Complete usage guide for end users
+- **Troubleshooting**: Common issues and their solutions
+- **Setup Guide**: Installation and configuration instructions
 
-### 🔧 Technical Documentation
-- **[API Reference](API_REFERENCE.md)** - Complete API documentation for developers
-- **[API Reference (Korean)](API_REFERENCE_KOR.md)** - 개발자용 완전한 API 문서 (한국어)
-- **[Performance Guide](PERFORMANCE.md)** - Optimization and performance tuning
-- **[Performance Guide (Korean)](PERFORMANCE_KOR.md)** - 최적화 및 성능 튜닝 (한국어)
+### Developer Documentation
+- **API Reference**: Programmatic usage and integration
+- **System Design**: Technical architecture and design decisions
+- **Development Diary**: Project history and milestones
 
-### 🚀 Deployment & Operations
-- **[Deployment Guide](DEPLOYMENT.md)** - Production deployment instructions
-- **[Deployment Guide (Korean)](DEPLOYMENT_KOR.md)** - 프로덕션 배포 가이드 (한국어)
+### Operational Documentation
+- **Deployment Guide**: Production setup and deployment
+- **Performance Guide**: Optimization tips and best practices
+- **Contributing Guide**: Guidelines for contributors
 
-### 🛠️ Development
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to LangFlix
-- **[Contributing Guide (Korean)](CONTRIBUTING_KOR.md)** - LangFlix 기여 방법 (한국어)
+### Architecture Documentation
+- **ADR (Architecture Decision Records)**: Key architectural decisions
+- **System Design**: High-level technical architecture
 
-### 🏗️ Architecture & Design
-- **[Architecture Decision Records (ADRs)](adr/)** - Key architectural decisions
-  - [ADR-001: Prompt Template Externalization](adr/ADR-001-prompt-template-externalization.md)
-  - [ADR-002: YAML Configuration Management](adr/ADR-002-yaml-configuration-management.md)
-  - [ADR-003: Structured LLM Output with Pydantic](adr/ADR-003-structured-llm-output-with-pydantic.md)
-  - [ADR-004: Video Processing Pipeline Architecture](adr/ADR-004-video-processing-pipeline-architecture.md)
+## 🌐 Language Support
 
-### 🔍 Troubleshooting
-- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
-- **[Troubleshooting Guide (Korean)](TROUBLESHOOTING_KOR.md)** - 일반적인 문제와 해결책 (한국어)
+LangFlix documentation is available in two languages:
 
-### 📊 Project Information
-- **[Development Diary](development_diary.md)** - Project history and milestones
-- **[System Design Document](system_design_and_development_plan.md)** - High-level system design
+- **English** (`docs/en/`): Primary documentation language
+- **Korean** (`docs/ko/`): 한국어 문서
 
----
+Both language versions are kept synchronized and contain the same information.
 
-## 🎯 Quick Navigation
+## 📖 Quick Navigation
 
-### For New Users
-1. Start with the **[README](../README.md)** for project overview
-2. Follow the **[Setup Guide](SETUP_GUIDE.md)** for installation
-3. Read the **[User Manual](USER_MANUAL.md)** for usage instructions
+### For Users
+- [English User Manual](en/USER_MANUAL.md)
+- [한국어 사용자 매뉴얼](ko/USER_MANUAL_KOR.md)
+- [English Troubleshooting](en/TROUBLESHOOTING.md)
+- [한국어 문제 해결 가이드](ko/TROUBLESHOOTING_KOR.md)
 
 ### For Developers
-1. Check the **[Contributing Guide](CONTRIBUTING.md)** for development setup
-2. Review the **[API Reference](API_REFERENCE.md)** for programmatic usage
-3. Read **[ADRs](adr/)** to understand architectural decisions
+- [English API Reference](en/API_REFERENCE.md)
+- [한국어 API 참조](ko/API_REFERENCE_KOR.md)
+- [System Design](system_design_and_development_plan.md)
+- [Development Diary](development_diary.md)
 
-### For System Administrators
-1. Use the **[Deployment Guide](DEPLOYMENT.md)** for production setup
-2. Consult the **[Performance Guide](PERFORMANCE.md)** for optimization
-3. Refer to **[Troubleshooting Guide](TROUBLESHOOTING.md)** for issue resolution
+### For DevOps
+- [English Deployment Guide](en/DEPLOYMENT.md)
+- [한국어 배포 가이드](ko/DEPLOYMENT_KOR.md)
+- [English Performance Guide](en/PERFORMANCE.md)
+- [한국어 성능 가이드](ko/PERFORMANCE_KOR.md)
 
 ### For Contributors
-1. Read the **[Contributing Guide](CONTRIBUTING.md)** for guidelines
-2. Review **[ADRs](adr/)** for architectural context
-3. Check the **[Development Diary](development_diary.md)** for project history
+- [English Contributing Guide](en/CONTRIBUTING.md)
+- [한국어 기여 가이드](ko/CONTRIBUTING_KOR.md)
 
----
+## 🔄 Documentation Maintenance
 
-## 📋 Documentation Standards
+### Updating Documentation
+When updating documentation:
 
-All documentation follows these standards:
+1. **Update both language versions** (English and Korean)
+2. **Maintain consistency** between language versions
+3. **Update cross-references** in other documents
+4. **Test all links** to ensure they work correctly
+5. **Update the main README.md** if needed
 
-### Language Support
-- **Dual Language**: All major documents provided in English and Korean
-- **Consistency**: Korean translations maintain technical accuracy
-- **Cultural Adaptation**: Examples and use cases adapted for Korean users
+### Adding New Documentation
+When adding new documentation:
 
-### Format Standards
-- **Markdown**: All documents in Markdown format for version control
-- **Structure**: Consistent heading hierarchy and formatting
-- **Links**: Cross-references between related documents
-- **Code Examples**: Syntax highlighting and proper formatting
+1. **Choose appropriate language directory** (`en/` or `ko/`)
+2. **Follow naming conventions** (e.g., `FEATURE_NAME.md`)
+3. **Add cross-references** in related documents
+4. **Update this README.md** with new document links
+5. **Update main project README.md** if it's user-facing
 
-### Content Guidelines
-- **Completeness**: Comprehensive coverage of features and use cases
-- **Accuracy**: Regular updates to match current codebase
-- **Clarity**: Clear explanations suitable for target audience
-- **Examples**: Practical examples and sample configurations
+### Architecture Decision Records (ADR)
+When creating new ADRs:
 
----
+1. **Use sequential numbering** (ADR-009, ADR-010, etc.)
+2. **Follow the ADR template** structure
+3. **Include context, decision, and consequences**
+4. **Reference related ADRs** when applicable
+5. **Update the ADR index** if one exists
 
-## 🔄 Keeping Documentation Updated
+## 📝 Documentation Standards
 
-Documentation is updated alongside code changes. When making changes:
+### Writing Guidelines
+- **Clear and concise**: Use simple, direct language
+- **Consistent terminology**: Use the same terms throughout
+- **Code examples**: Include working code examples
+- **Screenshots**: Use screenshots for UI-related documentation
+- **Cross-references**: Link to related documentation
 
-1. **Update relevant documentation** files
-2. **Test all examples** to ensure they work
-3. **Update both language versions** if applicable
-4. **Review cross-references** for accuracy
+### Formatting Standards
+- **Markdown**: Use standard Markdown formatting
+- **Headers**: Use consistent header hierarchy
+- **Code blocks**: Use appropriate language tags
+- **Links**: Use relative paths for internal links
+- **Tables**: Use Markdown tables for structured data
 
-### Documentation Maintenance Checklist
+### Review Process
+- **Technical accuracy**: Ensure all technical information is correct
+- **Language consistency**: Check for consistent terminology
+- **Link validation**: Verify all links work correctly
+- **User testing**: Test documentation with actual users when possible
 
-- [ ] Code examples tested and working
-- [ ] Screenshots and diagrams up to date
-- [ ] Version numbers and dates updated
-- [ ] Cross-references verified
-- [ ] Both English and Korean versions updated
-- [ ] New features fully documented
+## 🤝 Contributing to Documentation
 
----
+### How to Contribute
+1. **Fork the repository**
+2. **Create a feature branch** for documentation changes
+3. **Make your changes** following the standards above
+4. **Test your changes** by building the documentation
+5. **Submit a pull request** with a clear description
+
+### What to Contribute
+- **Bug fixes**: Correct errors in existing documentation
+- **Updates**: Keep documentation current with code changes
+- **Improvements**: Enhance clarity and usability
+- **Translations**: Help maintain Korean documentation
+- **New content**: Add missing documentation
 
 ## 📞 Getting Help
 
-If you can't find what you're looking for:
+If you need help with documentation:
 
-1. **Check the Troubleshooting Guide** first
-2. **Search existing issues** on GitHub
-3. **Create a new issue** with detailed information
-4. **Join discussions** for questions and community help
-
-### Reporting Documentation Issues
-
-When reporting documentation problems:
-
-- Specify the exact document and section
-- Describe what's unclear or incorrect
-- Suggest improvements if you have ideas
-- Include your system environment if relevant
+1. **Check existing documentation** first
+2. **Search for similar issues** in the repository
+3. **Create an issue** with specific questions
+4. **Contact the maintainers** for complex issues
 
 ---
 
-## 📈 Documentation Metrics
-
-This documentation set includes:
-
-- **15+ documents** covering all aspects of LangFlix
-- **Dual language support** for major user-facing documents
-- **4 Architecture Decision Records** documenting key choices
-- **Complete API reference** for programmatic usage
-- **Comprehensive troubleshooting** guide with solutions
-
----
-
-**Last Updated:** January 2025  
-**Version:** 1.0
-
-*This documentation index provides an overview of all available LangFlix documentation. For the most up-to-date information, always refer to the specific documents in your codebase.*
+**Last Updated:** October 21, 2025  
+**Maintainer:** LangFlix Development Team

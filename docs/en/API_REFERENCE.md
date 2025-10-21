@@ -14,8 +14,9 @@ This document provides comprehensive API documentation for all public classes an
 3. [Video Processing](#video-processing)
 4. [Subtitle Processing](#subtitle-processing)
 5. [Expression Analysis](#expression-analysis)
-6. [Configuration](#configuration)
-7. [Utility Functions](#utility-functions)
+6. [TTS Integration](#tts-integration)
+7. [Configuration](#configuration)
+8. [Utility Functions](#utility-functions)
 
 ---
 
@@ -365,6 +366,73 @@ success = processor.create_dual_language_subtitle_file(
 
 ---
 
+## TTS Integration
+
+### TTS Client Factory
+
+Factory pattern for creating TTS client instances.
+
+```python
+from langflix.tts.factory import create_tts_client
+
+# Create TTS client
+tts_client = create_tts_client(
+    provider="google",  # or "lemonfox"
+    provider_config={
+        "language_code": "en-us",
+        "model_name": "gemini-2.5-flash-preview-tts",
+        "response_format": "wav",
+        "speaking_rate": "slow",
+        "pitch": "-4st",
+        "alternate_voices": ["Despina", "Puck"]
+    }
+)
+```
+
+### Gemini TTS Client
+
+Google Gemini TTS implementation with SSML support.
+
+```python
+from langflix.tts.gemini_client import GeminiTTSClient
+
+client = GeminiTTSClient(
+    api_key="your_gemini_api_key",
+    voice_name="Kore",
+    language_code="en-us",
+    speaking_rate="slow",
+    pitch="-4st",
+    model_name="gemini-2.5-flash-preview-tts"
+)
+
+# Generate speech
+audio_path = client.generate_speech(
+    text="Hello, this is a test",
+    output_path="output/audio.wav"
+)
+```
+
+**Features:**
+- SSML rate and pitch control
+- Multiple voice support
+- WAV output format
+- Error handling with fallback
+
+### TTS Base Client
+
+Abstract base class for all TTS implementations.
+
+```python
+from langflix.tts.base import TTSClient
+
+class CustomTTSClient(TTSClient):
+    def generate_speech(self, text: str, output_path: Path = None) -> Path:
+        # Implementation
+        pass
+```
+
+---
+
 ## Expression Analysis
 
 ### `analyze_chunk`
@@ -489,6 +557,10 @@ Check if TTS is enabled.
 ##### `is_short_video_enabled() -> bool`
 
 Check if short video generation is enabled.
+
+##### `get_tts_repeat_count() -> int`
+
+Get number of times to repeat TTS audio for educational slides and short videos.
 
 **Example:**
 ```python

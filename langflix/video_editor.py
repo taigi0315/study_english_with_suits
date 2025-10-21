@@ -437,8 +437,7 @@ class VideoEditor:
     def _create_expression_clip(self, video_path: str, expression: ExpressionAnalysis) -> str:
         """Create short expression clip (expression part only)"""
         try:
-            # For now, use the full video as expression clip
-            # TODO: Implement precise expression timing extraction
+            # Use the full video as expression clip (expression timing extraction handled separately)
             output_path = self.output_dir / f"temp_expression_{self._sanitize_filename(expression.expression)}.mkv"
             
             # Copy video as-is for now

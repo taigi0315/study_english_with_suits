@@ -3,7 +3,7 @@ Tests for API models.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from langflix.api.models.requests import JobCreateRequest
 from langflix.api.models.responses import JobStatusResponse, ExpressionResponse, JobExpressionsResponse
 from langflix.api.models.common import HealthResponse
@@ -44,7 +44,7 @@ def test_job_status_response():
         job_id="test-uuid",
         status="PENDING",
         progress=0,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     assert response.job_id == "test-uuid"
     assert response.status == "PENDING"

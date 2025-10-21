@@ -13,6 +13,23 @@ app:
   template_file: "expression_analysis_prompt.txt"
 
 # ============================================================================
+# Database Configuration
+# ============================================================================
+database:
+  # Enable database integration (CLI defaults to false, API requires true)
+  enabled: false
+  
+  # Database connection URL
+  url: "postgresql://user:password@localhost:5432/langflix"
+  
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  
+  # SQL logging (set to true for debugging)
+  echo: false
+
+# ============================================================================
 # LLM (Language Learning Model) Settings
 # ============================================================================
 llm:

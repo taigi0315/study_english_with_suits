@@ -1,27 +1,24 @@
 """
-Request models for LangFlix API.
-
-This module defines Pydantic models for API request validation.
+Request models for LangFlix API
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
-from fastapi import UploadFile
+from typing import Optional
 
 class JobCreateRequest(BaseModel):
-    """Request model for creating a new processing job."""
-    language_code: str = Field(..., description="Language code (e.g., 'en', 'ko')")
-    show_name: str = Field(..., description="Name of the TV show")
+    """Request model for creating a new job."""
+    
+    language_code: str = Field(..., description="Language code for processing")
+    show_name: str = Field(..., description="Name of the show")
     episode_name: str = Field(..., description="Name of the episode")
-    max_expressions: Optional[int] = Field(10, description="Maximum number of expressions to extract")
-    language_level: Optional[Literal["beginner", "intermediate", "advanced", "mixed"]] = Field(
-        "intermediate", description="Target language proficiency level"
-    )
-    test_mode: bool = Field(False, description="Enable test mode (process only first chunk)")
+    max_expressions: int = Field(10, description="Maximum number of expressions to extract")
+    language_level: str = Field("intermediate", description="Language proficiency level")
+    test_mode: bool = Field(False, description="Enable test mode for faster processing")
     no_shorts: bool = Field(False, description="Skip short video generation")
 
 class FileUploadRequest(BaseModel):
-    """Request model for file uploads."""
-    video_file: UploadFile
-    subtitle_file: UploadFile
-    job_config: JobCreateRequest
+    """Request model for file upload."""
+    
+    filename: str = Field(..., description="Name of the uploaded file")
+    content_type: str = Field(..., description="MIME type of the file")
+    size: int = Field(..., description="Size of the file in bytes")

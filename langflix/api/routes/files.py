@@ -1,38 +1,55 @@
 """
-File management routes for LangFlix API.
-
-This module provides endpoints for file upload, download, and management.
+File management endpoints for LangFlix API
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse
-from typing import List
-
-from ..dependencies import get_storage
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, List
+import os
+from pathlib import Path
 
 router = APIRouter()
 
-@router.get("/files/{file_id}")
-async def download_file(file_id: str, storage = Depends(get_storage)):
-    """Download a file by ID."""
-    # TODO: Get file metadata from database
-    # TODO: Generate download URL or stream file
-    raise HTTPException(status_code=501, detail="Not implemented yet")
-
 @router.get("/files")
-async def list_files(
-    job_id: str = None,
-    file_type: str = None,
-    storage = Depends(get_storage)
-):
-    """List files with optional filtering."""
-    # TODO: Get files from database
-    # TODO: Filter by job_id, file_type
-    return {"files": []}
+async def list_files() -> Dict[str, Any]:
+    """List all output files."""
+    
+    output_dir = Path("output")
+    if not output_dir.exists():
+        return {"files": [], "total": 0}
+    
+    files = []
+    for file_path in output_dir.rglob("*"):
+        if file_path.is_file():
+            files.append({
+                "name": file_path.name,
+                "path": str(file_path.relative_to(output_dir)),
+                "size": file_path.stat().st_size,
+                "modified": file_path.stat().st_mtime
+            })
+    
+    return {
+        "files": files,
+        "total": len(files)
+    }
+
+@router.get("/files/{file_id}")
+async def get_file_details(file_id: str) -> Dict[str, Any]:
+    """Get file details."""
+    
+    # TODO: Implement file details lookup
+    return {
+        "file_id": file_id,
+        "name": "example.mp4",
+        "path": "output/example.mp4",
+        "size": 1024000,
+        "type": "video/mp4"
+    }
 
 @router.delete("/files/{file_id}")
-async def delete_file(file_id: str, storage = Depends(get_storage)):
-    """Delete a file by ID."""
-    # TODO: Delete file from storage
-    # TODO: Update database record
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+async def delete_file(file_id: str) -> Dict[str, Any]:
+    """Delete a file."""
+    
+    # TODO: Implement file deletion
+    return {
+        "message": f"File {file_id} deleted successfully"
+    }

@@ -1,7 +1,5 @@
 """
-Custom middleware for LangFlix API.
-
-This module provides custom middleware for logging, authentication, and other cross-cutting concerns.
+Custom middleware for LangFlix API
 """
 
 from fastapi import Request, Response
@@ -23,8 +21,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Process request
         response = await call_next(request)
         
-        # Log response
+        # Calculate processing time
         process_time = time.time() - start_time
-        logger.info(f"Response: {response.status_code} in {process_time:.3f}s")
+        
+        # Log response
+        logger.info(f"Response: {response.status_code} - {process_time:.3f}s")
+        
+        # Add processing time to response headers
+        response.headers["X-Process-Time"] = str(process_time)
         
         return response

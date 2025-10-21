@@ -182,6 +182,11 @@ def is_tts_enabled() -> bool:
     return get_tts_config().get('enabled', True)
 
 
+def get_tts_repeat_count() -> int:
+    """Get number of times to repeat TTS audio"""
+    return get_tts_config().get('repeat_count', 2)
+
+
 # ============================================================================
 # Short Video Settings
 # ============================================================================

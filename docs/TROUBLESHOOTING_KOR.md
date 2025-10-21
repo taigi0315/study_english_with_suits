@@ -592,6 +592,46 @@ Skipping expression: [표현 텍스트]
 
 ---
 
+### 문제: 일부 컨텍스트 비디오에서 자막이 표시되지 않음
+
+**증상:**
+- 일부 컨텍스트 비디오에서 자막이 표시되지 않지만 다른 비디오는 정상 표시
+- `translations/{lang}/subtitles/` 디렉토리에 자막 파일이 존재함
+- 오류 로그에서 "Could not find subtitle file for expression" 표시
+
+**원인:**
+- 파일명 잘림으로 인한 자막 파일명 불일치
+- 표현 텍스트가 파일명 허용 길이보다 김 (예: `get_to_someone_through_someone_else`가 `expression_01_get_to_someone_through_someone.srt`로 됨)
+
+**해결 방법:**
+
+1. **시스템이 자동으로 처리함** - LangFlix는 파일명이 잘려도 스마트 부분 매칭을 사용하여 자막 파일을 찾음
+
+2. **문제가 지속되면 자막 파일 매칭 확인:**
+   ```bash
+   # 사용 가능한 자막 파일 확인
+   ls -la output/Series/Episode/translations/{lang}/subtitles/
+   
+   # 파일명 패턴이 표현과 일치하는지 확인
+   # 패턴: expression_XX_{expression_text}.srt
+   ```
+
+3. **디버깅을 위해 상세 로깅 활성화:**
+   이런 로그 메시지를 찾아보세요:
+   ```
+   INFO | Looking for subtitle files in: {directory}
+   INFO | Available subtitle files: [...]
+   INFO | Found potential match via partial matching: {file_path}
+   ```
+
+**기술적 세부사항:**
+시스템은 여러 매칭 전략을 사용합니다:
+- 표현 텍스트와 정확한 매칭
+- 잘린 파일명에 대한 부분 매칭
+- 인덱스 접두사와 패턴 매칭 (expression_01_, expression_02_ 등)
+
+---
+
 ## 성능 및 리소스 문제
 
 ### 문제: 처리 속도가 매우 느림

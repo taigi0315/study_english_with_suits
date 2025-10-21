@@ -28,6 +28,15 @@ from .output_manager import OutputManager, create_output_structure
 from .models import ExpressionAnalysis
 from . import settings
 
+# Database imports (optional)
+try:
+    from .db import db_manager, MediaCRUD, ExpressionCRUD, ProcessingJobCRUD
+    from .db.models import Media, Expression, ProcessingJob
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+    logger.warning("Database modules not available. Database integration disabled.")
+
 # Configure structured logging
 def setup_logging(verbose: bool = False):
     """
@@ -221,6 +230,34 @@ class LangFlixPipeline:
             logger.info(f"Video directory: {self.video_dir}")
             logger.info(f"Output directory: {self.output_dir}")
             
+            # Initialize database if enabled
+            media_id = None
+            if DB_AVAILABLE and settings.get_database_enabled():
+                logger.info("📊 Database integration enabled")
+                db_manager.initialize()
+                db = db_manager.get_session()
+                try:
+                    # Create media record
+                    media = MediaCRUD.create(
+                        db=db,
+                        show_name=settings.get_show_name(),
+                        episode_name=self.episode_name,
+                        language_code=self.language_code,
+                        subtitle_file_path=str(self.subtitle_file),
+                        video_file_path=str(self.video_dir)
+                    )
+                    media_id = str(media.id)
+                    logger.info(f"Created media record: {media_id}")
+                except Exception as e:
+                    logger.error(f"Failed to create media record: {e}")
+                    db.rollback()
+                    db.close()
+                    raise
+                finally:
+                    db.close()
+            else:
+                logger.info("📁 File-only mode (database disabled)")
+            
             # Step 1: Parse subtitles
             logger.info("Step 1: Parsing subtitles...")
             self.subtitles = self._parse_subtitles()
@@ -239,6 +276,11 @@ class LangFlixPipeline:
             self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
                 raise ValueError("No expressions found")
+            
+            # Save expressions to database if enabled
+            if DB_AVAILABLE and settings.get_database_enabled() and media_id:
+                logger.info("Step 3.5: Saving expressions to database...")
+                self._save_expressions_to_database(media_id)
             
             # Step 4: Process expressions (if not dry run)
             if not dry_run:
@@ -331,6 +373,35 @@ class LangFlixPipeline:
                 logger.warning(f"Could not find timing for expression '{expression.expression}': {e}")
         
         return limited_expressions
+    
+    def _save_expressions_to_database(self, media_id: str):
+        """Save expressions to database."""
+        if not DB_AVAILABLE or not settings.get_database_enabled():
+            return
+        
+        db = db_manager.get_session()
+        try:
+            for expression in self.expressions:
+                try:
+                    ExpressionCRUD.create_from_analysis(
+                        db=db,
+                        media_id=media_id,
+                        analysis_data=expression
+                    )
+                    logger.debug(f"Saved expression to database: {expression.expression}")
+                except Exception as e:
+                    logger.error(f"Failed to save expression '{expression.expression}': {e}")
+                    continue
+            
+            db.commit()
+            logger.info(f"Saved {len(self.expressions)} expressions to database")
+            
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
     
     def _process_expressions(self):
         """Process each expression (video + subtitles)"""

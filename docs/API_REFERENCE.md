@@ -104,6 +104,8 @@ Pydantic model representing a single analyzed expression.
 class ExpressionAnalysis(BaseModel):
     dialogues: List[str]
     translation: List[str]
+    expression_dialogue: str
+    expression_dialogue_translation: str
     expression: str
     expression_translation: str
     context_start_time: str
@@ -116,13 +118,21 @@ class ExpressionAnalysis(BaseModel):
 **Fields:**
 - `dialogues` (List[str]): Complete dialogue lines in the scene
 - `translation` (List[str]): Translations of all dialogue lines in the same order
-- `expression` (str): The main expression/phrase to learn
-- `expression_translation` (str): Translation of the main expression
+- `expression_dialogue` (str): **NEW** - The complete dialogue line that contains the expression (full sentence from subtitles)
+- `expression_dialogue_translation` (str): **NEW** - Translation of the complete dialogue line containing the expression
+- `expression` (str): The main expression/phrase to learn (key part extracted from `expression_dialogue`)
+- `expression_translation` (str): Translation of the main expression (key part)
 - `context_start_time` (str): Timestamp where conversational context should BEGIN (format: "HH:MM:SS,mmm")
 - `context_end_time` (str): Timestamp where conversational context should END (format: "HH:MM:SS,mmm")
 - `expression_start_time` (str, optional): Exact timestamp where the expression phrase begins
 - `expression_end_time` (str, optional): Exact timestamp where the expression phrase ends
 - `similar_expressions` (List[str]): 1-3 similar expressions or alternatives
+
+**Field Relationships:**
+- `expression_dialogue` contains the **full sentence** where the expression appears
+- `expression` is the **key phrase/idiom** extracted from `expression_dialogue` for focused learning
+- `expression_dialogue_translation` translates the entire sentence
+- `expression_translation` translates just the key expression part
 
 **Example:**
 ```python
@@ -131,6 +141,8 @@ from langflix.models import ExpressionAnalysis
 expr = ExpressionAnalysis(
     dialogues=["I'm paying you millions,", "and you're telling me I'm gonna get screwed?"],
     translation=["나는 당신에게 수백만 달러를 지불하고 있는데,", "당신은 내가 속임을 당할 것이라고 말하고 있나요?"],
+    expression_dialogue="and you're telling me I'm gonna get screwed?",
+    expression_dialogue_translation="당신은 내가 속임을 당할 것이라고 말하고 있나요?",
     expression="I'm gonna get screwed",
     expression_translation="속임을 당할 것 같아요",
     context_start_time="00:01:25,657",

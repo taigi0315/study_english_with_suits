@@ -5,7 +5,7 @@ This module provides health check endpoints for monitoring service status.
 """
 
 from fastapi import APIRouter
-from datetime import datetime
+from datetime import datetime, timezone
 from ..models.common import HealthResponse, DetailedHealthResponse
 
 router = APIRouter()
@@ -15,7 +15,7 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(
         status="healthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         service="LangFlix API",
         version="1.0.0"
     )
@@ -29,7 +29,7 @@ async def detailed_health_check():
     
     return DetailedHealthResponse(
         status="healthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         components={
             "database": "healthy",
             "storage": "healthy",

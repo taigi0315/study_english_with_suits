@@ -8,6 +8,7 @@ all necessary middleware, routes, and exception handlers.
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import logging
 
 from .routes import health, jobs, files
@@ -18,6 +19,22 @@ from .middleware import LoggingMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Startup
+    logger.info("LangFlix API starting up...")
+    # Initialize database connection
+    # Initialize storage backends
+    logger.info("LangFlix API started successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("LangFlix API shutting down...")
+    # Cleanup resources
+    logger.info("LangFlix API shutdown complete")
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
     app = FastAPI(
@@ -25,7 +42,8 @@ def create_app() -> FastAPI:
         description="Language learning video processing API",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc"
+        redoc_url="/redoc",
+        lifespan=lifespan
     )
     
     # Add CORS middleware
@@ -54,17 +72,3 @@ def create_app() -> FastAPI:
 # Create app instance
 app = create_app()
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup event."""
-    logger.info("LangFlix API starting up...")
-    # Initialize database connection
-    # Initialize storage backends
-    logger.info("LangFlix API started successfully")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown event."""
-    logger.info("LangFlix API shutting down...")
-    # Cleanup resources
-    logger.info("LangFlix API shutdown complete")

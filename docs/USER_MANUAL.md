@@ -350,7 +350,7 @@ transitions:
 
 #### 6. Text-to-Speech (TTS)
 
-LangFlix uses Google Cloud Text-to-Speech for pronunciation audio generation:
+LangFlix uses Gemini TTS for pronunciation audio generation:
 
 ```yaml
 tts:
@@ -358,23 +358,26 @@ tts:
   provider: "google"             # TTS provider (google, lemonfox)
   
   google:
-    language_code: "en-US"       # Original language for audio (English)
-    voice_name: "en-US-Wavenet-D" # Default voice (Puck)
-    response_format: "mp3"       # Audio format (mp3, wav)
-    speaking_rate: 0.75          # Speech speed (0.75 = 75% speed, slower)
+    language_code: "en-us"       # Original language for audio (English)
+    model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model
+    response_format: "wav"       # Audio format (WAV)
+    # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
+    speaking_rate: "slow"        # SSML rate for slower, clearer speech
+    # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%", or semitones like "-2st"
+    pitch: "-4st"                # SSML pitch: four semitones lower for more natural sound
     alternate_voices:            # Voice alternation between expressions
-      - "en-US-Wavenet-D"        # Puck (male, neutral tone)
-      - "en-US-Wavenet-A"        # Leda (female, neutral tone)
+      - "Despina"                # Available Gemini voice
+      - "Puck"                   # Available Gemini voice
 ```
 
 **TTS Features:**
-- **Voice Alternation**: Automatically switches between Puck and Leda voices for each expression
-- **Timeline Structure**: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause
-- **Speech Speed**: Configurable slower speech for better learning (75% speed)
+- **Voice Alternation**: Automatically switches between configured voices for each expression
+- **Timeline Structure**: 1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause (3 repetitions)
+- **SSML Control**: Direct SSML rate and pitch control for natural speech
 - **Original Language**: Uses English (original language) for audio generation, not target language
 
 **Setup Requirements:**
-- Google Cloud TTS API key in environment: `GOOGLE_API_KEY_1=your_key_here`
+- Gemini API key in environment: `GEMINI_API_KEY=your_key_here`
 - Add to `.env` file in project root
 
 ### Environment Variables

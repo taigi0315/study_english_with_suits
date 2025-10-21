@@ -350,7 +350,7 @@ transitions:
 
 #### 6. 텍스트-음성 변환 (TTS)
 
-LangFlix는 발음 오디오 생성에 Google Cloud Text-to-Speech를 사용합니다:
+LangFlix는 발음 오디오 생성에 Gemini TTS를 사용합니다:
 
 ```yaml
 tts:
@@ -358,23 +358,26 @@ tts:
   provider: "google"             # TTS 제공업체 (google, lemonfox)
   
   google:
-    language_code: "en-US"       # 오디오용 원본 언어 (영어)
-    voice_name: "en-US-Wavenet-D" # 기본 음성 (Puck)
-    response_format: "mp3"       # 오디오 포맷 (mp3, wav)
-    speaking_rate: 0.75          # 말하기 속도 (0.75 = 75% 속도, 느림)
+    language_code: "en-us"       # 오디오용 원본 언어 (영어)
+    model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS 모델
+    response_format: "wav"       # 오디오 포맷 (WAV)
+    # SSML speaking rate 옵션: x-slow, slow, medium, fast, x-fast, 또는 백분율 like "0.8"
+    speaking_rate: "slow"        # SSML 속도: 더 느리고 명확한 발음
+    # SSML pitch 옵션: x-low, low, medium, high, x-high, 백분율 like "+10%", 또는 반음 like "-2st"
+    pitch: "-4st"                # SSML 피치: 4 반음 낮춰서 더 자연스러운 소리
     alternate_voices:            # 표현 간 음성 교대
-      - "en-US-Wavenet-D"        # Puck (남성, 중립적 톤)
-      - "en-US-Wavenet-A"        # Leda (여성, 중립적 톤)
+      - "Despina"                # 사용 가능한 Gemini 음성
+      - "Puck"                   # 사용 가능한 Gemini 음성
 ```
 
 **TTS 기능:**
-- **음성 교대**: 각 표현마다 Puck과 Leda 음성 자동 전환
-- **타임라인 구조**: 1초 일시정지 - TTS - 0.5초 일시정지 - TTS - 0.5초 일시정지 - TTS - 1초 일시정지
-- **말하기 속도**: 더 나은 학습을 위한 설정 가능한 느린 말하기 (75% 속도)
+- **음성 교대**: 구성된 음성들 간 자동 전환
+- **타임라인 구조**: 1초 일시정지 - TTS - 0.5초 일시정지 - TTS - 0.5초 일시정지 - TTS - 1초 일시정지 (3회 반복)
+- **SSML 제어**: 자연스러운 발음을 위한 직접적인 SSML 속도 및 피치 제어
 - **원본 언어**: 대상 언어가 아닌 영어(원본 언어)를 오디오 생성에 사용
 
 **설정 요구사항:**
-- 환경 변수의 Google Cloud TTS API 키: `GOOGLE_API_KEY_1=your_key_here`
+- 환경 변수의 Gemini API 키: `GEMINI_API_KEY=your_key_here`
 - 프로젝트 루트의 `.env` 파일에 추가
 
 ### 환경 변수

@@ -13,7 +13,10 @@ openai>=1.3.7
 # Google Gemini API
 google-generativeai>=0.8.0
 
-# Google Cloud Text-to-Speech (optional, for TTS)
+# Google GenAI library for TTS
+google-genai>=0.8.0
+
+# Google Cloud Text-to-Speech (legacy, optional)
 google-cloud-texttospeech>=2.16.0
 
 # Data validation and structured output

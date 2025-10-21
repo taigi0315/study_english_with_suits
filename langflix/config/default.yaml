@@ -143,17 +143,18 @@ tts:
   # TTS provider (lemonfox, google, aws, etc.)
   provider: "google"
   
-  # Google Cloud TTS Configuration
+  # Gemini TTS Configuration (Google GenAI library)
   google:
-    # api_key: "set via GOOGLE_API_KEY or GOOGLE_API_KEY_1 environment variable"
-    language_code: "en-US"  # Original language (English) for audio generation
-    voice_name: "en-US-Wavenet-D"  # Default voice (Puck - will alternate with Leda)
-    response_format: "mp3"  # Google Cloud TTS uses MP3 format
-    speaking_rate: 0.90  # 90% speed (slower)
-    # Alternative voices for alternation (English - original language)
-    # Puck: en-US-Wavenet-D (male, neutral tone)
-    # Leda: en-US-Wavenet-A (female, neutral tone)
-    alternate_voices: ["en-US-Wavenet-D", "en-US-Wavenet-A"]
+    # api_key: "set via GEMINI_API_KEY environment variable"
+    language_code: "en-us"  # Original language (English) for audio generation
+    model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model for high-quality synthesis
+    response_format: "wav"  # Audio format (WAV for new API)
+    # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
+    speaking_rate: "slow"  # SSML rate for slower, clearer speech
+    # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%" or semitones like "-2st"
+    pitch: "-2st"  # SSML pitch: one semitone lower for more natural sound
+    # Voice selection for TTS generation (uses Gemini voices from https://ai.google.dev/gemini-api/docs/speech-generation#voices)
+    alternate_voices: ["Despina", "Puck"]  # Available Gemini voices
   
   # LemonFox TTS Configuration (fallback)
   lemonfox:

@@ -4,7 +4,7 @@ Factory for creating TTS client instances
 
 import os
 import logging
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 
 # Load environment variables from .env file
 try:
@@ -16,16 +16,16 @@ except ImportError:
 from .base import TTSClient
 from .lemonfox_client import LemonFoxTTSClient
 
-# Import Google client with error handling
+logger = logging.getLogger(__name__)
+
+# Import Gemini client with error handling
 try:
-    from .google_client import GoogleTTSClient
+    from .gemini_client import GeminiTTSClient
     GOOGLE_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"Google Cloud TTS not available: {e}")
-    GoogleTTSClient = None
+    logger.warning(f"Gemini TTS not available: {e}")
+    GeminiTTSClient = None
     GOOGLE_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
 
 
 def get_google_tts_language_code(target_language: str) -> str:
@@ -94,59 +94,6 @@ def get_google_tts_language_code(target_language: str) -> str:
         logger.warning(f"Unknown target language '{target_language}', falling back to 'en-US'")
         return "en-US"
 
-
-def get_google_tts_voices_for_language(language_code: str) -> Tuple[List[str], str]:
-    """
-    Get appropriate voices for a given language code.
-    
-    Args:
-        language_code: Google Cloud TTS language code (e.g., "ko-KR", "es-ES")
-        
-    Returns:
-        Tuple of (voice_list, default_voice)
-    """
-    # Voice mapping for different languages (using Google Cloud TTS voice names)
-    voice_mapping = {
-        "ko-KR": {
-            "voices": ["ko-KR-Wavenet-A", "ko-KR-Wavenet-B", "ko-KR-Standard-A", "ko-KR-Standard-B"],
-            "default": "ko-KR-Wavenet-A",
-            "alternate": ["ko-KR-Wavenet-A", "ko-KR-Wavenet-B"]  # Puck and Leda for Korean
-        },
-        "es-ES": {
-            "voices": ["es-ES-Wavenet-A", "es-ES-Wavenet-B", "es-ES-Standard-A", "es-ES-Standard-B"],
-            "default": "es-ES-Wavenet-A",
-            "alternate": ["es-ES-Wavenet-A", "es-ES-Wavenet-B"]
-        },
-        "fr-FR": {
-            "voices": ["fr-FR-Wavenet-A", "fr-FR-Wavenet-B", "fr-FR-Standard-A", "fr-FR-Standard-B"],
-            "default": "fr-FR-Wavenet-A", 
-            "alternate": ["fr-FR-Wavenet-A", "fr-FR-Wavenet-B"]
-        },
-        "de-DE": {
-            "voices": ["de-DE-Wavenet-A", "de-DE-Wavenet-B", "de-DE-Standard-A", "de-DE-Standard-B"],
-            "default": "de-DE-Wavenet-A",
-            "alternate": ["de-DE-Wavenet-A", "de-DE-Wavenet-B"]
-        },
-        "ja-JP": {
-            "voices": ["ja-JP-Wavenet-A", "ja-JP-Wavenet-B", "ja-JP-Standard-A", "ja-JP-Standard-B"],
-            "default": "ja-JP-Wavenet-A",
-            "alternate": ["ja-JP-Wavenet-A", "ja-JP-Wavenet-B"]
-        },
-        "zh-CN": {
-            "voices": ["zh-CN-Wavenet-A", "zh-CN-Wavenet-B", "zh-CN-Standard-A", "zh-CN-Standard-B"],
-            "default": "zh-CN-Wavenet-A",
-            "alternate": ["zh-CN-Wavenet-A", "zh-CN-Wavenet-B"]
-        },
-        "en-US": {
-            "voices": ["en-US-Wavenet-A", "en-US-Wavenet-D", "en-US-Standard-A", "en-US-Standard-D"],
-            "default": "en-US-Wavenet-D",  # Puck
-            "alternate": ["en-US-Wavenet-D", "en-US-Wavenet-A"]  # Puck and Leda
-        }
-    }
-    
-    # Get voices for the language, fallback to English
-    voice_info = voice_mapping.get(language_code, voice_mapping["en-US"])
-    return voice_info["alternate"], voice_info["default"]
 
 
 def create_tts_client(provider: str, config: Dict[str, Any]) -> TTSClient:
@@ -244,10 +191,9 @@ def create_tts_client(provider: str, config: Dict[str, Any]) -> TTSClient:
             raise ValueError(f"Failed to initialize LemonFox TTS client: {e}")
     
     elif provider == "google":
-        if not GOOGLE_AVAILABLE or GoogleTTSClient is None:
+        if not GOOGLE_AVAILABLE or GeminiTTSClient is None:
             raise ValueError(
-                "Google Cloud TTS is not available. Install with: "
-                "pip install google-cloud-texttospeech"
+                "Gemini TTS is not available. Please check the installation."
             )
         
         # Force reload environment variables
@@ -257,66 +203,63 @@ def create_tts_client(provider: str, config: Dict[str, Any]) -> TTSClient:
         except ImportError:
             pass
         
-        # Get API key from environment variable first, fallback to config
-        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY_1") or config.get('api_key')
+        # Get API key from GEMINI_API_KEY environment variable first, fallback to config
+        api_key = os.getenv("GEMINI_API_KEY") or config.get('api_key')
         
-        logger.info(f"Google TTS API Key validation:")
-        logger.info(f"  Environment GOOGLE_API_KEY exists: {bool(os.getenv('GOOGLE_API_KEY'))}")
-        logger.info(f"  Environment GOOGLE_API_KEY_1 exists: {bool(os.getenv('GOOGLE_API_KEY_1'))}")
+        logger.info(f"Gemini TTS API Key validation:")
+        logger.info(f"  Environment GEMINI_API_KEY exists: {bool(os.getenv('GEMINI_API_KEY'))}")
         logger.info(f"  Config api_key exists: {bool(config.get('api_key'))}")
         logger.info(f"  Final API key length: {len(api_key) if api_key else 'None'}")
         
         if not api_key:
-            logger.error("No Google Cloud API key found in environment variables or config")
+            logger.error("No Gemini API key found in environment variables or config")
             logger.error("Please check:")
             logger.error("1. .env file exists in project root")
-            logger.error("2. GOOGLE_API_KEY or GOOGLE_API_KEY_1 is set in .env file")
+            logger.error("2. GEMINI_API_KEY is set in .env file")
             raise ValueError(
-                "Google Cloud API key is required. Set GOOGLE_API_KEY environment variable "
+                "Gemini API key is required. Set GEMINI_API_KEY environment variable "
                 "or provide api_key in configuration."
             )
         
         # TTS should use original language (English) for audio generation, not target language
         # Target language is for translations, but audio should be in the original language of the content
-        language_code = config.get('language_code', 'en-US')  # Default to English (original language)
+        language_code = config.get('language_code', 'en-us')  # Use lowercase for Gemini API
         
-        # Use English voices for original language content
-        alternate_voices, default_voice = get_google_tts_voices_for_language(language_code)
+        # Get configuration with defaults for Gemini TTS (SSML values)
+        speaking_rate = config.get('speaking_rate', 'medium')
+        pitch = config.get('pitch', '0st')
+        model_name = config.get('model_name', 'gemini-2.5-flash-preview-tts')
         
-        # Get configuration with defaults for original language (English)
-        voice_name = config.get('voice_name', default_voice)
-        speaking_rate = config.get('speaking_rate', 0.85)
+        # Voice selection is handled by alternate_voices in config
+        # This factory method gets called with a specific voice_name already selected
+        voice_name = config.get('voice_name', 'Kore')  # This should be set by video_editor when calling factory
+        logger.info(f"Using voice from config: '{voice_name}'")
         
-        # Update config with English voices for voice alternation (Puck and Leda)
-        if 'alternate_voices' not in config or not config.get('alternate_voices'):
-            config['alternate_voices'] = alternate_voices
-            logger.info(f"Set original language (English) alternate voices: {alternate_voices}")
-        else:
-            logger.info(f"Using configured alternate voices: {config['alternate_voices']}")
+        logger.info(f"TTS using Gemini model: {model_name} with language: {language_code}")
         
-        logger.info(f"TTS using original language: {language_code} (target language not used for audio generation)")
-        
-        logger.info(f"Creating Google Cloud TTS client with voice='{voice_name}', language='{language_code}', rate={speaking_rate}")
+        logger.info(f"Creating Gemini TTS client with voice='{voice_name}', language='{language_code}', rate={speaking_rate}, pitch={pitch}")
         logger.info(f"API key configured: {'*' * (len(api_key) - 4) + api_key[-4:] if len(api_key) > 4 else '****'}")
         
         try:
-            client = GoogleTTSClient(
+            client = GeminiTTSClient(
                 api_key=api_key,
                 voice_name=voice_name,
                 language_code=language_code,
-                speaking_rate=speaking_rate
+                speaking_rate=speaking_rate,
+                pitch=pitch,
+                model_name=model_name
             )
             
             # Validate the client configuration
             if not client.validate_config():
-                raise ValueError("Google TTS client configuration validation failed")
+                raise ValueError("Gemini TTS client configuration validation failed")
             
-            logger.info("Google Cloud TTS client created and validated successfully")
+            logger.info("Gemini TTS client created and validated successfully")
             return client
             
         except Exception as e:
-            logger.error(f"Failed to create Google Cloud TTS client: {e}")
-            raise ValueError(f"Failed to initialize Google Cloud TTS client: {e}")
+            logger.error(f"Failed to create Gemini TTS client: {e}")
+            raise ValueError(f"Failed to initialize Gemini TTS client: {e}")
     
     # Future providers can be added here
     # elif provider == "aws":

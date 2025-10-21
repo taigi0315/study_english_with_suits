@@ -1117,3 +1117,531 @@ This change supports the comprehensive documentation update initiative:
 - API documentation covers the template system architecture
 
 **The prompt template refactoring represents a significant improvement in LangFlix's maintainability, making it much easier for users and developers to customize and improve the AI prompt engineering without touching Python code! 📝✨**
+
+---
+
+## 📅 2025-10-19 - 2025-10-21: Major Feature Enhancements
+
+### 🎯 **Phase: TTS Integration, Short Videos & Educational Slide Enhancement**
+
+이 기간 동안 LangFlix는 여러 주요 기능 개선을 통해 더욱 강력하고 사용자 친화적인 언어 학습 플랫폼으로 발전했습니다.
+
+---
+
+## 📅 2025-10-19 - 2025-10-20: Text-to-Speech System Integration & Enhancement
+
+### 🎯 **Objective**: 자연스러운 음성을 가진 TTS 시스템 통합 및 개선
+
+#### ✅ **Phase 1: Initial TTS Integration (LemonFox & Google Cloud TTS)**
+
+**1. TTS Architecture Design**
+- **Factory Pattern Implementation**: `langflix/tts/factory.py`
+  - Swappable TTS client architecture
+  - Provider-agnostic interface
+- **Base Client**: `langflix/tts/base.py`
+  - `TTSClient` abstract base class
+  - Standard interface for all TTS providers
+- **Provider Implementations**:
+  - `langflix/tts/lemonfox_client.py` - LemonFox TTS
+  - `langflix/tts/google_client.py` - Google Cloud TTS
+
+**2. Configuration Management**
+- TTS configuration in `default.yaml`
+- Provider selection: `lemonfox`, `google`
+- Voice configuration per provider
+
+**3. Audio Timeline Implementation**
+- 3x repetition with pauses: `1s pause - TTS - 0.5s pause - TTS - 0.5s pause - TTS - 1s pause`
+- Voice alternation between expressions
+- MP3/WAV format support
+
+#### ✅ **Phase 2: Migration to Gemini TTS**
+
+**Problem**: 기존 TTS 음성이 로봇 같고 부자연스러움
+
+**Solution**: Google Gemini 2.5 Flash TTS 통합
+
+**1. Gemini TTS Client Implementation** (`langflix/tts/gemini_client.py`)
+- **Model**: `gemini-2.5-flash-preview-tts`
+- **Library**: `google-genai` (Google GenAI SDK)
+- **Features**:
+  - 더 자연스러운 음성
+  - SSML (Speech Synthesis Markup Language) 지원
+  - WAV 출력 포맷
+  - Multiple voice support (Despina, Puck, Kore)
+
+**2. API Integration**
+- **API Key**: `GEMINI_API_KEY` 환경 변수 사용
+- **Endpoint**: Google GenAI API
+- **Response Processing**: PCM data를 WAV 파일로 변환
+
+**3. SSML Control Implementation**
+- **Speaking Rate**: `x-slow`, `slow`, `medium`, `fast`, `x-fast` 또는 백분율 (e.g., "0.8")
+- **Pitch Control**: `x-low`, `low`, `medium`, `high`, `x-high` 또는 반음 (e.g., "-2st", "-4st")
+- **Direct Configuration**: YAML에 SSML 값을 직접 설정 (수치 변환 로직 제거)
+
+**Initial Implementation**:
+```yaml
+speaking_rate: 0.95  # 수치 값
+pitch: -1.0          # 수치 값
+```
+
+**Final Implementation** (ADR-007: Direct SSML Configuration):
+```yaml
+speaking_rate: "slow"  # SSML keyword
+pitch: "-4st"          # SSML semitone value
+```
+
+**Rationale for Change**:
+- 수치-to-SSML 변환 로직이 불필요하게 복잡
+- YAML에 직접 SSML 값을 설정하는 것이 더 명확하고 유연함
+- 코드 단순화 및 유지보수성 향상
+
+**4. Configuration Enhancement**
+- **Repeat Count Configurability**: TTS 반복 횟수를 설정으로 분리
+- `tts.repeat_count: 2` (default)
+- Dynamic timeline generation based on repeat count
+
+```yaml
+tts:
+  repeat_count: 2  # Configurable repetition count
+  google:
+    speaking_rate: "slow"
+    pitch: "-4st"
+    alternate_voices: ["Despina", "Puck"]
+```
+
+**5. Voice Selection Cleanup**
+- 기존: `get_google_tts_voices_for_language()` 함수로 언어별 voice mapping
+- 개선: `alternate_voices` 설정을 single source of truth로 사용
+- 불필요한 voice mapping 로직 제거
+
+#### 🔧 **Technical Improvements**
+
+**1. Error Handling**
+- API 403/429 에러 처리
+- Fallback to silence audio
+- Graceful degradation
+
+**2. Audio Processing**
+- WAV format conversion using `wave` library
+- PCM data processing
+- Sample rate: 24000 Hz
+
+**3. Code Quality**
+- Deprecation warnings for old voice selection logic
+- Extensive logging for debugging
+- Configuration validation
+
+#### 📊 **Results**
+
+**Before (Google Cloud TTS)**:
+- Robotic voice quality
+- Limited control over speech parameters
+- Complex voice selection logic
+
+**After (Gemini TTS)**:
+- Natural-sounding speech
+- Fine-grained SSML control
+- Simple, direct configuration
+- Better voice variety
+
+#### 🎯 **Key Learnings**
+
+1. **Direct Configuration > Conversion Logic**: YAML에 SSML 값을 직접 설정하는 것이 변환 로직보다 명확
+2. **Single Source of Truth**: Voice selection을 하나의 설정 소스로 통합하여 일관성 유지
+3. **Configurability Matters**: Repeat count를 설정으로 분리하여 유연성 증가
+4. **Simplicity Wins**: 복잡한 로직을 제거하고 단순한 구조로 개선
+
+---
+
+## 📅 2025-10-20: Short Video Generation Feature
+
+### 🎯 **Objective**: 소셜 미디어 공유를 위한 세로 포맷 숏폼 비디오 생성
+
+#### ✅ **Implementation**
+
+**1. Architecture Design** (ADR-006: Short Video Architecture)
+
+**Output Structure**:
+```
+translations/{lang}/
+├── context_slide_combined/  # Educational videos (context + slide)
+└── short_videos/             # Short-format batched videos
+```
+
+**Video Format**:
+- **Aspect Ratio**: 9:16 (vertical for social media)
+- **Resolution**: 1080x1920
+- **Upper Half**: Context video with subtitles
+- **Lower Half**: Educational slide (without audio)
+- **Batch Duration**: ~120 seconds (configurable)
+
+**2. Implementation Details** (`langflix/video_editor.py`)
+
+**Key Methods**:
+- `create_short_format_video()`: Create single short video (context + slide stacked vertically)
+- `create_batched_short_videos()`: Batch multiple short videos into ~120s chunks
+- `_create_educational_slide_silent()`: Create slide without audio for short videos
+
+**Video Processing**:
+```python
+# Vertical stacking
+context_scaled = context video scaled to 1080x960
+slide_scaled = slide scaled to 1080x960
+final = vstack(context_scaled, slide_scaled)  # 1080x1920
+```
+
+**Audio Timeline for Short Videos**:
+- Context audio + TTS audio (repeated based on `repeat_count`)
+- 0.5s pauses between TTS repetitions
+- Freeze frame on context video after it finishes
+
+**3. Configuration** (`langflix/config/default.yaml`)
+```yaml
+short_video:
+  enabled: true
+  resolution: "1080x1920"  # 9:16 vertical format
+  target_duration: 120     # ~2 minutes per batch
+  duration_variance: 10    # Allow ±10 seconds
+```
+
+**4. CLI Integration** (`langflix/main.py`)
+```bash
+# Default: short videos enabled
+python -m langflix.main --subtitle "file.srt"
+
+# Skip short video creation
+python -m langflix.main --subtitle "file.srt" --no-shorts
+```
+
+**5. Output Management** (`langflix/output_manager.py`)
+- Updated directory structure
+- `context_slide_combined/` for educational videos
+- `short_videos/` for batched short-format videos
+
+#### 🔧 **Technical Challenges & Solutions**
+
+**Challenge 1: Audio Missing in Short Videos**
+- **Problem**: FFmpeg `pan` filter syntax error
+- **Solution**: Use output options (`ac=2`, `ar=48000`) instead of `pan` filter
+- **Result**: Robust stereo audio output
+
+**Challenge 2: Context Video and Slide Mismatch**
+- **Problem**: Index-based matching caused mismatches
+- **Solution**: Dictionary mapping with sanitized expression names
+- **Result**: Accurate context-to-expression matching
+
+**Challenge 3: Duration Calculation**
+- **Initial**: Fixed duration based on context only
+- **Final**: `context_duration + (TTS_duration × repeat_count) + gaps`
+- **Freeze Frame**: Hold last frame of context video during TTS playback
+
+#### 📊 **Results**
+
+**Output Example**:
+```
+short_videos/
+├── batch_01_120s.mkv  # ~120 seconds, multiple expressions
+├── batch_02_115s.mkv
+└── batch_03_95s.mkv
+```
+
+**Features**:
+- ✅ Vertical 9:16 format for Instagram/TikTok/YouTube Shorts
+- ✅ Automatic batching based on duration
+- ✅ Context video with subtitles
+- ✅ Educational slide displayed during entire duration
+- ✅ Combined audio timeline (context + TTS)
+
+---
+
+## 📅 2025-10-20: Educational Slide Enhancement
+
+### 🎯 **Objective**: 교육 슬라이드 레이아웃 개선 및 새로운 스키마 필드 추가
+
+#### ✅ **Schema Update** (`langflix/models.py`)
+
+**New Fields in `ExpressionAnalysis`**:
+```python
+expression_dialogue: str  # Full dialogue sentence containing the expression
+expression_dialogue_translation: str  # Translation of the full dialogue
+expression: str  # Key phrase/idiom extracted from dialogue
+expression_translation: str  # Translation of key phrase
+```
+
+**Field Relationships**:
+- `expression_dialogue`: "and you're telling me I'm gonna get screwed?"
+- `expression`: "I'm gonna get screwed" (key phrase)
+- `expression_dialogue_translation`: "당신은 내가 속임을 당할 것이라고 말하고 있나요?"
+- `expression_translation`: "속임을 당할 것 같아요"
+
+#### ✅ **Prompt Template Update**
+
+**File**: `langflix/templates/expression_analysis_prompt_v2.txt` (later renamed to `expression_analysis_prompt.txt`)
+
+**Updated Instructions**:
+- Extract full dialogue line containing expression
+- Identify key phrase within dialogue
+- Provide separate translations for both
+
+**JSON Output Format**:
+```json
+{
+  "expression_dialogue": "full sentence",
+  "expression": "key phrase",
+  "expression_dialogue_translation": "full sentence translation",
+  "expression_translation": "key phrase translation"
+}
+```
+
+#### ✅ **Educational Slide Layout Redesign**
+
+**New 5-Section Layout**:
+```
+┌─────────────────────────────────┐
+│                                 │
+│   Expression Dialogue (full)   │ ← 48px white, upper area
+│   Expression (key phrase)       │ ← 72px yellow (emphasized)
+│                                 │
+│   ─────────────────────────    │ ← Visual separator
+│                                 │
+│   Dialogue Translation (full)   │ ← 44px white, middle area
+│   Expression Translation (key)  │ ← 60px yellow (emphasized)
+│                                 │
+│   Similar Expressions (1-2)     │ ← 38px white, bottom
+└─────────────────────────────────┘
+```
+
+**Font Size Configuration** (`default.yaml`):
+```yaml
+font:
+  sizes:
+    expression_dialogue: 48      # Full dialogue line
+    expression: 72               # Main expression (emphasized)
+    expression_dialogue_trans: 44  # Dialogue translation
+    expression_trans: 60         # Expression translation (emphasized)
+    similar: 38                  # Similar expressions
+```
+
+**Text Positioning** (3% lower adjustment):
+- Moved all text elements down by 3% for better visual balance
+- Adjusted similar expressions from `y=h-130` to `y=h-160`
+
+#### ✅ **TTS Audio Enhancement**
+
+**Change**: TTS 텍스트를 `expression_dialogue` only로 변경
+
+**Before**:
+```python
+tts_text = f"{expression.expression_dialogue}. {expression.expression}"
+```
+
+**After**:
+```python
+tts_text = expression.expression_dialogue  # Full dialogue only
+```
+
+**Rationale**:
+- Full dialogue provides better context
+- More natural pronunciation
+- Avoids redundancy when expression == dialogue
+
+**Repetition Count**:
+- Initially: 3 times
+- Adjusted to: 2 times (configurable via `tts.repeat_count`)
+
+#### ✅ **Backward Compatibility**
+
+**Helper Method**: `_ensure_expression_dialogue()`
+```python
+@staticmethod
+def _ensure_expression_dialogue(expression: ExpressionAnalysis) -> ExpressionAnalysis:
+    """Ensure expression has dialogue fields for backward compatibility"""
+    if not hasattr(expression, 'expression_dialogue'):
+        expression.expression_dialogue = expression.expression
+    if not hasattr(expression, 'expression_dialogue_translation'):
+        expression.expression_dialogue_translation = expression.expression_translation
+    return expression
+```
+
+**Edge Cases Handled**:
+- Missing dialogue fields → fallback to expression fields
+- Expression == Dialogue → avoid duplication
+- Very long dialogue → truncate to 120 chars
+- Very long TTS text → truncate to 500 chars
+
+#### 📊 **Results**
+
+**Before**:
+- Simple 3-section layout
+- Expression and translation only
+- Less context for learners
+
+**After**:
+- Rich 5-section layout
+- Full dialogue + key phrase
+- Better learning context
+- Visual hierarchy (yellow emphasis for key phrases)
+
+---
+
+## 📅 2025-10-20: Configuration Refactoring
+
+### 🎯 **Objective**: `settings.py` 단순화 및 코드 조직 개선
+
+#### ✅ **Implementation**
+
+**1. Font Utilities Separation** (`langflix/config/font_utils.py`)
+- Platform-specific font detection logic
+- `get_platform_default_font()`: Detect system fonts
+- `get_font_file_for_language()`: Language-specific font selection
+- Cross-platform compatibility (macOS, Linux, Windows)
+
+**2. Settings Simplification** (`langflix/settings.py`)
+
+**Before**: Complex configuration management with redundant fallbacks
+
+**After**: Clean accessor functions
+```python
+# Section accessors
+get_app_config()
+get_llm_config()
+get_video_config()
+get_font_config()
+get_tts_config()
+get_short_video_config()
+
+# Specific value accessors
+get_show_name()
+get_template_file()
+get_tts_repeat_count()
+is_short_video_enabled()
+get_font_size(size_type)
+```
+
+**3. Legacy Support**
+- Deprecated `ConfigManager` class maintained for backward compatibility
+- Legacy constants maintained with deprecation warnings
+- Clear migration path documented
+
+**4. Configuration Hierarchy**
+```
+default.yaml (built-in defaults)
+    ↓
+config.yaml (user customizations)
+    ↓
+Environment variables (runtime overrides)
+```
+
+#### 📊 **Results**
+
+**Code Quality Improvements**:
+- ✅ Reduced complexity in `settings.py`
+- ✅ Clear separation of concerns
+- ✅ Easier to maintain and extend
+- ✅ Better testability
+
+**User Experience**:
+- ✅ Simpler configuration access in code
+- ✅ Clearer YAML structure
+- ✅ Better documentation
+
+---
+
+## 📅 2025-10-21: Subtitle Matching Enhancement
+
+### 🎯 **Objective**: 파일명이 잘린 자막 파일도 정확하게 매칭
+
+#### ✅ **Problem**
+
+**Symptom**:
+- Subtitle file: `expression_01_get_to_someone_through_someone.srt`
+- Actual expression: `get_to_someone_through_someone_else`
+- Result: Subtitle not found → no subtitles displayed in video
+
+**Root Cause**: Filename truncation due to OS/filesystem limits
+
+#### ✅ **Solution: Smart Partial Matching**
+
+**File**: `langflix/video_editor.py` - `_find_subtitle_file_for_expression()`
+
+**Multiple Matching Strategies**:
+1. **Exact Match**: Full expression name
+2. **Truncated Match**: First 30 chars
+3. **Sanitized Match**: Clean special characters
+4. **Pattern Match**: Indexed prefix (expression_01_, expression_02_)
+5. **Partial Match** (NEW): Substring and prefix matching
+
+**Strategy 5 Implementation**:
+```python
+# Check if filename expression is a prefix or substring of actual expression
+for file_path in all_files:
+    filename_without_ext = file_path.stem
+    match = re.match(r'expression_\d+_(.+)', filename_without_ext)
+    if match:
+        file_expr_part = match.group(1)
+        if (file_expr_part in safe_expression or 
+            safe_expression[:len(file_expr_part)] == file_expr_part):
+            return str(file_path)  # Match found!
+```
+
+**Logging Enhancement**:
+```python
+logger.info(f"Looking for subtitle files in: {subtitle_dir}")
+logger.info(f"Expression: '{expression.expression}'")
+logger.info(f"Available subtitle files: {[f.name for f in all_subtitle_files]}")
+logger.info(f"Found potential match via partial matching: {file_path}")
+```
+
+#### 📊 **Results**
+
+**Before**:
+- ❌ Truncated filenames → no match
+- ❌ No subtitles displayed
+- ❌ Silent failure
+
+**After**:
+- ✅ Truncated filenames matched correctly
+- ✅ Subtitles displayed properly
+- ✅ Extensive logging for debugging
+
+**Documentation**:
+- Updated `docs/TROUBLESHOOTING.md` with subtitle matching section
+- Updated `docs/TROUBLESHOOTING_KOR.md` with Korean translation
+
+---
+
+## 🎯 **Summary of October 2025 Enhancements**
+
+### **Major Features Added**:
+1. ✅ **Gemini TTS Integration** - Natural-sounding speech with SSML control
+2. ✅ **Short Video Generation** - 9:16 vertical format for social media
+3. ✅ **Enhanced Educational Slides** - 5-section layout with full dialogue context
+4. ✅ **Configuration Refactoring** - Cleaner, more maintainable code
+5. ✅ **Smart Subtitle Matching** - Robust matching even with truncated filenames
+
+### **Technical Improvements**:
+- Factory pattern for TTS providers
+- YAML-based configuration management
+- Backward compatibility helpers
+- Extensive logging and debugging
+- Cross-platform font support
+
+### **User Experience**:
+- More natural TTS voices
+- Social media-ready short videos
+- Better learning context in slides
+- Configurable repetition counts
+- Reliable subtitle display
+
+### **Code Quality**:
+- Simplified settings management
+- Removed deprecated code
+- Clear deprecation warnings
+- Comprehensive error handling
+- Better documentation
+
+---
+
+**The October 2025 release represents a major leap forward in LangFlix's capabilities, making it a more powerful and user-friendly language learning platform! 🚀✨**

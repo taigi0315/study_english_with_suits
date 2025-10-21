@@ -377,6 +377,7 @@ tts:
 - **Repeat Count**: Configurable via `repeat_count` setting (default: 2)
 - **SSML Control**: Direct SSML rate and pitch control for natural speech
 - **Original Language**: Uses English (original language) for audio generation, not target language
+- **Full Dialogue Context**: Uses complete dialogue sentences for more natural pronunciation
 
 **Setup Requirements:**
 - Gemini API key in environment: `GEMINI_API_KEY=your_key_here`
@@ -567,7 +568,54 @@ python -m langflix.main \
 
 ---
 
-## Best Practices
+## 8. Short Video Generation
+
+### Overview
+LangFlix can create short-format videos optimized for social media platforms like Instagram, TikTok, and YouTube Shorts.
+
+### Features
+- **Vertical Format**: 9:16 aspect ratio (1080x1920)
+- **Automatic Batching**: Combines multiple expressions into ~120-second videos
+- **Context + Education**: Upper half shows context video, lower half displays educational slide
+- **Social Media Ready**: Optimized for mobile viewing and sharing
+
+### Configuration
+```yaml
+short_video:
+  enabled: true                  # Enable/disable short video generation
+  resolution: "1080x1920"       # 9:16 vertical format
+  target_duration: 120         # Target duration per batch (seconds)
+  duration_variance: 10        # Allow ±10 seconds variance
+```
+
+### Usage
+```bash
+# Default: short videos enabled
+python -m langflix.main --subtitle "file.srt"
+
+# Skip short video creation
+python -m langflix.main --subtitle "file.srt" --no-shorts
+```
+
+### Output Structure
+```
+output/Series/Episode/translations/ko/
+├── context_slide_combined/     # Educational videos (context + slide)
+│   ├── educational_expression_01.mkv
+│   └── educational_expression_02.mkv
+└── short_videos/              # Short-format batched videos
+    ├── batch_01_120s.mkv      # ~120 seconds, multiple expressions
+    ├── batch_02_115s.mkv
+    └── batch_03_95s.mkv
+```
+
+### Video Layout
+- **Upper Half**: Context video with target language subtitles
+- **Lower Half**: Educational slide (no audio)
+- **Audio**: Context audio + TTS audio (repeated based on `repeat_count`)
+- **Freeze Frame**: Context video holds last frame during TTS playback
+
+## 9. Best Practices
 
 ### 1. Start Small
 
@@ -637,6 +685,25 @@ python -m langflix.main --subtitle "file.srt" --max-expressions 5
 ```bash
 # Adjust language level
 python -m langflix.main --subtitle "file.srt" --language-level advanced
+```
+
+**Problem:** No TTS audio
+```bash
+# Check GEMINI_API_KEY environment variable
+echo $GEMINI_API_KEY
+# Add to .env file if missing
+```
+
+**Problem:** Short videos not created
+```bash
+# Check if short video is enabled
+# Ensure short_video.enabled: true in config.yaml
+```
+
+**Problem:** Subtitles not appearing
+```bash
+# System handles truncated filenames automatically
+# Check subtitle files in translations/{lang}/subtitles/
 ```
 
 ### Getting Help

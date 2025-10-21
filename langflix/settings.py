@@ -236,6 +236,30 @@ def get_short_video_resolution() -> str:
 
 
 # ============================================================================
+# Storage Configuration Accessors
+# ============================================================================
+
+def get_storage_backend() -> str:
+    """Get storage backend type."""
+    return _config_loader.get('storage.backend', 'local')
+
+
+def get_storage_local_path() -> str:
+    """Get local storage base path."""
+    return _config_loader.get('storage.local.base_path', 'output')
+
+
+def get_storage_gcs_bucket() -> str:
+    """Get GCS bucket name."""
+    return _config_loader.get('storage.gcs.bucket_name')
+
+
+def get_storage_gcs_credentials() -> Optional[str]:
+    """Get GCS credentials path."""
+    return _config_loader.get('storage.gcs.credentials_path')
+
+
+# ============================================================================
 # Backward Compatibility - Deprecated but maintained for compatibility
 # ============================================================================
 

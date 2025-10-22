@@ -11,7 +11,7 @@ import sys
 # Add the parent directory to the path so we can import langflix
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from langflix.video_processor import VideoProcessor, get_video_file_for_subtitle
+from langflix.core.video_processor import VideoProcessor, get_video_file_for_subtitle
 
 
 class TestVideoProcessor(unittest.TestCase):

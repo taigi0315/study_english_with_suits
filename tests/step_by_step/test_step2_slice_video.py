@@ -12,7 +12,7 @@ from test_utils import (validate_file_exists, validate_video_properties, load_te
                        save_test_results, log_step_start, log_step_complete, time_to_seconds)
 
 # Import LangFlix components
-from langflix.video_processor import VideoProcessor
+from langflix.core.video_processor import VideoProcessor
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')

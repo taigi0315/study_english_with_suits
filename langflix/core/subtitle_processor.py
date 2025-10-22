@@ -643,7 +643,7 @@ if __name__ == "__main__":
         processor = SubtitleProcessor(subtitle_path)
         
         # Test with dummy expression
-        from langflix.models import ExpressionAnalysis
+        from langflix.core.models import ExpressionAnalysis
         dummy_expression = ExpressionAnalysis(
             dialogues=["I'm paying you millions,", "and you're telling me I'm gonna get screwed?"],
             translation=["나는 당신에게 수백만 달러를 지불하고 있는데,", "당신은 내가 속임을 당할 것이라고 말하고 있나요?"],

@@ -12,9 +12,9 @@ import logging
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from langflix.video_processor import VideoProcessor
-from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.expression_analyzer import analyze_chunk
+from langflix.core.video_processor import VideoProcessor
+from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.core.expression_analyzer import analyze_chunk
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

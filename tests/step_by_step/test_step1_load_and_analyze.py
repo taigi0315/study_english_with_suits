@@ -11,8 +11,8 @@ from test_config import setup_test_environment, clean_step_directory, get_step_o
 from test_utils import validate_file_exists, validate_expression_data, save_test_results, log_step_start, log_step_complete
 
 # Import LangFlix components
-from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.expression_analyzer import analyze_chunk
+from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.core.expression_analyzer import analyze_chunk
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')

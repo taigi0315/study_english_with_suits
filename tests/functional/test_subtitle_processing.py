@@ -12,8 +12,8 @@ import logging
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from langflix.subtitle_processor import SubtitleProcessor, create_subtitle_file_for_expression
-from langflix.models import ExpressionAnalysis
+from langflix.core.subtitle_processor import SubtitleProcessor, create_subtitle_file_for_expression
+from langflix.core.models import ExpressionAnalysis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -12,9 +12,9 @@ from test_utils import (validate_file_exists, validate_audio_properties,
                        load_test_results, save_test_results, log_step_start, log_step_complete, time_to_seconds)
 
 # Import LangFlix components
-from langflix.video_processor import VideoProcessor
-from langflix.subtitle_processor import SubtitleProcessor
-from langflix.models import ExpressionAnalysis
+from langflix.core.video_processor import VideoProcessor
+from langflix.core.subtitle_processor import SubtitleProcessor
+from langflix.core.models import ExpressionAnalysis
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')

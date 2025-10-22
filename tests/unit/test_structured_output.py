@@ -3,8 +3,8 @@ Unit tests for structured output functionality
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from langflix.models import ExpressionAnalysis, ExpressionAnalysisResponse
-from langflix.expression_analyzer import analyze_chunk
+from langflix.core.models import ExpressionAnalysis, ExpressionAnalysisResponse
+from langflix.core.expression_analyzer import analyze_chunk
 
 
 class TestPydanticModels:

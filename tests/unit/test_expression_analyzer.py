@@ -10,8 +10,8 @@ import os
 # Add the parent directory to the path so we can import langflix
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from langflix.expression_analyzer import analyze_chunk
-from langflix.models import ExpressionAnalysis, ExpressionAnalysisResponse
+from langflix.core.expression_analyzer import analyze_chunk
+from langflix.core.models import ExpressionAnalysis, ExpressionAnalysisResponse
 
 
 class TestExpressionAnalyzer(unittest.TestCase):

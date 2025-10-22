@@ -10,8 +10,8 @@ from pathlib import Path
 # Add the current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from langflix.subtitle_parser import parse_srt_file
-from langflix.expression_analyzer import analyze_chunk
+from langflix.core.subtitle_parser import parse_srt_file
+from langflix.core.expression_analyzer import analyze_chunk
 
 
 def test_suits_analysis():

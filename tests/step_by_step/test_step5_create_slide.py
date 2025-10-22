@@ -12,8 +12,8 @@ from test_utils import (validate_file_exists, validate_video_properties,
                        load_test_results, save_test_results, log_step_start, log_step_complete)
 
 # Import LangFlix components
-from langflix.video_editor import VideoEditor
-from langflix.models import ExpressionAnalysis
+from langflix.core.video_editor import VideoEditor
+from langflix.core.models import ExpressionAnalysis
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')

@@ -11,8 +11,8 @@ import logging
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
-from langflix.video_editor import VideoEditor
-from langflix.models import ExpressionAnalysis
+from langflix.core.video_editor import VideoEditor
+from langflix.core.models import ExpressionAnalysis
 
 # Configure logging
 logging.basicConfig(

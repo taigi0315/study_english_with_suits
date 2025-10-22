@@ -11,8 +11,8 @@ from pathlib import Path
 # Add the current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.prompts import get_prompt_for_chunk
+from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.utils.prompts import get_prompt_for_chunk
 from langflix import settings
 
 

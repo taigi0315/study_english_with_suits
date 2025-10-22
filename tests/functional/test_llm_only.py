@@ -12,8 +12,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from langflix.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.expression_analyzer import analyze_chunk
+from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.core.expression_analyzer import analyze_chunk
 from langflix.settings import DEFAULT_LANGUAGE_LEVEL
 import logging
 

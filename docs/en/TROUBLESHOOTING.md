@@ -707,30 +707,179 @@ Killed (signal 9)
 
 ## Subtitle Processing Issues
 
-### Problem: "Subtitle encoding error"
+### Problem: "Subtitle encoding error" (Phase 2: Now Auto-Fixed!)
 
 **Symptoms:**
 ```
 UnicodeDecodeError: 'utf-8' codec can't decode byte
 Invalid subtitle format
+SubtitleEncodingError: Failed to decode subtitle file
 ```
 
-**Solutions:**
+**Phase 2 Solution**: 
 
-1. **Convert subtitle to UTF-8:**
+The system now **automatically detects and handles** most encoding issues! The enhanced subtitle parser:
+
+1. **Automatically detects encoding** using chardet
+2. **Tries multiple fallback encodings** (UTF-8, CP949, EUC-KR, Latin-1)
+3. **Logs encoding information** for debugging
+
+**Check logs for automatic handling:**
+```bash
+INFO: Detected encoding: cp949 (confidence: 0.95)
+INFO: Successfully parsed with fallback encoding: euc-kr
+```
+
+**If automatic detection fails:**
+
+1. **Install chardet** (should be automatic):
+   ```bash
+   pip install chardet>=5.0.0
+   ```
+
+2. **Check log for attempted encodings:**
+   ```bash
+   ERROR: SubtitleEncodingError: Failed to decode subtitle file 'file.srt'. 
+          Tried encodings: cp949, utf-8, cp949, euc-kr, latin-1
+   ```
+
+3. **Manual conversion (last resort):**
    ```bash
    iconv -f ISO-8859-1 -t UTF-8 subtitle.srt > subtitle_utf8.srt
    ```
 
-2. **Check subtitle encoding:**
+---
+
+### Problem: "SubtitleNotFoundError" (Phase 2: Better Errors)
+
+**Symptoms:**
+```
+SubtitleNotFoundError: Subtitle file not found: /path/to/file.srt
+```
+
+**Solutions:**
+
+1. **Check file path:**
    ```bash
-   file -i subtitle.srt
+   ls -la /path/to/file.srt
    ```
 
-3. **Use subtitle editor to fix:**
-   - Subtitle Edit (Windows)
-   - Aegisub (cross-platform)
-   - Save as UTF-8 encoding
+2. **Use absolute path:**
+   ```bash
+   python -m langflix.main --subtitle "$(pwd)/subtitle.srt"
+   ```
+
+3. **Check file permissions:**
+   ```bash
+   chmod 644 subtitle.srt
+   ```
+
+---
+
+### Problem: "SubtitleFormatError" (Phase 2: Format Validation)
+
+**Symptoms:**
+```
+SubtitleFormatError: Unsupported format. Supported formats: .srt, .vtt, .ass, .ssa
+```
+
+**Solutions:**
+
+1. **Check file extension:**
+   ```bash
+   # Rename if needed
+   mv subtitle.txt subtitle.srt
+   ```
+
+2. **Convert format using ffmpeg:**
+   ```bash
+   # Convert VTT to SRT
+   ffmpeg -i subtitle.vtt subtitle.srt
+   ```
+
+3. **Supported formats:**
+   - `.srt` - SubRip (most common)
+   - `.vtt` - WebVTT
+   - `.ass` - Advanced SubStation Alpha
+   - `.ssa` - SubStation Alpha
+
+---
+
+### Problem: "Too many duplicate expressions" (Phase 2: Ranking System)
+
+**Symptoms:**
+- Similar expressions appearing multiple times
+- Redundant content in output
+
+**Phase 2 Solution**:
+
+The system now uses **fuzzy duplicate detection**:
+
+```yaml
+# config.yaml
+llm:
+  ranking:
+    fuzzy_match_threshold: 85  # Adjust sensitivity
+```
+
+**Adjust duplicate detection:**
+
+- **85** (default): Balanced duplicate removal
+- **90**: Less aggressive (keeps more similar expressions)
+- **80**: More aggressive (removes more variations)
+
+**Check logs for removed duplicates:**
+```bash
+INFO: Removing duplicate: 'Get Screwed' (similar to 'get screwed', similarity: 100%)
+INFO: Removed 3 duplicate expressions
+```
+
+---
+
+### Problem: "Expression quality issues" (Phase 2: Ranking)
+
+**Symptoms:**
+- Too many easy expressions
+- Not enough relevant expressions
+- Expressions don't match learning level
+
+**Phase 2 Solution**:
+
+Adjust **ranking weights** in configuration:
+
+```yaml
+llm:
+  ranking:
+    difficulty_weight: 0.4        # Adjust for more/less advanced expressions
+    frequency_weight: 0.3          # Adjust for more/less common expressions
+    educational_value_weight: 0.3  # Adjust for pedagogical value
+```
+
+**Examples:**
+
+For **advanced learners**:
+```yaml
+ranking:
+  difficulty_weight: 0.6  # More weight on difficulty
+  frequency_weight: 0.2
+  educational_value_weight: 0.2
+```
+
+For **beginner content**:
+```yaml
+ranking:
+  difficulty_weight: 0.2  # Less weight on difficulty
+  frequency_weight: 0.5   # More weight on frequency
+  educational_value_weight: 0.3
+```
+
+For **pedagogical focus**:
+```yaml
+ranking:
+  difficulty_weight: 0.3
+  frequency_weight: 0.2
+  educational_value_weight: 0.5  # Emphasize educational value
+```
 
 ---
 

@@ -55,6 +55,26 @@ class ExpressionAnalysis(BaseModel):
         description="List of 1-3 similar expressions or alternative ways to say the same thing",
         min_length=1,
     )
+    
+    # New fields for expression-based learning
+    difficulty: Optional[int] = Field(
+        default=5,
+        description="Difficulty level from 1 (beginner) to 10 (advanced)",
+        ge=1,
+        le=10
+    )
+    category: Optional[str] = Field(
+        default="general",
+        description="Expression category (idiom, slang, formal, greeting, cultural, etc.)"
+    )
+    educational_value: Optional[str] = Field(
+        default="",
+        description="Explanation of why this expression is valuable for learning"
+    )
+    usage_notes: Optional[str] = Field(
+        default="",
+        description="Additional context about when and how to use this expression"
+    )
 
     model_config = {
         "json_schema_extra": {

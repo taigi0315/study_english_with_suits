@@ -481,7 +481,7 @@ class VideoEditor:
                 tts_text = tts_text[:MAX_TTS_CHARS]
             
             # Import TTS modules
-            from .tts.factory import create_tts_client
+            from langflix.tts.factory import create_tts_client
             from langflix import settings
             
             # Get TTS configuration with validation
@@ -1329,7 +1329,7 @@ class VideoEditor:
             Tuple of (tts_audio_path, duration)
         """
         try:
-            from .tts.factory import create_tts_client
+            from langflix.tts.factory import create_tts_client
             from langflix import settings
             
             # Get TTS configuration
@@ -1408,7 +1408,7 @@ class VideoEditor:
             logger.info(f"Expression {expression_index}: Using voice '{selected_voice}' (from alternate_voices: {alternate_voices})")
             
             # Generate ONE TTS audio file with the selected voice
-            from .tts.factory import create_tts_client
+            from langflix.tts.factory import create_tts_client
             voice_config = provider_config.copy()
             voice_config['voice_name'] = selected_voice
             

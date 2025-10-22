@@ -188,6 +188,35 @@ def get_tts_repeat_count() -> int:
 
 
 # ============================================================================
+# Database Configuration Accessors
+# ============================================================================
+
+def get_database_enabled() -> bool:
+    """Check if database is enabled."""
+    return _config_loader.get('database.enabled', False)
+
+
+def get_database_url() -> str:
+    """Get database URL."""
+    return _config_loader.get('database.url', 'postgresql://user:password@localhost:5432/langflix')
+
+
+def get_database_pool_size() -> int:
+    """Get database pool size."""
+    return _config_loader.get('database.pool_size', 5)
+
+
+def get_database_max_overflow() -> int:
+    """Get database max overflow."""
+    return _config_loader.get('database.max_overflow', 10)
+
+
+def get_database_echo() -> bool:
+    """Get database echo setting."""
+    return _config_loader.get('database.echo', False)
+
+
+# ============================================================================
 # Short Video Settings
 # ============================================================================
 
@@ -204,6 +233,30 @@ def get_short_video_target_duration() -> float:
 def get_short_video_resolution() -> str:
     """Get short video resolution"""
     return get_short_video_config().get('resolution', '1080x1920')
+
+
+# ============================================================================
+# Storage Configuration Accessors
+# ============================================================================
+
+def get_storage_backend() -> str:
+    """Get storage backend type."""
+    return _config_loader.get('storage.backend', 'local')
+
+
+def get_storage_local_path() -> str:
+    """Get local storage base path."""
+    return _config_loader.get('storage.local.base_path', 'output')
+
+
+def get_storage_gcs_bucket() -> str:
+    """Get GCS bucket name."""
+    return _config_loader.get('storage.gcs.bucket_name')
+
+
+def get_storage_gcs_credentials() -> Optional[str]:
+    """Get GCS credentials path."""
+    return _config_loader.get('storage.gcs.credentials_path')
 
 
 # ============================================================================

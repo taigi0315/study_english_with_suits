@@ -1,242 +1,191 @@
 # ADR-013: Expression Configuration Architecture
 
-**Date:** 2025-01-27  
-**Status:** Accepted  
-**Deciders:** Development Team  
-**Related ADRs:** ADR-009 (Service Architecture Foundation), ADR-010 (Database Schema Design)
+## Status
+Accepted
 
 ## Context
 
-LangFlix is implementing expression-based learning features as outlined in the north-start-doc.md development plan. This requires a comprehensive configuration system to manage:
+LangFlix 프로젝트에서 Expression-based Learning Feature를 구현하기 위해 Configuration 시스템을 확장해야 합니다. 기존 시스템은 기본적인 비디오 처리와 자막 생성에 중점을 두고 있었지만, 새로운 기능에서는 표현식 추출, 교육적 가치 분석, 학습 난이도 분류 등의 고급 기능이 필요합니다.
 
-- Subtitle styling for expression highlighting
-- Video playback settings (repetition, transitions)
-- Layout configurations for different video formats (landscape/portrait)
-- LLM and WhisperX integration settings
+### 요구사항
+- 표현식 기반 학습을 위한 설정 관리
+- 자막 스타일링 (기본/강조 스타일)
+- 비디오 재생 설정 (반복 횟수, 딜레이)
+- 레이아웃 설정 (landscape/portrait)
+- LLM 및 WhisperX 통합 설정
+- 데이터베이스 스키마 확장
 
-The existing LangFlix system already has a robust configuration management system using YAML files and ConfigLoader, but it needs to be extended to support the new expression-based learning features.
+### 기존 시스템
+- YAML 기반 설정 시스템 (`ConfigLoader`)
+- SQLAlchemy ORM 모델
+- Pydantic 모델 (LLM 출력)
+- Alembic 마이그레이션
 
 ## Decision
 
-We will extend the existing configuration system with expression-specific settings while maintaining consistency with the current architecture:
+Expression-based Learning Feature를 위한 Configuration 아키텍처를 다음과 같이 설계합니다:
 
-### 1. Configuration Structure
+### 1. Configuration Dataclass 구조
 
-**Expression Configuration Classes:**
-- `SubtitleStylingConfig`: Manages subtitle appearance (default and highlight styles)
-- `PlaybackConfig`: Controls video repetition and transition settings
-- `LayoutConfig`: Defines layout for landscape and portrait video formats
-- `ExpressionConfig`: Main configuration class that combines all settings
+```python
+@dataclass
+class SubtitleStylingConfig:
+    default: Dict[str, Any]
+    expression_highlight: Dict[str, Any]
 
-**Configuration Hierarchy:**
+@dataclass  
+class PlaybackConfig:
+    expression_repeat_count: int
+    context_play_count: int
+    repeat_delay_ms: int
+    transition_effect: str
+    transition_duration_ms: int
+
+@dataclass
+class LayoutConfig:
+    landscape: Dict[str, Any]
+    portrait: Dict[str, Any]
+
+@dataclass
+class ExpressionConfig:
+    subtitle_styling: SubtitleStylingConfig
+    playback: PlaybackConfig
+    layout: LayoutConfig
+    llm: Dict[str, Any]
+    whisper: Dict[str, Any]
 ```
-ExpressionConfig
-├── SubtitleStylingConfig
-│   ├── default (dict)
-│   └── expression_highlight (dict)
-├── PlaybackConfig
-│   ├── expression_repeat_count
-│   ├── context_play_count
-│   ├── repeat_delay_ms
-│   ├── transition_effect
-│   └── transition_duration_ms
-├── LayoutConfig
-│   ├── landscape (dict)
-│   └── portrait (dict)
-├── llm (dict)
-└── whisper (dict)
-```
 
-### 2. Database Schema Extension
+### 2. 설정 파일 구조
 
-**New Expression Fields:**
-- `difficulty` (Integer): 1-10 difficulty level
-- `category` (String(50)): Expression category (idiom, slang, formal, etc.)
-- `educational_value` (Text): Explanation of learning value
-- `usage_notes` (Text): Additional usage context
-- `score` (Float): Ranking score for expression selection
-
-### 3. Settings Integration
-
-**New Settings Accessors:**
-- `get_expression_config()`: Get entire expression configuration
-- `get_expression_subtitle_styling()`: Get subtitle styling settings
-- `get_expression_playback()`: Get playback configuration
-- `get_expression_layout()`: Get layout settings
-- `get_expression_llm()`: Get LLM configuration
-- `get_expression_whisper()`: Get WhisperX configuration
-
-### 4. YAML Configuration
-
-**Default Configuration Structure:**
+`default.yaml`에 `expression` 섹션 추가:
 ```yaml
 expression:
   subtitle_styling:
-    default:
-      color: '#FFFFFF'
-      font_family: 'Arial'
-      font_size: 24
-      # ... other default styling
-    expression_highlight:
-      color: '#FFD700'
-      font_weight: 'bold'
-      # ... highlight styling
+    default: { color: '#FFFFFF', font_size: 24, ... }
+    expression_highlight: { color: '#FFD700', font_size: 28, ... }
   playback:
     expression_repeat_count: 2
     context_play_count: 1
-    # ... other playback settings
+    repeat_delay_ms: 200
   layout:
-    landscape:
-      resolution: [1920, 1080]
-      # ... landscape layout
-    portrait:
-      resolution: [1080, 1920]
-      # ... portrait layout
-  llm:
-    provider: gemini
-    model: gemini-1.5-pro
-    # ... LLM settings
-  whisper:
-    model_size: base
-    device: cpu
-    # ... WhisperX settings
+    landscape: { resolution: [1920, 1080], ... }
+    portrait: { resolution: [1080, 1920], ... }
+  llm: { provider: gemini, model: gemini-1.5-pro, ... }
+  whisper: { model_size: base, device: cpu, ... }
 ```
 
-## Rationale
+### 3. Database Schema 확장
 
-### Why Extend Existing System
+기존 `Expression` 테이블에 5개 필드 추가:
+```sql
+ALTER TABLE expressions ADD COLUMN difficulty INTEGER;
+ALTER TABLE expressions ADD COLUMN category VARCHAR(50);
+ALTER TABLE expressions ADD COLUMN educational_value TEXT;
+ALTER TABLE expressions ADD COLUMN usage_notes TEXT;
+ALTER TABLE expressions ADD COLUMN score FLOAT;
+```
 
-1. **Consistency**: Maintains the same configuration patterns used throughout LangFlix
-2. **Familiarity**: Developers already understand the ConfigLoader pattern
-3. **Environment Override Support**: Leverages existing environment variable override system
-4. **Validation**: Reuses existing configuration validation patterns
+### 4. Pydantic 모델 확장
 
-### Why Dataclass Structure
+`ExpressionAnalysis` 모델에 새 필드 추가:
+```python
+class ExpressionAnalysis(BaseModel):
+    # ... 기존 필드들 ...
+    difficulty: Optional[int] = Field(default=5, ge=1, le=10)
+    category: Optional[str] = Field(default="general")
+    educational_value: Optional[str] = Field(default="")
+    usage_notes: Optional[str] = Field(default="")
+```
 
-1. **Type Safety**: Provides compile-time type checking
-2. **Default Values**: Built-in support for default values with `field(default_factory=dict)`
-3. **Validation**: Easy to add custom validation logic
-4. **Serialization**: Simple conversion to/from dictionaries
+### 5. Settings 접근자 추가
 
-### Why Database Schema Extension
+`settings.py`에 expression 설정 접근자 추가:
+```python
+def get_expression_config() -> Dict[str, Any]:
+    return _config_loader.get_section('expression') or {}
 
-1. **Backward Compatibility**: Existing Expression records remain valid
-2. **Gradual Migration**: New fields are nullable, allowing gradual adoption
-3. **Query Flexibility**: New fields enable advanced filtering and sorting
-4. **Future-Proof**: Extensible design for additional learning features
+def get_expression_subtitle_styling() -> Dict[str, Any]:
+    return _config_loader.get('expression', 'subtitle_styling', default={})
+# ... 기타 접근자들
+```
 
 ## Consequences
 
-### Positive
+### 장점
 
-- **Unified Configuration**: Single source of truth for all expression settings
-- **Type Safety**: Compile-time validation of configuration values
-- **Environment Flexibility**: Easy override via environment variables
-- **Database Compatibility**: Seamless integration with existing data
-- **Testing**: Comprehensive test coverage for all configuration scenarios
+1. **일관된 설정 관리**: 기존 `ConfigLoader` 패턴을 재사용하여 일관성 유지
+2. **타입 안전성**: Dataclass를 통한 타입 안전한 설정 관리
+3. **확장성**: 새로운 설정 섹션을 쉽게 추가할 수 있는 구조
+4. **검증**: Pydantic 모델을 통한 데이터 검증
+5. **마이그레이션**: Alembic을 통한 안전한 스키마 변경
 
-### Negative
+### 단점
 
-- **Migration Required**: Database migration needed for new fields
-- **Configuration Complexity**: More configuration options to manage
-- **Learning Curve**: Developers need to understand new configuration structure
+1. **복잡성 증가**: 설정 구조가 복잡해짐
+2. **학습 곡선**: 새로운 개발자가 설정 구조를 이해하는데 시간 필요
+3. **마이그레이션 위험**: 데이터베이스 스키마 변경으로 인한 잠재적 위험
 
-### Risks
+### 위험 완화
 
-- **Breaking Changes**: Configuration changes could affect existing functionality
-- **Migration Issues**: Database migration could fail in production
-- **Performance**: Additional fields could impact query performance
-
-### Mitigation
-
-- **Comprehensive Testing**: Unit and integration tests for all components
-- **Backward Compatibility**: New fields are nullable and optional
-- **Documentation**: Clear documentation of all configuration options
-- **Gradual Rollout**: Phased deployment with monitoring
+1. **단계적 구현**: Phase 1에서 Configuration만 구현하여 위험 최소화
+2. **테스트 커버리지**: 단위/통합 테스트로 안정성 보장
+3. **백워드 호환성**: 기존 설정과의 호환성 유지
+4. **문서화**: ADR과 User Manual을 통한 명확한 문서화
 
 ## Implementation Details
 
-### Files Created/Modified
+### 파일 구조
+```
+langflix/
+├── config/
+│   ├── expression_config.py      # 새로운 설정 클래스들
+│   └── default.yaml              # 확장된 기본 설정
+├── db/
+│   ├── models.py                 # 확장된 Expression 모델
+│   └── migrations/versions/
+│       └── 0002_add_expression_fields.py
+├── core/
+│   └── models.py                 # 확장된 ExpressionAnalysis
+└── settings.py                   # 새로운 접근자들
+```
 
-**New Files:**
-- `langflix/config/expression_config.py`: Configuration dataclasses
-- `langflix/db/migrations/versions/0002_add_expression_fields.py`: Database migration
-- `tests/unit/test_expression_config.py`: Unit tests
-- `tests/integration/test_expression_db_migration.py`: Integration tests
+### 테스트 구조
+```
+tests/
+├── unit/
+│   └── test_expression_config.py
+└── integration/
+    └── test_expression_db_migration.py
+```
 
-**Modified Files:**
-- `langflix/config/default.yaml`: Added expression configuration section
-- `langflix/settings.py`: Added expression accessor functions
-- `langflix/db/models.py`: Extended Expression model with new fields
-- `langflix/core/models.py`: Extended ExpressionAnalysis with new fields
+### 문서화
+```
+docs/
+├── adr/
+│   └── ADR-013-expression-configuration-architecture.md
+├── en/
+│   └── USER_MANUAL.md            # 영문 사용자 매뉴얼
+└── ko/
+    └── USER_MANUAL_KOR.md        # 한글 사용자 매뉴얼
+```
 
-### Configuration Validation
+## Alternatives Considered
 
-**Built-in Validation:**
-- Difficulty range: 1-10
-- Positive values for counts and delays
-- Valid resolution arrays: [width, height]
-- Required dictionary structures
+### 1. 별도 설정 파일
+- **장점**: 기존 설정과 분리
+- **단점**: 설정 관리 복잡성 증가, 일관성 부족
 
-**Custom Validation:**
-- Layout resolution format validation
-- Subtitle styling structure validation
-- Playback setting range validation
+### 2. 환경 변수만 사용
+- **장점**: 간단한 설정
+- **단점**: 복잡한 구조화된 설정 불가능
 
-### Database Migration
-
-**Migration Strategy:**
-1. Add new nullable columns
-2. Update existing records with default values
-3. Add constraints if needed
-4. Update application code to handle new fields
-
-**Rollback Plan:**
-- Migration can be reversed by dropping new columns
-- Application code gracefully handles missing fields
-- No data loss during rollback
-
-## Testing Strategy
-
-### Unit Tests
-- Configuration class instantiation
-- Default value validation
-- Custom value handling
-- Validation error detection
-- Settings accessor functions
-
-### Integration Tests
-- Database migration execution
-- CRUD operations with new fields
-- Configuration loading from YAML
-- Environment variable overrides
-
-### Performance Tests
-- Configuration loading performance
-- Database query performance with new fields
-- Memory usage with large configurations
-
-## Future Considerations
-
-### Phase 2 Extensions
-- Advanced LLM prompt templates
-- Custom subtitle styling themes
-- Dynamic layout generation
-- A/B testing for configuration values
-
-### Monitoring
-- Configuration usage analytics
-- Performance impact monitoring
-- Error rate tracking for new features
-
-### Documentation
-- Configuration reference guide
-- Best practices documentation
-- Troubleshooting guide
+### 3. JSON 설정
+- **장점**: 프로그래밍 언어 독립적
+- **단점**: YAML 대비 가독성 부족, 주석 지원 부족
 
 ## References
 
-- [north-start-doc.md](../north-start-doc.md): Original development plan
-- [ADR-009](ADR-009-service-architecture-foundation.md): Service architecture foundation
-- [ADR-010](ADR-010-database-schema-design.md): Database schema design
-- [LangFlix Configuration Guide](../../en/USER_MANUAL.md#configuration): User configuration guide
+- [north-start-doc.md](../north-start-doc.md) - 전체 개발 계획
+- [ConfigLoader 패턴](../langflix/config/config_loader.py) - 기존 설정 시스템
+- [SQLAlchemy ORM](../langflix/db/models.py) - 데이터베이스 모델
+- [Pydantic 모델](../langflix/core/models.py) - LLM 출력 모델

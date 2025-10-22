@@ -1,18 +1,16 @@
+#!/usr/bin/env python3
 """
-Expression configuration classes for LangFlix.
-
-This module provides dataclasses for managing expression-based learning feature
-configuration, following the existing ConfigLoader pattern.
+Expression Configuration Module for LangFlix
+Defines dataclasses for expression-based learning configuration
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 
 
 @dataclass
 class SubtitleStylingConfig:
     """Subtitle styling configuration for expressions"""
-    
     default: Dict[str, Any] = field(default_factory=dict)
     expression_highlight: Dict[str, Any] = field(default_factory=dict)
     
@@ -32,7 +30,7 @@ class SubtitleStylingConfig:
         
         if not self.expression_highlight:
             self.expression_highlight = {
-                'color': '#FFD700',  # Gold
+                'color': '#FFD700',
                 'font_weight': 'bold',
                 'font_size': 28,
                 'background_color': '#1A1A1A',
@@ -44,24 +42,33 @@ class SubtitleStylingConfig:
 
 @dataclass
 class PlaybackConfig:
-    """Video playback configuration"""
-    
+    """Video playback configuration for expressions"""
     expression_repeat_count: int = 2
     context_play_count: int = 1
     repeat_delay_ms: int = 200
     transition_effect: str = 'fade'
     transition_duration_ms: int = 150
+    
+    def __post_init__(self):
+        """Validate configuration values"""
+        if self.expression_repeat_count < 1:
+            self.expression_repeat_count = 1
+        if self.context_play_count < 1:
+            self.context_play_count = 1
+        if self.repeat_delay_ms < 0:
+            self.repeat_delay_ms = 0
+        if self.transition_duration_ms < 0:
+            self.transition_duration_ms = 0
 
 
 @dataclass
 class LayoutConfig:
-    """Video layout configuration for both formats"""
-    
+    """Layout configuration for different video formats"""
     landscape: Dict[str, Any] = field(default_factory=dict)
     portrait: Dict[str, Any] = field(default_factory=dict)
     
     def __post_init__(self):
-        """Set default layout values if not provided"""
+        """Set default layout configurations"""
         if not self.landscape:
             self.landscape = {
                 'resolution': [1920, 1080],
@@ -95,8 +102,7 @@ class LayoutConfig:
 
 @dataclass
 class ExpressionConfig:
-    """Main expression pipeline configuration"""
-    
+    """Main expression configuration class"""
     subtitle_styling: SubtitleStylingConfig
     playback: PlaybackConfig
     layout: LayoutConfig
@@ -104,38 +110,46 @@ class ExpressionConfig:
     whisper: Dict[str, Any] = field(default_factory=dict)
     
     @classmethod
-    def from_dict(cls, config_dict: dict) -> 'ExpressionConfig':
-        """
-        Create ExpressionConfig from dictionary, following existing pattern
-        
-        Args:
-            config_dict: Configuration dictionary from ConfigLoader
-            
-        Returns:
-            ExpressionConfig instance
-        """
-        # Extract sections with defaults
+    def from_dict(cls, config_dict: Dict[str, Any]) -> 'ExpressionConfig':
+        """Create ExpressionConfig from dictionary (ConfigLoader result)"""
+        # Handle subtitle_styling
         subtitle_styling_data = config_dict.get('subtitle_styling', {})
+        subtitle_styling = SubtitleStylingConfig(
+            default=subtitle_styling_data.get('default', {}),
+            expression_highlight=subtitle_styling_data.get('expression_highlight', {})
+        )
+        
+        # Handle playback
         playback_data = config_dict.get('playback', {})
+        playback = PlaybackConfig(
+            expression_repeat_count=playback_data.get('expression_repeat_count', 2),
+            context_play_count=playback_data.get('context_play_count', 1),
+            repeat_delay_ms=playback_data.get('repeat_delay_ms', 200),
+            transition_effect=playback_data.get('transition_effect', 'fade'),
+            transition_duration_ms=playback_data.get('transition_duration_ms', 150)
+        )
+        
+        # Handle layout
         layout_data = config_dict.get('layout', {})
-        llm_data = config_dict.get('llm', {})
-        whisper_data = config_dict.get('whisper', {})
+        layout = LayoutConfig(
+            landscape=layout_data.get('landscape', {}),
+            portrait=layout_data.get('portrait', {})
+        )
+        
+        # Handle additional configs
+        llm = config_dict.get('llm', {})
+        whisper = config_dict.get('whisper', {})
         
         return cls(
-            subtitle_styling=SubtitleStylingConfig(**subtitle_styling_data),
-            playback=PlaybackConfig(**playback_data),
-            layout=LayoutConfig(**layout_data),
-            llm=llm_data,
-            whisper=whisper_data
+            subtitle_styling=subtitle_styling,
+            playback=playback,
+            layout=layout,
+            llm=llm,
+            whisper=whisper
         )
     
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert ExpressionConfig to dictionary
-        
-        Returns:
-            Dictionary representation of the configuration
-        """
+        """Convert ExpressionConfig to dictionary"""
         return {
             'subtitle_styling': {
                 'default': self.subtitle_styling.default,
@@ -155,43 +169,3 @@ class ExpressionConfig:
             'llm': self.llm,
             'whisper': self.whisper
         }
-    
-    def validate(self) -> List[str]:
-        """
-        Validate configuration values
-        
-        Returns:
-            List of validation errors (empty if valid)
-        """
-        errors = []
-        
-        # Validate playback settings
-        if self.playback.expression_repeat_count < 1:
-            errors.append("expression_repeat_count must be >= 1")
-        
-        if self.playback.context_play_count < 1:
-            errors.append("context_play_count must be >= 1")
-        
-        if self.playback.repeat_delay_ms < 0:
-            errors.append("repeat_delay_ms must be >= 0")
-        
-        if self.playback.transition_duration_ms < 0:
-            errors.append("transition_duration_ms must be >= 0")
-        
-        # Validate layout resolutions
-        landscape_res = self.layout.landscape.get('resolution', [])
-        if len(landscape_res) != 2 or not all(isinstance(x, int) and x > 0 for x in landscape_res):
-            errors.append("landscape resolution must be [width, height] with positive integers")
-        
-        portrait_res = self.layout.portrait.get('resolution', [])
-        if len(portrait_res) != 2 or not all(isinstance(x, int) and x > 0 for x in portrait_res):
-            errors.append("portrait resolution must be [width, height] with positive integers")
-        
-        # Validate subtitle styling
-        if not isinstance(self.subtitle_styling.default, dict):
-            errors.append("subtitle_styling.default must be a dictionary")
-        
-        if not isinstance(self.subtitle_styling.expression_highlight, dict):
-            errors.append("subtitle_styling.expression_highlight must be a dictionary")
-        
-        return errors

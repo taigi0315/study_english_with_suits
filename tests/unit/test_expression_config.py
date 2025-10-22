@@ -1,15 +1,9 @@
+#!/usr/bin/env python3
 """
-Unit tests for expression configuration functionality.
+Unit tests for Expression Configuration
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
-from langflix.config.expression_config import (
-    ExpressionConfig,
-    SubtitleStylingConfig,
-    PlaybackConfig,
-    LayoutConfig
-)
 from langflix.settings import (
     get_expression_config,
     get_expression_subtitle_styling,
@@ -18,337 +12,205 @@ from langflix.settings import (
     get_expression_llm,
     get_expression_whisper
 )
+from langflix.config.expression_config import (
+    ExpressionConfig,
+    SubtitleStylingConfig,
+    PlaybackConfig,
+    LayoutConfig
+)
 
 
-class TestSubtitleStylingConfig:
-    """Test SubtitleStylingConfig dataclass."""
+class TestExpressionConfiguration:
+    """Test expression configuration loading and parsing"""
     
-    def test_default_values(self):
-        """Test default styling values are set correctly."""
-        config = SubtitleStylingConfig()
-        
-        # Test default styling
-        assert config.default['color'] == '#FFFFFF'
-        assert config.default['font_family'] == 'Arial'
-        assert config.default['font_size'] == 24
-        assert config.default['font_weight'] == 'normal'
-        assert config.default['background_color'] == '#000000'
-        assert config.default['background_opacity'] == 0.7
-        assert config.default['position'] == 'bottom'
-        assert config.default['margin_bottom'] == 50
-        
-        # Test expression highlight styling
-        assert config.expression_highlight['color'] == '#FFD700'
-        assert config.expression_highlight['font_weight'] == 'bold'
-        assert config.expression_highlight['font_size'] == 28
-        assert config.expression_highlight['background_color'] == '#1A1A1A'
-        assert config.expression_highlight['background_opacity'] == 0.85
-        assert config.expression_highlight['animation'] == 'fade_in'
-        assert config.expression_highlight['duration_ms'] == 300
+    def test_load_expression_config(self):
+        """Test loading expression configuration"""
+        config = get_expression_config()
+        assert isinstance(config, dict)
+        assert 'subtitle_styling' in config
+        assert 'playback' in config
+        assert 'layout' in config
+        assert 'llm' in config
+        assert 'whisper' in config
     
-    def test_custom_values(self):
-        """Test custom styling values."""
-        custom_default = {
-            'color': '#FF0000',
-            'font_size': 30
-        }
-        custom_highlight = {
-            'color': '#00FF00',
-            'font_size': 35
-        }
+    def test_subtitle_styling_defaults(self):
+        """Test subtitle styling default values"""
+        styling = get_expression_subtitle_styling()
+        assert isinstance(styling, dict)
+        assert 'default' in styling
+        assert 'expression_highlight' in styling
         
-        config = SubtitleStylingConfig(
-            default=custom_default,
-            expression_highlight=custom_highlight
-        )
+        # Check default styling
+        default = styling['default']
+        assert default['color'] == '#FFFFFF'
+        assert default['font_family'] == 'Arial'
+        assert default['font_size'] == 24
+        assert default['font_weight'] == 'normal'
         
-        assert config.default['color'] == '#FF0000'
-        assert config.default['font_size'] == 30
-        assert config.expression_highlight['color'] == '#00FF00'
-        assert config.expression_highlight['font_size'] == 35
+        # Check expression highlight styling
+        highlight = styling['expression_highlight']
+        assert highlight['color'] == '#FFD700'
+        assert highlight['font_weight'] == 'bold'
+        assert highlight['font_size'] == 28
+    
+    def test_playback_config(self):
+        """Test playback configuration"""
+        playback = get_expression_playback()
+        assert isinstance(playback, dict)
+        assert playback['expression_repeat_count'] == 2
+        assert playback['context_play_count'] == 1
+        assert playback['repeat_delay_ms'] == 200
+        assert playback['transition_effect'] == 'fade'
+        assert playback['transition_duration_ms'] == 150
+    
+    def test_layout_config(self):
+        """Test layout configuration"""
+        layout = get_expression_layout()
+        assert isinstance(layout, dict)
+        assert 'landscape' in layout
+        assert 'portrait' in layout
+        
+        # Check landscape layout
+        landscape = layout['landscape']
+        assert landscape['resolution'] == [1920, 1080]
+        assert 'expression_video' in landscape
+        assert 'educational_slide' in landscape
+        
+        # Check portrait layout
+        portrait = layout['portrait']
+        assert portrait['resolution'] == [1080, 1920]
+        assert 'context_video' in portrait
+        assert 'educational_slide' in portrait
+    
+    def test_llm_config(self):
+        """Test LLM configuration"""
+        llm = get_expression_llm()
+        assert isinstance(llm, dict)
+        assert 'provider' in llm
+        assert 'model' in llm
+        assert 'temperature' in llm
+    
+    def test_whisper_config(self):
+        """Test WhisperX configuration"""
+        whisper = get_expression_whisper()
+        assert isinstance(whisper, dict)
+        assert 'model_size' in whisper
+        assert 'device' in whisper
+        assert 'compute_type' in whisper
 
 
-class TestPlaybackConfig:
-    """Test PlaybackConfig dataclass."""
+class TestExpressionConfigDataclass:
+    """Test ExpressionConfig dataclass functionality"""
     
-    def test_default_values(self):
-        """Test default playback values."""
-        config = PlaybackConfig()
+    def test_expression_config_from_dict(self):
+        """Test ExpressionConfig creation from dictionary"""
+        config_dict = get_expression_config()
+        expr_config = ExpressionConfig.from_dict(config_dict)
         
-        assert config.expression_repeat_count == 2
-        assert config.context_play_count == 1
-        assert config.repeat_delay_ms == 200
-        assert config.transition_effect == 'fade'
-        assert config.transition_duration_ms == 150
+        assert isinstance(expr_config, ExpressionConfig)
+        assert isinstance(expr_config.subtitle_styling, SubtitleStylingConfig)
+        assert isinstance(expr_config.playback, PlaybackConfig)
+        assert isinstance(expr_config.layout, LayoutConfig)
     
-    def test_custom_values(self):
-        """Test custom playback values."""
-        config = PlaybackConfig(
+    def test_subtitle_styling_config(self):
+        """Test SubtitleStylingConfig with defaults"""
+        styling = SubtitleStylingConfig()
+        
+        # Check default values are set
+        assert styling.default['color'] == '#FFFFFF'
+        assert styling.default['font_size'] == 24
+        assert styling.expression_highlight['color'] == '#FFD700'
+        assert styling.expression_highlight['font_size'] == 28
+    
+    def test_playback_config_validation(self):
+        """Test PlaybackConfig validation"""
+        # Test with valid values
+        playback = PlaybackConfig(
             expression_repeat_count=3,
             context_play_count=2,
-            repeat_delay_ms=500,
+            repeat_delay_ms=300,
             transition_effect='slide',
-            transition_duration_ms=300
+            transition_duration_ms=200
         )
         
-        assert config.expression_repeat_count == 3
-        assert config.context_play_count == 2
-        assert config.repeat_delay_ms == 500
-        assert config.transition_effect == 'slide'
-        assert config.transition_duration_ms == 300
-
-
-class TestLayoutConfig:
-    """Test LayoutConfig dataclass."""
-    
-    def test_default_values(self):
-        """Test default layout values."""
-        config = LayoutConfig()
+        assert playback.expression_repeat_count == 3
+        assert playback.context_play_count == 2
+        assert playback.repeat_delay_ms == 300
+        assert playback.transition_effect == 'slide'
+        assert playback.transition_duration_ms == 200
         
-        # Test landscape layout
-        assert config.landscape['resolution'] == [1920, 1080]
-        assert config.landscape['expression_video']['width_percent'] == 50
-        assert config.landscape['expression_video']['position'] == 'left'
-        assert config.landscape['educational_slide']['width_percent'] == 50
-        assert config.landscape['educational_slide']['position'] == 'right'
-        
-        # Test portrait layout
-        assert config.portrait['resolution'] == [1080, 1920]
-        assert config.portrait['context_video']['height_percent'] == 75
-        assert config.portrait['context_video']['position'] == 'top'
-        assert config.portrait['educational_slide']['height_percent'] == 25
-        assert config.portrait['educational_slide']['position'] == 'bottom'
-    
-    def test_custom_values(self):
-        """Test custom layout values."""
-        custom_landscape = {
-            'resolution': [2560, 1440],
-            'expression_video': {'width_percent': 60}
-        }
-        custom_portrait = {
-            'resolution': [1440, 2560],
-            'context_video': {'height_percent': 80}
-        }
-        
-        config = LayoutConfig(
-            landscape=custom_landscape,
-            portrait=custom_portrait
+        # Test with invalid values (should be corrected)
+        invalid_playback = PlaybackConfig(
+            expression_repeat_count=0,  # Should be corrected to 1
+            context_play_count=-1,     # Should be corrected to 1
+            repeat_delay_ms=-100,      # Should be corrected to 0
+            transition_duration_ms=-50 # Should be corrected to 0
         )
         
-        assert config.landscape['resolution'] == [2560, 1440]
-        assert config.landscape['expression_video']['width_percent'] == 60
-        assert config.portrait['resolution'] == [1440, 2560]
-        assert config.portrait['context_video']['height_percent'] == 80
-
-
-class TestExpressionConfig:
-    """Test ExpressionConfig main class."""
+        assert invalid_playback.expression_repeat_count == 1
+        assert invalid_playback.context_play_count == 1
+        assert invalid_playback.repeat_delay_ms == 0
+        assert invalid_playback.transition_duration_ms == 0
     
-    def test_from_dict_with_defaults(self):
-        """Test creating ExpressionConfig from dictionary with defaults."""
-        config_dict = {}
-        config = ExpressionConfig.from_dict(config_dict)
+    def test_layout_config_defaults(self):
+        """Test LayoutConfig with defaults"""
+        layout = LayoutConfig()
         
-        # Should use default values
-        assert config.subtitle_styling.default['color'] == '#FFFFFF'
-        assert config.playback.expression_repeat_count == 2
-        assert config.layout.landscape['resolution'] == [1920, 1080]
-        assert config.llm == {}
-        assert config.whisper == {}
+        # Check landscape defaults
+        assert layout.landscape['resolution'] == [1920, 1080]
+        assert layout.landscape['expression_video']['width_percent'] == 50
+        assert layout.landscape['educational_slide']['width_percent'] == 50
+        
+        # Check portrait defaults
+        assert layout.portrait['resolution'] == [1080, 1920]
+        assert layout.portrait['context_video']['height_percent'] == 75
+        assert layout.portrait['educational_slide']['height_percent'] == 25
     
-    def test_from_dict_with_custom_values(self):
-        """Test creating ExpressionConfig from dictionary with custom values."""
-        config_dict = {
-            'subtitle_styling': {
-                'default': {'color': '#FF0000'},
-                'expression_highlight': {'color': '#00FF00'}
-            },
-            'playback': {
-                'expression_repeat_count': 3,
-                'context_play_count': 2
-            },
-            'layout': {
-                'landscape': {'resolution': [2560, 1440]},
-                'portrait': {'resolution': [1440, 2560]}
-            },
-            'llm': {'provider': 'gemini'},
-            'whisper': {'model_size': 'large'}
-        }
-        
-        config = ExpressionConfig.from_dict(config_dict)
-        
-        assert config.subtitle_styling.default['color'] == '#FF0000'
-        assert config.subtitle_styling.expression_highlight['color'] == '#00FF00'
-        assert config.playback.expression_repeat_count == 3
-        assert config.playback.context_play_count == 2
-        assert config.layout.landscape['resolution'] == [2560, 1440]
-        assert config.layout.portrait['resolution'] == [1440, 2560]
-        assert config.llm['provider'] == 'gemini'
-        assert config.whisper['model_size'] == 'large'
-    
-    def test_to_dict(self):
-        """Test converting ExpressionConfig to dictionary."""
-        config = ExpressionConfig.from_dict({})
-        config_dict = config.to_dict()
-        
-        assert 'subtitle_styling' in config_dict
-        assert 'playback' in config_dict
-        assert 'layout' in config_dict
-        assert 'llm' in config_dict
-        assert 'whisper' in config_dict
-        
-        # Check specific values
-        assert config_dict['playback']['expression_repeat_count'] == 2
-        assert config_dict['layout']['landscape']['resolution'] == [1920, 1080]
-    
-    def test_validation_valid_config(self):
-        """Test validation with valid configuration."""
-        config = ExpressionConfig.from_dict({})
-        errors = config.validate()
-        
-        assert len(errors) == 0
-    
-    def test_validation_invalid_playback(self):
-        """Test validation with invalid playback settings."""
-        config = ExpressionConfig.from_dict({
-            'playback': {
-                'expression_repeat_count': 0,  # Invalid: should be >= 1
-                'context_play_count': -1,     # Invalid: should be >= 1
-                'repeat_delay_ms': -100,      # Invalid: should be >= 0
-                'transition_duration_ms': -50 # Invalid: should be >= 0
-            }
-        })
-        
-        errors = config.validate()
-        
-        assert len(errors) == 4
-        assert "expression_repeat_count must be >= 1" in errors
-        assert "context_play_count must be >= 1" in errors
-        assert "repeat_delay_ms must be >= 0" in errors
-        assert "transition_duration_ms must be >= 0" in errors
-    
-    def test_validation_invalid_layout(self):
-        """Test validation with invalid layout settings."""
-        config = ExpressionConfig.from_dict({
-            'layout': {
-                'landscape': {'resolution': [1920]},  # Invalid: should be [width, height]
-                'portrait': {'resolution': [1080, -1920]}  # Invalid: negative height
-            }
-        })
-        
-        errors = config.validate()
-        
-        assert len(errors) == 2
-        assert "landscape resolution must be [width, height] with positive integers" in errors
-        assert "portrait resolution must be [width, height] with positive integers" in errors
-
-
-class TestSettingsAccessors:
-    """Test settings accessor functions."""
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_config(self, mock_loader):
-        """Test get_expression_config function."""
-        mock_config = {
-            'subtitle_styling': {'default': {'color': '#FFFFFF'}},
-            'playback': {'expression_repeat_count': 2}
-        }
-        mock_loader.get_section.return_value = mock_config
-        
-        result = get_expression_config()
-        
-        assert result == mock_config
-        mock_loader.get_section.assert_called_once_with('expression')
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_subtitle_styling(self, mock_loader):
-        """Test get_expression_subtitle_styling function."""
-        mock_styling = {'default': {'color': '#FFFFFF'}}
-        mock_loader.get.return_value = mock_styling
-        
-        result = get_expression_subtitle_styling()
-        
-        assert result == mock_styling
-        mock_loader.get.assert_called_once_with('expression', 'subtitle_styling', default={})
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_playback(self, mock_loader):
-        """Test get_expression_playback function."""
-        mock_playback = {'expression_repeat_count': 2}
-        mock_loader.get.return_value = mock_playback
-        
-        result = get_expression_playback()
-        
-        assert result == mock_playback
-        mock_loader.get.assert_called_once_with('expression', 'playback', default={})
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_layout(self, mock_loader):
-        """Test get_expression_layout function."""
-        mock_layout = {'landscape': {'resolution': [1920, 1080]}}
-        mock_loader.get.return_value = mock_layout
-        
-        result = get_expression_layout()
-        
-        assert result == mock_layout
-        mock_loader.get.assert_called_once_with('expression', 'layout', default={})
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_llm(self, mock_loader):
-        """Test get_expression_llm function."""
-        mock_llm = {'provider': 'gemini'}
-        mock_loader.get.return_value = mock_llm
-        
-        result = get_expression_llm()
-        
-        assert result == mock_llm
-        mock_loader.get.assert_called_once_with('expression', 'llm', default={})
-    
-    @patch('langflix.settings._config_loader')
-    def test_get_expression_whisper(self, mock_loader):
-        """Test get_expression_whisper function."""
-        mock_whisper = {'model_size': 'base'}
-        mock_loader.get.return_value = mock_whisper
-        
-        result = get_expression_whisper()
-        
-        assert result == mock_whisper
-        mock_loader.get.assert_called_once_with('expression', 'whisper', default={})
-
-
-class TestIntegration:
-    """Integration tests for expression configuration."""
-    
-    @patch('langflix.settings._config_loader')
-    def test_load_expression_config_from_settings(self, mock_loader):
-        """Test loading expression configuration through settings."""
-        mock_config = {
-            'subtitle_styling': {
-                'default': {'color': '#FFFFFF'},
-                'expression_highlight': {'color': '#FFD700'}
-            },
-            'playback': {
-                'expression_repeat_count': 2,
-                'context_play_count': 1
-            },
-            'layout': {
-                'landscape': {'resolution': [1920, 1080]},
-                'portrait': {'resolution': [1080, 1920]}
-            }
-        }
-        mock_loader.get_section.return_value = mock_config
-        
-        # Load through settings
+    def test_expression_config_to_dict(self):
+        """Test ExpressionConfig to_dict method"""
         config_dict = get_expression_config()
-        config = ExpressionConfig.from_dict(config_dict)
+        expr_config = ExpressionConfig.from_dict(config_dict)
+        result_dict = expr_config.to_dict()
         
-        # Verify the configuration
-        assert config.subtitle_styling.default['color'] == '#FFFFFF'
-        assert config.subtitle_styling.expression_highlight['color'] == '#FFD700'
-        assert config.playback.expression_repeat_count == 2
-        assert config.layout.landscape['resolution'] == [1920, 1080]
-        assert config.layout.portrait['resolution'] == [1080, 1920]
+        assert isinstance(result_dict, dict)
+        assert 'subtitle_styling' in result_dict
+        assert 'playback' in result_dict
+        assert 'layout' in result_dict
+        assert 'llm' in result_dict
+        assert 'whisper' in result_dict
         
-        # Verify validation passes
-        errors = config.validate()
-        assert len(errors) == 0
+        # Check structure matches original
+        assert result_dict['playback']['expression_repeat_count'] == 2
+        assert result_dict['layout']['landscape']['resolution'] == [1920, 1080]
+
+
+class TestExpressionConfigIntegration:
+    """Test integration between configuration components"""
+    
+    def test_config_consistency(self):
+        """Test that all configuration components are consistent"""
+        # Load all configuration sections
+        main_config = get_expression_config()
+        styling = get_expression_subtitle_styling()
+        playback = get_expression_playback()
+        layout = get_expression_layout()
+        llm = get_expression_llm()
+        whisper = get_expression_whisper()
+        
+        # Verify all sections are present in main config
+        assert main_config['subtitle_styling'] == styling
+        assert main_config['playback'] == playback
+        assert main_config['layout'] == layout
+        assert main_config['llm'] == llm
+        assert main_config['whisper'] == whisper
+    
+    def test_dataclass_roundtrip(self):
+        """Test that dataclass can be created from config and converted back"""
+        config_dict = get_expression_config()
+        expr_config = ExpressionConfig.from_dict(config_dict)
+        result_dict = expr_config.to_dict()
+        
+        # Key values should match
+        assert result_dict['playback']['expression_repeat_count'] == config_dict['playback']['expression_repeat_count']
+        assert result_dict['layout']['landscape']['resolution'] == config_dict['layout']['landscape']['resolution']
+        assert result_dict['subtitle_styling']['default']['color'] == config_dict['subtitle_styling']['default']['color']

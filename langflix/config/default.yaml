@@ -180,7 +180,7 @@ tts:
     model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model for high-quality synthesis
     response_format: "wav"  # Audio format (WAV for new API)
     # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
-    speaking_rate: "medium" 
+    speaking_rate: "high" 
     # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%" or semitones like "-2st"
     pitch: "-2st"  # SSML pitch: one semitone lower for more natural sound
     # Voice selection for TTS generation (uses Gemini voices from https://ai.google.dev/gemini-api/docs/speech-generation#voices)

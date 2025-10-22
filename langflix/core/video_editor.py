@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from .models import ExpressionAnalysis
 from langflix import settings
+from langflix.settings import get_expression_subtitle_styling
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,77 @@ class VideoEditor:
         """Register a temporary file for cleanup later"""
         self._temp_files.append(file_path)
     
+    def _get_subtitle_style_config(self) -> Dict[str, Any]:
+        """Get subtitle styling configuration from expression settings"""
+        try:
+            styling_config = get_expression_subtitle_styling()
+            return styling_config
+        except Exception as e:
+            logger.warning(f"Failed to load expression subtitle styling: {e}, using defaults")
+            return {
+                'default': {
+                    'color': '#FFFFFF',
+                    'font_size': 24,
+                    'font_weight': 'normal',
+                    'background_color': '#000000',
+                    'background_opacity': 0.7
+                },
+                'expression_highlight': {
+                    'color': '#FFD700',
+                    'font_size': 28,
+                    'font_weight': 'bold',
+                    'background_color': '#1A1A1A',
+                    'background_opacity': 0.85
+                }
+            }
+    
+    def _convert_color_to_ass(self, color_hex: str) -> str:
+        """Convert hex color to ASS format (BGR format)"""
+        # Remove # if present
+        color_hex = color_hex.lstrip('#')
+        # Convert to BGR format for ASS
+        r = int(color_hex[0:2], 16)
+        g = int(color_hex[2:4], 16)
+        b = int(color_hex[4:6], 16)
+        # ASS uses BGR format
+        return f"&H{b:02x}{g:02x}{r:02x}"
+    
+    def _generate_subtitle_style_string(self, is_expression: bool = False) -> str:
+        """Generate ASS style string from expression configuration"""
+        styling_config = self._get_subtitle_style_config()
+        
+        if is_expression:
+            style_config = styling_config.get('expression_highlight', {})
+        else:
+            style_config = styling_config.get('default', {})
+        
+        # Extract style properties
+        color = style_config.get('color', '#FFFFFF')
+        font_size = style_config.get('font_size', 24)
+        font_weight = style_config.get('font_weight', 'normal')
+        background_color = style_config.get('background_color', '#000000')
+        background_opacity = style_config.get('background_opacity', 0.7)
+        
+        # Convert colors to ASS format
+        primary_color = self._convert_color_to_ass(color)
+        outline_color = self._convert_color_to_ass(background_color)
+        
+        # Calculate outline width based on font size
+        outline_width = max(2, font_size // 12)
+        
+        # Generate ASS style string
+        style_parts = [
+            f"FontSize={font_size}",
+            f"PrimaryColour={primary_color}",
+            f"OutlineColour={outline_color}",
+            f"Outline={outline_width}",
+            f"Bold={1 if font_weight == 'bold' else 0}",
+            f"BackColour={primary_color}",
+            f"BorderStyle=3"
+        ]
+        
+        return ",".join(style_parts)
+    
     def _get_tts_cache_key(self, text: str, expression_index: int) -> str:
         """Generate cache key for TTS audio"""
         # Normalize text to ensure consistent cache keys
@@ -330,12 +402,15 @@ class VideoEditor:
                     self._register_temp_file(temp_subtitle_file)
                     self._create_dual_language_subtitle_file(subtitle_file, temp_subtitle_file)
                     
-                    # Add subtitles using the subtitle file
+                    # Add subtitles using the subtitle file with expression styling
+                    subtitle_style = self._generate_subtitle_style_string(is_expression=False)
+                    logger.info(f"Using subtitle style: {subtitle_style}")
+                    
                     (
                         ffmpeg
                         .input(str(video_path))
                         .output(str(output_path),
-                               vf=f"subtitles={temp_subtitle_file}:force_style='FontSize=19,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2'",
+                               vf=f"subtitles={temp_subtitle_file}:force_style='{subtitle_style}'",
                                vcodec='libx264',
                                acodec='copy',
                                preset='fast')
@@ -481,13 +556,27 @@ class VideoEditor:
             
             clean_translation = clean_text_for_ffmpeg(translation_text)
             
-            # Simple drawtext overlay for target language only
+            # Simple drawtext overlay for target language only with expression styling
             font_file_option = self._get_font_option()
             
             video_args = self._get_video_output_args()
             
+            # Get styling configuration
+            styling_config = self._get_subtitle_style_config()
+            default_style = styling_config.get('default', {})
+            
+            font_size = default_style.get('font_size', settings.get_font_size())
+            font_color = default_style.get('color', '#FFFFFF')
+            
+            # Convert hex color to ffmpeg format
+            color_hex = font_color.lstrip('#')
+            r = int(color_hex[0:2], 16)
+            g = int(color_hex[2:4], 16)
+            b = int(color_hex[4:6], 16)
+            ffmpeg_color = f"0x{b:02x}{g:02x}{r:02x}"
+            
             subtitle_filter = (
-                f"drawtext=text='{clean_translation}':fontsize={settings.get_font_size()}:fontcolor=white:"
+                f"drawtext=text='{clean_translation}':fontsize={font_size}:fontcolor={ffmpeg_color}:"
                 f"{font_file_option}"
                 f"x=(w-text_w)/2:y=h-70"
             )

@@ -75,6 +75,29 @@ class ExpressionAnalysis(BaseModel):
         default="",
         description="Additional context about when and how to use this expression"
     )
+    
+    # Phase 2: Expression ranking fields
+    educational_value_score: float = Field(
+        default=5.0,
+        description="Educational value score (0-10) for ranking expressions",
+        ge=0.0,
+        le=10.0
+    )
+    frequency: int = Field(
+        default=1,
+        description="Frequency of the expression in the content",
+        ge=1
+    )
+    context_relevance: float = Field(
+        default=5.0,
+        description="Relevance of the context to the expression (0-10)",
+        ge=0.0,
+        le=10.0
+    )
+    ranking_score: float = Field(
+        default=0.0,
+        description="Calculated ranking score for expression selection"
+    )
 
     model_config = {
         "json_schema_extra": {

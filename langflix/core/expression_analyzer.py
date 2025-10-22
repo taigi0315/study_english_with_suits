@@ -470,3 +470,143 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, gener
     # If we get here, all retries failed
     logger.error(f"All {max_retries + 1} API attempts failed. Last error: {last_error}")
     raise last_error
+
+
+def _remove_duplicates(expressions: List[ExpressionAnalysis]) -> List[ExpressionAnalysis]:
+    """
+    Remove duplicate expressions using fuzzy string matching.
+    
+    Args:
+        expressions: List of ExpressionAnalysis objects
+        
+    Returns:
+        List of unique expressions
+    """
+    try:
+        from rapidfuzz import fuzz
+    except ImportError:
+        logger.warning("rapidfuzz not installed, skipping duplicate removal")
+        return expressions
+    
+    # Get fuzzy match threshold from settings (default: 85)
+    llm_config = settings.get_llm_config()
+    ranking_config = llm_config.get('ranking', {})
+    threshold = ranking_config.get('fuzzy_match_threshold', 85)
+    
+    unique = []
+    for expr in expressions:
+        is_duplicate = False
+        for existing in unique:
+            # Compare expressions using fuzzy matching
+            similarity = fuzz.ratio(expr.expression.lower(), existing.expression.lower())
+            if similarity > threshold:
+                logger.info(f"Removing duplicate: '{expr.expression}' (similar to '{existing.expression}', similarity: {similarity}%)")
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            unique.append(expr)
+    
+    logger.info(f"Removed {len(expressions) - len(unique)} duplicate expressions")
+    return unique
+
+
+def calculate_expression_score(
+    expression: ExpressionAnalysis,
+    difficulty_weight: float = 0.4,
+    frequency_weight: float = 0.3,
+    educational_value_weight: float = 0.3
+) -> float:
+    """
+    Calculate ranking score for an expression.
+    
+    Score formula: difficulty × w1 + frequency × w2 + educational_value × w3
+    
+    Args:
+        expression: ExpressionAnalysis object
+        difficulty_weight: Weight for difficulty (default: 0.4)
+        frequency_weight: Weight for frequency (default: 0.3)
+        educational_value_weight: Weight for educational value (default: 0.3)
+        
+    Returns:
+        Calculated score (0-10)
+    """
+    # Normalize difficulty (1-10 to 0-10)
+    normalized_difficulty = (expression.difficulty - 1) / 9.0 * 10.0 if expression.difficulty else 5.0
+    
+    # Normalize frequency (log scale for better distribution)
+    import math
+    normalized_frequency = min(10.0, math.log(expression.frequency + 1) * 2.0)
+    
+    # Educational value score is already 0-10
+    educational_score = expression.educational_value_score
+    
+    # Calculate weighted score
+    score = (
+        normalized_difficulty * difficulty_weight +
+        normalized_frequency * frequency_weight +
+        educational_score * educational_value_weight
+    )
+    
+    return round(score, 2)
+
+
+def rank_expressions(
+    expressions: List[ExpressionAnalysis],
+    max_count: int = 5,
+    remove_duplicates: bool = True
+) -> List[ExpressionAnalysis]:
+    """
+    Rank and filter expressions by educational value.
+    
+    Process:
+    1. Remove duplicates using fuzzy matching (if enabled)
+    2. Calculate ranking scores for each expression
+    3. Sort by score (highest first)
+    4. Return top N expressions
+    
+    Args:
+        expressions: List of ExpressionAnalysis objects
+        max_count: Maximum number of expressions to return
+        remove_duplicates: Whether to remove duplicate expressions (default: True)
+        
+    Returns:
+        List of ranked expressions (top N)
+    """
+    if not expressions:
+        return []
+    
+    logger.info(f"Ranking {len(expressions)} expressions...")
+    
+    # Step 1: Remove duplicates
+    if remove_duplicates:
+        expressions = _remove_duplicates(expressions)
+    
+    # Step 2: Calculate scores
+    llm_config = settings.get_llm_config()
+    ranking_config = llm_config.get('ranking', {})
+    
+    difficulty_weight = ranking_config.get('difficulty_weight', 0.4)
+    frequency_weight = ranking_config.get('frequency_weight', 0.3)
+    educational_value_weight = ranking_config.get('educational_value_weight', 0.3)
+    
+    for expr in expressions:
+        expr.ranking_score = calculate_expression_score(
+            expr,
+            difficulty_weight=difficulty_weight,
+            frequency_weight=frequency_weight,
+            educational_value_weight=educational_value_weight
+        )
+        logger.info(f"Expression '{expr.expression}' score: {expr.ranking_score:.2f}")
+    
+    # Step 3: Sort by score (highest first)
+    ranked = sorted(expressions, key=lambda x: x.ranking_score, reverse=True)
+    
+    # Step 4: Return top N
+    result = ranked[:max_count]
+    
+    logger.info(f"Top {len(result)} expressions selected:")
+    for i, expr in enumerate(result, 1):
+        logger.info(f"  {i}. '{expr.expression}' (score: {expr.ranking_score:.2f})")
+    
+    return result

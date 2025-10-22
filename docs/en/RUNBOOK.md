@@ -1,9 +1,9 @@
 # LangFlix Runbook
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Last Updated:** October 21, 2025
 
-This runbook provides comprehensive operational guidance for running LangFlix in both CLI and API modes.
+This runbook provides comprehensive operational guidance for running LangFlix API service.
 
 ---
 
@@ -11,531 +11,375 @@ This runbook provides comprehensive operational guidance for running LangFlix in
 
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
-3. [CLI Mode](#cli-mode)
-4. [API Mode](#api-mode)
-5. [Configuration](#configuration)
-6. [Storage Backends](#storage-backends)
-7. [Database Integration](#database-integration)
-8. [Monitoring & Health Checks](#monitoring--health-checks)
-9. [Troubleshooting](#troubleshooting)
-10. [Deployment](#deployment)
+3. [API Service](#api-service)
+4. [Configuration](#configuration)
+5. [Storage Backends](#storage-backends)
+6. [Database Integration](#database-integration)
+7. [Monitoring & Health Checks](#monitoring--health-checks)
+8. [Troubleshooting](#troubleshooting)
+9. [Deployment](#deployment)
 
 ---
 
 ## Overview
 
-LangFlix supports two operational modes:
+LangFlix is now a **FastAPI-based web service** that provides:
 
-### CLI Mode (Development/Local)
-- **Purpose**: Local development, testing, single-user processing
-- **Storage**: Local filesystem (`output/` directory)
-- **Database**: Optional (metadata storage)
-- **Usage**: Command-line interface for direct video processing
-
-### API Mode (Production/Cloud)
+### API-First Architecture
 - **Purpose**: Web service, multi-user access, scalable processing
-- **Storage**: Google Cloud Storage (configurable)
-- **Database**: Required (job tracking, metadata)
+- **Storage**: Local filesystem (default) or Google Cloud Storage (configurable)
+- **Database**: Required (job tracking, metadata, user management)
 - **Usage**: RESTful API for asynchronous video processing
+- **Background Processing**: Long-running video processing tasks
+- **Job Management**: Real-time progress tracking and status monitoring
+
+### Key Features
+- ✅ **RESTful API**: Complete video processing via HTTP endpoints
+- ✅ **Background Tasks**: Asynchronous processing with job tracking
+- ✅ **Modular Architecture**: Clean separation of concerns
+- ✅ **Production Ready**: Tested with multiple episodes (S01E01-S01E06)
+- ✅ **Scalable**: Designed for cloud deployment
 
 ---
 
 ## Quick Start
 
-### CLI Mode
+### 1. Setup
 ```bash
-# Install dependencies
+# Clone repository
+git clone <repository-url>
+cd langflix
+
+# Setup environment
+make setup
+
+# Or manually:
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Set up environment
-cp env.example .env
-# Edit .env and add your API key
-
-# Run CLI
-python -m langflix.main --video-dir /path/to/video --subtitle /path/to/subtitle.srt
 ```
 
-### API Mode
+### 2. Start API Server
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure database and storage
-# Edit langflix/config/default.yaml
-
 # Start API server
-uvicorn langflix.api.main:app --host 0.0.0.0 --port 8000
+make api
+
+# Or manually:
+uvicorn langflix.api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### 3. Test API
+```bash
+# Health check
+curl http://127.0.0.1:8000/health
+
+# API documentation
+open http://127.0.0.1:8000/docs
+```
+
+### 4. Process Video
+```bash
+# Upload video and subtitle for processing
+curl -X POST "http://127.0.0.1:8000/api/v1/jobs" \
+  -F "video_file=@path/to/video.mkv" \
+  -F "subtitle_file=@path/to/subtitle.srt" \
+  -F "language_code=ko" \
+  -F "show_name=Suits" \
+  -F "episode_name=S01E01" \
+  -F "max_expressions=3" \
+  -F "language_level=intermediate"
+```
+
+### 5. Check Job Status
+```bash
+# Get job status
+curl "http://127.0.0.1:8000/api/v1/jobs/{job_id}"
+
+# List all jobs
+curl "http://127.0.0.1:8000/api/v1/jobs"
 ```
 
 ---
 
-## CLI Mode
+## API Service
 
-### Basic Usage
-
-```bash
-# Basic processing
-python -m langflix.main \
-  --video-dir /path/to/video/directory \
-  --subtitle /path/to/subtitle.srt \
-  --language en
-
-# With test mode (faster processing)
-python -m langflix.main \
-  --video-dir /path/to/video/directory \
-  --subtitle /path/to/subtitle.srt \
-  --language en \
-  --test
-
-# Skip short video generation
-python -m langflix.main \
-  --video-dir /path/to/video/directory \
-  --subtitle /path/to/subtitle.srt \
-  --language en \
-  --no-shorts
-```
-
-### CLI Configuration
-
-**Environment Variables:**
-```bash
-# Required
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Optional
-LANGFLIX_CONFIG_PATH=/path/to/custom/config.yaml
-```
-
-**Configuration File (`langflix/config/default.yaml`):**
-```yaml
-# Application settings
-app:
-  show_name: "Suits"
-  template_file: "expression_analysis_prompt.txt"
-
-# Database (optional for CLI)
-database:
-  enabled: false  # Set to true to enable database integration
-  url: "postgresql://user:password@localhost:5432/langflix"
-
-# Storage (CLI uses local by default)
-storage:
-  backend: "local"
-  local:
-    base_path: "output"
-```
-
-### CLI Output Structure
-
-```
-output/
-├── Suits/
-│   └── S01E01_720p.HDTV.x264/
-│       ├── metadata/
-│       │   └── expressions.json
-│       ├── shared/
-│       │   ├── context_videos/
-│       │   ├── context_slide_combined/
-│       │   └── short_videos/
-│       └── translations/
-│           └── ko/
-│               ├── subtitles/
-│               ├── slides/
-│               └── audio/
-```
-
----
-
-## API Mode
-
-### Starting the API Server
-
-```bash
-# Development mode
-uvicorn langflix.api.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production mode
-uvicorn langflix.api.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-### API Endpoints
+### Endpoints
 
 #### Health Check
 ```bash
-# Basic health check
-curl http://localhost:8000/health
-
-# Detailed health check
-curl http://localhost:8000/health/detailed
+GET /health
 ```
+Returns service health status.
 
-#### Job Management
+#### Create Job
 ```bash
-# Create processing job
-curl -X POST "http://localhost:8000/api/v1/jobs" \
-  -F "video_file=@video.mp4" \
-  -F "subtitle_file=@subtitles.srt" \
-  -F "language_code=en" \
-  -F "show_name=Suits" \
-  -F "episode_name=S01E01"
-
-# Check job status
-curl http://localhost:8000/api/v1/jobs/{job_id}
-
-# Get job results
-curl http://localhost:8000/api/v1/jobs/{job_id}/expressions
-
-# List all jobs
-curl http://localhost:8000/api/v1/jobs
+POST /api/v1/jobs
 ```
+Upload video and subtitle files for processing.
 
-### API Configuration
+**Parameters:**
+- `video_file`: Video file (MKV, MP4, AVI)
+- `subtitle_file`: Subtitle file (SRT)
+- `language_code`: Target language (ko, en, etc.)
+- `show_name`: Series name
+- `episode_name`: Episode identifier
+- `max_expressions`: Maximum expressions to extract (default: 3)
+- `language_level`: Difficulty level (beginner, intermediate, advanced)
+- `test_mode`: Enable test mode (optional)
+- `no_shorts`: Skip short video generation (optional)
 
-**Required Environment Variables:**
+#### Get Job Status
 ```bash
-# API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+GET /api/v1/jobs/{job_id}
+```
+Returns job status and progress.
 
-# Database (required for API)
-DATABASE_URL=postgresql://user:password@localhost:5432/langflix
+#### List Jobs
+```bash
+GET /api/v1/jobs
+```
+Returns list of all jobs.
 
-# Storage (GCS for production)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+### Job States
+- `PENDING`: Job created, waiting to start
+- `PROCESSING`: Currently processing
+- `COMPLETED`: Successfully completed
+- `FAILED`: Processing failed
+
+### Output Structure
+```
+output/
+└── {show_name}/
+    └── {episode_name}/
+        ├── context_videos/          # Context clips
+        ├── slides/                  # Educational slides
+        ├── tts_audio/              # TTS audio files
+        ├── final_videos/           # Final educational video
+        ├── short_videos/           # Short-form videos
+        ├── context_slide_combined/  # Individual short videos
+        └── subtitles/              # Subtitle files
 ```
 
-**API Configuration (`langflix/config/default.yaml`):**
+---
+
+## Configuration
+
+### Environment Variables
+```bash
+# Copy example environment file
+cp env.example .env
+
+# Edit .env file
+GEMINI_API_KEY=your_gemini_api_key
+DATABASE_URL=sqlite:///./langflix.db
+STORAGE_TYPE=local  # or gcs
+```
+
+### Configuration File
+Edit `langflix/config/default.yaml`:
+
 ```yaml
-# Database (required for API)
-database:
-  enabled: true
-  url: "postgresql://user:password@localhost:5432/langflix"
-
-# Storage (GCS for API)
-storage:
-  backend: "gcs"
-  gcs:
-    bucket_name: "langflix-storage"
-    credentials_path: "/path/to/service-account.json"
-
-# API settings
+# API Configuration
 api:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 8000
-  workers: 4
-  cors_origins: ["*"]
+  debug: false
+
+# Database Configuration
+database:
+  url: "sqlite:///./langflix.db"
+  echo: false
+
+# Storage Configuration
+storage:
+  type: "local"  # or "gcs"
+  local:
+    base_path: "./output"
+  gcs:
+    bucket_name: "your-bucket"
+    project_id: "your-project"
+
+# TTS Configuration
+tts:
+  provider: "gemini"  # or "google", "lemonfox"
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
 ```
 
 ---
 
 ## Storage Backends
 
-### LocalStorage (CLI Default)
-- **Purpose**: Local development, CLI usage
-- **Configuration**: `storage.backend: "local"`
-- **Files**: Stored in `output/` directory
-- **URLs**: Local file paths
+### Local Storage (Default)
+```yaml
+storage:
+  type: "local"
+  local:
+    base_path: "./output"
+```
 
-### GoogleCloudStorage (API Default)
-- **Purpose**: Production, cloud storage
-- **Configuration**: `storage.backend: "gcs"`
-- **Files**: Stored in GCS bucket
-- **URLs**: Public GCS URLs
-
-**GCS Setup:**
-```bash
-# Create GCS bucket
-gsutil mb gs://your-langflix-bucket
-
-# Set up service account
-# 1. Create service account in Google Cloud Console
-# 2. Download JSON key file
-# 3. Set GOOGLE_APPLICATION_CREDENTIALS environment variable
+### Google Cloud Storage
+```yaml
+storage:
+  type: "gcs"
+  gcs:
+    bucket_name: "your-langflix-bucket"
+    project_id: "your-gcp-project"
+    credentials_path: "/path/to/service-account.json"
 ```
 
 ---
 
 ## Database Integration
 
-### Database Setup
-
-**PostgreSQL Installation:**
+### SQLite (Development)
 ```bash
-# macOS
-brew install postgresql
-brew services start postgresql
-
-# Ubuntu/Debian
-sudo apt-get install postgresql postgresql-contrib
-sudo systemctl start postgresql
+# Default SQLite database
+DATABASE_URL=sqlite:///./langflix.db
 ```
 
-**Database Creation:**
-```sql
-CREATE DATABASE langflix;
-CREATE USER langflix_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE langflix TO langflix_user;
-```
-
-**Migration:**
+### PostgreSQL (Production)
 ```bash
-# Run database migrations
-alembic upgrade head
+# PostgreSQL database
+DATABASE_URL=postgresql://user:password@localhost/langflix
 ```
 
-### Database Models
+### Database Migrations
+```bash
+# Run migrations
+make db-migrate
 
-**Media Table:**
-- `id`: Unique identifier
-- `show_name`: TV show name
-- `episode_name`: Episode identifier
-- `language_code`: Language code (en, ko, etc.)
-- `subtitle_file_path`: Path to subtitle file
-- `video_file_path`: Path to video file
-- `created_at`: Creation timestamp
-
-**Expression Table:**
-- `id`: Unique identifier
-- `media_id`: Foreign key to Media
-- `expression`: The English expression
-- `translation`: Translation text
-- `dialogue`: Full dialogue context
-- `similar_expressions`: JSON array of similar expressions
-- `context_start_time`: Start time in seconds
-- `context_end_time`: End time in seconds
-
-**ProcessingJob Table:**
-- `id`: Unique identifier
-- `media_id`: Foreign key to Media
-- `status`: PENDING, PROCESSING, COMPLETED, FAILED
-- `job_type`: Type of processing job
-- `started_at`: Processing start time
-- `completed_at`: Processing completion time
-- `error_message`: Error details if failed
+# Reset database
+make db-reset
+```
 
 ---
 
 ## Monitoring & Health Checks
 
-### CLI Monitoring
-
-**Log Files:**
+### Health Endpoint
 ```bash
-# Check processing logs
-tail -f langflix.log
-
-# Check for errors
-grep ERROR langflix.log
+curl http://127.0.0.1:8000/health
 ```
 
-**Output Verification:**
+### Job Monitoring
 ```bash
-# Check if files were created
-ls -la output/ShowName/EpisodeName/
+# Check job status
+curl "http://127.0.0.1:8000/api/v1/jobs/{job_id}"
 
-# Verify video files
-ffprobe output/ShowName/EpisodeName/shared/context_videos/*.mkv
+# Monitor all jobs
+curl "http://127.0.0.1:8000/api/v1/jobs"
 ```
 
-### API Monitoring
-
-**Health Endpoints:**
+### Logs
 ```bash
-# Basic health
-curl http://localhost:8000/health
-
-# Detailed health (checks database, storage, LLM)
-curl http://localhost:8000/health/detailed
-```
-
-**API Documentation:**
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-**Logging:**
-```bash
-# API logs
+# View API logs
 tail -f logs/api.log
 
-# Database logs
-tail -f logs/database.log
+# View processing logs
+tail -f logs/processing.log
 ```
 
 ---
 
 ## Troubleshooting
 
-### Common CLI Issues
+### Common Issues
 
-**Problem**: `ModuleNotFoundError: No module named 'langflix'`
+#### 1. Port Already in Use
 ```bash
-# Solution: Install in development mode
-pip install -e .
+# Error: [Errno 48] Address already in use
+# Solution: Kill existing process or use different port
+lsof -ti:8000 | xargs kill -9
+# Or use different port:
+uvicorn langflix.api.main:app --host 127.0.0.1 --port 8001
 ```
 
-**Problem**: `ffmpeg not found`
+#### 2. Database Connection Issues
 ```bash
-# Solution: Install ffmpeg
-# macOS
-brew install ffmpeg
+# Check database connection
+python -c "from langflix.db.session import engine; print('Database connected')"
 
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
+# Reset database
+make db-reset
 ```
 
-**Problem**: `GEMINI_API_KEY not found`
+#### 3. Storage Issues
 ```bash
-# Solution: Set environment variable
-export GEMINI_API_KEY=your_api_key_here
-# Or add to .env file
+# Check storage configuration
+python -c "from langflix.storage.factory import get_storage; print('Storage configured')"
+
+# Test storage access
+python -c "from langflix.storage.local import LocalStorage; storage = LocalStorage(); print('Storage working')"
 ```
 
-### Common API Issues
-
-**Problem**: `Database connection failed`
+#### 4. API Key Issues
 ```bash
-# Solution: Check database configuration
-# 1. Verify PostgreSQL is running
-# 2. Check connection string in config
-# 3. Run migrations: alembic upgrade head
+# Check API key configuration
+python -c "from langflix.core.expression_analyzer import analyze_chunk; print('API key configured')"
 ```
 
-**Problem**: `Storage backend error`
+### Debug Mode
 ```bash
-# Solution: Check storage configuration
-# 1. Verify GCS credentials
-# 2. Check bucket permissions
-# 3. Test with LocalStorage first
+# Start with debug logging
+make dev
+
+# Or manually:
+uvicorn langflix.api.main:app --host 127.0.0.1 --port 8000 --reload --log-level debug
 ```
-
-**Problem**: `Job stuck in PROCESSING status`
-```bash
-# Solution: Check background task logs
-# 1. Check API logs for errors
-# 2. Verify database connection
-# 3. Check storage backend access
-```
-
-### Performance Issues
-
-**Slow Processing:**
-- Use `--test` flag for faster processing
-- Check available disk space
-- Verify API key quota limits
-
-**Memory Issues:**
-- Process shorter video segments
-- Increase system memory
-- Use test mode for development
 
 ---
 
 ## Deployment
 
-### CLI Deployment
-
-**Local Development:**
+### Development
 ```bash
-# Clone repository
-git clone https://github.com/your-repo/langflix.git
-cd langflix
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp env.example .env
-# Edit .env with your API key
-
-# Run processing
-python -m langflix.main --help
+# Local development
+make dev
 ```
 
-### API Deployment
-
-**Docker Deployment:**
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-EXPOSE 8000
-
-CMD ["uvicorn", "langflix.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-**Environment Variables:**
+### Production
 ```bash
-# Required
-GEMINI_API_KEY=your_api_key
-DATABASE_URL=postgresql://user:password@db:5432/langflix
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-
-# Optional
-LANGFLIX_CONFIG_PATH=/app/config/production.yaml
+# Production deployment
+uvicorn langflix.api.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-**Production Configuration:**
-```yaml
-# production.yaml
-database:
-  enabled: true
-  url: "${DATABASE_URL}"
-  pool_size: 10
-  max_overflow: 20
+### Docker
+```bash
+# Build Docker image
+docker build -t langflix-api .
 
-storage:
-  backend: "gcs"
-  gcs:
-    bucket_name: "langflix-production"
-    credentials_path: "${GOOGLE_APPLICATION_CREDENTIALS}"
-
-api:
-  host: "0.0.0.0"
-  port: 8000
-  workers: 4
-  cors_origins: ["https://yourdomain.com"]
+# Run container
+docker run -p 8000:8000 -e GEMINI_API_KEY=your_key langflix-api
 ```
+
+### Cloud Deployment
+See `docs/en/DEPLOYMENT.md` for detailed cloud deployment instructions.
 
 ---
 
-## Security Considerations
+## Makefile Commands
 
-### API Security
-- **Authentication**: Implement in Phase 2
-- **Rate Limiting**: Add in Phase 2
-- **Input Validation**: Already implemented
-- **CORS**: Configure for production domains
-
-### Data Security
-- **API Keys**: Store in environment variables
-- **Database**: Use connection pooling
-- **Storage**: Use service account authentication
-- **Logs**: Avoid logging sensitive data
+```bash
+make setup     # Setup virtual environment and install dependencies
+make api       # Start API server
+make dev       # Start API server in development mode
+make test      # Run all tests
+make test-unit # Run unit tests only
+make test-functional # Run functional tests only
+make test-api  # Run API tests only
+make db-migrate # Run database migrations
+make db-reset  # Reset database
+make clean     # Clean up generated files
+make help      # Show help message
+```
 
 ---
 
 ## Support
 
-### Documentation
-- **User Manual**: `docs/en/USER_MANUAL.md`
-- **API Reference**: `docs/en/API_REFERENCE.md`
-- **Troubleshooting**: `docs/en/TROUBLESHOOTING.md`
-
-### Getting Help
-- **Issues**: Create GitHub issue
-- **Logs**: Include relevant log files
-- **Configuration**: Share sanitized config files
-
----
-
-## Version History
-
-- **v1.0**: Initial release with CLI and API support
-- **v1.1**: Added short video generation
-- **v1.2**: Added Gemini TTS integration
-- **v1.3**: Added storage abstraction layer
-- **v1.4**: Added database integration
-- **v1.5**: Added FastAPI application scaffold
+For additional support:
+- Check the troubleshooting section above
+- Review logs in the `logs/` directory
+- Check API documentation at `http://127.0.0.1:8000/docs`
+- Review the API Reference in `docs/en/API_REFERENCE.md`

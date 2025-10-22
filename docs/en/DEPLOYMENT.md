@@ -1,9 +1,11 @@
 # LangFlix Deployment Guide
 
-**Version:** 1.0  
-**Last Updated:** October 19, 2025
+**Version:** 2.0  
+**Last Updated:** October 21, 2025
 
-This guide covers production deployment of LangFlix for scalable, reliable video processing operations.
+This guide covers production deployment of LangFlix API service for scalable, reliable video processing operations.
+
+**✅ Phase 1 Complete**: API-based deployment is now fully operational.
 
 ---
 
@@ -48,7 +50,24 @@ This guide covers production deployment of LangFlix for scalable, reliable video
 
 ## Local Deployment
 
-### 1. System Setup
+### 1. Quick Start (API Service)
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd langflix
+
+# Setup environment
+make setup
+
+# Start API server
+make api
+
+# Test API
+curl http://127.0.0.1:8000/health
+```
+
+### 2. System Setup
 
 **Ubuntu/Debian:**
 ```bash

@@ -1,8 +1,13 @@
 # LangFlix API Reference
 
+**Version:** 2.0  
+**Last Updated:** October 21, 2025
+
 ## Overview
 
 The LangFlix API provides RESTful endpoints for video processing, job management, and result retrieval. The API is built with FastAPI and provides automatic OpenAPI documentation.
+
+**✅ Phase 1 Complete**: All video processing features are now available via API endpoints.
 
 ## Base URL
 
@@ -13,6 +18,10 @@ http://localhost:8000
 ## Authentication
 
 Currently, the API does not require authentication. Authentication will be added in Phase 2.
+
+## Interactive Documentation
+
+Visit `http://localhost:8000/docs` for interactive API documentation with Swagger UI.
 
 ## API Endpoints
 

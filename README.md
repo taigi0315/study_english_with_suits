@@ -11,8 +11,9 @@ LangFlix automatically analyzes TV show subtitles to extract valuable English ex
 - 🚀 **FastAPI Service**: Complete REST API for video processing
 - 🎯 **All CLI Features**: Every CLI feature now available via API endpoints
 - 📱 **Background Processing**: Asynchronous video processing with job tracking
-- 🔧 **Production Ready**: Tested with multiple episodes (S01E01-S01E04)
+- 🔧 **Production Ready**: Tested with multiple episodes (S01E01-S01E06)
 - 📊 **Job Management**: Real-time progress tracking and status monitoring
+- 🧹 **Code Cleanup**: Removed CLI and duplicate code, clean modular structure
 
 ## 🚀 Features
 
@@ -34,20 +35,43 @@ LangFlix automatically analyzes TV show subtitles to extract valuable English ex
 
 ```
 langflix/
-├── langflix/                 # Main package
-│   ├── subtitle_parser.py    # SRT file parsing
+├── api/                     # FastAPI application
+│   ├── routes/              # API endpoints
+│   ├── models/             # Pydantic request/response models
+│   ├── tasks/              # Background task processing
+│   └── main.py             # FastAPI app initialization
+├── core/                   # Core business logic
 │   ├── expression_analyzer.py # Gemini API integration
-│   ├── video_processor.py    # Video file processing & clip extraction
+│   ├── video_processor.py     # Video file processing & clip extraction
+│   ├── video_editor.py       # Video editing & composition
+│   ├── subtitle_parser.py   # SRT file parsing
 │   ├── subtitle_processor.py # Subtitle processing & translation
-│   ├── prompts.py           # Advanced prompt engineering
-│   ├── templates/           # External prompt templates
-│   │   └── expression_analysis_prompt.txt
 │   ├── models.py            # Pydantic data models
-│   └── settings.py          # Configuration settings
-├── tests/                   # Test suite
-│   ├── unit/               # Unit tests
-│   ├── functional/         # End-to-end tests
-│   ├── integration/        # API integration tests
+│   └── language_config.py    # Language configuration
+├── services/               # Service layer
+│   └── output_manager.py    # Output directory management
+├── storage/                # Storage abstraction
+│   ├── local.py            # Local file storage
+│   └── gcs.py              # Google Cloud Storage
+├── db/                     # Database layer
+│   ├── models.py           # SQLAlchemy models
+│   ├── crud.py             # Database operations
+│   └── migrations/         # Database migrations
+├── tts/                    # Text-to-Speech clients
+│   ├── gemini_client.py    # Gemini TTS
+│   ├── google_client.py    # Google TTS
+│   └── lemonfox_client.py  # LemonFox TTS
+├── config/                 # Configuration
+│   ├── config_loader.py    # Configuration management
+│   └── default.yaml        # Default settings
+├── utils/                  # Utilities
+│   └── prompts.py          # Advanced prompt engineering
+├── templates/              # Prompt templates
+│   └── expression_analysis_prompt.txt
+└── tests/                  # Test suite
+    ├── unit/              # Unit tests
+    ├── functional/        # End-to-end tests
+    ├── integration/       # API integration tests
 │   ├── step_by_step/       # Step-by-step workflow tests
 │   └── test_output/        # Generated test files
 ├── assets/                  # Media assets

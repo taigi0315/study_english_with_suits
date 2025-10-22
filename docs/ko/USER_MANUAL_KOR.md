@@ -752,7 +752,38 @@ expression:
     max_tokens: 2000
     chunk_size: 50
     overlap: 5
+    max_expressions_per_chunk: 5  # 청크당 최대 표현식 수
 ```
+
+#### 표현식 랭킹 설정
+
+**Phase 2**: 어떤 표현식이 선택될지 제어하는 표현식 랭킹 시스템 설정:
+
+```yaml
+llm:
+  ranking:
+    difficulty_weight: 0.4           # 난이도 가중치 (0-1)
+    frequency_weight: 0.3             # 빈도 가중치 (0-1)
+    educational_value_weight: 0.3     # 교육적 가치 가중치 (0-1)
+    fuzzy_match_threshold: 85         # 중복 감지를 위한 유사도 임계값 (0-100)
+```
+
+**랭킹 알고리즘**:
+```
+점수 = 난이도 × 0.4 + log(빈도) × 0.3 + 교육적_가치 × 0.3
+```
+
+**매개변수**:
+- **difficulty_weight**: 도전적인 표현식의 우선순위 (기본값: 0.4)
+- **frequency_weight**: 일반적인 표현식의 우선순위 (기본값: 0.3)
+- **educational_value_weight**: 교육적 가치의 우선순위 (기본값: 0.3)
+- **fuzzy_match_threshold**: 중복 감지를 위한 유사도 퍼센트 (기본값: 85)
+
+**팁**:
+- difficulty_weight 높임 → 더 고급 표현식
+- frequency_weight 높임 → 더 일반적인 표현식
+- educational_value_weight 높임 → 더 교육적으로 가치 있는 표현식
+- fuzzy_match_threshold 낮춤 → 더 적극적인 중복 제거
 
 #### WhisperX 설정
 

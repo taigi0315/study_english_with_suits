@@ -29,6 +29,10 @@ PyYAML>=6.0
 python-dotenv>=1.0.0
 inflect>=6.0.0
 
+# Phase 2: Subtitle processing & expression ranking
+chardet>=5.0.0  # Encoding detection
+rapidfuzz>=3.0.0  # Fuzzy string matching for duplicate removal
+
 # Video processing
 ffmpeg-python>=0.2.0
 Pillow>=10.2.0

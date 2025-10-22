@@ -63,6 +63,13 @@ llm:
   temperature: 0.1
   top_p: 0.8
   top_k: 40
+  
+  # Expression ranking configuration (Phase 2)
+  ranking:
+    difficulty_weight: 0.4           # Weight for difficulty level (0-1)
+    frequency_weight: 0.3             # Weight for expression frequency (0-1)
+    educational_value_weight: 0.3     # Weight for educational value (0-1)
+    fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
 
 # ============================================================================
 # Language Proficiency Levels
@@ -277,6 +284,7 @@ expression:
     max_tokens: 2000
     chunk_size: 50
     overlap: 5
+    max_expressions_per_chunk: 5  # Maximum expressions to extract per chunk
   
   # WhisperX configuration for precise timestamps
   whisper:

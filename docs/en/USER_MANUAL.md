@@ -806,7 +806,38 @@ expression:
     max_tokens: 2000
     chunk_size: 50
     overlap: 5
+    max_expressions_per_chunk: 5  # Maximum expressions to extract per chunk
 ```
+
+#### Expression Ranking Configuration
+
+**Phase 2**: Configure the expression ranking system to control which expressions are selected:
+
+```yaml
+llm:
+  ranking:
+    difficulty_weight: 0.4           # Weight for difficulty level (0-1)
+    frequency_weight: 0.3             # Weight for expression frequency (0-1)
+    educational_value_weight: 0.3     # Weight for educational value (0-1)
+    fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
+```
+
+**Ranking Algorithm**:
+```
+score = difficulty × 0.4 + log(frequency) × 0.3 + educational_value × 0.3
+```
+
+**Parameters**:
+- **difficulty_weight**: How much to prioritize challenging expressions (default: 0.4)
+- **frequency_weight**: How much to prioritize common expressions (default: 0.3)
+- **educational_value_weight**: How much to prioritize educational value (default: 0.3)
+- **fuzzy_match_threshold**: Similarity percentage for duplicate detection (default: 85)
+
+**Tips**:
+- Higher difficulty_weight → More advanced expressions
+- Higher frequency_weight → More common expressions
+- Higher educational_value_weight → More pedagogically valuable expressions
+- Lower fuzzy_match_threshold → More aggressive duplicate removal
 
 #### WhisperX Configuration
 

@@ -4,10 +4,23 @@
 
 LangFlix automatically analyzes TV show subtitles to extract valuable English expressions, idioms, and phrases, then creates educational content with contextual translations and definitions.
 
+## 🎉 Phase 1 Complete!
+
+**✅ API-based video processing is now fully operational!**
+
+- 🚀 **FastAPI Service**: Complete REST API for video processing
+- 🎯 **All CLI Features**: Every CLI feature now available via API endpoints
+- 📱 **Background Processing**: Asynchronous video processing with job tracking
+- 🔧 **Production Ready**: Tested with multiple episodes (S01E01-S01E04)
+- 📊 **Job Management**: Real-time progress tracking and status monitoring
+
 ## 🚀 Features
 
 - **Smart Subtitle Parsing**: Supports SRT subtitle files with automatic chunking
 - **AI-Powered Analysis**: Uses Google Gemini API for intelligent expression extraction
+- **Short Video Generation**: Creates 9:16 vertical videos optimized for social media
+- **Natural TTS Audio**: High-quality text-to-speech using Gemini TTS with SSML control
+- **Enhanced Educational Slides**: 5-section layout with full dialogue context
 - **Language Level Support**: Beginner, Intermediate, Advanced, and Mixed levels
 - **Video Processing**: Automatic video file mapping and precise clip extraction
 - **Dual-Language Subtitles**: Generates synchronized subtitles with translations
@@ -374,7 +387,13 @@ python tests/functional/manual_prompt_test.py 2
 
 ### 🎉 **CORE PIPELINE COMPLETE - READY FOR PRODUCTION USE**
 
-**Recent Achievements (January 18, 2025):**
+**Recent Achievements (October 2025):**
+- ✅ **Short Video Generation**: 9:16 vertical videos for social media platforms
+- ✅ **Gemini TTS Integration**: Natural-sounding speech with SSML control
+- ✅ **Enhanced Educational Slides**: 5-section layout with full dialogue context
+- ✅ **Smart Subtitle Matching**: Handles truncated filenames automatically
+- ✅ **Configuration Refactoring**: Cleaner, more maintainable code
+- ✅ **Comprehensive Documentation**: Updated guides and API references
 - ✅ **End-to-End Pipeline**: Single command processes entire workflow
 - ✅ **Language Level Support**: Beginner, Intermediate, Advanced, Mixed levels
 - ✅ **LLM Output Review**: Save and analyze AI responses for debugging
@@ -444,23 +463,23 @@ python run_tests.py all --coverage
 ## 📚 Documentation
 
 ### User Guides
-- [User Manual](docs/USER_MANUAL.md) - Complete usage guide (English)
-- [User Manual 한국어](docs/USER_MANUAL_KOR.md) - 완전한 사용 가이드 (한국어)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions (English)
-- [Troubleshooting Guide 한국어](docs/TROUBLESHOOTING_KOR.md) - 일반적인 문제와 해결책 (한국어)
+- [User Manual](docs/en/USER_MANUAL.md) - Complete usage guide (English)
+- [User Manual 한국어](docs/ko/USER_MANUAL_KOR.md) - 완전한 사용 가이드 (한국어)
+- [Troubleshooting Guide](docs/en/TROUBLESHOOTING.md) - Common issues and solutions (English)
+- [Troubleshooting Guide 한국어](docs/ko/TROUBLESHOOTING_KOR.md) - 일반적인 문제와 해결책 (한국어)
 - [Setup Guide](SETUP_GUIDE.md) - Detailed installation instructions
 
 ### Technical Documentation
-- [API Reference](docs/API_REFERENCE.md) - Programmatic usage guide (English)
-- [API Reference 한국어](docs/API_REFERENCE_KOR.md) - 프로그래밍 사용 가이드 (한국어)
+- [API Reference](docs/en/API_REFERENCE.md) - Programmatic usage guide (English)
+- [API Reference 한국어](docs/ko/API_REFERENCE_KOR.md) - 프로그래밍 사용 가이드 (한국어)
 - [Development Diary](docs/development_diary.md) - Progress tracking
 - [System Design](docs/system_design_and_development_plan.md) - Technical architecture
 
 ### Advanced Topics
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production setup (English)
-- [Deployment Guide 한국어](docs/DEPLOYMENT_KOR.md) - 프로덕션 설정 (한국어)
-- [Performance Guide](docs/PERFORMANCE.md) - Optimization tips (English)
-- [Performance Guide 한국어](docs/PERFORMANCE_KOR.md) - 최적화 팁 (한국어)
+- [Deployment Guide](docs/en/DEPLOYMENT.md) - Production setup (English)
+- [Deployment Guide 한국어](docs/ko/DEPLOYMENT_KOR.md) - 프로덕션 설정 (한국어)
+- [Performance Guide](docs/en/PERFORMANCE.md) - Optimization tips (English)
+- [Performance Guide 한국어](docs/ko/PERFORMANCE_KOR.md) - 최적화 팁 (한국어)
 
 ## 🤝 Contributing
 

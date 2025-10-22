@@ -116,6 +116,200 @@ Error: GEMINI_API_KEY environment variable not set
 
 ---
 
+## TTS Issues
+
+### Problem: No TTS audio generated
+
+**Symptoms:**
+- Educational slides have no audio
+- Short videos missing TTS audio
+- Silent fallback audio used instead
+
+**Causes:**
+- Missing or invalid `GEMINI_API_KEY`
+- API quota exceeded
+- Network connectivity issues
+- Invalid TTS configuration
+
+**Solutions:**
+
+1. **Check API Key:**
+   ```bash
+   echo $GEMINI_API_KEY
+   # Should show your API key
+   ```
+
+2. **Verify API Key in .env file:**
+   ```bash
+   # Add to .env file in project root
+   GEMINI_API_KEY=your_actual_api_key_here
+   ```
+
+3. **Check API Quota:**
+   - Visit [Google AI Studio](https://aistudio.google.com/)
+   - Check your usage and quota limits
+   - Wait for quota reset if exceeded
+
+4. **Test TTS Configuration:**
+   ```yaml
+   tts:
+     enabled: true
+     provider: "google"
+     google:
+       model_name: "gemini-2.5-flash-preview-tts"
+       response_format: "wav"
+   ```
+
+**Technical Details:**
+- TTS uses Gemini 2.5 Flash TTS model
+- Requires `GEMINI_API_KEY` environment variable
+- Fallback to silence audio if TTS fails
+- Check logs for specific error messages
+
+### Problem: TTS audio sounds robotic or unnatural
+
+**Symptoms:**
+- TTS voice sounds mechanical
+- Poor pronunciation quality
+- Inconsistent speech patterns
+
+**Solutions:**
+
+1. **Adjust SSML Settings:**
+   ```yaml
+   tts:
+     google:
+       speaking_rate: "slow"    # Try: x-slow, slow, medium, fast, x-fast
+       pitch: "-4st"            # Try: x-low, low, medium, high, x-high, or semitones like "-2st"
+   ```
+
+2. **Try Different Voices:**
+   ```yaml
+   tts:
+     google:
+       alternate_voices: ["Despina", "Puck", "Kore"]
+   ```
+
+3. **Use Full Dialogue Context:**
+   - TTS now uses complete dialogue sentences
+   - Provides better context for natural pronunciation
+
+### Problem: TTS audio missing in short videos
+
+**Symptoms:**
+- Short videos have context audio but no TTS
+- Educational slides not playing TTS audio
+- Audio timeline incomplete
+
+**Solutions:**
+
+1. **Check TTS Configuration:**
+   ```yaml
+   tts:
+     enabled: true
+     repeat_count: 2  # Number of TTS repetitions
+   ```
+
+2. **Verify Audio Timeline:**
+   - Context audio + TTS audio (repeated)
+   - 0.5s pauses between TTS repetitions
+   - Total duration = context + (TTS × repeat_count) + gaps
+
+3. **Check Short Video Settings:**
+   ```yaml
+   short_video:
+     enabled: true
+   ```
+
+---
+
+## Short Video Issues
+
+### Problem: Short videos not created
+
+**Symptoms:**
+- No `short_videos/` directory in output
+- Missing batched video files
+- Only educational videos created
+
+**Causes:**
+- Short video feature disabled
+- Configuration issues
+- Processing errors
+
+**Solutions:**
+
+1. **Enable Short Videos:**
+   ```yaml
+   short_video:
+     enabled: true
+     resolution: "1080x1920"
+     target_duration: 120
+   ```
+
+2. **Check CLI Flags:**
+   ```bash
+   # Default: short videos enabled
+   python -m langflix.main --subtitle "file.srt"
+   
+   # If using --no-shorts, remove it
+   python -m langflix.main --subtitle "file.srt"
+   ```
+
+3. **Verify Output Structure:**
+   ```
+   output/Series/Episode/translations/ko/
+   ├── context_slide_combined/  # Educational videos
+   └── short_videos/            # Short format videos
+   ```
+
+### Problem: Wrong aspect ratio in short videos
+
+**Symptoms:**
+- Short videos not 9:16 format
+- Incorrect resolution
+- Poor mobile viewing experience
+
+**Solutions:**
+
+1. **Check Resolution Setting:**
+   ```yaml
+   short_video:
+     resolution: "1080x1920"  # 9:16 vertical format
+   ```
+
+2. **Verify Video Layout:**
+   - Upper half: Context video (1080x960)
+   - Lower half: Educational slide (1080x960)
+   - Combined: 1080x1920 (9:16)
+
+### Problem: Short video audio issues
+
+**Symptoms:**
+- Missing audio in short videos
+- Audio sync problems
+- Incomplete audio timeline
+
+**Solutions:**
+
+1. **Check Audio Timeline:**
+   - Context audio plays during video portion
+   - TTS audio plays after context ends
+   - Freeze frame on context video during TTS
+
+2. **Verify TTS Settings:**
+   ```yaml
+   tts:
+     repeat_count: 2  # TTS repetitions in short videos
+   ```
+
+3. **Check Audio Processing:**
+   - Context audio + TTS audio combined
+   - 0.5s pauses between TTS repetitions
+   - Total duration matches video length
+
+---
+
 ## API and LLM Issues
 
 ### Problem: API Timeout (504 Gateway Timeout)

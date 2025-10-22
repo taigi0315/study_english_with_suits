@@ -6,7 +6,7 @@ This module defines SQLAlchemy models for storing metadata and structured data.
 
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, CheckConstraint, func
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, CheckConstraint, func, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -54,6 +54,13 @@ class Expression(Base):
     context_video_path = Column(Text)        # Reference to storage backend
     slide_video_path = Column(Text)         # Reference to storage backend
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # New fields for expression-based learning
+    difficulty = Column(Integer)              # 1-10 difficulty level
+    category = Column(String(50))             # idiom, slang, formal, etc.
+    educational_value = Column(Text)          # Educational value explanation
+    usage_notes = Column(Text)                # Additional usage context
+    score = Column(Float)                     # Ranking score for selection
     
     # Relationships
     media = relationship("Media", back_populates="expressions")

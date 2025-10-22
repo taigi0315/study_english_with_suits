@@ -66,6 +66,36 @@ def get_language_levels() -> Dict[str, Any]:
     return _config_loader.get_section('language_levels') or {}
 
 
+def get_expression_config() -> Dict[str, Any]:
+    """Get expression configuration section"""
+    return _config_loader.get_section('expression') or {}
+
+
+def get_expression_subtitle_styling() -> Dict[str, Any]:
+    """Get expression subtitle styling configuration"""
+    return _config_loader.get('expression', 'subtitle_styling', default={})
+
+
+def get_expression_playback() -> Dict[str, Any]:
+    """Get expression playback configuration"""
+    return _config_loader.get('expression', 'playback', default={})
+
+
+def get_expression_layout() -> Dict[str, Any]:
+    """Get expression layout configuration"""
+    return _config_loader.get('expression', 'layout', default={})
+
+
+def get_expression_llm() -> Dict[str, Any]:
+    """Get expression LLM configuration"""
+    return _config_loader.get('expression', 'llm', default={})
+
+
+def get_expression_whisper() -> Dict[str, Any]:
+    """Get expression WhisperX configuration"""
+    return _config_loader.get('expression', 'whisper', default={})
+
+
 # ============================================================================
 # App Settings
 # ============================================================================

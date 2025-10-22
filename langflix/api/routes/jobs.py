@@ -284,7 +284,7 @@ async def process_video_task(
             try:
                 # Get context videos with subtitles (created by educational sequence)
                 context_videos_dir = paths['language']['context_videos']
-                context_videos = sorted(list(context_videos_dir.glob("context_*.mkv")))
+                context_videos = list(context_videos_dir.glob("context_*.mkv"))
                 
                 logger.info(f"Found {len(context_videos)} context videos for short video creation")
                 
@@ -303,12 +303,24 @@ async def process_video_task(
                     logger.info(f"Context video mapping: {list(context_video_map.keys())}")
                     
                     for i, expression in enumerate(expressions):
+                        # Find matching context video by expression name
                         # Sanitize expression name to match filename format
-                        safe_expression_name = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()[:30]
+                        safe_expression_name = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip().replace(' ', '_')
                         logger.info(f"Looking for context video: context_{safe_expression_name}.mkv")
                         
+                        # Try exact match first
+                        context_video = None
                         if safe_expression_name in context_video_map:
                             context_video = context_video_map[safe_expression_name]
+                        else:
+                            # Try partial match
+                            for expr_name, video in context_video_map.items():
+                                if safe_expression_name.lower() in expr_name.lower() or expr_name.lower() in safe_expression_name.lower():
+                                    context_video = video
+                                    logger.info(f"Found partial match: {expr_name} for {safe_expression_name}")
+                                    break
+                        
+                        if context_video:
                             logger.info(f"Creating short format video {i+1}/{len(expressions)}: {expression.expression}")
                             logger.info(f"Using context video: {context_video.name}")
                             

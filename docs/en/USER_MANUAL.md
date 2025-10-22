@@ -715,6 +715,142 @@ echo $GEMINI_API_KEY
 
 ---
 
+## Expression-Based Learning Configuration
+
+LangFlix now supports advanced expression-based learning features with comprehensive configuration options.
+
+### Expression Configuration
+
+The expression configuration system allows you to customize subtitle styling, video playback, and layout settings for optimal learning experiences.
+
+#### Subtitle Styling
+
+Configure how expressions are highlighted in videos:
+
+```yaml
+expression:
+  subtitle_styling:
+    default:
+      color: '#FFFFFF'
+      font_family: 'Arial'
+      font_size: 24
+      font_weight: 'normal'
+      background_color: '#000000'
+      background_opacity: 0.7
+      position: 'bottom'
+      margin_bottom: 50
+    expression_highlight:
+      color: '#FFD700'
+      font_weight: 'bold'
+      font_size: 28
+      background_color: '#1A1A1A'
+      background_opacity: 0.85
+      animation: 'fade_in'
+      duration_ms: 300
+```
+
+#### Video Playback Settings
+
+Control how expressions are repeated for better learning:
+
+```yaml
+expression:
+  playback:
+    expression_repeat_count: 2      # How many times to repeat the expression
+    context_play_count: 1           # How many times to play the context
+    repeat_delay_ms: 200             # Delay between repetitions
+    transition_effect: 'fade'         # Transition between clips
+    transition_duration_ms: 150     # Duration of transitions
+```
+
+#### Layout Configuration
+
+Define layouts for different video formats:
+
+```yaml
+expression:
+  layout:
+    landscape:
+      resolution: [1920, 1080]
+      expression_video:
+        width_percent: 50
+        position: 'left'
+        padding: 10
+      educational_slide:
+        width_percent: 50
+        position: 'right'
+        padding: 10
+    portrait:
+      resolution: [1080, 1920]
+      context_video:
+        height_percent: 75
+        position: 'top'
+        padding: 5
+      educational_slide:
+        height_percent: 25
+        position: 'bottom'
+        padding: 5
+```
+
+#### LLM Configuration
+
+Configure the AI model for expression extraction:
+
+```yaml
+expression:
+  llm:
+    provider: gemini
+    model: gemini-1.5-pro
+    api_key: ${GEMINI_API_KEY}
+    temperature: 0.7
+    max_tokens: 2000
+    chunk_size: 50
+    overlap: 5
+```
+
+#### WhisperX Configuration
+
+Configure precise timestamp detection:
+
+```yaml
+expression:
+  whisper:
+    model_size: base
+    device: cpu
+    compute_type: float32
+    language: null
+    fuzzy_threshold: 0.85
+    buffer_start: 0.2
+    buffer_end: 0.2
+    cache_dir: ./cache/audio
+    batch_size: 16
+```
+
+### Expression Database Fields
+
+The system now tracks additional metadata for each expression:
+
+- **difficulty**: 1-10 difficulty level
+- **category**: Expression type (idiom, slang, formal, etc.)
+- **educational_value**: Why this expression is valuable for learning
+- **usage_notes**: Additional context about usage
+- **score**: Ranking score for expression selection
+
+### Environment Variable Overrides
+
+Override any configuration using environment variables:
+
+```bash
+# Override subtitle styling
+export LANGFLIX_EXPRESSION_SUBTITLE_STYLING_DEFAULT_COLOR="#FF0000"
+
+# Override playback settings
+export LANGFLIX_EXPRESSION_PLAYBACK_EXPRESSION_REPEAT_COUNT=3
+
+# Override layout resolution
+export LANGFLIX_EXPRESSION_LAYOUT_LANDSCAPE_RESOLUTION="[2560,1440]"
+```
+
 ## Next Steps
 
 - Read [API Reference](API_REFERENCE.md) for programmatic usage

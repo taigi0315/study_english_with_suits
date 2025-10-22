@@ -8,7 +8,7 @@ import ffmpeg
 import logging
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from .models import ExpressionAnalysis
 from langflix import settings
 
@@ -30,6 +30,7 @@ class VideoEditor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self._temp_files = []  # Track temporary files for cleanup
+        self._tts_cache = {}  # Cache for TTS audio files to avoid duplicate generation
         self.language_code = language_code
         
         # Set up paths for different video types
@@ -202,6 +203,90 @@ class VideoEditor:
     def _register_temp_file(self, file_path: Path) -> None:
         """Register a temporary file for cleanup later"""
         self._temp_files.append(file_path)
+    
+    def _get_tts_cache_key(self, text: str, expression_index: int) -> str:
+        """Generate cache key for TTS audio"""
+        # Normalize text to ensure consistent cache keys
+        normalized_text = text.strip()
+        return f"{normalized_text}_{expression_index}"
+    
+    def _get_cached_tts(self, text: str, expression_index: int) -> Optional[Tuple[str, float]]:
+        """Get cached TTS audio if available"""
+        cache_key = self._get_tts_cache_key(text, expression_index)
+        logger.info(f"Checking cache for key: '{cache_key}' (text: '{text}', index: {expression_index})")
+        logger.info(f"Current cache keys: {list(self._tts_cache.keys())}")
+        
+        if cache_key in self._tts_cache:
+            cached_path, duration = self._tts_cache[cache_key]
+            if Path(cached_path).exists():
+                logger.info(f"✅ Using cached TTS for: '{text}' (duration: {duration:.2f}s)")
+                return cached_path, duration
+            else:
+                # Remove invalid cache entry
+                logger.warning(f"❌ Cached file not found, removing from cache: {cached_path}")
+                del self._tts_cache[cache_key]
+        else:
+            logger.info(f"❌ No cache found for key: '{cache_key}'")
+        return None
+    
+    def _cache_tts(self, text: str, expression_index: int, tts_path: str, duration: float) -> None:
+        """Cache TTS audio for reuse"""
+        cache_key = self._get_tts_cache_key(text, expression_index)
+        self._tts_cache[cache_key] = (tts_path, duration)
+        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{cache_key}'")
+    
+    def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:
+        """Create timeline from existing TTS audio file"""
+        try:
+            from langflix import settings
+            
+            # Get repeat count from settings
+            repeat_count = settings.get_tts_repeat_count()
+            
+            # Create timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
+            pause_duration = 1.0
+            gap_duration = 0.5
+            
+            # Calculate total duration
+            total_duration = pause_duration + (tts_duration * repeat_count) + (gap_duration * (repeat_count - 1)) + pause_duration
+            
+            # Create timeline audio file
+            timeline_filename = f"timeline_{self._sanitize_filename(tts_path.split('/')[-1])}"
+            timeline_path = tts_audio_dir / timeline_filename
+            
+            # Build FFmpeg filter for timeline
+            filters = []
+            
+            # Start with 1 second pause
+            filters.append(f"anullsrc=duration={pause_duration}")
+            
+            # Add TTS repetitions with gaps
+            for i in range(repeat_count):
+                filters.append(f"amovie={tts_path}")
+                if i < repeat_count - 1:  # Add gap between repetitions (except after last)
+                    filters.append(f"anullsrc=duration={gap_duration}")
+            
+            # End with 1 second pause
+            filters.append(f"anullsrc=duration={pause_duration}")
+            
+            # Concatenate all audio segments
+            filter_complex = "concat=n=" + str(len(filters)) + ":v=0:a=1[out]"
+            
+            # Apply the filter
+            (
+                ffmpeg
+                .filter_complex(filter_complex, *filters)
+                .output(str(timeline_path), map='[out]', acodec='pcm_s16le', ar=44100)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            logger.info(f"Created timeline from cached TTS: {total_duration:.2f}s")
+            return timeline_path, total_duration
+            
+        except Exception as e:
+            logger.error(f"Error creating timeline from cached TTS: {e}")
+            raise
     
     def _cleanup_temp_files(self) -> None:
         """Clean up all registered temporary files"""
@@ -1320,6 +1405,7 @@ class VideoEditor:
         """
         Generate single TTS audio and return path + duration.
         For short videos where we need to play TTS with custom timing.
+        Uses caching to avoid duplicate TTS generation.
         
         Args:
             text: Text to convert to speech
@@ -1328,6 +1414,11 @@ class VideoEditor:
         Returns:
             Tuple of (tts_audio_path, duration)
         """
+        # Check cache first
+        cached_result = self._get_cached_tts(text, expression_index)
+        if cached_result:
+            return cached_result
+        
         try:
             from langflix.tts.factory import create_tts_client
             from langflix import settings
@@ -1370,6 +1461,9 @@ class VideoEditor:
             
             logger.info(f"Generated single TTS with {selected_voice}: {tts_duration:.2f}s")
             
+            # Cache the TTS for reuse
+            self._cache_tts(text, expression_index, str(tts_path), tts_duration)
+            
             return str(tts_path), tts_duration
             
         except Exception as e:
@@ -1381,6 +1475,7 @@ class VideoEditor:
         Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
         Uses alternating voices between expressions (not within the same expression).
         Repeat count is configurable via settings.
+        Uses caching to avoid duplicate TTS generation.
         
         Args:
             text: Text to convert to speech
@@ -1392,6 +1487,16 @@ class VideoEditor:
         Returns:
             Tuple of (final_audio_path, total_duration)
         """
+        # Check cache first for the base TTS audio
+        cached_result = self._get_cached_tts(text, expression_index)
+        if cached_result:
+            # Use cached TTS and create timeline from it
+            cached_tts_path, cached_duration = cached_result
+            logger.info(f"Using cached TTS for timeline: '{text}' (duration: {cached_duration:.2f}s)")
+            
+            # Create timeline from cached TTS
+            return self._create_timeline_from_tts(cached_tts_path, cached_duration, tts_audio_dir, expression_index)
+        
         try:
             import tempfile
             import shutil
@@ -1496,6 +1601,9 @@ class VideoEditor:
                 
                 logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, {repeat_count} repetitions)")
                 
+                # Cache the base TTS for reuse
+                self._cache_tts(text, expression_index, str(temp_tts_path), tts_duration)
+                
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
                 if audio_format:
@@ -1562,6 +1670,7 @@ class VideoEditor:
                 logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
                 tts_text = tts_text[:MAX_TTS_CHARS]
             
+            logger.info(f"🔍 Calling _generate_single_tts for: '{tts_text}' (index: {expression_index})")
             tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
             logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             

@@ -661,6 +661,142 @@ python -m langflix.main --subtitle "file.srt" --language-level advanced
 
 ---
 
+## 표현식 기반 학습 설정
+
+LangFlix는 이제 포괄적인 설정 옵션을 통한 고급 표현식 기반 학습 기능을 지원합니다.
+
+### 표현식 설정
+
+표현식 설정 시스템을 통해 자막 스타일링, 비디오 재생, 레이아웃 설정을 최적의 학습 경험을 위해 커스터마이징할 수 있습니다.
+
+#### 자막 스타일링
+
+비디오에서 표현식이 어떻게 강조되는지 설정:
+
+```yaml
+expression:
+  subtitle_styling:
+    default:
+      color: '#FFFFFF'
+      font_family: 'Arial'
+      font_size: 24
+      font_weight: 'normal'
+      background_color: '#000000'
+      background_opacity: 0.7
+      position: 'bottom'
+      margin_bottom: 50
+    expression_highlight:
+      color: '#FFD700'
+      font_weight: 'bold'
+      font_size: 28
+      background_color: '#1A1A1A'
+      background_opacity: 0.85
+      animation: 'fade_in'
+      duration_ms: 300
+```
+
+#### 비디오 재생 설정
+
+더 나은 학습을 위해 표현식이 어떻게 반복되는지 제어:
+
+```yaml
+expression:
+  playback:
+    expression_repeat_count: 2      # 표현식을 몇 번 반복할지
+    context_play_count: 1           # 컨텍스트를 몇 번 재생할지
+    repeat_delay_ms: 200             # 반복 간 지연 시간
+    transition_effect: 'fade'         # 클립 간 전환 효과
+    transition_duration_ms: 150     # 전환 지속 시간
+```
+
+#### 레이아웃 설정
+
+다양한 비디오 형식에 대한 레이아웃 정의:
+
+```yaml
+expression:
+  layout:
+    landscape:
+      resolution: [1920, 1080]
+      expression_video:
+        width_percent: 50
+        position: 'left'
+        padding: 10
+      educational_slide:
+        width_percent: 50
+        position: 'right'
+        padding: 10
+    portrait:
+      resolution: [1080, 1920]
+      context_video:
+        height_percent: 75
+        position: 'top'
+        padding: 5
+      educational_slide:
+        height_percent: 25
+        position: 'bottom'
+        padding: 5
+```
+
+#### LLM 설정
+
+표현식 추출을 위한 AI 모델 설정:
+
+```yaml
+expression:
+  llm:
+    provider: gemini
+    model: gemini-1.5-pro
+    api_key: ${GEMINI_API_KEY}
+    temperature: 0.7
+    max_tokens: 2000
+    chunk_size: 50
+    overlap: 5
+```
+
+#### WhisperX 설정
+
+정확한 타임스탬프 감지를 위한 설정:
+
+```yaml
+expression:
+  whisper:
+    model_size: base
+    device: cpu
+    compute_type: float32
+    language: null
+    fuzzy_threshold: 0.85
+    buffer_start: 0.2
+    buffer_end: 0.2
+    cache_dir: ./cache/audio
+    batch_size: 16
+```
+
+### 표현식 데이터베이스 필드
+
+시스템은 이제 각 표현식에 대한 추가 메타데이터를 추적합니다:
+
+- **difficulty**: 1-10 난이도 수준
+- **category**: 표현식 유형 (관용구, 슬랭, 격식체 등)
+- **educational_value**: 이 표현식이 학습에 왜 가치 있는지
+- **usage_notes**: 사용에 대한 추가 컨텍스트
+- **score**: 표현식 선택을 위한 순위 점수
+
+### 환경 변수 오버라이드
+
+환경 변수를 사용하여 모든 설정을 오버라이드할 수 있습니다:
+
+```bash
+# 자막 스타일링 오버라이드
+export LANGFLIX_EXPRESSION_SUBTITLE_STYLING_DEFAULT_COLOR="#FF0000"
+
+# 재생 설정 오버라이드
+export LANGFLIX_EXPRESSION_PLAYBACK_EXPRESSION_REPEAT_COUNT=3
+
+# 레이아웃 해상도 오버라이드
+export LANGFLIX_EXPRESSION_LAYOUT_LANDSCAPE_RESOLUTION="[2560,1440]"
+```
+
 ## 다음 단계
 
 - 프로그래밍 방식 사용을 위한 [API_REFERENCE_KOR.md](API_REFERENCE_KOR.md) 읽기

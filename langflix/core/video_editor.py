@@ -8,9 +8,10 @@ import ffmpeg
 import logging
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from .models import ExpressionAnalysis
 from langflix import settings
+from langflix.settings import get_expression_subtitle_styling
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class VideoEditor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self._temp_files = []  # Track temporary files for cleanup
+        self._tts_cache = {}  # Cache for TTS audio files to avoid duplicate generation
         self.language_code = language_code
         
         # Set up paths for different video types
@@ -203,6 +205,161 @@ class VideoEditor:
         """Register a temporary file for cleanup later"""
         self._temp_files.append(file_path)
     
+    def _get_subtitle_style_config(self) -> Dict[str, Any]:
+        """Get subtitle styling configuration from expression settings"""
+        try:
+            styling_config = get_expression_subtitle_styling()
+            return styling_config
+        except Exception as e:
+            logger.warning(f"Failed to load expression subtitle styling: {e}, using defaults")
+            return {
+                'default': {
+                    'color': '#FFFFFF',
+                    'font_size': 24,
+                    'font_weight': 'normal',
+                    'background_color': '#000000',
+                    'background_opacity': 0.7
+                },
+                'expression_highlight': {
+                    'color': '#FFD700',
+                    'font_size': 28,
+                    'font_weight': 'bold',
+                    'background_color': '#1A1A1A',
+                    'background_opacity': 0.85
+                }
+            }
+    
+    def _convert_color_to_ass(self, color_hex: str) -> str:
+        """Convert hex color to ASS format (BGR format)"""
+        # Remove # if present
+        color_hex = color_hex.lstrip('#')
+        # Convert to BGR format for ASS
+        r = int(color_hex[0:2], 16)
+        g = int(color_hex[2:4], 16)
+        b = int(color_hex[4:6], 16)
+        # ASS uses BGR format
+        return f"&H{b:02x}{g:02x}{r:02x}"
+    
+    def _generate_subtitle_style_string(self, is_expression: bool = False) -> str:
+        """Generate ASS style string from expression configuration"""
+        styling_config = self._get_subtitle_style_config()
+        
+        if is_expression:
+            style_config = styling_config.get('expression_highlight', {})
+        else:
+            style_config = styling_config.get('default', {})
+        
+        # Extract style properties
+        color = style_config.get('color', '#FFFFFF')
+        font_size = style_config.get('font_size', 24)
+        font_weight = style_config.get('font_weight', 'normal')
+        background_color = style_config.get('background_color', '#000000')
+        background_opacity = style_config.get('background_opacity', 0.7)
+        
+        # Convert colors to ASS format
+        primary_color = self._convert_color_to_ass(color)
+        outline_color = self._convert_color_to_ass(background_color)
+        
+        # Calculate outline width based on font size
+        outline_width = max(2, font_size // 12)
+        
+        # Generate ASS style string
+        style_parts = [
+            f"FontSize={font_size}",
+            f"PrimaryColour={primary_color}",
+            f"OutlineColour={outline_color}",
+            f"Outline={outline_width}",
+            f"Bold={1 if font_weight == 'bold' else 0}",
+            f"BackColour={primary_color}",
+            f"BorderStyle=3"
+        ]
+        
+        return ",".join(style_parts)
+    
+    def _get_tts_cache_key(self, text: str, expression_index: int) -> str:
+        """Generate cache key for TTS audio"""
+        # Normalize text to ensure consistent cache keys
+        normalized_text = text.strip()
+        return f"{normalized_text}_{expression_index}"
+    
+    def _get_cached_tts(self, text: str, expression_index: int) -> Optional[Tuple[str, float]]:
+        """Get cached TTS audio if available"""
+        cache_key = self._get_tts_cache_key(text, expression_index)
+        logger.info(f"Checking cache for key: '{cache_key}' (text: '{text}', index: {expression_index})")
+        logger.info(f"Current cache keys: {list(self._tts_cache.keys())}")
+        
+        if cache_key in self._tts_cache:
+            cached_path, duration = self._tts_cache[cache_key]
+            if Path(cached_path).exists():
+                logger.info(f"✅ Using cached TTS for: '{text}' (duration: {duration:.2f}s)")
+                return cached_path, duration
+            else:
+                # Remove invalid cache entry
+                logger.warning(f"❌ Cached file not found, removing from cache: {cached_path}")
+                del self._tts_cache[cache_key]
+        else:
+            logger.info(f"❌ No cache found for key: '{cache_key}'")
+        return None
+    
+    def _cache_tts(self, text: str, expression_index: int, tts_path: str, duration: float) -> None:
+        """Cache TTS audio for reuse"""
+        cache_key = self._get_tts_cache_key(text, expression_index)
+        self._tts_cache[cache_key] = (tts_path, duration)
+        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{cache_key}'")
+    
+    def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:
+        """Create timeline from existing TTS audio file"""
+        try:
+            from langflix import settings
+            
+            # Get repeat count from settings
+            repeat_count = settings.get_tts_repeat_count()
+            
+            # Create timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
+            pause_duration = 1.0
+            gap_duration = 0.5
+            
+            # Calculate total duration
+            total_duration = pause_duration + (tts_duration * repeat_count) + (gap_duration * (repeat_count - 1)) + pause_duration
+            
+            # Create timeline audio file
+            timeline_filename = f"timeline_{self._sanitize_filename(tts_path.split('/')[-1])}"
+            timeline_path = tts_audio_dir / timeline_filename
+            
+            # Build FFmpeg filter for timeline
+            filters = []
+            
+            # Start with 1 second pause
+            filters.append(f"anullsrc=duration={pause_duration}")
+            
+            # Add TTS repetitions with gaps
+            for i in range(repeat_count):
+                filters.append(f"amovie={tts_path}")
+                if i < repeat_count - 1:  # Add gap between repetitions (except after last)
+                    filters.append(f"anullsrc=duration={gap_duration}")
+            
+            # End with 1 second pause
+            filters.append(f"anullsrc=duration={pause_duration}")
+            
+            # Concatenate all audio segments
+            filter_complex = "concat=n=" + str(len(filters)) + ":v=0:a=1[out]"
+            
+            # Apply the filter
+            (
+                ffmpeg
+                .filter_complex(filter_complex, *filters)
+                .output(str(timeline_path), map='[out]', acodec='pcm_s16le', ar=44100)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            logger.info(f"Created timeline from cached TTS: {total_duration:.2f}s")
+            return timeline_path, total_duration
+            
+        except Exception as e:
+            logger.error(f"Error creating timeline from cached TTS: {e}")
+            raise
+    
     def _cleanup_temp_files(self) -> None:
         """Clean up all registered temporary files"""
         for temp_file in self._temp_files:
@@ -245,12 +402,15 @@ class VideoEditor:
                     self._register_temp_file(temp_subtitle_file)
                     self._create_dual_language_subtitle_file(subtitle_file, temp_subtitle_file)
                     
-                    # Add subtitles using the subtitle file
+                    # Add subtitles using the subtitle file with expression styling
+                    subtitle_style = self._generate_subtitle_style_string(is_expression=False)
+                    logger.info(f"Using subtitle style: {subtitle_style}")
+                    
                     (
                         ffmpeg
                         .input(str(video_path))
                         .output(str(output_path),
-                               vf=f"subtitles={temp_subtitle_file}:force_style='FontSize=19,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2'",
+                               vf=f"subtitles={temp_subtitle_file}:force_style='{subtitle_style}'",
                                vcodec='libx264',
                                acodec='copy',
                                preset='fast')
@@ -396,13 +556,27 @@ class VideoEditor:
             
             clean_translation = clean_text_for_ffmpeg(translation_text)
             
-            # Simple drawtext overlay for target language only
+            # Simple drawtext overlay for target language only with expression styling
             font_file_option = self._get_font_option()
             
             video_args = self._get_video_output_args()
             
+            # Get styling configuration
+            styling_config = self._get_subtitle_style_config()
+            default_style = styling_config.get('default', {})
+            
+            font_size = default_style.get('font_size', settings.get_font_size())
+            font_color = default_style.get('color', '#FFFFFF')
+            
+            # Convert hex color to ffmpeg format
+            color_hex = font_color.lstrip('#')
+            r = int(color_hex[0:2], 16)
+            g = int(color_hex[2:4], 16)
+            b = int(color_hex[4:6], 16)
+            ffmpeg_color = f"0x{b:02x}{g:02x}{r:02x}"
+            
             subtitle_filter = (
-                f"drawtext=text='{clean_translation}':fontsize={settings.get_font_size()}:fontcolor=white:"
+                f"drawtext=text='{clean_translation}':fontsize={font_size}:fontcolor={ffmpeg_color}:"
                 f"{font_file_option}"
                 f"x=(w-text_w)/2:y=h-70"
             )
@@ -1320,6 +1494,7 @@ class VideoEditor:
         """
         Generate single TTS audio and return path + duration.
         For short videos where we need to play TTS with custom timing.
+        Uses caching to avoid duplicate TTS generation.
         
         Args:
             text: Text to convert to speech
@@ -1328,6 +1503,11 @@ class VideoEditor:
         Returns:
             Tuple of (tts_audio_path, duration)
         """
+        # Check cache first
+        cached_result = self._get_cached_tts(text, expression_index)
+        if cached_result:
+            return cached_result
+        
         try:
             from langflix.tts.factory import create_tts_client
             from langflix import settings
@@ -1370,6 +1550,9 @@ class VideoEditor:
             
             logger.info(f"Generated single TTS with {selected_voice}: {tts_duration:.2f}s")
             
+            # Cache the TTS for reuse
+            self._cache_tts(text, expression_index, str(tts_path), tts_duration)
+            
             return str(tts_path), tts_duration
             
         except Exception as e:
@@ -1381,6 +1564,7 @@ class VideoEditor:
         Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
         Uses alternating voices between expressions (not within the same expression).
         Repeat count is configurable via settings.
+        Uses caching to avoid duplicate TTS generation.
         
         Args:
             text: Text to convert to speech
@@ -1392,6 +1576,16 @@ class VideoEditor:
         Returns:
             Tuple of (final_audio_path, total_duration)
         """
+        # Check cache first for the base TTS audio
+        cached_result = self._get_cached_tts(text, expression_index)
+        if cached_result:
+            # Use cached TTS and create timeline from it
+            cached_tts_path, cached_duration = cached_result
+            logger.info(f"Using cached TTS for timeline: '{text}' (duration: {cached_duration:.2f}s)")
+            
+            # Create timeline from cached TTS
+            return self._create_timeline_from_tts(cached_tts_path, cached_duration, tts_audio_dir, expression_index)
+        
         try:
             import tempfile
             import shutil
@@ -1496,6 +1690,9 @@ class VideoEditor:
                 
                 logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, {repeat_count} repetitions)")
                 
+                # Cache the base TTS for reuse
+                self._cache_tts(text, expression_index, str(temp_tts_path), tts_duration)
+                
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
                 if audio_format:
@@ -1562,6 +1759,7 @@ class VideoEditor:
                 logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
                 tts_text = tts_text[:MAX_TTS_CHARS]
             
+            logger.info(f"🔍 Calling _generate_single_tts for: '{tts_text}' (index: {expression_index})")
             tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
             logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             

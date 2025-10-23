@@ -38,6 +38,10 @@ whisperx>=3.1.0  # Automatic Speech Recognition with word-level timestamps
 torch>=2.0.0  # PyTorch for WhisperX
 torchaudio>=2.0.0  # Audio processing for WhisperX
 
+# Phase 4: Media Processing & Slide Generation
+Pillow>=10.2.0  # Image processing for slide generation
+ffmpeg-python>=0.2.0  # Video processing and slicing
+
 # Video processing
 ffmpeg-python>=0.2.0
 Pillow>=10.2.0

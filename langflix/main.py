@@ -19,13 +19,13 @@ except ImportError:
     pass
 
 # Import our modules
-from .subtitle_parser import parse_srt_file, chunk_subtitles
-from .expression_analyzer import analyze_chunk
-from .video_processor import VideoProcessor
-from .subtitle_processor import SubtitleProcessor
-from .video_editor import VideoEditor
-from .output_manager import OutputManager, create_output_structure
-from .models import ExpressionAnalysis
+from .core.subtitle_parser import parse_srt_file, chunk_subtitles
+from .core.expression_analyzer import analyze_chunk
+from .core.video_processor import VideoProcessor
+from .core.subtitle_processor import SubtitleProcessor
+from .core.video_editor import VideoEditor
+from .services.output_manager import OutputManager, create_output_structure
+from .core.models import ExpressionAnalysis
 from . import settings
 
 # Database imports (optional)

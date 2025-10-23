@@ -1,9 +1,9 @@
 # LangFlix Runbook
 
-**Version:** 1.0  
-**Last Updated:** October 21, 2025
+**Version:** 2.0  
+**Last Updated:** January 28, 2025
 
-This runbook provides comprehensive operational guidance for running LangFlix in both CLI and API modes.
+This runbook provides comprehensive operational guidance for running LangFlix in both CLI and API modes, including the new Expression-Based Learning Feature with WhisperX integration and educational slide generation.
 
 ---
 
@@ -14,11 +14,12 @@ This runbook provides comprehensive operational guidance for running LangFlix in
 3. [CLI Mode](#cli-mode)
 4. [API Mode](#api-mode)
 5. [Configuration](#configuration)
-6. [Storage Backends](#storage-backends)
-7. [Database Integration](#database-integration)
-8. [Monitoring & Health Checks](#monitoring--health-checks)
-9. [Troubleshooting](#troubleshooting)
-10. [Deployment](#deployment)
+6. [Expression-Based Learning Feature](#expression-based-learning-feature)
+7. [Storage Backends](#storage-backends)
+8. [Database Integration](#database-integration)
+9. [Monitoring & Health Checks](#monitoring--health-checks)
+10. [Troubleshooting](#troubleshooting)
+11. [Deployment](#deployment)
 
 ---
 
@@ -223,6 +224,173 @@ api:
   port: 8000
   workers: 4
   cors_origins: ["*"]
+```
+
+---
+
+## Expression-Based Learning Feature
+
+The Expression-Based Learning Feature is a comprehensive system that automatically extracts educational expressions from media content, generates precise timestamps using WhisperX ASR, and creates educational slides and videos.
+
+### Key Components
+
+#### 1. Media Processing Pipeline
+- **MediaValidator**: Validates media files and extracts metadata using FFprobe
+- **ExpressionMediaSlicer**: Slices videos with precise timestamps from WhisperX
+- **SubtitleRenderer**: Renders subtitles with expression highlighting
+
+#### 2. Educational Content Generation
+- **SlideContentGenerator**: Uses Gemini API to generate educational content
+- **SlideTemplates**: 6 template types (expression, usage, cultural, grammar, pronunciation, similar)
+- **SlideRenderer**: Creates educational slides using PIL
+
+#### 3. WhisperX Integration
+- **AudioPreprocessor**: Extracts and preprocesses audio for WhisperX
+- **WhisperXClient**: Performs ASR with word-level timestamps
+- **TimestampAligner**: Aligns expressions with precise timestamps
+
+### Configuration
+
+**Expression Learning Settings:**
+```yaml
+expression:
+  # Media processing
+  media:
+    slicing:
+      quality: high
+      buffer_start: 0.2
+      buffer_end: 0.2
+      crf: 18
+      preset: slow
+      audio_bitrate: 256k
+    
+    subtitles:
+      style: expression_highlight
+      font_size: 24
+      font_color: '#FFFFFF'
+      background_color: '#000000'
+      highlight_color: '#FFD700'
+  
+  # Educational slides
+  slides:
+    templates:
+      expression:
+        background_color: '#1a1a1a'
+        text_color: '#ffffff'
+        font_family: 'DejaVu Sans'
+        font_size: 48
+        title_font_size: 72
+      # ... other templates
+    
+    generation:
+      max_examples: 4
+      max_similar_expressions: 5
+      include_cultural_notes: true
+      include_grammar_notes: true
+      include_pronunciation: true
+      slide_size: [1920, 1080]
+      output_format: 'PNG'
+      quality: 95
+  
+  # WhisperX ASR
+  whisper:
+    model_size: base
+    device: cpu
+    compute_type: float32
+    language: null
+    fuzzy_threshold: 0.85
+    buffer_start: 0.2
+    buffer_end: 0.2
+    cache_dir: ./cache/audio
+    batch_size: 16
+```
+
+### Usage Examples
+
+**CLI Mode with Expression Learning:**
+```bash
+# Process episode with expression learning
+python -m langflix.main \
+  --subtitle "assets/subtitles/Suits - 1x01.srt" \
+  --video "assets/media/Suits - 1x01.mp4" \
+  --max-expressions 5 \
+  --enable-whisperx \
+  --generate-slides
+```
+
+**API Mode with Expression Learning:**
+```bash
+# Start API server
+python -m langflix.api.main
+
+# Submit job with expression learning
+curl -X POST "http://localhost:8000/api/v1/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subtitle_path": "assets/subtitles/Suits - 1x01.srt",
+    "video_path": "assets/media/Suits - 1x01.mp4",
+    "max_expressions": 5,
+    "enable_whisperx": true,
+    "generate_slides": true
+  }'
+```
+
+### Performance Considerations
+
+**WhisperX Processing:**
+- **Processing Time**: ~2-3 seconds per minute of audio
+- **Memory Usage**: ~1-2GB RAM for base model
+- **Storage**: ~2GB for model and dependencies
+- **GPU Acceleration**: Significantly faster with CUDA
+
+**Slide Generation:**
+- **Content Generation**: ~5-10 seconds per expression (Gemini API)
+- **Slide Rendering**: ~1-2 seconds per slide
+- **Storage**: ~500KB per slide (PNG format)
+
+**Video Slicing:**
+- **Slicing Time**: ~2-5 seconds per expression clip
+- **Quality**: Configurable (low, medium, high, lossless)
+- **Output**: MP4 with optimized encoding
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **WhisperX Model Loading Failed**
+   ```bash
+   # Check CUDA availability
+   python -c "import torch; print(torch.cuda.is_available())"
+   
+   # Use CPU if GPU unavailable
+   # Set device: cpu in configuration
+   ```
+
+2. **Slide Generation Failed**
+   ```bash
+   # Check Gemini API key
+   echo $GEMINI_API_KEY
+   
+   # Verify API quota
+   # Check network connectivity
+   ```
+
+3. **Video Slicing Failed**
+   ```bash
+   # Check FFmpeg installation
+   ffmpeg -version
+   
+   # Verify video file format
+   ffprobe input_video.mp4
+   ```
+
+**Debug Mode:**
+```bash
+# Enable debug logging
+export LANGFLIX_LOG_LEVEL=DEBUG
+
+# Run with verbose output
+python -m langflix.main --verbose --debug
 ```
 
 ---

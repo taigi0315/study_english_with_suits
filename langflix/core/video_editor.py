@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from .models import ExpressionAnalysis
+from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
 
@@ -31,7 +32,8 @@ class VideoEditor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self._temp_files = []  # Track temporary files for cleanup
-        self._tts_cache = {}  # Cache for TTS audio files to avoid duplicate generation
+        self._tts_cache = {}  # Legacy cache for backward compatibility
+        self.cache_manager = get_cache_manager()  # Advanced cache manager
         self.language_code = language_code
         
         # Set up paths for different video types
@@ -283,29 +285,52 @@ class VideoEditor:
         return f"{normalized_text}_{expression_index}"
     
     def _get_cached_tts(self, text: str, expression_index: int) -> Optional[Tuple[str, float]]:
-        """Get cached TTS audio if available"""
-        cache_key = self._get_tts_cache_key(text, expression_index)
-        logger.info(f"Checking cache for key: '{cache_key}' (text: '{text}', index: {expression_index})")
-        logger.info(f"Current cache keys: {list(self._tts_cache.keys())}")
+        """Get cached TTS audio if available (enhanced with advanced cache)"""
+        # Try advanced cache first
+        cache_key = self.cache_manager.get_tts_key(text, "default", "en", expression_index)
+        cached_data = self.cache_manager.get(cache_key)
         
-        if cache_key in self._tts_cache:
-            cached_path, duration = self._tts_cache[cache_key]
+        if cached_data and isinstance(cached_data, dict):
+            tts_path = cached_data.get('path')
+            duration = cached_data.get('duration')
+            if tts_path and Path(tts_path).exists():
+                logger.info(f"✅ Using advanced cached TTS for: '{text}' (duration: {duration:.2f}s)")
+                return tts_path, duration
+        
+        # Fallback to legacy cache
+        legacy_cache_key = self._get_tts_cache_key(text, expression_index)
+        logger.info(f"Checking legacy cache for key: '{legacy_cache_key}' (text: '{text}', index: {expression_index})")
+        logger.info(f"Current legacy cache keys: {list(self._tts_cache.keys())}")
+        
+        if legacy_cache_key in self._tts_cache:
+            cached_path, duration = self._tts_cache[legacy_cache_key]
             if Path(cached_path).exists():
-                logger.info(f"✅ Using cached TTS for: '{text}' (duration: {duration:.2f}s)")
+                logger.info(f"✅ Using legacy cached TTS for: '{text}' (duration: {duration:.2f}s)")
                 return cached_path, duration
             else:
                 # Remove invalid cache entry
                 logger.warning(f"❌ Cached file not found, removing from cache: {cached_path}")
-                del self._tts_cache[cache_key]
+                del self._tts_cache[legacy_cache_key]
         else:
-            logger.info(f"❌ No cache found for key: '{cache_key}'")
+            logger.info(f"❌ No cache found for key: '{legacy_cache_key}'")
         return None
     
     def _cache_tts(self, text: str, expression_index: int, tts_path: str, duration: float) -> None:
-        """Cache TTS audio for reuse"""
-        cache_key = self._get_tts_cache_key(text, expression_index)
-        self._tts_cache[cache_key] = (tts_path, duration)
-        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{cache_key}'")
+        """Cache TTS audio for reuse (enhanced with advanced cache)"""
+        # Cache in advanced cache manager
+        cache_key = self.cache_manager.get_tts_key(text, "default", "en", expression_index)
+        cache_data = {
+            'path': tts_path,
+            'duration': duration,
+            'text': text,
+            'expression_index': expression_index
+        }
+        self.cache_manager.set(cache_key, cache_data, ttl=86400, persist_to_disk=True)  # 24 hours
+        
+        # Also cache in legacy cache for backward compatibility
+        legacy_cache_key = self._get_tts_cache_key(text, expression_index)
+        self._tts_cache[legacy_cache_key] = (tts_path, duration)
+        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{legacy_cache_key}'")
     
     def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:
         """Create timeline from existing TTS audio file"""

@@ -7,7 +7,7 @@ with word-level timestamp alignment.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 import torch
@@ -17,6 +17,7 @@ from langflix.asr.exceptions import (
     ModelLoadError,
     TranscriptionTimeoutError
 )
+from langflix.core.cache_manager import get_cache_manager
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ class WhisperXClient:
             language: Force language (None for auto-detect)
             batch_size: Batch size for processing
         """
+        self.cache_manager = get_cache_manager()
         if not WHISPERX_AVAILABLE:
             raise ModelLoadError(
                 "whisperx",
@@ -150,7 +152,7 @@ class WhisperXClient:
         timeout_seconds: int = 300
     ) -> WhisperXTranscript:
         """
-        Transcribe audio with word-level timestamps
+        Transcribe audio with word-level timestamps (with caching)
         
         Args:
             audio_path: Path to audio file
@@ -171,6 +173,18 @@ class WhisperXClient:
                 str(audio_path),
                 "Audio file does not exist"
             )
+        
+        # Check cache first
+        cache_key = self.cache_manager.get_whisperx_key(
+            str(audio_path), 
+            self.model_size, 
+            language or "auto"
+        )
+        cached_result = self.cache_manager.get(cache_key)
+        
+        if cached_result and isinstance(cached_result, dict):
+            logger.info(f"Using cached WhisperX result for: {audio_path}")
+            return self._parse_result(cached_result, cached_result.get('language', 'en'))
         
         try:
             logger.info(f"Starting WhisperX transcription: {audio_path}")
@@ -212,6 +226,15 @@ class WhisperXClient:
             
             # Parse results
             transcript = self._parse_result(aligned_result, detected_language)
+            
+            # Cache the result
+            cache_data = {
+                'segments': [asdict(seg) for seg in transcript.segments],
+                'word_timestamps': [asdict(word) for word in transcript.word_timestamps],
+                'language': transcript.language,
+                'duration': transcript.duration
+            }
+            self.cache_manager.set(cache_key, cache_data, ttl=86400, persist_to_disk=True)  # 24 hours
             
             logger.info(f"Transcription complete: {len(transcript.segments)} segments, "
                        f"{len(transcript.word_timestamps)} words")

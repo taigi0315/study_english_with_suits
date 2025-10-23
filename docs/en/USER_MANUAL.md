@@ -841,21 +841,61 @@ score = difficulty × 0.4 + log(frequency) × 0.3 + educational_value × 0.3
 
 #### WhisperX Configuration
 
-Configure precise timestamp detection:
+Configure precise timestamp detection for expression alignment:
 
 ```yaml
 expression:
   whisper:
-    model_size: base
-    device: cpu
-    compute_type: float32
-    language: null
-    fuzzy_threshold: 0.85
-    buffer_start: 0.2
-    buffer_end: 0.2
-    cache_dir: ./cache/audio
-    batch_size: 16
+    # Model settings
+    model_size: base          # WhisperX model size (tiny, base, small, medium, large)
+    device: cpu              # Processing device (cpu, cuda)
+    compute_type: float32     # Compute precision (float32, float16, int8)
+    language: null           # Force language (null for auto-detect)
+    
+    # Audio settings
+    sample_rate: 16000       # Target sample rate for WhisperX
+    channels: 1              # Number of audio channels (mono)
+    format: wav              # Audio format for processing
+    timeout: 300             # Processing timeout in seconds
+    
+    # Alignment settings
+    fuzzy_threshold: 0.85    # Fuzzy matching threshold for expression alignment
+    context_buffer: 0.5      # Context buffer around expressions (seconds)
+    batch_size: 16           # Batch size for processing
 ```
+
+**Model Settings:**
+- **model_size**: WhisperX model size affecting accuracy and speed
+  - `tiny`: Fastest, lowest accuracy (~39MB)
+  - `base`: Balanced speed and accuracy (recommended, ~74MB)
+  - `small`: Better accuracy, slower (~244MB)
+  - `medium`: High accuracy, much slower (~769MB)
+  - `large`: Highest accuracy, very slow (~1550MB)
+
+- **device**: Processing device for WhisperX
+  - `cpu`: CPU processing (slower, no GPU required)
+  - `cuda`: GPU processing (faster, requires CUDA)
+
+- **compute_type**: Numerical precision for processing
+  - `float32`: Standard precision (recommended)
+  - `float16`: Half precision (faster, may reduce accuracy)
+  - `int8`: Integer precision (fastest, may reduce accuracy)
+
+- **language**: Force specific language detection
+  - `null`: Auto-detect language (recommended)
+  - `en`: English, `ko`: Korean, `ja`: Japanese, `zh`: Chinese
+
+**Performance Considerations:**
+- **Processing Time**: ~2-3 seconds per minute of audio
+- **Memory Usage**: ~1-2GB RAM for base model
+- **Storage**: Models are cached locally after first download
+- **GPU Acceleration**: Significantly faster with CUDA support
+
+**System Requirements:**
+- **FFmpeg**: Required for audio extraction
+- **PyTorch**: Required for WhisperX models
+- **CUDA**: Optional, for GPU acceleration
+- **Storage**: ~2GB for base model and dependencies
 
 ### Expression Database Fields
 

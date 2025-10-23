@@ -33,6 +33,11 @@ inflect>=6.0.0
 chardet>=5.0.0  # Encoding detection
 rapidfuzz>=3.0.0  # Fuzzy string matching for duplicate removal
 
+# Phase 3: WhisperX ASR Integration
+whisperx>=3.1.0  # Automatic Speech Recognition with word-level timestamps
+torch>=2.0.0  # PyTorch for WhisperX
+torchaudio>=2.0.0  # Audio processing for WhisperX
+
 # Video processing
 ffmpeg-python>=0.2.0
 Pillow>=10.2.0

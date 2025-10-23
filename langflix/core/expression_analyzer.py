@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from langflix import settings
 from langflix.utils.prompts import get_prompt_for_chunk
 from .models import ExpressionAnalysisResponse, ExpressionAnalysis
+from .cache_manager import get_cache_manager
 
 import google.generativeai as genai
 
@@ -83,7 +84,7 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
 
 def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None) -> List[ExpressionAnalysis]:
     """
-    Analyzes a chunk of subtitles using Gemini API with structured output.
+    Analyzes a chunk of subtitles using Gemini API with structured output (with caching).
     
     Args:
         subtitle_chunk: List of subtitle dictionaries
@@ -96,6 +97,16 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         List of ExpressionAnalysis objects
     """
     try:
+        # Check cache first
+        cache_manager = get_cache_manager()
+        chunk_text = " ".join([sub.get('text', '') for sub in subtitle_chunk])
+        cache_key = cache_manager.get_expression_key(chunk_text, language_code)
+        cached_result = cache_manager.get(cache_key)
+        
+        if cached_result and isinstance(cached_result, list):
+            logger.info(f"Using cached expression analysis for chunk with {len(cached_result)} expressions")
+            return [ExpressionAnalysis(**expr) for expr in cached_result]
+        
         # Generate prompt
         prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
         
@@ -165,6 +176,10 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 
                 # Validate and filter expressions
                 validated_expressions = _validate_and_filter_expressions(expressions)
+                
+                # Cache the result
+                cache_data = [expr.dict() for expr in validated_expressions]
+                cache_manager.set(cache_key, cache_data, ttl=3600, persist_to_disk=True)  # 1 hour
                 
                 logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
                 return validated_expressions

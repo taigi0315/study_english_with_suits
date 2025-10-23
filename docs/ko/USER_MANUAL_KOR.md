@@ -787,21 +787,61 @@ llm:
 
 #### WhisperX 설정
 
-정확한 타임스탬프 감지를 위한 설정:
+표현식 정렬을 위한 정확한 타임스탬프 감지 설정:
 
 ```yaml
 expression:
   whisper:
-    model_size: base
-    device: cpu
-    compute_type: float32
-    language: null
-    fuzzy_threshold: 0.85
-    buffer_start: 0.2
-    buffer_end: 0.2
-    cache_dir: ./cache/audio
-    batch_size: 16
+    # 모델 설정
+    model_size: base          # WhisperX 모델 크기 (tiny, base, small, medium, large)
+    device: cpu              # 처리 장치 (cpu, cuda)
+    compute_type: float32     # 계산 정밀도 (float32, float16, int8)
+    language: null           # 언어 강제 설정 (null은 자동 감지)
+    
+    # 오디오 설정
+    sample_rate: 16000       # WhisperX용 대상 샘플 레이트
+    channels: 1              # 오디오 채널 수 (모노)
+    format: wav              # 처리용 오디오 형식
+    timeout: 300             # 처리 타임아웃 (초)
+    
+    # 정렬 설정
+    fuzzy_threshold: 0.85    # 표현식 정렬용 퍼지 매칭 임계값
+    context_buffer: 0.5      # 표현식 주변 컨텍스트 버퍼 (초)
+    batch_size: 16           # 처리 배치 크기
 ```
+
+**모델 설정:**
+- **model_size**: 정확도와 속도에 영향을 주는 WhisperX 모델 크기
+  - `tiny`: 가장 빠름, 낮은 정확도 (~39MB)
+  - `base`: 속도와 정확도 균형 (권장, ~74MB)
+  - `small`: 더 나은 정확도, 느림 (~244MB)
+  - `medium`: 높은 정확도, 매우 느림 (~769MB)
+  - `large`: 최고 정확도, 매우 느림 (~1550MB)
+
+- **device**: WhisperX 처리 장치
+  - `cpu`: CPU 처리 (느림, GPU 불필요)
+  - `cuda`: GPU 처리 (빠름, CUDA 필요)
+
+- **compute_type**: 처리용 수치 정밀도
+  - `float32`: 표준 정밀도 (권장)
+  - `float16`: 반정밀도 (빠름, 정확도 감소 가능)
+  - `int8`: 정수 정밀도 (가장 빠름, 정확도 감소 가능)
+
+- **language**: 특정 언어 감지 강제
+  - `null`: 언어 자동 감지 (권장)
+  - `en`: 영어, `ko`: 한국어, `ja`: 일본어, `zh`: 중국어
+
+**성능 고려사항:**
+- **처리 시간**: 오디오 1분당 ~2-3초
+- **메모리 사용량**: base 모델용 ~1-2GB RAM
+- **저장공간**: 첫 다운로드 후 모델이 로컬에 캐시됨
+- **GPU 가속**: CUDA 지원 시 상당히 빠름
+
+**시스템 요구사항:**
+- **FFmpeg**: 오디오 추출에 필요
+- **PyTorch**: WhisperX 모델에 필요
+- **CUDA**: GPU 가속용 선택사항
+- **저장공간**: base 모델 및 의존성용 ~2GB
 
 ### 표현식 데이터베이스 필드
 

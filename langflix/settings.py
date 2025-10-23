@@ -338,6 +338,135 @@ class ConfigManager:
 config = ConfigManager()
 
 
+# ============================================================================
+# Phase 4: Media Processing & Slide Generation Settings
+# ============================================================================
+
+def get_media_config() -> Dict[str, Any]:
+    """Get media processing configuration"""
+    return _config_loader.get('expression.media', {})
+
+
+def get_media_slicing_config() -> Dict[str, Any]:
+    """Get media slicing configuration"""
+    return _config_loader.get('expression.media.slicing', {})
+
+
+def get_media_subtitles_config() -> Dict[str, Any]:
+    """Get media subtitles configuration"""
+    return _config_loader.get('expression.media.subtitles', {})
+
+
+def get_slides_config() -> Dict[str, Any]:
+    """Get slides configuration"""
+    return _config_loader.get('expression.slides', {})
+
+
+def get_slides_templates_config() -> Dict[str, Any]:
+    """Get slides templates configuration"""
+    return _config_loader.get('expression.slides.templates', {})
+
+
+def get_slides_generation_config() -> Dict[str, Any]:
+    """Get slides generation configuration"""
+    return _config_loader.get('expression.slides.generation', {})
+
+
+def get_media_slicing_quality() -> str:
+    """Get media slicing quality setting"""
+    return get_media_slicing_config().get('quality', 'high')
+
+
+def get_media_slicing_buffer_start() -> float:
+    """Get media slicing buffer start time"""
+    return get_media_slicing_config().get('buffer_start', 0.2)
+
+
+def get_media_slicing_buffer_end() -> float:
+    """Get media slicing buffer end time"""
+    return get_media_slicing_config().get('buffer_end', 0.2)
+
+
+def get_media_slicing_crf() -> int:
+    """Get media slicing CRF setting"""
+    return get_media_slicing_config().get('crf', 18)
+
+
+def get_media_slicing_preset() -> str:
+    """Get media slicing preset"""
+    return get_media_slicing_config().get('preset', 'slow')
+
+
+def get_media_slicing_audio_bitrate() -> str:
+    """Get media slicing audio bitrate"""
+    return get_media_slicing_config().get('audio_bitrate', '256k')
+
+
+def get_subtitles_style() -> str:
+    """Get subtitles style"""
+    return get_media_subtitles_config().get('style', 'expression_highlight')
+
+
+def get_subtitles_font_size() -> int:
+    """Get subtitles font size"""
+    return get_media_subtitles_config().get('font_size', 24)
+
+
+def get_subtitles_font_color() -> str:
+    """Get subtitles font color"""
+    return get_media_subtitles_config().get('font_color', '#FFFFFF')
+
+
+def get_subtitles_background_color() -> str:
+    """Get subtitles background color"""
+    return get_media_subtitles_config().get('background_color', '#000000')
+
+
+def get_subtitles_highlight_color() -> str:
+    """Get subtitles highlight color"""
+    return get_media_subtitles_config().get('highlight_color', '#FFD700')
+
+
+def get_slides_max_examples() -> int:
+    """Get maximum examples per slide"""
+    return get_slides_generation_config().get('max_examples', 4)
+
+
+def get_slides_max_similar_expressions() -> int:
+    """Get maximum similar expressions per slide"""
+    return get_slides_generation_config().get('max_similar_expressions', 5)
+
+
+def get_slides_include_cultural_notes() -> bool:
+    """Check if cultural notes should be included"""
+    return get_slides_generation_config().get('include_cultural_notes', True)
+
+
+def get_slides_include_grammar_notes() -> bool:
+    """Check if grammar notes should be included"""
+    return get_slides_generation_config().get('include_grammar_notes', True)
+
+
+def get_slides_include_pronunciation() -> bool:
+    """Check if pronunciation should be included"""
+    return get_slides_generation_config().get('include_pronunciation', True)
+
+
+def get_slides_size() -> List[int]:
+    """Get slide dimensions"""
+    return get_slides_generation_config().get('slide_size', [1920, 1080])
+
+
+def get_slides_output_format() -> str:
+    """Get slide output format"""
+    return get_slides_generation_config().get('output_format', 'PNG')
+
+
+def get_slides_quality() -> int:
+    """Get slide quality"""
+    return get_slides_generation_config().get('quality', 95)
+
+
 # Legacy functions - maintained for compatibility
 def get_video_config(attribute: str = None):
     """Legacy: Get video processing configuration"""

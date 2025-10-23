@@ -6,7 +6,7 @@ All configuration is stored in YAML files (default.yaml, config.yaml).
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from .config import ConfigLoader
 from .config.font_utils import get_platform_default_font, get_font_file_for_language

@@ -48,4 +48,6 @@ ehthumbs.db
 Thumbs.db
 
 
-.DS_Store
+.DS_Storeyoutube_token.json
+client_secret_*.json
+youtube_credentials.json

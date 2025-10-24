@@ -49,7 +49,7 @@ class PipelineRunner:
             from langflix.core.expression_analyzer import analyze_chunk
             from langflix.core.expression_selector import IntelligentExpressionSelector
             from langflix.core.video_processor import VideoProcessor
-            from langflix.config.config_loader import get_output_directory
+            from langflix.settings import get_storage_local_path
             
             # Callback wrapper
             def update_progress(progress: int, message: str):
@@ -90,7 +90,7 @@ class PipelineRunner:
             update_progress(60, "Generating videos...")
             
             # Get output directory
-            output_dir = get_output_directory()
+            output_dir = get_storage_local_path()
             
             # Extract show/episode info from video path
             video_path = Path(job.video_path)

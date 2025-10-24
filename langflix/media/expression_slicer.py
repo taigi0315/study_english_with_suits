@@ -75,7 +75,7 @@ class ExpressionMediaSlicer:
     async def slice_expression(
         self,
         media_path: str,
-        aligned_expression: AlignedExpression,
+        expression_data: dict,  # Changed from AlignedExpression to dict
         media_id: str
     ) -> str:
         """
@@ -83,7 +83,7 @@ class ExpressionMediaSlicer:
         
         Args:
             media_path: Path to source media file
-            aligned_expression: Aligned expression with timestamps
+            expression_data: Expression data with timestamps
             media_id: Unique media identifier
             
         Returns:
@@ -93,13 +93,13 @@ class ExpressionMediaSlicer:
             # Calculate times with buffer
             start_time = max(
                 0,
-                aligned_expression.start_time - self.buffer_start
+                expression_data.get('start_time', 0) - self.buffer_start
             )
-            end_time = aligned_expression.end_time + self.buffer_end
+            end_time = expression_data.get('end_time', 0) + self.buffer_end
             duration = end_time - start_time
             
             # Generate output filename
-            expression_text = aligned_expression.expression[:30].replace(' ', '_').replace('/', '_')
+            expression_text = expression_data.get('expression', 'unknown')[:30].replace(' ', '_').replace('/', '_')
             output_filename = f"expr_{media_id}_{expression_text}_{int(start_time*1000)}.mp4"
             local_output = self.output_dir / output_filename
             
@@ -135,7 +135,7 @@ class ExpressionMediaSlicer:
             if process.returncode != 0:
                 raise VideoSlicingError(
                     f"FFmpeg failed: {stderr.decode()}",
-                    expression=aligned_expression.expression,
+                    expression=expression_data.get('expression', 'unknown'),
                     file_path=media_path
                 )
             
@@ -143,7 +143,7 @@ class ExpressionMediaSlicer:
             if not local_output.exists() or local_output.stat().st_size == 0:
                 raise VideoSlicingError(
                     "Output file not created or empty",
-                    expression=aligned_expression.expression,
+                    expression=expression_data.get('expression', 'unknown'),
                     file_path=media_path
                 )
             
@@ -170,7 +170,7 @@ class ExpressionMediaSlicer:
     async def slice_multiple_expressions(
         self,
         media_path: str,
-        aligned_expressions: List[AlignedExpression],
+        expressions: List[dict],  # Changed from List[AlignedExpression]
         media_id: str
     ) -> List[str]:
         """
@@ -225,7 +225,7 @@ class ExpressionMediaSlicer:
             # Return local path as fallback
             return str(local_path)
     
-    def get_slicing_info(self, aligned_expression: AlignedExpression) -> Dict[str, Any]:
+    def get_slicing_info(self, expression_data: dict) -> Dict[str, Any]:
         """
         Get information about slicing operation
         
@@ -235,12 +235,12 @@ class ExpressionMediaSlicer:
         Returns:
             Dict with slicing information
         """
-        start_time = max(0, aligned_expression.start_time - self.buffer_start)
-        end_time = aligned_expression.end_time + self.buffer_end
+        start_time = max(0, expression_data.get('start_time', 0) - self.buffer_start)
+        end_time = expression_data.get('end_time', 0) + self.buffer_end
         duration = end_time - start_time
         
         return {
-            'expression': aligned_expression.expression,
+            'expression': expression_data.get('expression', 'unknown'),
             'start_time': start_time,
             'end_time': end_time,
             'duration': duration,
@@ -253,7 +253,7 @@ class ExpressionMediaSlicer:
     def validate_slicing_parameters(
         self,
         media_metadata: MediaMetadata,
-        aligned_expression: AlignedExpression
+        expression_data: dict
     ) -> bool:
         """
         Validate slicing parameters
@@ -266,20 +266,20 @@ class ExpressionMediaSlicer:
             bool: True if parameters are valid
         """
         # Check if expression is within media duration
-        if aligned_expression.end_time > media_metadata.duration:
+        if expression_data.get('end_time', 0) > media_metadata.duration:
             logger.warning(
-                f"Expression end time ({aligned_expression.end_time}) "
+                f"Expression end time ({expression_data.get('end_time', 0)}) "
                 f"exceeds media duration ({media_metadata.duration})"
             )
             return False
         
         # Check if start time is valid
-        if aligned_expression.start_time < 0:
-            logger.warning(f"Invalid start time: {aligned_expression.start_time}")
+        if expression_data.get('start_time', 0) < 0:
+            logger.warning(f"Invalid start time: {expression_data.get('start_time', 0)}")
             return False
         
         # Check if duration is reasonable
-        expression_duration = aligned_expression.end_time - aligned_expression.start_time
+        expression_duration = expression_data.get('end_time', 0) - expression_data.get('start_time', 0)
         if expression_duration < 0.1:  # Less than 100ms
             logger.warning(f"Expression duration too short: {expression_duration}")
             return False

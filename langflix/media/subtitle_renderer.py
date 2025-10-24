@@ -39,7 +39,7 @@ class SubtitleRenderer:
     def render_expression_subtitles(
         self,
         expression: ExpressionAnalysis,
-        aligned_expression: AlignedExpression,
+        expression_data: dict,  # Changed from AlignedExpression to dict
         video_path: str,
         output_path: str
     ) -> str:
@@ -87,7 +87,7 @@ class SubtitleRenderer:
     def _create_srt_content(
         self,
         expression: ExpressionAnalysis,
-        aligned_expression: AlignedExpression
+        expression_data: dict
     ) -> str:
         """
         Create SRT content for expression
@@ -102,8 +102,8 @@ class SubtitleRenderer:
         srt_content = []
         
         # Add expression highlight
-        start_time = self._format_timestamp(aligned_expression.start_time)
-        end_time = self._format_timestamp(aligned_expression.end_time)
+        start_time = self._format_timestamp(expression_data.get('start_time', 0))
+        end_time = self._format_timestamp(expression_data.get('end_time', 0))
         
         # Create highlighted expression subtitle
         expression_text = f"<font color='{self.expression_style.get('color', '#FFD700')}'>{expression.expression}</font>"
@@ -119,7 +119,7 @@ class SubtitleRenderer:
         if hasattr(expression, 'dialogues') and expression.dialogues:
             for i, dialogue in enumerate(expression.dialogues, 2):
                 if i <= 5:  # Limit to 5 context lines
-                    context_start = aligned_expression.start_time + (i - 1) * 0.5
+                    context_start = expression_data.get('start_time', 0) + (i - 1) * 0.5
                     context_end = context_start + 2.0
                     
                     srt_content.append(str(i))
@@ -274,7 +274,7 @@ class SubtitleRenderer:
     def create_srt_file(
         self,
         expression: ExpressionAnalysis,
-        aligned_expression: AlignedExpression,
+        expression_data: dict,  # Changed from AlignedExpression to dict
         output_path: str
     ) -> str:
         """

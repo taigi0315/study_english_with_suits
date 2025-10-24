@@ -45,7 +45,7 @@ class PipelineRunner:
                 raise FileNotFoundError(f"Subtitle file not found: {job.subtitle_path}")
             
             # Import main pipeline components
-            from langflix.core.subtitle_parser import SubtitleParser
+            from langflix.core.subtitle_parser import parse_subtitle_file
             from langflix.core.expression_analyzer import ExpressionAnalyzer
             from langflix.core.expression_selector import ExpressionSelector
             from langflix.core.video_processor import VideoProcessor
@@ -58,11 +58,10 @@ class PipelineRunner:
             
             # Step 1: Parse subtitles (10%)
             update_progress(10, "Parsing subtitles...")
-            parser = SubtitleParser()
             if not job.subtitle_path:
                 raise ValueError("Subtitle file is required for content creation")
             
-            subtitle_entries = parser.parse_file(job.subtitle_path)
+            subtitle_entries = parse_subtitle_file(job.subtitle_path)
             logger.info(f"Parsed {len(subtitle_entries)} subtitle entries")
             
             # Step 2: Analyze expressions (30%)

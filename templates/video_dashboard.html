@@ -256,6 +256,50 @@
             background: #e67e22;
         }
         
+        .btn-create-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-create-content:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+        
+        .btn-create-content:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-create-content .btn-icon {
+            font-size: 1.2em;
+            animation: sparkle 2s ease-in-out infinite;
+        }
+        
+        .btn-create-content .btn-text {
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        @keyframes sparkle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
         .loading {
             text-align: center;
             padding: 50px;
@@ -440,16 +484,17 @@
         <div class="controls">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">All Videos</button>
-                    <button class="filter-btn" data-filter="educational">Educational</button>
-                    <button class="filter-btn" data-filter="short">Shorts</button>
-                    <button class="filter-btn" data-filter="final">Final Videos</button>
-                    <button class="filter-btn" data-filter="upload-ready">Upload Ready</button>
-                    <button class="filter-btn" data-filter="uploaded">✅ Uploaded</button>
-                    <button class="filter-btn" data-filter="not-uploaded">📤 Not Uploaded</button>
+                    <button class="filter-btn active" data-filter="all">📺 All Videos</button>
+                    <button class="filter-btn" data-filter="educational">🎓 Educational</button>
+                    <button class="filter-btn" data-filter="short">⚡ Shorts</button>
+                    <button class="filter-btn" data-filter="final">🎬 Final Videos</button>
+                    <button class="filter-btn" data-filter="upload-ready">✅ Upload Ready</button>
+                    <button class="filter-btn" data-filter="uploaded">📤 Uploaded</button>
+                    <button class="filter-btn" data-filter="not-uploaded">⏳ Not Uploaded</button>
                 </div>
-                <button class="btn-success" onclick="showCreateContentModal()" style="padding: 12px 24px; font-size: 1em;">
-                    ➕ Create Content
+                <button class="btn-create-content" onclick="showCreateContentModal()">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">Create Content</span>
                 </button>
             </div>
             <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
@@ -610,13 +655,13 @@
                         <button class="action-btn-icon btn-primary" 
                                 onclick="previewVideo('${video.path}')" 
                                 title="Preview">
-                            👁️
+                            ▶️
                         </button>
                         <button class="action-btn-icon btn-success" 
                                 onclick="uploadToYouTube('${video.path}')" 
                                 ${!video.ready_for_upload ? 'disabled' : ''}
                                 title="Upload to YouTube">
-                            📤
+                            ⬆️
                         </button>
                     </div>
                 </div>

@@ -172,11 +172,27 @@ class SubtitleRenderer:
         background_color = self.default_style.get('background_color', '#000000')
         highlight_color = self.expression_style.get('color', '#FFD700')
         
-        # FFmpeg command with subtitle styling
+        # Get language-specific font
+        from langflix.core.language_config import LanguageConfig
+        font_path = LanguageConfig.get_font_path()  # Default font
+        font_name = "Arial"  # Fallback font name
+        
+        # Try to determine font name from font path
+        if font_path and font_path.endswith('.ttc'):
+            if 'AppleSDGothicNeo' in font_path:
+                font_name = "Apple SD Gothic Neo"
+            elif 'Hiragino' in font_path:
+                font_name = "Hiragino Sans"
+            elif 'HelveticaNeue' in font_path:
+                font_name = "Helvetica Neue"
+            else:
+                font_name = "Arial"
+        
+        # FFmpeg command with subtitle styling and font configuration
         ffmpeg_cmd = [
             'ffmpeg',
             '-i', video_path,
-            '-vf', f"subtitles={srt_path}:force_style='FontSize={font_size},PrimaryColour={font_color},BackColour={background_color},OutlineColour={highlight_color}'",
+            '-vf', f"subtitles={srt_path}:fontsdir=/System/Library/Fonts:force_style='FontName={font_name},FontSize={font_size},PrimaryColour={font_color},BackColour={background_color},OutlineColour={highlight_color}'",
             '-c:v', 'libx264',
             '-c:a', 'aac',
             '-movflags', '+faststart',
@@ -241,11 +257,27 @@ class SubtitleRenderer:
         if style_config is None:
             style_config = self.default_style
         
-        # FFmpeg command for burn-in subtitles
+        # Get language-specific font
+        from langflix.core.language_config import LanguageConfig
+        font_path = LanguageConfig.get_font_path()  # Default font
+        font_name = "Arial"  # Fallback font name
+        
+        # Try to determine font name from font path
+        if font_path and font_path.endswith('.ttc'):
+            if 'AppleSDGothicNeo' in font_path:
+                font_name = "Apple SD Gothic Neo"
+            elif 'Hiragino' in font_path:
+                font_name = "Hiragino Sans"
+            elif 'HelveticaNeue' in font_path:
+                font_name = "Helvetica Neue"
+            else:
+                font_name = "Arial"
+        
+        # FFmpeg command for burn-in subtitles with font configuration
         ffmpeg_cmd = [
             'ffmpeg',
             '-i', video_path,
-            '-vf', f"subtitles={srt_path}:force_style='FontSize={style_config.get('font_size', 24)},PrimaryColour={style_config.get('color', '#FFFFFF')}'",
+            '-vf', f"subtitles={srt_path}:fontsdir=/System/Library/Fonts:force_style='FontName={font_name},FontSize={style_config.get('font_size', 24)},PrimaryColour={style_config.get('color', '#FFFFFF')}'",
             '-c:v', 'libx264',
             '-c:a', 'copy',  # Copy audio without re-encoding
             '-y',

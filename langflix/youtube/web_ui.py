@@ -802,6 +802,9 @@ class VideoManagementUI:
                     if field not in data:
                         return jsonify({"error": f"Missing required field: {field}"}), 400
                 
+                # Get test_mode parameter (optional, defaults to False)
+                test_mode = data.get('test_mode', False)
+                
                 # Call FastAPI backend with file uploads
                 import requests
                 fastapi_url = "http://localhost:8000/api/v1/jobs"
@@ -814,7 +817,7 @@ class VideoManagementUI:
                     "episode_name": os.path.splitext(os.path.basename(data['video_path']))[0],
                     "max_expressions": 50,
                     "language_level": data['language_level'],
-                    "test_mode": False,
+                    "test_mode": test_mode,
                     "no_shorts": False
                 }
                 

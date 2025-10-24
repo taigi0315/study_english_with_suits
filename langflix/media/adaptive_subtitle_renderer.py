@@ -510,11 +510,27 @@ class AdaptiveSubtitleRenderer(SubtitleRenderer):
             with open(temp_srt_path, 'w', encoding='utf-8') as f:
                 f.write(subtitle_content)
             
-            # Build FFmpeg command with custom style
+            # Get language-specific font
+            from langflix.core.language_config import LanguageConfig
+            font_path = LanguageConfig.get_font_path()  # Default font
+            font_name = "Arial"  # Fallback font name
+            
+            # Try to determine font name from font path
+            if font_path and font_path.endswith('.ttc'):
+                if 'AppleSDGothicNeo' in font_path:
+                    font_name = "Apple SD Gothic Neo"
+                elif 'Hiragino' in font_path:
+                    font_name = "Hiragino Sans"
+                elif 'HelveticaNeue' in font_path:
+                    font_name = "Helvetica Neue"
+                else:
+                    font_name = "Arial"
+            
+            # Build FFmpeg command with custom style and font configuration
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-i', video_path,
-                '-vf', f"subtitles='{temp_srt_path}':force_style='{style_string}'",
+                '-vf', f"subtitles='{temp_srt_path}':fontsdir=/System/Library/Fonts:force_style='FontName={font_name},{style_string}'",
                 '-c:a', 'copy',
                 '-y',
                 str(local_output_path)

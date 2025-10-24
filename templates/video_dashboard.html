@@ -217,6 +217,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .action-btn-icon:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
         }
         
         .action-btn {
@@ -667,18 +674,70 @@
         }
 
         function previewVideo(videoPath) {
-            // Open video in popup window
-            const encodedPath = encodeURIComponent(videoPath);
-            const popup = window.open(
-                `/api/video/${encodedPath}`, 
-                'videoPreview', 
-                'width=800,height=600,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no'
-            );
+            // Create modal for video preview
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+            `;
             
-            // Focus the popup window
-            if (popup) {
-                popup.focus();
-            }
+            const videoContainer = document.createElement('div');
+            videoContainer.style.cssText = `
+                background: black;
+                border-radius: 10px;
+                padding: 20px;
+                max-width: 90vw;
+                max-height: 90vh;
+                position: relative;
+            `;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '✕';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 15px;
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const video = document.createElement('video');
+            video.controls = true;
+            video.style.cssText = `
+                max-width: 80vw;
+                max-height: 80vh;
+                border-radius: 5px;
+            `;
+            
+            const encodedPath = encodeURIComponent(videoPath);
+            video.src = `/api/video/${encodedPath}`;
+            
+            closeBtn.onclick = () => modal.remove();
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            
+            videoContainer.appendChild(closeBtn);
+            videoContainer.appendChild(video);
+            modal.appendChild(videoContainer);
+            document.body.appendChild(modal);
         }
 
         async function uploadToYouTube(videoPath) {

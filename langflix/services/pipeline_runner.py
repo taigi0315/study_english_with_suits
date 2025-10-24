@@ -47,7 +47,7 @@ class PipelineRunner:
             # Import main pipeline components
             from langflix.core.subtitle_parser import parse_subtitle_file
             from langflix.core.expression_analyzer import analyze_chunk
-            from langflix.core.expression_selector import ExpressionSelector
+            from langflix.core.expression_selector import IntelligentExpressionSelector
             from langflix.core.video_processor import VideoProcessor
             from langflix.config.config_loader import get_output_directory
             
@@ -77,12 +77,11 @@ class PipelineRunner:
             
             # Step 3: Select expressions (40%)
             update_progress(40, "Selecting expressions...")
-            selector = ExpressionSelector(
-                language_level=job.language_level,
-                target_language=job.language_code
-            )
+            selector = IntelligentExpressionSelector()
             selected_expressions = selector.select_expressions(
                 analyzed_expressions,
+                language_level=job.language_level,
+                target_language=job.language_code,
                 max_expressions=50  # Configurable
             )
             logger.info(f"Selected {len(selected_expressions)} expressions")

@@ -22,8 +22,8 @@ sys.path.insert(0, str(project_root))
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Real job storage with actual processing
-jobs_db: Dict[str, Dict[str, Any]] = {}
+# Redis-based job storage for Phase 7 architecture
+from langflix.core.redis_client import get_redis_job_manager
 
 async def process_video_task(
     job_id: str,
@@ -44,10 +44,15 @@ async def process_video_task(
     logger.info(f"Starting REAL video processing for job {job_id}")
     
     try:
+        # Get Redis job manager
+        redis_manager = get_redis_job_manager()
+        
         # Update job status
-        jobs_db[job_id]["status"] = "PROCESSING"
-        jobs_db[job_id]["progress"] = 10
-        jobs_db[job_id]["current_step"] = "Initializing video processing..."
+        redis_manager.update_job(job_id, {
+            "status": "PROCESSING",
+            "progress": 10,
+            "current_step": "Initializing video processing..."
+        })
         
         # Save uploaded file contents to local filesystem for LangFlix pipeline
         temp_video_path = f"/tmp/{job_id}_video.mkv"
@@ -63,8 +68,10 @@ async def process_video_task(
         logger.info(f"Processing subtitle: {subtitle_filename}")
         
         # Update progress
-        jobs_db[job_id]["progress"] = 20
-        jobs_db[job_id]["current_step"] = "Saving uploaded files..."
+        redis_manager.update_job(job_id, {
+            "progress": 20,
+            "current_step": "Saving uploaded files..."
+        })
         
         # Import LangFlix components inside function to avoid circular imports
         from langflix.core.expression_analyzer import analyze_chunk
@@ -77,8 +84,10 @@ async def process_video_task(
         # Parse subtitles
         logger.info("Parsing subtitles...")
         subtitles = parse_srt_file(temp_subtitle_path)
-        jobs_db[job_id]["progress"] = 30
-        jobs_db[job_id]["current_step"] = "Parsing subtitles..."
+        redis_manager.update_job(job_id, {
+            "progress": 30,
+            "current_step": "Parsing subtitles..."
+        })
         
         # Chunk subtitles
         logger.info("Chunking subtitles...")
@@ -122,8 +131,10 @@ async def process_video_task(
         # Limit to max_expressions
         expressions = expressions[:max_expressions]
         logger.info(f"Found {len(expressions)} expressions")
-        jobs_db[job_id]["progress"] = 50
-        jobs_db[job_id]["current_step"] = "Analyzing expressions..."
+        redis_manager.update_job(job_id, {
+            "progress": 50,
+            "current_step": "Analyzing expressions..."
+        })
         
         # Create organized output structure using the same method as main branch
         # Create a proper subtitle file path that includes series/episode info
@@ -193,8 +204,10 @@ async def process_video_task(
             try:
                 # Update progress
                 progress = 50 + (i / len(expressions)) * 20
-                jobs_db[job_id]["progress"] = int(progress)
-                jobs_db[job_id]["current_step"] = f"Processing expression {i+1}/{len(expressions)}: {expression.expression[:30]}..."
+                redis_manager.update_job(job_id, {
+                    "progress": int(progress),
+                    "current_step": f"Processing expression {i+1}/{len(expressions)}: {expression.expression[:30]}..."
+                })
                 
                 # Create output filenames using organized structure
                 safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -257,8 +270,10 @@ async def process_video_task(
             try:
                 # Update progress
                 progress = 70 + (i / len(expressions)) * 20
-                jobs_db[job_id]["progress"] = int(progress)
-                jobs_db[job_id]["current_step"] = f"Creating educational video {i+1}/{len(expressions)}..."
+                redis_manager.update_job(job_id, {
+                    "progress": int(progress),
+                    "current_step": f"Creating educational video {i+1}/{len(expressions)}..."
+                })
                 
                 temp_clip_path = temp_clip_files[i]
                 
@@ -422,11 +437,19 @@ async def process_video_task(
             logger.warning(f"Error cleaning up temp files: {e}")
         
         # Update job with results
-        jobs_db[job_id]["status"] = "COMPLETED"
-        jobs_db[job_id]["progress"] = 100
-        jobs_db[job_id]["current_step"] = "Completed successfully!"
-        jobs_db[job_id]["expressions"] = processed_expressions
-        jobs_db[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+        redis_manager.update_job(job_id, {
+            "status": "COMPLETED",
+            "progress": 100,
+            "current_step": "Completed successfully!"
+        })
+        redis_manager.update_job(job_id, {
+            "expressions": processed_expressions,
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Invalidate video cache since new videos were created
+        logger.info("Invalidating video cache after job completion...")
+        redis_manager.invalidate_video_cache()
         
         logger.info(f"Completed REAL processing for job {job_id}")
         
@@ -443,9 +466,11 @@ async def process_video_task(
             pass
         
         # Update job with error
-        jobs_db[job_id]["status"] = "FAILED"
-        jobs_db[job_id]["error"] = str(e)
-        jobs_db[job_id]["failed_at"] = datetime.now(timezone.utc).isoformat()
+        redis_manager.update_job(job_id, {
+            "status": "FAILED",
+            "error": str(e),
+            "failed_at": datetime.now(timezone.utc).isoformat()
+        })
 
 @router.post("/jobs")
 async def create_job(
@@ -481,25 +506,29 @@ async def create_job(
         # Generate job ID
         job_id = str(uuid.uuid4())
         
-        # Store job information
-        jobs_db[job_id] = {
+        # Get Redis job manager
+        redis_manager = get_redis_job_manager()
+        
+        # Store job information in Redis
+        job_data = {
             "job_id": job_id,
             "status": "PENDING",
-            "created_at": datetime.now(timezone.utc).isoformat(),
             "video_file": video_file.filename,
             "subtitle_file": subtitle_file.filename,
-            "video_size": len(video_content),
-            "subtitle_size": len(subtitle_content),
+            "video_size": str(len(video_content)),
+            "subtitle_size": str(len(subtitle_content)),
             "language_code": language_code,
             "show_name": show_name,
             "episode_name": episode_name,
-            "max_expressions": max_expressions,
+            "max_expressions": str(max_expressions),
             "language_level": language_level,
-            "test_mode": test_mode,
-            "no_shorts": no_shorts,
-            "progress": 0,
-            "error": None
+            "test_mode": str(test_mode),
+            "no_shorts": str(no_shorts),
+            "progress": "0",
+            "error": ""
         }
+        
+        redis_manager.create_job(job_id, job_data)
         
         # Start REAL background processing task with file contents
         background_tasks.add_task(
@@ -533,14 +562,13 @@ async def create_job(
 async def get_job_status(job_id: str) -> Dict[str, Any]:
     """Get job status and details."""
     
-    if job_id not in jobs_db:
+    redis_manager = get_redis_job_manager()
+    job = redis_manager.get_job(job_id)
+    
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    job = jobs_db[job_id]
-    
-    # Return actual job status (no simulation)
-    # Status is updated by the background task
-    
+    # Return actual job status from Redis
     return job
 
 @router.get("/jobs/{job_id}/expressions")
@@ -572,7 +600,9 @@ async def get_job_expressions(job_id: str) -> Dict[str, Any]:
 @router.get("/jobs")
 async def list_jobs() -> Dict[str, Any]:
     """List all jobs."""
+    redis_manager = get_redis_job_manager()
+    jobs = redis_manager.get_all_jobs()
     return {
-        "jobs": list(jobs_db.values()),
-        "total": len(jobs_db)
+        "jobs": list(jobs.values()),
+        "total": len(jobs)
     }

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -34,12 +34,36 @@ class VideoMetadata:
 class VideoFileManager:
     """Manages generated video files for YouTube upload"""
     
-    def __init__(self, output_dir: str = "output"):
+    def __init__(self, output_dir: str = "output", use_cache: bool = True):
         self.output_dir = Path(output_dir)
         self.video_extensions = {'.mp4', '.mkv', '.avi', '.mov', '.webm'}
+        self.use_cache = use_cache
         
-    def scan_all_videos(self) -> List[VideoMetadata]:
-        """Scan all generated video files and extract metadata"""
+    def scan_all_videos(self, force_refresh: bool = False) -> List[VideoMetadata]:
+        """
+        Scan all generated video files and extract metadata.
+        
+        Args:
+            force_refresh: If True, bypass cache and force filesystem scan
+            
+        Returns:
+            List of VideoMetadata objects
+        """
+        # Try to get from cache first (unless force_refresh is True)
+        if self.use_cache and not force_refresh:
+            try:
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                cached_videos = redis_manager.get_video_cache()
+                
+                if cached_videos:
+                    logger.info(f"✅ Loaded {len(cached_videos)} videos from cache")
+                    # Convert cached dictionaries back to VideoMetadata objects
+                    return [self._dict_to_metadata(v) for v in cached_videos]
+            except Exception as e:
+                logger.warning(f"Cache retrieval failed, falling back to filesystem scan: {e}")
+        
+        # Cache miss or force refresh - scan filesystem
         logger.info(f"Scanning for video files in: {self.output_dir}")
         
         videos = []
@@ -53,6 +77,17 @@ class VideoFileManager:
                 continue
                 
         logger.info(f"Found {len(videos)} video files")
+        
+        # Cache the results
+        if self.use_cache and videos:
+            try:
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                video_dicts = [self._metadata_to_dict(v) for v in videos]
+                redis_manager.set_video_cache(video_dicts, ttl=300)  # 5 minutes TTL
+            except Exception as e:
+                logger.warning(f"Failed to cache video results: {e}")
+        
         return videos
     
     def _find_video_files(self) -> List[Path]:
@@ -263,3 +298,22 @@ class VideoFileManager:
             "type_distribution": type_counts,
             "episodes": list(set(v.episode for v in videos))
         }
+    
+    def _metadata_to_dict(self, metadata: VideoMetadata) -> Dict[str, Any]:
+        """Convert VideoMetadata to dictionary for caching."""
+        data = asdict(metadata)
+        # Convert datetime to ISO format string
+        if isinstance(data.get('created_at'), datetime):
+            data['created_at'] = data['created_at'].isoformat()
+        return data
+    
+    def _dict_to_metadata(self, data: Dict[str, Any]) -> VideoMetadata:
+        """Convert dictionary to VideoMetadata object."""
+        # Convert ISO format string back to datetime
+        if isinstance(data.get('created_at'), str):
+            try:
+                data['created_at'] = datetime.fromisoformat(data['created_at'])
+            except:
+                data['created_at'] = datetime.now(timezone.utc)
+        
+        return VideoMetadata(**data)

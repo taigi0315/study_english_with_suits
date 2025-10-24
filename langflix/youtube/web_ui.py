@@ -858,18 +858,22 @@ class VideoManagementUI:
         
         @self.app.route('/api/content/jobs/<job_id>')
         def get_job_status(job_id):
-            """Get job status from local job queue"""
+            """Get job status from Redis (Phase 7 architecture)"""
             try:
-                # Get job from local job queue
-                job = self.job_queue.get_job(job_id)
+                # Import Redis job manager
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                
+                # Get job from Redis
+                job = redis_manager.get_job(job_id)
                 
                 if job:
                     return jsonify({
-                        "job_id": job.job_id,
-                        "status": job.status.value,
-                        "progress": job.progress,
-                        "current_step": job.current_step,
-                        "error_message": getattr(job, 'error_message', None)
+                        "job_id": job.get("job_id", job_id),
+                        "status": job.get("status", "UNKNOWN"),
+                        "progress": int(job.get("progress", 0)),
+                        "current_step": job.get("current_step", ""),
+                        "error_message": job.get("error", None)
                     })
                 else:
                     # Try to get from FastAPI backend as fallback
@@ -888,30 +892,58 @@ class VideoManagementUI:
         
         @self.app.route('/api/content/jobs')
         def get_all_jobs():
-            """Get all jobs"""
+            """Get all jobs from Redis (Phase 7 architecture)"""
             try:
-                jobs = self.job_queue.get_all_jobs()
-                return jsonify([{
-                    "job_id": job.job_id,
-                    "media_id": job.media_id,
-                    "status": job.status.value,
-                    "progress": job.progress,
-                    "current_step": job.current_step,
-                    "created_at": job.created_at.isoformat()
-                } for job in jobs])
+                # Import Redis job manager
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                
+                # Get all jobs from Redis
+                all_jobs = redis_manager.get_all_jobs()
+                
+                # Convert to list format
+                jobs_list = []
+                for job_id, job_data in all_jobs.items():
+                    jobs_list.append({
+                        "job_id": job_data.get("job_id", job_id),
+                        "media_id": job_data.get("media_id", ""),
+                        "status": job_data.get("status", "UNKNOWN"),
+                        "progress": int(job_data.get("progress", 0)),
+                        "current_step": job_data.get("current_step", ""),
+                        "created_at": job_data.get("created_at", ""),
+                        "error_message": job_data.get("error", None)
+                    })
+                
+                return jsonify(jobs_list)
             except Exception as e:
                 logger.error(f"Error getting jobs: {e}")
                 return jsonify({"error": str(e)}), 500
         
         @self.app.route('/api/content/jobs/<job_id>/cancel', methods=['POST'])
         def cancel_job(job_id):
-            """Cancel a job"""
+            """Cancel a job via Redis (Phase 7 architecture)"""
             try:
-                success = self.job_queue.cancel_job(job_id)
-                if success:
-                    return jsonify({"status": "cancelled"})
-                else:
+                # Import Redis job manager
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                
+                # Get current job status
+                job = redis_manager.get_job(job_id)
+                if not job:
+                    return jsonify({"error": "Job not found"}), 404
+                
+                # Check if job can be cancelled
+                current_status = job.get("status", "UNKNOWN")
+                if current_status in ["COMPLETED", "FAILED", "CANCELLED"]:
                     return jsonify({"error": "Job cannot be cancelled"}), 400
+                
+                # Update job status to cancelled
+                redis_manager.update_job(job_id, {
+                    "status": "CANCELLED",
+                    "current_step": "Job cancelled by user"
+                })
+                
+                return jsonify({"status": "cancelled"})
             except Exception as e:
                 logger.error(f"Error cancelling job: {e}")
                 return jsonify({"error": str(e)}), 500

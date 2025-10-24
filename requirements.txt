@@ -52,3 +52,7 @@ psycopg2-binary>=2.9.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
+
+# Redis for shared job state (Phase 7)
+redis>=5.0.0
+hiredis>=2.2.0  # High-performance Redis parser

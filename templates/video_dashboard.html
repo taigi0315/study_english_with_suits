@@ -526,6 +526,9 @@
             setupFilterButtons();
             setupSearchBox();
             setupYouTubeAccountEvents();
+            
+            // Restore active job progress bar if exists
+            restoreActiveJobs();
         });
 
         async function loadVideos() {
@@ -1260,7 +1263,37 @@
             }
         }
 
+        async function restoreActiveJobs() {
+            // Check localStorage for active jobs
+            const activeJobId = localStorage.getItem('langflix_active_job');
+            if (activeJobId) {
+                try {
+                    const response = await fetch(`/api/content/jobs/${activeJobId}`);
+                    if (response.ok) {
+                        const job = await response.json();
+                        // Only restore if job is still processing
+                        if (job.status === 'PROCESSING' || job.status === 'processing') {
+                            console.log('Restoring active job:', activeJobId);
+                            showJobProgressModal(activeJobId);
+                        } else {
+                            // Job completed/failed, clear localStorage
+                            localStorage.removeItem('langflix_active_job');
+                        }
+                    } else {
+                        // Job not found, clear localStorage
+                        localStorage.removeItem('langflix_active_job');
+                    }
+                } catch (error) {
+                    console.error('Error restoring active job:', error);
+                    localStorage.removeItem('langflix_active_job');
+                }
+            }
+        }
+
         async function showJobProgressModal(jobId) {
+            // Save job ID to localStorage for persistence across page refreshes
+            localStorage.setItem('langflix_active_job', jobId);
+            
             // Create bottom progress bar instead of blocking modal
             const progressBar = document.createElement('div');
             progressBar.id = 'progressModal';
@@ -1317,6 +1350,7 @@
                         // Check if completed or failed
                         if (job.status === 'COMPLETED' || job.status === 'completed') {
                             clearInterval(pollInterval);
+                            localStorage.removeItem('langflix_active_job'); // Clear on completion
                             document.getElementById('progressText').textContent = 'Completed successfully!';
                             document.getElementById('cancelButton').textContent = 'Close';
                             document.getElementById('cancelButton').onclick = () => {
@@ -1326,12 +1360,14 @@
                             document.getElementById('cancelButton').style.background = '#27ae60';
                         } else if (job.status === 'FAILED' || job.status === 'failed') {
                             clearInterval(pollInterval);
+                            localStorage.removeItem('langflix_active_job'); // Clear on failure
                             document.getElementById('progressText').textContent = `Failed: ${job.error_message}`;
                             document.getElementById('cancelButton').textContent = 'Close';
                             document.getElementById('cancelButton').onclick = () => progressBar.remove();
                             document.getElementById('cancelButton').style.background = '#7f8c8d';
                         } else if (job.status === 'CANCELLED' || job.status === 'cancelled') {
                             clearInterval(pollInterval);
+                            localStorage.removeItem('langflix_active_job'); // Clear on cancellation
                             progressBar.remove();
                         }
                     }
@@ -1352,6 +1388,7 @@
                 });
                 
                 if (response.ok) {
+                    localStorage.removeItem('langflix_active_job'); // Clear on cancellation
                     const progressModal = document.getElementById('progressModal');
                     if (progressModal) progressModal.remove();
                 } else {

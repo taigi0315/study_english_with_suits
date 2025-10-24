@@ -39,7 +39,6 @@ class SubtitleRenderer:
     def render_expression_subtitles(
         self,
         expression: ExpressionAnalysis,
-        expression_data: dict,  # Changed from AlignedExpression to dict
         video_path: str,
         output_path: str
     ) -> str:
@@ -274,7 +273,6 @@ class SubtitleRenderer:
     def create_srt_file(
         self,
         expression: ExpressionAnalysis,
-        expression_data: dict,  # Changed from AlignedExpression to dict
         output_path: str
     ) -> str:
         """

@@ -64,16 +64,16 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router, prefix="/api/v1", tags=["jobs"])
     app.include_router(files.router, prefix="/api/v1", tags=["files"])
     
-    # Add UI endpoint
-    @app.get("/", response_class=HTMLResponse)
+    # API-only endpoint (no UI)
+    @app.get("/")
     async def root():
-        """Serve the main UI."""
-        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "templates", "fastapi_ui.html")
-        if os.path.exists(template_path):
-            with open(template_path, 'r', encoding='utf-8') as f:
-                return HTMLResponse(content=f.read())
-        else:
-            return HTMLResponse(content="<h1>LangFlix API</h1><p><a href='/docs'>API Documentation</a></p>")
+        """API root endpoint."""
+        return {
+            "message": "LangFlix API",
+            "version": "1.0.0",
+            "docs": "/docs",
+            "redoc": "/redoc"
+        }
     
     # Add local development endpoints
     @app.get("/local/status")

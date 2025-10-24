@@ -54,3 +54,8 @@ class DatabaseManager:
 
 # Global database manager
 db_manager = DatabaseManager()
+
+
+def get_db_session() -> Session:
+    """Get database session for dependency injection."""
+    return db_manager.get_session()

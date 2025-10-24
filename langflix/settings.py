@@ -223,27 +223,27 @@ def get_tts_repeat_count() -> int:
 
 def get_database_enabled() -> bool:
     """Check if database is enabled."""
-    return _config_loader.get('database.enabled', False)
+    return _config_loader.get('database', 'enabled', default=False)
 
 
 def get_database_url() -> str:
     """Get database URL."""
-    return _config_loader.get('database.url', 'postgresql://user:password@localhost:5432/langflix')
+    return _config_loader.get('database', 'url', default='postgresql://user:password@localhost:5432/langflix')
 
 
 def get_database_pool_size() -> int:
     """Get database pool size."""
-    return _config_loader.get('database.pool_size', 5)
+    return _config_loader.get('database', 'pool_size', default=5)
 
 
 def get_database_max_overflow() -> int:
     """Get database max overflow."""
-    return _config_loader.get('database.max_overflow', 10)
+    return _config_loader.get('database', 'max_overflow', default=10)
 
 
 def get_database_echo() -> bool:
     """Get database echo setting."""
-    return _config_loader.get('database.echo', False)
+    return _config_loader.get('database', 'echo', default=False)
 
 
 # ============================================================================

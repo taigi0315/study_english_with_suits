@@ -19,19 +19,19 @@ except ImportError:
     pass
 
 # Import our modules
-from .core.subtitle_parser import parse_srt_file, chunk_subtitles
-from .core.expression_analyzer import analyze_chunk
-from .core.video_processor import VideoProcessor
-from .core.subtitle_processor import SubtitleProcessor
-from .core.video_editor import VideoEditor
-from .services.output_manager import OutputManager, create_output_structure
-from .core.models import ExpressionAnalysis
-from . import settings
+from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.core.expression_analyzer import analyze_chunk
+from langflix.core.video_processor import VideoProcessor
+from langflix.core.subtitle_processor import SubtitleProcessor
+from langflix.core.video_editor import VideoEditor
+from langflix.services.output_manager import OutputManager, create_output_structure
+from langflix.core.models import ExpressionAnalysis
+from langflix import settings
 
 # Database imports (optional)
 try:
-    from .db import db_manager, MediaCRUD, ExpressionCRUD, ProcessingJobCRUD
-    from .db.models import Media, Expression, ProcessingJob
+    from langflix.db import db_manager, MediaCRUD, ExpressionCRUD, ProcessingJobCRUD
+    from langflix.db.models import Media, Expression, ProcessingJob
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
@@ -528,7 +528,7 @@ class LangFlixPipeline:
         """Create short-format videos for social media."""
         try:
             # Check if short video generation is enabled
-            from . import settings
+            from langflix import settings
             if not settings.is_short_video_enabled():
                 logger.info("Short video generation is disabled in configuration")
                 return
@@ -583,7 +583,7 @@ class LangFlixPipeline:
             
             if short_format_videos:
                 # Batch into ~120s videos using configuration
-                from . import settings
+                from langflix import settings
                 target_duration = settings.get_short_video_target_duration()
                 batch_videos = self.video_editor.create_batched_short_videos(
                     short_format_videos, target_duration=target_duration

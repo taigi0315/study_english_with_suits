@@ -802,23 +802,34 @@ class VideoManagementUI:
                     if field not in data:
                         return jsonify({"error": f"Missing required field: {field}"}), 400
                 
-                # Call FastAPI backend
+                # Call FastAPI backend with file uploads
                 import requests
                 fastapi_url = "http://localhost:8000/api/v1/jobs"
                 
-                # Prepare request for FastAPI
-                fastapi_data = {
-                    "video_filename": os.path.basename(data['video_path']),
-                    "subtitle_filename": os.path.basename(data.get('subtitle_path', '')),
+                # Prepare files for upload
+                files = {}
+                form_data = {
                     "language_code": data['language_code'],
                     "show_name": "Suits",  # Extract from path or use default
                     "episode_name": os.path.splitext(os.path.basename(data['video_path']))[0],
                     "max_expressions": 50,
-                    "language_level": data['language_level']
+                    "language_level": data['language_level'],
+                    "test_mode": False,
+                    "no_shorts": False
                 }
                 
-                # Make request to FastAPI
-                response = requests.post(fastapi_url, json=fastapi_data)
+                # Add video file if it exists
+                if os.path.exists(data['video_path']):
+                    with open(data['video_path'], 'rb') as f:
+                        files['video_file'] = (os.path.basename(data['video_path']), f, 'video/mp4')
+                
+                # Add subtitle file if it exists
+                if data.get('subtitle_path') and os.path.exists(data['subtitle_path']):
+                    with open(data['subtitle_path'], 'rb') as f:
+                        files['subtitle_file'] = (os.path.basename(data['subtitle_path']), f, 'text/plain')
+                
+                # Make request to FastAPI with multipart/form-data
+                response = requests.post(fastapi_url, files=files, data=form_data)
                 
                 if response.status_code == 200:
                     result = response.json()

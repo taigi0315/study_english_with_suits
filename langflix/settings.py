@@ -91,11 +91,6 @@ def get_expression_llm() -> Dict[str, Any]:
     return _config_loader.get('expression', 'llm', default={})
 
 
-def get_expression_whisper() -> Dict[str, Any]:
-    """Get expression WhisperX configuration"""
-    return _config_loader.get('expression', 'whisper', default={})
-
-
 # ============================================================================
 # App Settings
 # ============================================================================

@@ -107,7 +107,7 @@ class ExpressionConfig:
     playback: PlaybackConfig
     layout: LayoutConfig
     llm: Dict[str, Any] = field(default_factory=dict)
-    whisper: Dict[str, Any] = field(default_factory=dict)
+    # Note: whisper field removed - using external transcription
     
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'ExpressionConfig':
@@ -138,14 +138,13 @@ class ExpressionConfig:
         
         # Handle additional configs
         llm = config_dict.get('llm', {})
-        whisper = config_dict.get('whisper', {})
+        # Note: whisper config removed - using external transcription
         
         return cls(
             subtitle_styling=subtitle_styling,
             playback=playback,
             layout=layout,
-            llm=llm,
-            whisper=whisper
+            llm=llm
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -166,6 +165,6 @@ class ExpressionConfig:
                 'landscape': self.layout.landscape,
                 'portrait': self.layout.portrait
             },
-            'llm': self.llm,
-            'whisper': self.whisper
+            'llm': self.llm
+            # Note: whisper field removed - using external transcription
         }

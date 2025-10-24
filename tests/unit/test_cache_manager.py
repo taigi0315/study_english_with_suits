@@ -174,10 +174,7 @@ class TestCacheManager:
         assert isinstance(tts_key, str)
         assert len(tts_key) > 0
         
-        # WhisperX key
-        whisperx_key = self.cache_manager.get_whisperx_key("/path/to/audio.wav", "base", "en")
-        assert isinstance(whisperx_key, str)
-        assert len(whisperx_key) > 0
+        # Note: WhisperX key test removed - using external transcription
         
         # Expression key
         expression_key = self.cache_manager.get_expression_key("chunk text", "ko")

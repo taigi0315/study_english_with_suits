@@ -47,6 +47,7 @@ async def process_video_task(
         # Update job status
         jobs_db[job_id]["status"] = "PROCESSING"
         jobs_db[job_id]["progress"] = 10
+        jobs_db[job_id]["current_step"] = "Initializing video processing..."
         
         # Save uploaded file contents to local filesystem for LangFlix pipeline
         temp_video_path = f"/tmp/{job_id}_video.mkv"
@@ -63,6 +64,7 @@ async def process_video_task(
         
         # Update progress
         jobs_db[job_id]["progress"] = 20
+        jobs_db[job_id]["current_step"] = "Saving uploaded files..."
         
         # Import LangFlix components inside function to avoid circular imports
         from langflix.core.expression_analyzer import analyze_chunk
@@ -76,6 +78,7 @@ async def process_video_task(
         logger.info("Parsing subtitles...")
         subtitles = parse_srt_file(temp_subtitle_path)
         jobs_db[job_id]["progress"] = 30
+        jobs_db[job_id]["current_step"] = "Parsing subtitles..."
         
         # Chunk subtitles
         logger.info("Chunking subtitles...")
@@ -120,6 +123,7 @@ async def process_video_task(
         expressions = expressions[:max_expressions]
         logger.info(f"Found {len(expressions)} expressions")
         jobs_db[job_id]["progress"] = 50
+        jobs_db[job_id]["current_step"] = "Analyzing expressions..."
         
         # Create organized output structure using the same method as main branch
         # Create a proper subtitle file path that includes series/episode info
@@ -190,6 +194,7 @@ async def process_video_task(
                 # Update progress
                 progress = 50 + (i / len(expressions)) * 20
                 jobs_db[job_id]["progress"] = int(progress)
+                jobs_db[job_id]["current_step"] = f"Processing expression {i+1}/{len(expressions)}: {expression.expression[:30]}..."
                 
                 # Create output filenames using organized structure
                 safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -253,6 +258,7 @@ async def process_video_task(
                 # Update progress
                 progress = 70 + (i / len(expressions)) * 20
                 jobs_db[job_id]["progress"] = int(progress)
+                jobs_db[job_id]["current_step"] = f"Creating educational video {i+1}/{len(expressions)}..."
                 
                 temp_clip_path = temp_clip_files[i]
                 
@@ -418,6 +424,7 @@ async def process_video_task(
         # Update job with results
         jobs_db[job_id]["status"] = "COMPLETED"
         jobs_db[job_id]["progress"] = 100
+        jobs_db[job_id]["current_step"] = "Completed successfully!"
         jobs_db[job_id]["expressions"] = processed_expressions
         jobs_db[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
         

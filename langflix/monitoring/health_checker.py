@@ -285,7 +285,6 @@ class HealthChecker:
         try:
             required_modules = [
                 'google.generativeai',
-                'whisperx',
                 'torch',
                 'PIL',
                 'psutil'

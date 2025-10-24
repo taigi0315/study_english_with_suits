@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import logging
 from langflix.core.models import ExpressionAnalysis
-from langflix.asr.timestamp_aligner import AlignedExpression
+# Note: AlignedExpression import removed - using external transcription
 from langflix import settings
 from .exceptions import SubtitleRenderingError
 

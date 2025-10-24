@@ -316,9 +316,7 @@ class CacheManager:
         """Generate cache key for TTS audio"""
         return self._generate_key("tts", text, voice, language, index)
     
-    def get_whisperx_key(self, audio_path: str, model_size: str, language: str) -> str:
-        """Generate cache key for WhisperX transcription"""
-        return self._generate_key("whisperx", audio_path, model_size, language)
+    # Note: get_whisperx_key method removed - using external transcription
     
     def get_expression_key(self, chunk_text: str, language: str) -> str:
         """Generate cache key for expression analysis"""

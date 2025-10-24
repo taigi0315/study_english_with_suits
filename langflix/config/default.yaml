@@ -286,17 +286,7 @@ expression:
     overlap: 5
     max_expressions_per_chunk: 5  # Maximum expressions to extract per chunk
   
-  # WhisperX configuration for precise timestamps
-  whisper:
-    model_size: base
-    device: cpu
-    compute_type: float32
-    language: null
-    fuzzy_threshold: 0.85
-    buffer_start: 0.2
-    buffer_end: 0.2
-    cache_dir: ./cache/audio
-    batch_size: 16
+  # ASR configuration (removed - using external transcription)
   
   # Media processing configuration (Phase 4)
   media:

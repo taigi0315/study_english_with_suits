@@ -2,7 +2,7 @@
 Expression video slicing for LangFlix.
 
 This module provides functionality to slice media files for expressions
-using FFmpeg with precise timestamps from WhisperX ASR.
+using FFmpeg with precise timestamps from external transcription.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 import subprocess
 import asyncio
 import logging
-from langflix.asr.timestamp_aligner import AlignedExpression
+# Note: AlignedExpression import removed - using external transcription
 from langflix.media.media_validator import MediaMetadata
 from langflix.storage.base import StorageBackend
 from langflix import settings

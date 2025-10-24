@@ -819,17 +819,28 @@ class VideoManagementUI:
                 }
                 
                 # Add video file if it exists
-                if os.path.exists(data['video_path']):
-                    with open(data['video_path'], 'rb') as f:
-                        files['video_file'] = (os.path.basename(data['video_path']), f, 'video/mp4')
+                video_file_handle = None
+                subtitle_file_handle = None
                 
-                # Add subtitle file if it exists
-                if data.get('subtitle_path') and os.path.exists(data['subtitle_path']):
-                    with open(data['subtitle_path'], 'rb') as f:
-                        files['subtitle_file'] = (os.path.basename(data['subtitle_path']), f, 'text/plain')
-                
-                # Make request to FastAPI with multipart/form-data
-                response = requests.post(fastapi_url, files=files, data=form_data)
+                try:
+                    if os.path.exists(data['video_path']):
+                        video_file_handle = open(data['video_path'], 'rb')
+                        files['video_file'] = (os.path.basename(data['video_path']), video_file_handle, 'video/mp4')
+                    
+                    # Add subtitle file if it exists
+                    if data.get('subtitle_path') and os.path.exists(data['subtitle_path']):
+                        subtitle_file_handle = open(data['subtitle_path'], 'rb')
+                        files['subtitle_file'] = (os.path.basename(data['subtitle_path']), subtitle_file_handle, 'text/plain')
+                    
+                    # Make request to FastAPI with multipart/form-data
+                    response = requests.post(fastapi_url, files=files, data=form_data)
+                    
+                finally:
+                    # Close file handles
+                    if video_file_handle:
+                        video_file_handle.close()
+                    if subtitle_file_handle:
+                        subtitle_file_handle.close()
                 
                 if response.status_code == 200:
                     result = response.json()
@@ -847,18 +858,29 @@ class VideoManagementUI:
         
         @self.app.route('/api/content/jobs/<job_id>')
         def get_job_status(job_id):
-            """Get job status from FastAPI backend"""
+            """Get job status from local job queue"""
             try:
-                import requests
-                fastapi_url = f"http://localhost:8000/api/v1/jobs/{job_id}"
+                # Get job from local job queue
+                job = self.job_queue.get_job(job_id)
                 
-                # Make request to FastAPI
-                response = requests.get(fastapi_url)
-                
-                if response.status_code == 200:
-                    return jsonify(response.json())
+                if job:
+                    return jsonify({
+                        "job_id": job.job_id,
+                        "status": job.status.value,
+                        "progress": job.progress,
+                        "current_step": job.current_step,
+                        "error_message": getattr(job, 'error_message', None)
+                    })
                 else:
-                    return jsonify({"error": f"FastAPI error: {response.text}"}), response.status_code
+                    # Try to get from FastAPI backend as fallback
+                    import requests
+                    fastapi_url = f"http://localhost:8000/api/v1/jobs/{job_id}"
+                    response = requests.get(fastapi_url)
+                    
+                    if response.status_code == 200:
+                        return jsonify(response.json())
+                    else:
+                        return jsonify({"error": "Job not found"}), 404
                     
             except Exception as e:
                 logger.error(f"Error getting job status: {e}")

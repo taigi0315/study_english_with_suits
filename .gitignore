@@ -51,3 +51,4 @@ Thumbs.db
 .DS_Storeyoutube_token.json
 client_secret_*.json
 youtube_credentials.json
+youtube_token.json

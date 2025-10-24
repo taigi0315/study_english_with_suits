@@ -78,12 +78,17 @@ class PipelineRunner:
             # Step 3: Select expressions (40%)
             update_progress(40, "Selecting expressions...")
             selector = IntelligentExpressionSelector()
-            selected_expressions = selector.select_expressions(
+            context = {
+                'language_level': job.language_level,
+                'target_language': job.language_code,
+                'max_expressions': 50
+            }
+            selection_result = selector.select_expressions(
                 analyzed_expressions,
-                language_level=job.language_level,
-                target_language=job.language_code,
-                max_expressions=50  # Configurable
+                target_count=50,  # Configurable
+                context=context
             )
+            selected_expressions = selection_result.selected_expressions
             logger.info(f"Selected {len(selected_expressions)} expressions")
             
             # Step 4: Generate videos (60%)

@@ -8,6 +8,7 @@ and subtitle rendering for the expression-based learning feature.
 from .media_validator import MediaValidator, MediaMetadata
 from .expression_slicer import ExpressionMediaSlicer
 from .subtitle_renderer import SubtitleRenderer
+from .media_scanner import MediaScanner
 from .exceptions import (
     MediaValidationError,
     VideoSlicingError,
@@ -19,6 +20,7 @@ __all__ = [
     'MediaMetadata',
     'ExpressionMediaSlicer',
     'SubtitleRenderer',
+    'MediaScanner',
     'MediaValidationError',
     'VideoSlicingError',
     'SubtitleRenderingError'

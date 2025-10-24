@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class VideoManagementUI:
     """Web UI for video file management"""
     
-    def __init__(self, output_dir: str = "output", port: int = 5000):
+    def __init__(self, output_dir: str = "output", media_dir: str = "assets/media", port: int = 5000):
         self.output_dir = output_dir
+        self.media_dir = media_dir
         self.port = port
         # Use absolute path for video manager
         import os
@@ -35,6 +36,27 @@ class VideoManagementUI:
         except Exception as e:
             logger.warning(f"Failed to initialize schedule manager: {e}")
             self.schedule_manager = None
+        
+        # Initialize media scanner
+        from langflix.media.media_scanner import MediaScanner
+        try:
+            self.media_scanner = MediaScanner(media_dir, scan_recursive=True)
+            logger.info(f"Media scanner initialized for: {media_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize media scanner: {e}")
+            self.media_scanner = None
+        
+        # Initialize job queue
+        from langflix.services.job_queue import get_job_queue
+        from langflix.services.pipeline_runner import create_pipeline_processor
+        self.job_queue = get_job_queue()
+        
+        # Set pipeline processor with progress callback
+        def progress_callback(job_id: str, progress: int, message: str):
+            self.job_queue.update_progress(job_id, progress, message)
+        
+        processor = create_pipeline_processor(progress_callback)
+        self.job_queue.set_job_processor(processor)
         
         # Flask 앱 초기화 시 템플릿 디렉토리 경로 설정
         import os
@@ -629,9 +651,17 @@ class VideoManagementUI:
                 import traceback
                 logger.error(f"Full traceback: {traceback.format_exc()}")
                 return jsonify({"error": str(e)}), 500
+        
+        # Setup content creation routes
+        self._setup_content_creation_routes()
     
     def _video_to_dict(self, video: VideoMetadata) -> Dict[str, Any]:
         """Convert VideoMetadata to dictionary"""
+        # Determine upload status
+        upload_status = 'not_uploaded'
+        if video.uploaded_to_youtube or video.youtube_video_id:
+            upload_status = 'uploaded'
+        
         return {
             "path": video.path,
             "filename": video.filename,
@@ -647,7 +677,8 @@ class VideoManagementUI:
             "language": video.language,
             "ready_for_upload": video.ready_for_upload,
             "uploaded_to_youtube": video.uploaded_to_youtube,
-            "youtube_video_id": video.youtube_video_id
+            "youtube_video_id": video.youtube_video_id,
+            "upload_status": upload_status
         }
     
     def _format_duration(self, seconds: float) -> str:
@@ -725,6 +756,104 @@ class VideoManagementUI:
             logger.error(f"Failed to save YouTube account: {e}")
             if 'db_session' in locals():
                 db_session.rollback()
+    
+    def _setup_content_creation_routes(self):
+        """Setup content creation API routes"""
+        
+        @self.app.route('/api/media/scan')
+        def scan_media():
+            """Scan media directory and return available files"""
+            try:
+                if not self.media_scanner:
+                    return jsonify({"error": "Media scanner not initialized"}), 503
+                
+                media_files = self.media_scanner.scan_media_directory()
+                return jsonify(media_files)
+            except Exception as e:
+                logger.error(f"Error scanning media: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/content/create', methods=['POST'])
+        def create_content():
+            """Trigger content creation pipeline"""
+            try:
+                data = request.json
+                
+                # Validate required fields
+                required_fields = ['media_id', 'video_path', 'language_code', 'language_level']
+                for field in required_fields:
+                    if field not in data:
+                        return jsonify({"error": f"Missing required field: {field}"}), 400
+                
+                # Enqueue job
+                job_id = self.job_queue.enqueue(
+                    media_id=data['media_id'],
+                    video_path=data['video_path'],
+                    subtitle_path=data.get('subtitle_path'),
+                    language_code=data['language_code'],
+                    language_level=data['language_level']
+                )
+                
+                return jsonify({
+                    "job_id": job_id,
+                    "status": "queued"
+                })
+            except Exception as e:
+                logger.error(f"Error creating content: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/content/jobs/<job_id>')
+        def get_job_status(job_id):
+            """Get job status"""
+            try:
+                job = self.job_queue.get_job(job_id)
+                if not job:
+                    return jsonify({"error": "Job not found"}), 404
+                
+                return jsonify({
+                    "job_id": job.job_id,
+                    "status": job.status.value,
+                    "progress": job.progress,
+                    "current_step": job.current_step,
+                    "error_message": job.error_message,
+                    "created_at": job.created_at.isoformat(),
+                    "started_at": job.started_at.isoformat() if job.started_at else None,
+                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "result": job.result
+                })
+            except Exception as e:
+                logger.error(f"Error getting job status: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/content/jobs')
+        def get_all_jobs():
+            """Get all jobs"""
+            try:
+                jobs = self.job_queue.get_all_jobs()
+                return jsonify([{
+                    "job_id": job.job_id,
+                    "media_id": job.media_id,
+                    "status": job.status.value,
+                    "progress": job.progress,
+                    "current_step": job.current_step,
+                    "created_at": job.created_at.isoformat()
+                } for job in jobs])
+            except Exception as e:
+                logger.error(f"Error getting jobs: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/content/jobs/<job_id>/cancel', methods=['POST'])
+        def cancel_job(job_id):
+            """Cancel a job"""
+            try:
+                success = self.job_queue.cancel_job(job_id)
+                if success:
+                    return jsonify({"status": "cancelled"})
+                else:
+                    return jsonify({"error": "Job cannot be cancelled"}), 400
+            except Exception as e:
+                logger.error(f"Error cancelling job: {e}")
+                return jsonify({"error": str(e)}), 500
     
     def run(self, debug: bool = False):
         """Run the web UI"""

@@ -44,11 +44,8 @@ class PipelineRunner:
             if job.subtitle_path and not os.path.exists(job.subtitle_path):
                 raise FileNotFoundError(f"Subtitle file not found: {job.subtitle_path}")
             
-            # Import main pipeline components
-            from langflix.core.subtitle_parser import parse_subtitle_file
-            from langflix.core.expression_analyzer import analyze_chunk
-            from langflix.core.expression_selector import IntelligentExpressionSelector
-            from langflix.core.video_editor import VideoEditor
+            # Import main pipeline
+            from langflix.main import LangFlixPipeline
             from langflix.settings import get_storage_local_path
             
             # Callback wrapper
@@ -102,22 +99,32 @@ class PipelineRunner:
             show_name = video_path.parent.name
             episode = video_path.stem
             
-            # Create video editor
-            video_editor = VideoEditor(
+            # Run the actual LangFlix pipeline
+            update_progress(70, "Running LangFlix pipeline...")
+            
+            # Create pipeline instance
+            pipeline = LangFlixPipeline(
+                subtitle_file=job.subtitle_path,
+                video_dir=os.path.dirname(job.video_path),  # Directory containing the video
                 output_dir=output_dir,
                 language_code=job.language_code
             )
             
-            # For now, simulate video creation
-            # TODO: Integrate with actual video creation pipeline
-            update_progress(70, "Creating final video...")
-            logger.info(f"Would create final video for {show_name}/{episode}")
-            final_video_path = f"{output_dir}/{show_name}/{episode}/final_video.mkv"
+            # Run the pipeline
+            result = pipeline.run(
+                max_expressions=50,
+                dry_run=False,
+                language_level=job.language_level,
+                save_llm_output=False,
+                test_mode=False,
+                no_shorts=False
+            )
             
-            # Step 5: Create shorts (80%)
-            update_progress(80, "Creating short videos...")
-            logger.info(f"Would create short videos for {show_name}/{episode}")
-            short_videos = [f"{output_dir}/{show_name}/{episode}/short_001.mkv"]
+            update_progress(90, "Pipeline completed!")
+            
+            # Extract results
+            final_video_path = result.get('final_video_path', '')
+            short_videos = result.get('short_videos', [])
             
             # Step 6: Finalize (100%)
             update_progress(100, "Completed!")

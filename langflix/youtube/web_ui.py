@@ -792,7 +792,7 @@ class VideoManagementUI:
         
         @self.app.route('/api/content/create', methods=['POST'])
         def create_content():
-            """Trigger content creation pipeline"""
+            """Trigger content creation pipeline via FastAPI backend"""
             try:
                 data = request.json
                 
@@ -802,42 +802,53 @@ class VideoManagementUI:
                     if field not in data:
                         return jsonify({"error": f"Missing required field: {field}"}), 400
                 
-                # Enqueue job
-                job_id = self.job_queue.enqueue(
-                    media_id=data['media_id'],
-                    video_path=data['video_path'],
-                    subtitle_path=data.get('subtitle_path'),
-                    language_code=data['language_code'],
-                    language_level=data['language_level']
-                )
+                # Call FastAPI backend
+                import requests
+                fastapi_url = "http://localhost:8000/api/v1/jobs"
                 
-                return jsonify({
-                    "job_id": job_id,
-                    "status": "queued"
-                })
+                # Prepare request for FastAPI
+                fastapi_data = {
+                    "video_filename": os.path.basename(data['video_path']),
+                    "subtitle_filename": os.path.basename(data.get('subtitle_path', '')),
+                    "language_code": data['language_code'],
+                    "show_name": "Suits",  # Extract from path or use default
+                    "episode_name": os.path.splitext(os.path.basename(data['video_path']))[0],
+                    "max_expressions": 50,
+                    "language_level": data['language_level']
+                }
+                
+                # Make request to FastAPI
+                response = requests.post(fastapi_url, json=fastapi_data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return jsonify({
+                        "job_id": result.get('job_id'),
+                        "status": "queued",
+                        "backend": "fastapi"
+                    })
+                else:
+                    return jsonify({"error": f"FastAPI error: {response.text}"}), response.status_code
+                    
             except Exception as e:
                 logger.error(f"Error creating content: {e}")
                 return jsonify({"error": str(e)}), 500
         
         @self.app.route('/api/content/jobs/<job_id>')
         def get_job_status(job_id):
-            """Get job status"""
+            """Get job status from FastAPI backend"""
             try:
-                job = self.job_queue.get_job(job_id)
-                if not job:
-                    return jsonify({"error": "Job not found"}), 404
+                import requests
+                fastapi_url = f"http://localhost:8000/api/v1/jobs/{job_id}"
                 
-                return jsonify({
-                    "job_id": job.job_id,
-                    "status": job.status.value,
-                    "progress": job.progress,
-                    "current_step": job.current_step,
-                    "error_message": job.error_message,
-                    "created_at": job.created_at.isoformat(),
-                    "started_at": job.started_at.isoformat() if job.started_at else None,
-                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-                    "result": job.result
-                })
+                # Make request to FastAPI
+                response = requests.get(fastapi_url)
+                
+                if response.status_code == 200:
+                    return jsonify(response.json())
+                else:
+                    return jsonify({"error": f"FastAPI error: {response.text}"}), response.status_code
+                    
             except Exception as e:
                 logger.error(f"Error getting job status: {e}")
                 return jsonify({"error": str(e)}), 500

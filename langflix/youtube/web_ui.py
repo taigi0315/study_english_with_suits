@@ -159,6 +159,23 @@ class VideoManagementUI:
                 logger.error(f"Error generating thumbnail: {e}")
                 return jsonify({"error": str(e)}), 500
         
+        @self.app.route('/assets/<path:filename>')
+        def serve_static_assets(filename):
+            """Serve static assets like icons"""
+            try:
+                # Get the project root directory
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                assets_path = os.path.join(project_root, 'assets', filename)
+                
+                if os.path.exists(assets_path):
+                    return send_file(assets_path)
+                else:
+                    return jsonify({"error": "Asset not found"}), 404
+                    
+            except Exception as e:
+                logger.error(f"Error serving asset {filename}: {e}")
+                return jsonify({"error": str(e)}), 500
+        
         @self.app.route('/api/organize')
         def organize_videos():
             """Organize videos by episode"""

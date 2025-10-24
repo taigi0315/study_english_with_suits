@@ -46,7 +46,7 @@ class PipelineRunner:
             
             # Import main pipeline components
             from langflix.core.subtitle_parser import parse_subtitle_file
-            from langflix.core.expression_analyzer import ExpressionAnalyzer
+            from langflix.core.expression_analyzer import analyze_chunk
             from langflix.core.expression_selector import ExpressionSelector
             from langflix.core.video_processor import VideoProcessor
             from langflix.config.config_loader import get_output_directory
@@ -66,8 +66,13 @@ class PipelineRunner:
             
             # Step 2: Analyze expressions (30%)
             update_progress(30, "Analyzing expressions...")
-            analyzer = ExpressionAnalyzer(target_language=job.language_code)
-            analyzed_expressions = analyzer.analyze_expressions(subtitle_entries)
+            # Convert subtitle entries to the format expected by analyze_chunk
+            subtitle_chunks = [subtitle_entries]  # analyze_chunk expects a list of chunks
+            analyzed_expressions = analyze_chunk(
+                subtitle_chunks[0], 
+                language_level=job.language_level, 
+                language_code=job.language_code
+            )
             logger.info(f"Analyzed {len(analyzed_expressions)} expressions")
             
             # Step 3: Select expressions (40%)

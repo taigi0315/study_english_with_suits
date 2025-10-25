@@ -1940,6 +1940,90 @@ class VideoEditor:
         except Exception as e:
             logger.error(f"Failed to create silence fallback for short video: {e}")
             raise RuntimeError(f"All audio generation methods failed for short video: {e}")
+    
+    def _time_to_seconds(self, time_str: str) -> float:
+        """
+        Convert SRT timestamp to seconds.
+        
+        Args:
+            time_str: Timestamp in format "HH:MM:SS,mmm" or "HH:MM:SS.mmm"
+            
+        Returns:
+            Time in seconds as float
+        """
+        try:
+            # Replace comma with dot for milliseconds if needed
+            time_str = time_str.replace(',', '.')
+            
+            # Split by colon and dot
+            parts = time_str.split(':')
+            if len(parts) != 3:
+                raise ValueError(f"Invalid timestamp format: {time_str}")
+            
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            # Handle seconds and milliseconds
+            seconds_part = parts[2]
+            if '.' in seconds_part:
+                seconds, milliseconds = seconds_part.split('.')
+                seconds = int(seconds)
+                # Pad milliseconds to 3 digits if needed
+                milliseconds = milliseconds.ljust(3, '0')[:3]
+                milliseconds = int(milliseconds)
+            else:
+                seconds = int(seconds_part)
+                milliseconds = 0
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+            return total_seconds
+            
+        except Exception as e:
+            logger.error(f"Error parsing timestamp '{time_str}': {e}")
+            raise ValueError(f"Invalid timestamp: {time_str}") from e
+
+    def _get_original_video_path(self, context_video_path: str) -> str:
+        """
+        Get original video path for audio extraction.
+        
+        If context_video_path is a temporary clip, find the original video file.
+        If it's already the original video, return it as is.
+        
+        Args:
+            context_video_path: Path to context video (might be a clip)
+            
+        Returns:
+            Path to original video file for accurate timestamp-based audio extraction
+        """
+        context_path = Path(context_video_path)
+        
+        # If the path contains temp directories, it's likely a clip - find original
+        if 'tmp' in str(context_path) or 'temp' in str(context_path):
+            logger.info(f"Context video appears to be a temporary clip: {context_path.name}")
+            
+            # Try to find original video in assets/media
+            from langflix.core.video_processor import VideoProcessor
+            media_dir = Path("assets/media")
+            
+            # Look for video files in assets/media
+            for video_file in media_dir.rglob("*.mkv"):
+                if video_file.exists():
+                    logger.info(f"Found original video for audio extraction: {video_file}")
+                    return str(video_file)
+            
+            # Fallback: look for any video file
+            for ext in ['.mkv', '.mp4', '.avi']:
+                for video_file in media_dir.rglob(f"*{ext}"):
+                    if video_file.exists():
+                        logger.info(f"Using fallback original video: {video_file}")
+                        return str(video_file)
+            
+            logger.warning(f"Could not find original video, using context path: {context_video_path}")
+            return context_video_path
+        else:
+            # Path looks like original video
+            logger.info(f"Using provided video path as original: {context_path.name}")
+            return context_video_path
 
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0) -> Tuple[str, float]:
@@ -1994,21 +2078,26 @@ class VideoEditor:
                 tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
                 logger.info(f"TTS audio duration: {tts_duration:.2f}s")
             else:
-                logger.info("TTS disabled - using original audio for short video")
+                logger.info("TTS disabled - using original audio timeline for short video")
                 
-                # Extract original audio directly (no timeline - just single segment for short video)
-                tts_audio_path, tts_duration = self._extract_single_original_audio(
-                    expression, context_video_path, expression_index
+                # Use SAME complete timeline as final_video (not single segment!)
+                # Get original video path for timeline extraction
+                original_video = self._get_original_video_path(context_video_path)
+                
+                # Create TTS audio directory for timeline storage
+                tts_audio_dir = self.output_dir.parent / "tts_audio"
+                tts_audio_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Use same complete timeline extraction as final_video
+                tts_audio_path, tts_duration = self._extract_original_audio_timeline(
+                    expression, original_video, tts_audio_dir, expression_index, {}
                 )
-                logger.info(f"Original audio duration: {tts_duration:.2f}s")
+                logger.info(f"Original audio timeline duration: {tts_duration:.2f}s")
             
-            # Get repeat count from settings
-            repeat_count = settings.get_tts_repeat_count()
-            
-            # Calculate total video duration: context + (TTS * repeat_count) + (0.5s gaps * (repeat_count - 1))
-            gap_duration = 0.5 * (repeat_count - 1) if repeat_count > 1 else 0.0
-            total_duration = context_duration + (tts_duration * repeat_count) + gap_duration
-            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×{repeat_count}: {tts_duration * repeat_count:.2f}s + gaps: {gap_duration:.2f}s)")
+            # Calculate total video duration: context + complete_timeline_duration
+            # Note: tts_duration is now the COMPLETE timeline (includes repetitions and pauses)
+            total_duration = context_duration + tts_duration
+            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + complete_timeline: {tts_duration:.2f}s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -2043,31 +2132,11 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Create combined audio: context_audio + TTS (repeat_count times with 0.5s gaps)
-            logger.info(f"Creating combined audio timeline: context audio + TTS×{repeat_count} with 0.5s gaps")
+            # Use SAME complete timeline as final_video - much simpler!
+            logger.info(f"Using complete audio timeline (same as final_video): {tts_duration:.2f}s")
             
-            # Create audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
-            # Timeline: context_audio + TTS + 0.5s silence + TTS + ... (repeat_count times)
             try:
-                # Create silence for 0.5s gap
-                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
-                self._register_temp_file(silence_0_5s_path)
-                
-                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
-                 .output(str(silence_0_5s_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Convert audio (TTS or original) to WAV with stereo for concatenation
-                audio_wav_path = self.output_dir / f"temp_audio_short_{safe_expression}.wav"
-                self._register_temp_file(audio_wav_path)
-                
-                (ffmpeg.input(str(tts_audio_path))  # tts_audio_path is now generic (can be TTS or original)
-                 .output(str(audio_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Extract context audio to WAV
+                # Extract context audio from context video clip (for the video part)
                 context_audio_path = self.output_dir / f"temp_context_audio_short_{safe_expression}.wav"
                 self._register_temp_file(context_audio_path)
                 
@@ -2076,21 +2145,15 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Create concat file for audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
+                # Create simple concatenation: context_audio + complete_timeline
                 audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
                 self._register_temp_file(audio_concat_file)
                 
                 with open(audio_concat_file, 'w') as f:
-                    # Start with context audio
-                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")
-                    
-                    # Add audio segments with 0.5s silence between them
-                    for i in range(repeat_count):
-                        f.write(f"file '{Path(audio_wav_path).absolute()}'\n")  # audio_wav_path (TTS or original)
-                        if i < repeat_count - 1:  # Don't add silence after the last audio
-                            f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
+                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")        # Context audio
+                    f.write(f"file '{Path(tts_audio_path).absolute()}'\n")            # Complete timeline (same as final_video)
                 
-                # Concatenate all audio segments
+                # Concatenate: context + complete_timeline  
                 combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"
                 self._register_temp_file(combined_audio_path)
                 
@@ -2099,10 +2162,13 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                logger.info(f"✅ Combined audio timeline created: {total_duration:.2f}s")
+                logger.info(f"✅ Combined audio created: context + complete_timeline = {total_duration:.2f}s")
                 
                 # Create final video with combined audio
                 combined_audio_input = ffmpeg.input(str(combined_audio_path))
+                
+                # Create final video with combined audio - fixed FFmpeg command
+                logger.info(f"Creating final short video: {total_duration:.2f}s with combined audio")
                 
                 (
                     ffmpeg
@@ -2113,9 +2179,9 @@ class VideoEditor:
                            crf=23,
                            ac=2,
                            ar=48000,
-                           t=total_duration)
+                           t=total_duration)  # Remove shortest=None - it was causing audio mux issues
                     .overwrite_output()
-                    .run(quiet=True)
+                    .run()
                 )
                 
                 logger.info("✅ Short video created with extended audio successfully")

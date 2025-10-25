@@ -12,9 +12,6 @@ venv:
 	python3 -m venv venv
 	@echo "Virtual environment created."
 
-download_transcripts: venv
-	. venv/bin/activate && python download_transcripts.py
-
 clean:
 	@echo "Cleaning up..."
 	rm -rf venv

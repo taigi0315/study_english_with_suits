@@ -1810,17 +1810,19 @@ class VideoEditor:
             silence_filename = f"silence_fallback_{expression_index}.{audio_format}"
             silence_path = output_dir / silence_filename
             
-            # Use ffmpeg to create silence audio
+            # Use ffmpeg to create silence audio with 48kHz (video standard)
+            sample_rate = 48000  # Match video audio standard, not CD audio (44.1kHz)
+            
             if audio_format.lower() == "mp3":
-                codec_args = ["-c:a", "mp3", "-b:a", "192k"]
+                codec_args = ["-c:a", "mp3", "-b:a", "192k", "-ar", str(sample_rate)]
             else:  # wav
-                codec_args = ["-c:a", "pcm_s16le", "-ar", "44100"]
+                codec_args = ["-c:a", "pcm_s16le", "-ar", str(sample_rate)]
             
             import subprocess
             silence_cmd = [
                 "ffmpeg",
                 "-f", "lavfi",
-                "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-i", f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
                 "-t", str(fallback_duration),
                 *codec_args,
                 "-y",

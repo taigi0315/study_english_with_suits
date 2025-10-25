@@ -79,12 +79,22 @@ class OriginalAudioExtractor:
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Set audio codec and quality based on format
+        # Set audio codec and quality based on format - preserve original sample rate
         if audio_format.lower() == "wav":
-            codec_args = ["-c:a", "pcm_s16le", "-ar", "44100"]  # 16-bit, 44.1kHz WAV
+            # Use original sample rate and proper channel downmix
+            codec_args = [
+                "-c:a", "pcm_s16le",  # 16-bit PCM
+                "-ac", "2",           # Downmix to stereo (from 5.1 if needed)
+                # Don't force sample rate - keep original (usually 48kHz for video)
+            ]
             output_path = output_path.with_suffix('.wav')
         else:  # mp3
-            codec_args = ["-c:a", "mp3", "-b:a", "192k"]
+            codec_args = [
+                "-c:a", "mp3", 
+                "-b:a", "192k",
+                "-ac", "2"            # Downmix to stereo
+                # Don't force sample rate - keep original
+            ]
             output_path = output_path.with_suffix('.mp3')
         
         # FFmpeg command to extract audio segment
@@ -227,15 +237,18 @@ class OriginalAudioExtractor:
             duration: Duration in seconds
             audio_format: Audio format (wav or mp3)
         """
+        # Use 48kHz to match typical video audio (not 44.1kHz for CD audio)
+        sample_rate = 48000
+        
         if audio_format.lower() == "wav":
-            codec_args = ["-c:a", "pcm_s16le", "-ar", "44100"]
+            codec_args = ["-c:a", "pcm_s16le", "-ar", str(sample_rate)]
         else:  # mp3
-            codec_args = ["-c:a", "mp3", "-b:a", "192k"]
+            codec_args = ["-c:a", "mp3", "-b:a", "192k", "-ar", str(sample_rate)]
         
         silence_cmd = [
             "ffmpeg",
             "-f", "lavfi",
-            "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-i", f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
             "-t", str(duration),
             *codec_args,
             "-y",

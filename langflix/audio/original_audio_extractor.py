@@ -148,9 +148,9 @@ class OriginalAudioExtractor:
         audio_format: str = "wav"
     ) -> Tuple[Path, float]:
         """
-        Create an audio timeline with 3x repetition pattern matching TTS behavior.
+        Create an audio timeline with configurable repetition pattern matching TTS behavior.
         
-        Timeline pattern: 1s silence - audio - 0.5s silence - audio - 0.5s silence - audio - 1s silence
+        Timeline pattern: 1s silence - audio - 0.5s silence - audio - ... - 1s silence (repeat_count times)
         
         Args:
             expression: ExpressionAnalysis object
@@ -162,6 +162,11 @@ class OriginalAudioExtractor:
             Tuple of (timeline_audio_path, total_duration)
         """
         logger.info(f"Creating audio timeline for expression {expression_index}: '{expression.expression}'")
+        
+        # Get repeat count from settings to match TTS behavior
+        from langflix import settings
+        repeat_count = settings.get_tts_repeat_count()
+        logger.info(f"Using repeat count: {repeat_count} (from settings)")
         
         # Create temporary directory for audio processing
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -180,19 +185,21 @@ class OriginalAudioExtractor:
             self._create_silence_audio(silence_1s_path, 1.0, audio_format)
             self._create_silence_audio(silence_05s_path, 0.5, audio_format)
             
-            # Create concatenation list file for FFmpeg
+            # Create concatenation list file for FFmpeg with configurable repeat_count
             concat_list_path = temp_path / "concat_list.txt"
             with open(concat_list_path, 'w') as f:
-                f.write(f"file '{silence_1s_path}'\n")      # 1s silence
-                f.write(f"file '{extracted_path}'\n")        # Original audio
-                f.write(f"file '{silence_05s_path}'\n")      # 0.5s silence  
-                f.write(f"file '{extracted_path}'\n")        # Original audio (2nd)
-                f.write(f"file '{silence_05s_path}'\n")      # 0.5s silence
-                f.write(f"file '{extracted_path}'\n")        # Original audio (3rd)
-                f.write(f"file '{silence_1s_path}'\n")       # 1s silence
+                f.write(f"file '{silence_1s_path}'\n")      # 1s start silence
+                
+                # Add audio segments with 0.5s silence between them (matching TTS pattern)
+                for i in range(repeat_count):
+                    f.write(f"file '{extracted_path}'\n")    # Original audio
+                    if i < repeat_count - 1:  # Don't add silence after the last audio
+                        f.write(f"file '{silence_05s_path}'\n")  # 0.5s silence between repetitions
+                
+                f.write(f"file '{silence_1s_path}'\n")       # 1s end silence
             
-            # Calculate total duration
-            total_duration = 1.0 + segment_duration + 0.5 + segment_duration + 0.5 + segment_duration + 1.0
+            # Calculate total duration: 1s start + (audio * repeat_count) + (0.5s * (repeat_count-1)) + 1s end
+            total_duration = 2.0 + (segment_duration * repeat_count) + (0.5 * (repeat_count - 1))
             
             # Output timeline file
             timeline_filename = f"expression_{expression_index}_timeline.{audio_format}"

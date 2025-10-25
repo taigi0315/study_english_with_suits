@@ -1988,44 +1988,38 @@ class VideoEditor:
         """
         Get original video path for audio extraction.
         
-        If context_video_path is a temporary clip, find the original video file.
-        If it's already the original video, return it as is.
+        Context videos are clips without audio, so we need to find the original video file.
         
         Args:
-            context_video_path: Path to context video (might be a clip)
+            context_video_path: Path to context video (always a clip)
             
         Returns:
             Path to original video file for accurate timestamp-based audio extraction
         """
         context_path = Path(context_video_path)
         
-        # If the path contains temp directories, it's likely a clip - find original
-        if 'tmp' in str(context_path) or 'temp' in str(context_path):
-            logger.info(f"Context video appears to be a temporary clip: {context_path.name}")
-            
-            # Try to find original video in assets/media
-            from langflix.core.video_processor import VideoProcessor
-            media_dir = Path("assets/media")
-            
-            # Look for video files in assets/media
-            for video_file in media_dir.rglob("*.mkv"):
+        # Context videos are always clips - find the original video file
+        logger.info(f"Finding original video for context clip: {context_path.name}")
+        
+        # Try to find original video in assets/media
+        from langflix.core.video_processor import VideoProcessor
+        media_dir = Path("assets/media")
+        
+        # Look for video files in assets/media
+        for video_file in media_dir.rglob("*.mkv"):
+            if video_file.exists():
+                logger.info(f"Found original video for audio extraction: {video_file}")
+                return str(video_file)
+        
+        # Fallback: look for any video file
+        for ext in ['.mkv', '.mp4', '.avi']:
+            for video_file in media_dir.rglob(f"*{ext}"):
                 if video_file.exists():
-                    logger.info(f"Found original video for audio extraction: {video_file}")
+                    logger.info(f"Using fallback original video: {video_file}")
                     return str(video_file)
-            
-            # Fallback: look for any video file
-            for ext in ['.mkv', '.mp4', '.avi']:
-                for video_file in media_dir.rglob(f"*{ext}"):
-                    if video_file.exists():
-                        logger.info(f"Using fallback original video: {video_file}")
-                        return str(video_file)
-            
-            logger.warning(f"Could not find original video, using context path: {context_video_path}")
-            return context_video_path
-        else:
-            # Path looks like original video
-            logger.info(f"Using provided video path as original: {context_path.name}")
-            return context_video_path
+        
+        logger.warning(f"Could not find original video, using context path: {context_video_path}")
+        return context_video_path
 
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0) -> Tuple[str, float]:

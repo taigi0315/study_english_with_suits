@@ -2013,24 +2013,24 @@ class VideoEditor:
                 return str(original_video)
         
         # Fallback: Try to find original video in assets/media (old logic)
-        from langflix.core.video_processor import VideoProcessor
-        media_dir = Path("assets/media")
-        
-        # Look for video files in assets/media
-        for video_file in media_dir.rglob("*.mkv"):
-            if video_file.exists():
-                logger.info(f"Found original video for audio extraction: {video_file}")
-                return str(video_file)
-        
-        # Fallback: look for any video file
-        for ext in ['.mkv', '.mp4', '.avi']:
-            for video_file in media_dir.rglob(f"*{ext}"):
+            from langflix.core.video_processor import VideoProcessor
+            media_dir = Path("assets/media")
+            
+            # Look for video files in assets/media
+            for video_file in media_dir.rglob("*.mkv"):
                 if video_file.exists():
-                    logger.info(f"Using fallback original video: {video_file}")
+                    logger.info(f"Found original video for audio extraction: {video_file}")
                     return str(video_file)
-        
-        logger.warning(f"Could not find original video, using context path: {context_video_path}")
-        return context_video_path
+            
+            # Fallback: look for any video file
+            for ext in ['.mkv', '.mp4', '.avi']:
+                for video_file in media_dir.rglob(f"*{ext}"):
+                    if video_file.exists():
+                        logger.info(f"Using fallback original video: {video_file}")
+                        return str(video_file)
+            
+            logger.warning(f"Could not find original video, using context path: {context_video_path}")
+            return context_video_path
 
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
@@ -2150,15 +2150,56 @@ class VideoEditor:
             context_input = ffmpeg.input(context_video_path)
             slide_input = ffmpeg.input(slide_path)
             
-            # Extend context video with freeze frame during expression timeline
-            freeze_duration = expression_timeline_duration
-            logger.info(f"Extending context video by {freeze_duration:.2f}s with freeze frame for expression timeline")
-            context_extended = ffmpeg.filter(
-                context_input['v'],
-                'tpad',
-                stop_mode='clone',
-                stop_duration=freeze_duration
-            )
+            # Extract expression video clip and concatenate with context video
+            logger.info(f"Creating expression video clip for timeline duration: {expression_timeline_duration:.2f}s")
+            
+            try:
+                # Convert timestamps to seconds for FFmpeg
+                start_seconds = self._time_to_seconds(expression.expression_start_time)
+                end_seconds = self._time_to_seconds(expression.expression_end_time)
+                expression_duration = end_seconds - start_seconds
+                
+                logger.info(f"Extracting expression video: {expression.expression_start_time} - {expression.expression_end_time} ({expression_duration:.2f}s)")
+                
+                # Simple approach: Just extract expression video and concatenate with context
+                expression_video_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
+                self._register_temp_file(expression_video_path)
+                
+                # Extract expression video clip (no looping for now)
+                logger.info(f"Creating expression video clip ({expression_duration:.2f}s)")
+                
+                (ffmpeg.input(original_video, ss=start_seconds, t=expression_duration)
+                 .output(str(expression_video_path), vcodec='libx264', acodec='aac', preset='fast', crf=23)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Create concatenated video using concat filter
+                logger.info(f"Concatenating context video ({context_duration:.2f}s) + expression video ({expression_duration:.2f}s)")
+                
+                concatenated_video_path = self.output_dir / f"temp_concatenated_video_{safe_expression}.mkv"
+                self._register_temp_file(concatenated_video_path)
+                
+                # Use concat filter to join videos (video only, no audio)
+                context_clip = ffmpeg.input(context_video_path)
+                expression_clip = ffmpeg.input(str(expression_video_path))
+                
+                (ffmpeg.concat(context_clip, expression_clip, v=1, a=0)  # Only video, no audio
+                 .output(str(concatenated_video_path), vcodec='libx264', preset='fast', crf=23)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                context_extended = ffmpeg.input(str(concatenated_video_path))['v']
+                logger.info(f"✅ Successfully created expression video with playback (context: {context_duration:.2f}s + expression: {expression_duration:.2f}s)")
+                
+            except Exception as e:
+                logger.warning(f"Failed to create expression video, falling back to freeze frame: {e}")
+                # Fallback to freeze frame if expression video creation fails
+                context_extended = ffmpeg.filter(
+                    context_input['v'],
+                    'tpad',
+                    stop_mode='clone',
+                    stop_duration=expression_timeline_duration
+                )
             
             # Scale videos to half height for stacking
             context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
@@ -2195,14 +2236,14 @@ class VideoEditor:
                      stacked_video,
                      timeline_audio_input['a'],
                      str(output_path),
-                     vcodec='libx264',
-                     acodec='aac',
-                     preset='fast',
-                     crf=23,
-                     ac=2,
-                     ar=48000,
+                           vcodec='libx264',
+                           acodec='aac',
+                           preset='fast',
+                           crf=23,
+                           ac=2,
+                           ar=48000,
                      t=total_duration)  # Video duration matches audio duration
-                 .overwrite_output()
+                    .overwrite_output()
                  .run())
                 
                 logger.info("✅ Short video created with extended audio successfully")

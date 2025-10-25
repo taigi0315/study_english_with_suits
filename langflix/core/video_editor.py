@@ -2094,10 +2094,11 @@ class VideoEditor:
                 )
                 logger.info(f"Original audio timeline duration: {tts_duration:.2f}s")
             
-            # Calculate total video duration: context + complete_timeline_duration
-            # Note: tts_duration is now the COMPLETE timeline (includes repetitions and pauses)
-            total_duration = context_duration + tts_duration
-            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + complete_timeline: {tts_duration:.2f}s)")
+            # Use ONLY the complete timeline duration (same as final_video)
+            # The complete timeline already includes all repetitions and pauses
+            total_duration = context_duration + tts_duration  # Keep context video for visual + timeline for audio
+            video_audio_duration = tts_duration  # But audio is ONLY the complete timeline
+            logger.info(f"Short video: context visual ({context_duration:.2f}s) + timeline audio ({video_audio_duration:.2f}s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -2132,54 +2133,53 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Use SAME complete timeline as final_video - much simpler!
-            logger.info(f"Using complete audio timeline (same as final_video): {tts_duration:.2f}s")
+            # Use complete timeline but extend it to match total video duration
+            logger.info(f"Extending timeline audio to match video duration: {video_audio_duration:.2f}s → {total_duration:.2f}s")
             
             try:
-                # Extract context audio from context video clip (for the video part)
-                context_audio_path = self.output_dir / f"temp_context_audio_short_{safe_expression}.wav"
-                self._register_temp_file(context_audio_path)
+                # Create extended audio by looping the timeline to fill video duration
+                if total_duration > video_audio_duration:
+                    # Calculate how many times to loop
+                    loop_count = int(total_duration / video_audio_duration) + 1
+                    logger.info(f"Looping timeline {loop_count} times to fill {total_duration:.2f}s")
+                    
+                    # Create loop concat list
+                    loop_concat_file = self.output_dir / f"temp_loop_audio_short_{safe_expression}.txt"
+                    self._register_temp_file(loop_concat_file)
+                    
+                    with open(loop_concat_file, 'w') as f:
+                        for i in range(loop_count):
+                            f.write(f"file '{Path(tts_audio_path).absolute()}'\n")
+                    
+                    # Create looped audio
+                    extended_audio_path = self.output_dir / f"temp_extended_audio_short_{safe_expression}.wav"
+                    self._register_temp_file(extended_audio_path)
+                    
+                    (ffmpeg.input(str(loop_concat_file), format='concat', safe=0)
+                     .output(str(extended_audio_path), acodec='pcm_s16le', ar=48000, ac=2, t=total_duration)
+                     .overwrite_output()
+                     .run(quiet=True))
+                    
+                    timeline_audio_input = ffmpeg.input(str(extended_audio_path))
+                    logger.info(f"✅ Extended audio created: {total_duration:.2f}s")
+                else:
+                    # Use original timeline if it's already long enough
+                    timeline_audio_input = ffmpeg.input(str(tts_audio_path))
+                    logger.info(f"✅ Using original timeline: {video_audio_duration:.2f}s")
                 
-                (ffmpeg.input(context_video_path)
-                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2, vn=None)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Create simple concatenation: context_audio + complete_timeline
-                audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
-                self._register_temp_file(audio_concat_file)
-                
-                with open(audio_concat_file, 'w') as f:
-                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")        # Context audio
-                    f.write(f"file '{Path(tts_audio_path).absolute()}'\n")            # Complete timeline (same as final_video)
-                
-                # Concatenate: context + complete_timeline  
-                combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"
-                self._register_temp_file(combined_audio_path)
-                
-                (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
-                 .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                logger.info(f"✅ Combined audio created: context + complete_timeline = {total_duration:.2f}s")
-                
-                # Create final video with combined audio
-                combined_audio_input = ffmpeg.input(str(combined_audio_path))
-                
-                # Create final video with combined audio - fixed FFmpeg command
-                logger.info(f"Creating final short video: {total_duration:.2f}s with combined audio")
+                # Create final video with extended timeline audio
+                logger.info(f"Creating final short video: video={total_duration:.2f}s with extended_timeline_audio={total_duration:.2f}s")
                 
                 (
                     ffmpeg
-                    .output(stacked_video, combined_audio_input['a'], str(output_path),
+                    .output(stacked_video, timeline_audio_input['a'], str(output_path),
                            vcodec='libx264',
                            acodec='aac',
                            preset='fast',
                            crf=23,
                            ac=2,
                            ar=48000,
-                           t=total_duration)  # Remove shortest=None - it was causing audio mux issues
+                           t=total_duration)  # Video duration (extended context + slide)
                     .overwrite_output()
                     .run()
                 )

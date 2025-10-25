@@ -1841,6 +1841,106 @@ class VideoEditor:
             logger.error(f"Failed to create silence fallback: {e}")
             raise RuntimeError(f"All audio generation methods failed: {e}")
 
+    def _extract_single_original_audio(
+        self, 
+        expression: ExpressionAnalysis, 
+        original_video_path: str, 
+        expression_index: int = 0
+    ) -> Tuple[Path, float]:
+        """
+        Extract single audio segment from original video for short video use.
+        
+        Unlike timeline creation, this extracts just the raw audio segment without repetition.
+        
+        Args:
+            expression: ExpressionAnalysis object with timestamps
+            original_video_path: Path to the original video file
+            expression_index: Index for unique filename generation
+            
+        Returns:
+            Tuple of (audio_path, duration)
+        """
+        try:
+            logger.info(f"Extracting single original audio segment for short video")
+            
+            # Import the original audio extractor
+            from langflix.audio.original_audio_extractor import OriginalAudioExtractor
+            
+            # Create extractor instance
+            extractor = OriginalAudioExtractor(original_video_path)
+            
+            # Create output path for single audio segment
+            audio_dir = self.output_dir / "temp_short_audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            single_audio_filename = f"short_audio_{expression_index}.wav"
+            single_audio_path = audio_dir / single_audio_filename
+            
+            # Extract just the single audio segment (no timeline)
+            extracted_path, duration = extractor.extract_expression_audio(
+                expression=expression,
+                output_path=single_audio_path,
+                audio_format="wav"
+            )
+            
+            # Register for cleanup
+            self._register_temp_file(extracted_path)
+            
+            logger.info(f"Extracted single audio segment: {extracted_path} ({duration:.2f}s)")
+            return extracted_path, duration
+            
+        except Exception as e:
+            error_msg = f"Error extracting single original audio: {e}"
+            logger.error(error_msg)
+            
+            # Create fallback silence audio for short video
+            logger.warning("Original audio extraction failed, creating silence fallback for short video")
+            return self._create_silence_fallback_single(expression_index)
+    
+    def _create_silence_fallback_single(self, expression_index: int = 0) -> Tuple[Path, float]:
+        """
+        Create single silence audio file as fallback for short video.
+        
+        Args:
+            expression_index: Index for unique filename generation
+            
+        Returns:
+            Tuple of (silence_audio_path, duration)
+        """
+        try:
+            # Create simple 2-second silence for short video fallback
+            fallback_duration = 2.0
+            sample_rate = 48000  # Match video audio standard
+            
+            silence_filename = f"short_silence_fallback_{expression_index}.wav"
+            silence_path = self.output_dir / silence_filename
+            
+            # Use ffmpeg to create silence audio
+            codec_args = ["-c:a", "pcm_s16le", "-ar", str(sample_rate)]
+            
+            import subprocess
+            silence_cmd = [
+                "ffmpeg",
+                "-f", "lavfi",
+                "-i", f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
+                "-t", str(fallback_duration),
+                *codec_args,
+                "-y",
+                str(silence_path)
+            ]
+            
+            subprocess.run(silence_cmd, capture_output=True, text=True, check=True)
+            
+            # Register for cleanup
+            self._register_temp_file(silence_path)
+            
+            logger.warning(f"Created silence fallback for short video: {silence_path} ({fallback_duration}s)")
+            return silence_path, fallback_duration
+            
+        except Exception as e:
+            logger.error(f"Failed to create silence fallback for short video: {e}")
+            raise RuntimeError(f"All audio generation methods failed for short video: {e}")
+
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0) -> Tuple[str, float]:
         """
@@ -1876,19 +1976,31 @@ class VideoEditor:
                 logger.error(f"Error getting context video duration: {e}")
                 context_duration = 10.0  # Fallback duration
             
-            # Generate TTS audio using only expression_dialogue
+            # Generate audio for short video - check TTS setting like main educational video
             tts_text = expression.expression_dialogue
-            logger.info(f"Generating TTS audio for short video: '{tts_text}'")
+            logger.info(f"Generating audio for short video: '{tts_text}'")
             
-            # Edge case: Truncate if too long for TTS provider
-            MAX_TTS_CHARS = 500  # Adjust based on provider
-            if len(tts_text) > MAX_TTS_CHARS:
-                logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
-                tts_text = tts_text[:MAX_TTS_CHARS]
-            
-            logger.info(f"🔍 Calling _generate_single_tts for: '{tts_text}' (index: {expression_index})")
-            tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
-            logger.info(f"TTS audio duration: {tts_duration:.2f}s")
+            # Check TTS setting and use appropriate audio source
+            if settings.is_tts_enabled():
+                logger.info("TTS enabled - using synthetic speech for short video")
+                
+                # Edge case: Truncate if too long for TTS provider
+                MAX_TTS_CHARS = 500  # Adjust based on provider
+                if len(tts_text) > MAX_TTS_CHARS:
+                    logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
+                    tts_text = tts_text[:MAX_TTS_CHARS]
+                
+                logger.info(f"🔍 Calling _generate_single_tts for: '{tts_text}' (index: {expression_index})")
+                tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
+                logger.info(f"TTS audio duration: {tts_duration:.2f}s")
+            else:
+                logger.info("TTS disabled - using original audio for short video")
+                
+                # Extract original audio directly (no timeline - just single segment for short video)
+                tts_audio_path, tts_duration = self._extract_single_original_audio(
+                    expression, context_video_path, expression_index
+                )
+                logger.info(f"Original audio duration: {tts_duration:.2f}s")
             
             # Get repeat count from settings
             repeat_count = settings.get_tts_repeat_count()
@@ -1946,12 +2058,12 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Convert TTS to WAV with stereo for concatenation
-                tts_wav_path = self.output_dir / f"temp_tts_short_{safe_expression}.wav"
-                self._register_temp_file(tts_wav_path)
+                # Convert audio (TTS or original) to WAV with stereo for concatenation
+                audio_wav_path = self.output_dir / f"temp_audio_short_{safe_expression}.wav"
+                self._register_temp_file(audio_wav_path)
                 
-                (ffmpeg.input(str(tts_audio_path))
-                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
+                (ffmpeg.input(str(tts_audio_path))  # tts_audio_path is now generic (can be TTS or original)
+                 .output(str(audio_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
                  .run(quiet=True))
                 
@@ -1972,10 +2084,10 @@ class VideoEditor:
                     # Start with context audio
                     f.write(f"file '{Path(context_audio_path).absolute()}'\n")
                     
-                    # Add TTS segments with 0.5s silence between them
+                    # Add audio segments with 0.5s silence between them
                     for i in range(repeat_count):
-                        f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
-                        if i < repeat_count - 1:  # Don't add silence after the last TTS
+                        f.write(f"file '{Path(audio_wav_path).absolute()}'\n")  # audio_wav_path (TTS or original)
+                        if i < repeat_count - 1:  # Don't add silence after the last audio
                             f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
                 
                 # Concatenate all audio segments

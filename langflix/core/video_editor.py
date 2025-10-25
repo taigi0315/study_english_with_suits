@@ -2173,15 +2173,38 @@ class VideoEditor:
                  .overwrite_output()
                  .run(quiet=True))
                 
+                # Loop expression video to match timeline duration if needed
+                if expression_duration < expression_timeline_duration:
+                    # Calculate how many loops we need
+                    num_loops = int(expression_timeline_duration / expression_duration) + 1
+                    logger.info(f"Looping expression video {num_loops} times to match timeline duration ({expression_timeline_duration:.2f}s)")
+                    
+                    # Create looped expression video using loop filter
+                    looped_expression_path = self.output_dir / f"temp_looped_expression_{safe_expression}.mkv"
+                    self._register_temp_file(looped_expression_path)
+                    
+                    (ffmpeg.input(str(expression_video_path))
+                     .video.filter('loop', loop=num_loops-1, size=32767)
+                     .output(str(looped_expression_path), vcodec='libx264', t=expression_timeline_duration, preset='fast', crf=23)
+                     .overwrite_output()
+                     .run(quiet=True))
+                    
+                    final_expression_path = looped_expression_path
+                    final_expression_duration = expression_timeline_duration
+                else:
+                    # Expression video is long enough, just trim to timeline duration
+                    final_expression_path = expression_video_path
+                    final_expression_duration = min(expression_duration, expression_timeline_duration)
+                
                 # Create concatenated video using concat filter
-                logger.info(f"Concatenating context video ({context_duration:.2f}s) + expression video ({expression_duration:.2f}s)")
+                logger.info(f"Concatenating context video ({context_duration:.2f}s) + expression video ({final_expression_duration:.2f}s)")
                 
                 concatenated_video_path = self.output_dir / f"temp_concatenated_video_{safe_expression}.mkv"
                 self._register_temp_file(concatenated_video_path)
                 
                 # Use concat filter to join videos (video only, no audio)
                 context_clip = ffmpeg.input(context_video_path)
-                expression_clip = ffmpeg.input(str(expression_video_path))
+                expression_clip = ffmpeg.input(str(final_expression_path))
                 
                 (ffmpeg.concat(context_clip, expression_clip, v=1, a=0)  # Only video, no audio
                  .output(str(concatenated_video_path), vcodec='libx264', preset='fast', crf=23)
@@ -2189,7 +2212,7 @@ class VideoEditor:
                  .run(quiet=True))
                 
                 context_extended = ffmpeg.input(str(concatenated_video_path))['v']
-                logger.info(f"✅ Successfully created expression video with playback (context: {context_duration:.2f}s + expression: {expression_duration:.2f}s)")
+                logger.info(f"✅ Successfully created expression video with playback (context: {context_duration:.2f}s + expression: {final_expression_duration:.2f}s)")
                 
             except Exception as e:
                 logger.warning(f"Failed to create expression video, falling back to freeze frame: {e}")

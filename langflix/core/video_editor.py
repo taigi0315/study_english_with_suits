@@ -1984,14 +1984,16 @@ class VideoEditor:
             logger.error(f"Error parsing timestamp '{time_str}': {e}")
             raise ValueError(f"Invalid timestamp: {time_str}") from e
 
-    def _get_original_video_path(self, context_video_path: str) -> str:
+    def _get_original_video_path(self, context_video_path: str, subtitle_file_path: str = None) -> str:
         """
-        Get original video path for audio extraction.
+        Get original video path for audio extraction using the same logic as educational videos.
         
-        Context videos are clips without audio, so we need to find the original video file.
+        Context videos are clips without audio, so we need to find the original video file
+        that corresponds to the subtitle file being processed.
         
         Args:
             context_video_path: Path to context video (always a clip)
+            subtitle_file_path: Path to subtitle file for matching (if available)
             
         Returns:
             Path to original video file for accurate timestamp-based audio extraction
@@ -2001,7 +2003,16 @@ class VideoEditor:
         # Context videos are always clips - find the original video file
         logger.info(f"Finding original video for context clip: {context_path.name}")
         
-        # Try to find original video in assets/media
+        # If we have subtitle file path, use the same logic as educational videos
+        if subtitle_file_path:
+            from langflix.core.video_processor import VideoProcessor
+            video_processor = VideoProcessor()
+            original_video = video_processor.find_video_file(subtitle_file_path)
+            if original_video and original_video.exists():
+                logger.info(f"Found original video using subtitle matching: {original_video}")
+                return str(original_video)
+        
+        # Fallback: Try to find original video in assets/media (old logic)
         from langflix.core.video_processor import VideoProcessor
         media_dir = Path("assets/media")
         
@@ -2022,7 +2033,7 @@ class VideoEditor:
         return context_video_path
 
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
-                                  expression_index: int = 0) -> Tuple[str, float]:
+                                  expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
         """
         Create vertical short-format video (9:16) with context video on top and slide on bottom.
         Total duration = context_duration + (TTS_duration * repeat_count) + (0.5s * (repeat_count - 1))
@@ -2085,7 +2096,7 @@ class VideoEditor:
                 raise
             
             # 2. Get repeating expression audio (timeline with repetitions)
-            original_video = self._get_original_video_path(context_video_path)
+            original_video = self._get_original_video_path(context_video_path, subtitle_file_path)
             tts_audio_dir = self.output_dir.parent / "tts_audio"
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             

@@ -574,7 +574,7 @@ class LangFlixPipeline:
                     
                     try:
                         output_path, duration = self.video_editor.create_short_format_video(
-                            str(context_video), expression, i
+                            str(context_video), expression, i, str(self.subtitle_file)
                         )
                         short_format_videos.append((output_path, duration))
                         logger.info(f"✅ Short format video created: {output_path} (duration: {duration:.2f}s)")

@@ -704,71 +704,37 @@ class VideoEditor:
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"TTS audio directory: {tts_audio_dir}")
             
-            try:
-                # Create and validate TTS client
-                logger.info("Creating TTS client...")
-                tts_client = create_tts_client(provider, provider_config)
-                
-                # Test if TTS is enabled
-                if not settings.is_tts_enabled():
-                    logger.warning("TTS is disabled in configuration, using fallback")
-                    raise ValueError("TTS is disabled")
-                
-                # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
-                logger.info(f"Generating TTS timeline for: '{tts_text}' (expression index: {expression_index})")
-                audio_path, expression_duration = self._generate_tts_timeline(
-                    tts_text, tts_client, provider_config, tts_audio_dir, expression_index
+            # Check if TTS is enabled and decide on audio workflow
+            if settings.is_tts_enabled():
+                try:
+                    # TTS Workflow: Generate synthetic speech
+                    logger.info("TTS is enabled - using synthetic speech")
+                    logger.info("Creating TTS client...")
+                    tts_client = create_tts_client(provider, provider_config)
+                    
+                    # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+                    logger.info(f"Generating TTS timeline for: '{tts_text}' (expression index: {expression_index})")
+                    audio_path, expression_duration = self._generate_tts_timeline(
+                        tts_text, tts_client, provider_config, tts_audio_dir, expression_index
+                    )
+                    
+                    logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
+                    
+                except Exception as tts_error:
+                    logger.error(f"Error generating TTS audio: {tts_error}")
+                    logger.error(f"TTS Error details: {tts_error}")
+                    
+                    # Fallback to original audio when TTS fails
+                    logger.warning("TTS failed, falling back to original audio extraction")
+                    audio_path, expression_duration = self._extract_original_audio_timeline(
+                        expression, expression_source_video, tts_audio_dir, expression_index, provider_config
+                    )
+            else:
+                # Original Audio Workflow: Extract from source video
+                logger.info("TTS is disabled - using original audio extraction")
+                audio_path, expression_duration = self._extract_original_audio_timeline(
+                    expression, expression_source_video, tts_audio_dir, expression_index, provider_config
                 )
-                
-                logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
-                
-            except Exception as tts_error:
-                logger.error(f"Error generating TTS audio: {tts_error}")
-                logger.error(f"TTS Error details: {tts_error}")
-                
-                # Use the configured audio format for fallback as well
-                audio_format = provider_config.get('response_format', 'mp3')
-                logger.info(f"Using {audio_format} format for fallback audio")
-                
-                expression_duration = 2.0  # Default 2 seconds
-                
-                # Create fallback with same format as configured
-                if audio_format.lower() == 'mp3':
-                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.mp3"
-                    self._register_temp_file(audio_path)
-                    
-                    # Generate 2 seconds of silence as MP3 fallback
-                    (
-                        ffmpeg
-                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
-                        .output(str(audio_path), acodec='libmp3lame', ar=44100)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                else:
-                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
-                    self._register_temp_file(audio_path)
-                    
-                    # Generate 2 seconds of silence as WAV fallback
-                    (
-                        ffmpeg
-                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
-                        .output(str(audio_path), acodec='pcm_s16le')
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                
-                logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback in {audio_format} format")
-                
-                # Save the fallback file to permanent tts_audio directory with correct format
-                tts_audio_dir = self.output_dir.parent / "tts_audio"
-                tts_audio_dir.mkdir(exist_ok=True)
-                fallback_filename = f"tts_fallback_{self._sanitize_filename(expression.expression)}.{audio_format}"
-                fallback_permanent_path = tts_audio_dir / fallback_filename
-                
-                import shutil
-                shutil.copy2(str(audio_path), str(fallback_permanent_path))
-                logger.warning(f"Fallback silence audio saved to: {fallback_permanent_path}")
             
             # Use the timeline audio directly (no need for 2x conversion since timeline is already complete)
             audio_2x_path = audio_path  # The timeline already includes 2 TTS segments with pauses
@@ -1738,6 +1704,140 @@ class VideoEditor:
         except Exception as e:
             logger.error(f"Error in _generate_tts_timeline: {e}")
             raise
+
+    def _extract_original_audio_timeline(
+        self, 
+        expression: ExpressionAnalysis, 
+        original_video_path: str, 
+        output_dir: Path, 
+        expression_index: int = 0,
+        provider_config: dict = None
+    ) -> Tuple[Path, float]:
+        """
+        Extract audio from original video and create 3x repetition timeline matching TTS behavior.
+        
+        Timeline pattern: 1s silence - audio - 0.5s silence - audio - 0.5s silence - audio - 1s silence
+        
+        Args:
+            expression: ExpressionAnalysis object with timestamps
+            original_video_path: Path to the original video file
+            output_dir: Directory for output files
+            expression_index: Index for unique filename generation
+            provider_config: TTS provider config (for audio format compatibility)
+            
+        Returns:
+            Tuple of (timeline_audio_path, total_duration)
+        """
+        try:
+            logger.info(f"Extracting original audio timeline for expression {expression_index}: '{expression.expression}'")
+            
+            # Import the original audio extractor
+            from langflix.audio.original_audio_extractor import create_original_audio_timeline
+            
+            # Determine audio format from provider config (default to wav for compatibility)
+            audio_format = "wav"
+            if provider_config:
+                config_format = provider_config.get('response_format', 'wav')
+                if config_format.lower() in ['mp3', 'wav']:
+                    audio_format = config_format.lower()
+            
+            logger.info(f"Using audio format: {audio_format} (from provider config)")
+            
+            # Validate expression timestamps
+            if not expression.expression_start_time or not expression.expression_end_time:
+                error_msg = f"Expression '{expression.expression}' missing required timestamps for audio extraction"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Create timeline using the original audio extractor
+            logger.info(f"Original video path: {original_video_path}")
+            logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time}")
+            
+            timeline_path, total_duration = create_original_audio_timeline(
+                expression=expression,
+                original_video_path=original_video_path,
+                output_dir=output_dir,
+                expression_index=expression_index,
+                audio_format=audio_format
+            )
+            
+            # Register the created file for cleanup
+            self._register_temp_file(timeline_path)
+            
+            logger.info(f"Successfully created original audio timeline: {timeline_path}")
+            logger.info(f"Timeline duration: {total_duration:.2f}s (3x repetition with pauses)")
+            
+            return timeline_path, total_duration
+            
+        except Exception as e:
+            error_msg = f"Error extracting original audio timeline: {e}"
+            logger.error(error_msg)
+            
+            # Create a fallback silence audio if original extraction fails
+            logger.warning("Original audio extraction failed, creating silence fallback")
+            return self._create_silence_fallback(expression, output_dir, expression_index, provider_config)
+    
+    def _create_silence_fallback(
+        self,
+        expression: ExpressionAnalysis,
+        output_dir: Path,
+        expression_index: int = 0,
+        provider_config: dict = None
+    ) -> Tuple[Path, float]:
+        """
+        Create silence audio as fallback when both TTS and original audio extraction fail.
+        
+        Args:
+            expression: ExpressionAnalysis object
+            output_dir: Directory for output files
+            expression_index: Index for unique filename generation
+            provider_config: TTS provider config (for audio format compatibility)
+            
+        Returns:
+            Tuple of (silence_audio_path, duration)
+        """
+        try:
+            # Determine audio format from provider config
+            audio_format = "wav"
+            if provider_config:
+                config_format = provider_config.get('response_format', 'wav')
+                if config_format.lower() in ['mp3', 'wav']:
+                    audio_format = config_format.lower()
+            
+            # Create silence file with same timeline duration as TTS would have
+            fallback_duration = 5.0  # 1s + 2s + 0.5s + 2s + 0.5s + 1s (approximate)
+            
+            silence_filename = f"silence_fallback_{expression_index}.{audio_format}"
+            silence_path = output_dir / silence_filename
+            
+            # Use ffmpeg to create silence audio
+            if audio_format.lower() == "mp3":
+                codec_args = ["-c:a", "mp3", "-b:a", "192k"]
+            else:  # wav
+                codec_args = ["-c:a", "pcm_s16le", "-ar", "44100"]
+            
+            import subprocess
+            silence_cmd = [
+                "ffmpeg",
+                "-f", "lavfi",
+                "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-t", str(fallback_duration),
+                *codec_args,
+                "-y",
+                str(silence_path)
+            ]
+            
+            subprocess.run(silence_cmd, capture_output=True, text=True, check=True)
+            
+            # Register for cleanup
+            self._register_temp_file(silence_path)
+            
+            logger.warning(f"Created silence fallback: {silence_path} ({fallback_duration}s)")
+            return silence_path, fallback_duration
+            
+        except Exception as e:
+            logger.error(f"Failed to create silence fallback: {e}")
+            raise RuntimeError(f"All audio generation methods failed: {e}")
 
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0) -> Tuple[str, float]:

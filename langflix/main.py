@@ -198,6 +198,10 @@ class LangFlixPipeline:
         # Create organized output structure
         self.paths = create_output_structure(str(self.subtitle_file), language_code, str(self.output_dir))
         
+        # Extract series and episode names from paths
+        self.series_name = self.paths['series_name']
+        self.episode_name = self.paths['episode_name']
+        
         # Initialize processors
         self.video_processor = VideoProcessor(str(self.video_dir))
         self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file))

@@ -2251,7 +2251,7 @@ class VideoEditor:
                 for video_path in video_paths:
                     f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate videos
+            # Concatenate videos with explicit stream mapping and audio parameters
             (
                 ffmpeg
                 .input(str(concat_file), format='concat', safe=0)
@@ -2259,7 +2259,9 @@ class VideoEditor:
                        vcodec='libx264',
                        acodec='aac',
                        preset='fast',
-                       crf=23)
+                       crf=23,
+                       ac=2,  # Force stereo audio
+                       ar=48000)  # Set sample rate to match video audio
                 .overwrite_output()
                 .run(capture_stdout=True, capture_stderr=True)
             )

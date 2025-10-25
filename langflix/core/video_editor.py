@@ -953,12 +953,12 @@ class VideoEditor:
                 audio_file_size = audio_2x_path.stat().st_size
                 logger.info(f"Using 2x audio file: {audio_2x_path} (size: {audio_file_size} bytes)")
                 
-                # Add the 2x TTS audio input with 20% volume boost
+                # Add the 2x TTS audio input with 40% volume boost
                 audio_input = ffmpeg.input(str(audio_2x_path))
-                # Apply 20% volume boost to final video audio
-                boosted_audio = audio_input['a'].filter('volume', '1.2')
+                # Apply 40% volume boost to final video audio
+                boosted_audio = audio_input['a'].filter('volume', '1.4')
                 
-                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path} (20% volume boost)")
+                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path} (40% volume boost)")
                 
                 # Create the slide with both video and boosted audio directly
                 try:
@@ -2060,10 +2060,10 @@ class VideoEditor:
             tts_text = expression.expression_dialogue
             logger.info(f"Generating audio for short video: '{tts_text}'")
             
-            # For short videos, use context video's original audio (not repeated timeline)
-            logger.info("Short video - using context video's original audio (matches visual content)")
+            # For short videos, use context audio + repeating expression audio
+            logger.info("Short video - using context audio + repeating expression audio")
             
-            # Extract audio directly from context video (which has the matching audio)
+            # 1. Extract context audio (matches visual content)
             context_audio_path = self.output_dir / f"temp_context_audio_{safe_expression}.wav"
             self._register_temp_file(context_audio_path)
             
@@ -2080,26 +2080,49 @@ class VideoEditor:
                 context_audio_duration = float(context_audio_probe['format']['duration'])
                 logger.info(f"Context audio duration: {context_audio_duration:.2f}s")
                 
-                tts_audio_path = context_audio_path
-                tts_duration = context_audio_duration
-                
             except Exception as e:
-                logger.warning(f"Failed to extract context audio: {e}, falling back to timeline audio")
-                
-                # Fallback: Use timeline audio if context audio extraction fails
-                original_video = self._get_original_video_path(context_video_path)
-                tts_audio_dir = self.output_dir.parent / "tts_audio"
-                tts_audio_dir.mkdir(parents=True, exist_ok=True)
-                
-                tts_audio_path, tts_duration = self._extract_original_audio_timeline(
-                    expression, original_video, tts_audio_dir, expression_index, {}
-                )
-                logger.info(f"Fallback timeline audio duration: {tts_duration:.2f}s")
+                logger.error(f"Failed to extract context audio: {e}")
+                raise
             
-            # For short videos, use context duration as total (audio matches video length)
-            total_duration = context_duration
-            video_audio_duration = tts_duration
-            logger.info(f"Short video: context visual + audio ({context_duration:.2f}s), audio duration ({video_audio_duration:.2f}s)")
+            # 2. Get repeating expression audio (timeline with repetitions)
+            original_video = self._get_original_video_path(context_video_path)
+            tts_audio_dir = self.output_dir.parent / "tts_audio"
+            tts_audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            expression_timeline_path, expression_timeline_duration = self._extract_original_audio_timeline(
+                expression, original_video, tts_audio_dir, expression_index, {}
+            )
+            logger.info(f"Expression timeline duration: {expression_timeline_duration:.2f}s")
+            
+            # 3. Concatenate context audio + expression timeline
+            combined_audio_path = self.output_dir / f"temp_combined_audio_{safe_expression}.wav"
+            self._register_temp_file(combined_audio_path)
+            
+            # Create concat file for audio
+            audio_concat_file = self.output_dir / f"temp_audio_concat_{safe_expression}.txt"
+            self._register_temp_file(audio_concat_file)
+            
+            with open(audio_concat_file, 'w') as f:
+                f.write(f"file '{Path(context_audio_path).absolute()}'\n")
+                f.write(f"file '{Path(expression_timeline_path).absolute()}'\n")
+            
+            # Concatenate context + expression audio
+            (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
+             .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+             .overwrite_output()
+             .run(quiet=True))
+            
+            # Get combined audio duration
+            combined_probe = ffmpeg.probe(str(combined_audio_path))
+            combined_audio_duration = float(combined_probe['format']['duration'])
+            logger.info(f"Combined audio duration: {combined_audio_duration:.2f}s (context: {context_audio_duration:.2f}s + expression: {expression_timeline_duration:.2f}s)")
+            
+            # For short videos, total duration = context duration + expression timeline duration
+            total_duration = context_duration + expression_timeline_duration
+            tts_audio_path = combined_audio_path
+            tts_duration = combined_audio_duration
+            video_audio_duration = combined_audio_duration
+            logger.info(f"Short video: context visual ({context_duration:.2f}s) + freeze frame ({expression_timeline_duration:.2f}s), total audio ({video_audio_duration:.2f}s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -2116,33 +2139,40 @@ class VideoEditor:
             context_input = ffmpeg.input(context_video_path)
             slide_input = ffmpeg.input(slide_path)
             
-            # No freeze frame extension needed - use context video as-is with matching audio
-            logger.info(f"Using context video without extension: {context_duration:.2f}s")
+            # Extend context video with freeze frame during expression timeline
+            freeze_duration = expression_timeline_duration
+            logger.info(f"Extending context video by {freeze_duration:.2f}s with freeze frame for expression timeline")
+            context_extended = ffmpeg.filter(
+                context_input['v'],
+                'tpad',
+                stop_mode='clone',
+                stop_duration=freeze_duration
+            )
             
             # Scale videos to half height for stacking
-            context_scaled = ffmpeg.filter(context_input['v'], 'scale', width, half_height)
+            context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
             slide_scaled = ffmpeg.filter(slide_input['v'], 'scale', width, half_height)
             
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Use context audio directly (matches video duration) + 20% volume boost
-            logger.info(f"Using context audio with 20% volume boost: {video_audio_duration:.2f}s")
+            # Use combined audio (context + expression) + 40% volume boost
+            logger.info(f"Using combined audio with 40% volume boost: {video_audio_duration:.2f}s")
             logger.info(f"Video duration: {total_duration:.2f}s, Audio duration: {tts_duration:.2f}s")
             
             try:
-                # Apply 20% volume boost to context audio
-                boosted_audio_path = self.output_dir / f"temp_boosted_context_audio_{safe_expression}.wav"
+                # Apply 40% volume boost to combined audio
+                boosted_audio_path = self.output_dir / f"temp_boosted_combined_audio_{safe_expression}.wav"
                 self._register_temp_file(boosted_audio_path)
                 
-                # Apply volume boost to context audio
+                # Apply volume boost to combined audio
                 (ffmpeg.input(str(tts_audio_path))
-                 .audio.filter('volume', '1.2')  # 20% volume boost
+                 .audio.filter('volume', '1.4')  # 40% volume boost
                  .output(str(boosted_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
                  .run(quiet=True))
                 
-                logger.info(f"✅ Context audio with 20% volume boost created")
+                logger.info(f"✅ Combined audio with 40% volume boost created")
                 
                 timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 

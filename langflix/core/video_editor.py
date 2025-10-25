@@ -2137,37 +2137,68 @@ class VideoEditor:
             
             # Use complete timeline directly (same as final_video) + 20% volume boost
             logger.info(f"Using complete timeline with 20% volume boost: {video_audio_duration:.2f}s")
+            logger.info(f"Total video duration: {total_duration:.2f}s, Audio duration: {tts_duration:.2f}s")
             
             try:
-                # Apply 20% volume boost to the timeline audio for short video
+                # Apply 20% volume boost and loop audio to match video duration
                 boosted_audio_path = self.output_dir / f"temp_boosted_audio_short_{safe_expression}.wav"
                 self._register_temp_file(boosted_audio_path)
                 
+                # First apply volume boost
                 (ffmpeg.input(str(tts_audio_path))
                  .audio.filter('volume', '1.2')  # 20% volume boost
                  .output(str(boosted_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
                  .run(quiet=True))
                 
-                timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 logger.info(f"✅ Timeline audio with 20% volume boost created")
                 
-                # Create final video with boosted timeline audio (let FFmpeg handle duration)
-                logger.info(f"Creating final short video with boosted audio: video={total_duration:.2f}s")
+                # Try to loop audio to match video duration
+                # Calculate how many times we need to loop
+                num_loops = int(total_duration / tts_duration) + 1
+                logger.info(f"Looping audio {num_loops} times to match video duration")
                 
-                (
-                    ffmpeg
-                    .output(stacked_video, timeline_audio_input['a'], str(output_path),
-                           vcodec='libx264',
-                           acodec='aac',
-                           preset='fast',
-                           crf=23,
-                           ac=2,
-                           ar=48000,
-                           t=total_duration)  # Video duration (extended context + slide)
-                    .overwrite_output()
-                    .run()
-                )
+                try:
+                    # Try using aloop filter to loop audio
+                    looped_audio_path = self.output_dir / f"temp_looped_audio_short_{safe_expression}.wav"
+                    self._register_temp_file(looped_audio_path)
+                    
+                    # Create concatenated audio by looping using aloop filter
+                    # aloop filter loops the audio stream
+                    (ffmpeg.input(str(boosted_audio_path))
+                     .filter('aloop', loop=num_loops, size=2e+09)
+                     .filter('atrim', duration=total_duration)
+                     .output(str(looped_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                     .overwrite_output()
+                     .run(capture_stdout=True, capture_stderr=True))
+                    
+                    timeline_audio_input = ffmpeg.input(str(looped_audio_path))
+                    logger.info(f"✅ Looped audio created to match video duration")
+                except Exception as e:
+                    # Fallback: use boosted audio as-is and let FFmpeg repeat it
+                    logger.warning(f"Audio looping failed: {e}, using boost audio with short duration")
+                    timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
+                    logger.warning(f"Using non-looped audio (may be shorter than video)")
+                
+                # Create final video with looped and boosted timeline audio
+                logger.info(f"Creating final short video with full duration audio: video={total_duration:.2f}s")
+                
+                # Concatenate audio using filter_complex to loop it
+                (ffmpeg
+                 .output(
+                     stacked_video,
+                     timeline_audio_input['a'],
+                     str(output_path),
+                     vcodec='libx264',
+                     acodec='aac',
+                     preset='fast',
+                     crf=23,
+                     ac=2,
+                     ar=48000,
+                     t=total_duration,  # Video duration (extended context + slide)
+                     **{'filter:a': f'aloop=loop=-1:size=1e+09'})  # Loop audio
+                 .overwrite_output()
+                 .run())
                 
                 logger.info("✅ Short video created with extended audio successfully")
                 

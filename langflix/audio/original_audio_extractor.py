@@ -145,7 +145,8 @@ class OriginalAudioExtractor:
         expression: ExpressionAnalysis,
         output_dir: Path,
         expression_index: int = 0,
-        audio_format: str = "wav"
+        audio_format: str = "wav",
+        repeat_count: int = None
     ) -> Tuple[Path, float]:
         """
         Create an audio timeline with configurable repetition pattern matching TTS behavior.
@@ -157,16 +158,19 @@ class OriginalAudioExtractor:
             output_dir: Directory for output files
             expression_index: Index for unique filename generation
             audio_format: Audio format (wav or mp3)
+            repeat_count: Number of times to repeat audio (if None, use expression repeat count from settings)
             
         Returns:
             Tuple of (timeline_audio_path, total_duration)
         """
         logger.info(f"Creating audio timeline for expression {expression_index}: '{expression.expression}'")
         
-        # Get repeat count from settings to match TTS behavior
-        from langflix import settings
-        repeat_count = settings.get_tts_repeat_count()
-        logger.info(f"Using repeat count: {repeat_count} (from settings)")
+        # Get repeat count from unified expression settings if not specified
+        if repeat_count is None:
+            from langflix import settings
+            repeat_count = settings.get_expression_repeat_count()
+        
+        logger.info(f"Using repeat count: {repeat_count}")
         
         # Create temporary directory for audio processing
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -320,7 +324,8 @@ def create_original_audio_timeline(
     original_video_path: str,
     output_dir: Path,
     expression_index: int = 0,
-    audio_format: str = "wav"
+    audio_format: str = "wav",
+    repeat_count: int = None
 ) -> Tuple[Path, float]:
     """
     Convenience function to create audio timeline from original video.
@@ -331,9 +336,10 @@ def create_original_audio_timeline(
         output_dir: Directory for output files
         expression_index: Index for unique filename generation
         audio_format: Audio format (wav or mp3)
+        repeat_count: Number of times to repeat audio (if None, use expression repeat count from settings)
         
     Returns:
         Tuple of (timeline_audio_path, total_duration)
     """
     extractor = OriginalAudioExtractor(original_video_path)
-    return extractor.create_audio_timeline(expression, output_dir, expression_index, audio_format)
+    return extractor.create_audio_timeline(expression, output_dir, expression_index, audio_format, repeat_count)

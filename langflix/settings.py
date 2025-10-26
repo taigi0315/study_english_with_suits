@@ -71,6 +71,23 @@ def get_expression_config() -> Dict[str, Any]:
     return _config_loader.get_section('expression') or {}
 
 
+def get_expression_repeat_count() -> int:
+    """
+    Get unified expression repeat count for all video types.
+    
+    This setting controls how many times expressions are repeated
+    for educational purposes across all video types:
+    - TTS audio generation
+    - Original audio extraction
+    - Short video loops
+    - Educational video playback
+    
+    Returns:
+        int: Number of times to repeat expressions (default: 3)
+    """
+    return int(get_expression_config().get('repeat_count', 3))
+
+
 def get_expression_subtitle_styling() -> Dict[str, Any]:
     """Get expression subtitle styling configuration"""
     return _config_loader.get('expression', 'subtitle_styling', default={})
@@ -208,8 +225,13 @@ def is_tts_enabled() -> bool:
 
 
 def get_tts_repeat_count() -> int:
-    """Get number of times to repeat TTS audio"""
-    return get_tts_config().get('repeat_count', 2)
+    """
+    Get number of times to repeat TTS audio.
+    
+    DEPRECATED: Use get_expression_repeat_count() instead.
+    This function now returns the unified expression repeat count.
+    """
+    return get_expression_repeat_count()
 
 
 # ============================================================================
@@ -261,8 +283,13 @@ def get_short_video_resolution() -> str:
 
 
 def get_short_video_expression_repeat_count() -> int:
-    """Get number of times to repeat expression video in short videos"""
-    return int(get_short_video_config().get('expression_repeat_count', 3))
+    """
+    Get number of times to repeat expression video in short videos.
+    
+    DEPRECATED: Use get_expression_repeat_count() instead.
+    This function now returns the unified expression repeat count.
+    """
+    return get_expression_repeat_count()
 
 
 # ============================================================================

@@ -174,11 +174,27 @@ class VideoFileManager:
                     episode = part
                     break
             
-            # Find language info
-            if "ko" in path_parts:
-                language = "ko"
-            elif "en" in path_parts:
-                language = "en"
+            # Find language info - check all path parts for language indicators
+            for part in path_parts:
+                part_lower = part.lower()
+                if "ko" in part_lower or "korean" in part_lower:
+                    language = "ko"
+                    break
+                elif "ja" in part_lower or "japanese" in part_lower:
+                    language = "ja"
+                    break
+                elif "zh" in part_lower or "chinese" in part_lower:
+                    language = "zh"
+                    break
+                elif "es" in part_lower or "spanish" in part_lower:
+                    language = "es"
+                    break
+                elif "fr" in part_lower or "french" in part_lower:
+                    language = "fr"
+                    break
+                elif "en" in part_lower or "english" in part_lower:
+                    language = "en"
+                    break
             
             # Determine video type from filename and directory
             filename = video_path.stem.lower()

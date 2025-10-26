@@ -18,7 +18,7 @@ LangFlix automatically analyzes TV show subtitles to extract valuable English ex
 
 - **Smart Subtitle Parsing**: Supports SRT subtitle files with automatic chunking
 - **AI-Powered Analysis**: Uses Google Gemini API for intelligent expression extraction
-- **Short Video Generation**: Creates 9:16 vertical videos optimized for social media
+- **Short Video Generation**: Creates 9:16 vertical videos with expression video playback and perfect audio-video sync
 - **Natural TTS Audio**: High-quality text-to-speech using Gemini TTS with SSML control
 - **Enhanced Educational Slides**: 5-section layout with full dialogue context
 - **Language Level Support**: Beginner, Intermediate, Advanced, and Mixed levels
@@ -388,7 +388,8 @@ python tests/functional/manual_prompt_test.py 2
 ### 🎉 **CORE PIPELINE COMPLETE - READY FOR PRODUCTION USE**
 
 **Recent Achievements (October 2025):**
-- ✅ **Short Video Generation**: 9:16 vertical videos for social media platforms
+- ✅ **Short Video Generation**: 9:16 vertical videos with expression video playback (no freeze frames)
+- ✅ **Audio-Video Synchronization**: Perfect sync with expression video looping during audio repetition
 - ✅ **Gemini TTS Integration**: Natural-sounding speech with SSML control
 - ✅ **Enhanced Educational Slides**: 5-section layout with full dialogue context
 - ✅ **Smart Subtitle Matching**: Handles truncated filenames automatically

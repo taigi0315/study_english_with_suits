@@ -132,11 +132,17 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         
         try:
             # Use structured output with Pydantic model
-            response = model.generate_content(
-                prompt,
-                response_schema=ExpressionAnalysisResponse,
-                generation_config=genai.types.GenerationConfig(**generation_config) if generation_config else None
+            # Create model with response schema configuration
+            model_with_schema = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config=genai.types.GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExpressionAnalysisResponse,
+                    **generation_config if generation_config else {}
+                )
             )
+            
+            response = model_with_schema.generate_content(prompt)
             
             # Extract structured response
             if hasattr(response, 'text') and response.text:

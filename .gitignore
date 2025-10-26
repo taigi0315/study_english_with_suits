@@ -16,6 +16,18 @@ assets/
 test_output/
 output/
 
+# Cache files
+cache/
+*.cache
+
+# Database files
+*.db
+langflix_youtube.db
+
+# Auto-generated directories
+context_slide_combined/
+short_videos/
+
 # Video files (usually large)
 *.mkv
 *.mp4

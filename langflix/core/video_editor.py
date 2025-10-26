@@ -704,71 +704,37 @@ class VideoEditor:
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"TTS audio directory: {tts_audio_dir}")
             
-            try:
-                # Create and validate TTS client
-                logger.info("Creating TTS client...")
-                tts_client = create_tts_client(provider, provider_config)
-                
-                # Test if TTS is enabled
-                if not settings.is_tts_enabled():
-                    logger.warning("TTS is disabled in configuration, using fallback")
-                    raise ValueError("TTS is disabled")
-                
-                # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
-                logger.info(f"Generating TTS timeline for: '{tts_text}' (expression index: {expression_index})")
-                audio_path, expression_duration = self._generate_tts_timeline(
-                    tts_text, tts_client, provider_config, tts_audio_dir, expression_index
+            # Check if TTS is enabled and decide on audio workflow
+            if settings.is_tts_enabled():
+                try:
+                    # TTS Workflow: Generate synthetic speech
+                    logger.info("TTS is enabled - using synthetic speech")
+                    logger.info("Creating TTS client...")
+                    tts_client = create_tts_client(provider, provider_config)
+                    
+                    # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
+                    logger.info(f"Generating TTS timeline for: '{tts_text}' (expression index: {expression_index})")
+                    audio_path, expression_duration = self._generate_tts_timeline(
+                        tts_text, tts_client, provider_config, tts_audio_dir, expression_index
+                    )
+                    
+                    logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
+                    
+                except Exception as tts_error:
+                    logger.error(f"Error generating TTS audio: {tts_error}")
+                    logger.error(f"TTS Error details: {tts_error}")
+                    
+                    # Fallback to original audio when TTS fails
+                    logger.warning("TTS failed, falling back to original audio extraction")
+                    audio_path, expression_duration = self._extract_original_audio_timeline(
+                        expression, expression_source_video, tts_audio_dir, expression_index, provider_config
+                    )
+            else:
+                # Original Audio Workflow: Extract from source video
+                logger.info("TTS is disabled - using original audio extraction")
+                audio_path, expression_duration = self._extract_original_audio_timeline(
+                    expression, expression_source_video, tts_audio_dir, expression_index, provider_config
                 )
-                
-                logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
-                
-            except Exception as tts_error:
-                logger.error(f"Error generating TTS audio: {tts_error}")
-                logger.error(f"TTS Error details: {tts_error}")
-                
-                # Use the configured audio format for fallback as well
-                audio_format = provider_config.get('response_format', 'mp3')
-                logger.info(f"Using {audio_format} format for fallback audio")
-                
-                expression_duration = 2.0  # Default 2 seconds
-                
-                # Create fallback with same format as configured
-                if audio_format.lower() == 'mp3':
-                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.mp3"
-                    self._register_temp_file(audio_path)
-                    
-                    # Generate 2 seconds of silence as MP3 fallback
-                    (
-                        ffmpeg
-                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
-                        .output(str(audio_path), acodec='libmp3lame', ar=44100)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                else:
-                    audio_path = self.output_dir / f"temp_audio_silence_{self._sanitize_filename(expression.expression)}.wav"
-                    self._register_temp_file(audio_path)
-                    
-                    # Generate 2 seconds of silence as WAV fallback
-                    (
-                        ffmpeg
-                        .input('anullsrc=r=44100:cl=mono', f='lavfi', t=expression_duration)
-                        .output(str(audio_path), acodec='pcm_s16le')
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                
-                logger.warning(f"Using {expression_duration:.2f}s silence as TTS fallback in {audio_format} format")
-                
-                # Save the fallback file to permanent tts_audio directory with correct format
-                tts_audio_dir = self.output_dir.parent / "tts_audio"
-                tts_audio_dir.mkdir(exist_ok=True)
-                fallback_filename = f"tts_fallback_{self._sanitize_filename(expression.expression)}.{audio_format}"
-                fallback_permanent_path = tts_audio_dir / fallback_filename
-                
-                import shutil
-                shutil.copy2(str(audio_path), str(fallback_permanent_path))
-                logger.warning(f"Fallback silence audio saved to: {fallback_permanent_path}")
             
             # Use the timeline audio directly (no need for 2x conversion since timeline is already complete)
             audio_2x_path = audio_path  # The timeline already includes 2 TTS segments with pauses
@@ -987,16 +953,18 @@ class VideoEditor:
                 audio_file_size = audio_2x_path.stat().st_size
                 logger.info(f"Using 2x audio file: {audio_2x_path} (size: {audio_file_size} bytes)")
                 
-                # Add the 2x TTS audio input
+                # Add the 2x TTS audio input with 40% volume boost
                 audio_input = ffmpeg.input(str(audio_2x_path))
+                # Apply 40% volume boost to final video audio
+                boosted_audio = audio_input['a'].filter('volume', '1.4')
                 
-                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path}")
+                logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path} (40% volume boost)")
                 
-                # Create the slide with both video and audio directly
+                # Create the slide with both video and boosted audio directly
                 try:
                     (
                         ffmpeg
-                        .output(video_input['v'], audio_input['a'], str(output_path),
+                        .output(video_input['v'], boosted_audio, str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
                                vcodec='libx264',
                                acodec='aac',
@@ -1739,8 +1707,333 @@ class VideoEditor:
             logger.error(f"Error in _generate_tts_timeline: {e}")
             raise
 
+    def _extract_original_audio_timeline(
+        self, 
+        expression: ExpressionAnalysis, 
+        original_video_path: str, 
+        output_dir: Path, 
+        expression_index: int = 0,
+        provider_config: dict = None
+    ) -> Tuple[Path, float]:
+        """
+        Extract audio from original video and create 3x repetition timeline matching TTS behavior.
+        
+        Timeline pattern: 1s silence - audio - 0.5s silence - audio - 0.5s silence - audio - 1s silence
+        
+        Args:
+            expression: ExpressionAnalysis object with timestamps
+            original_video_path: Path to the original video file
+            output_dir: Directory for output files
+            expression_index: Index for unique filename generation
+            provider_config: TTS provider config (for audio format compatibility)
+            
+        Returns:
+            Tuple of (timeline_audio_path, total_duration)
+        """
+        try:
+            logger.info(f"Extracting original audio timeline for expression {expression_index}: '{expression.expression}'")
+            
+            # Import the original audio extractor
+            from langflix.audio.original_audio_extractor import create_original_audio_timeline
+            
+            # Determine audio format from provider config (default to wav for compatibility)
+            audio_format = "wav"
+            if provider_config:
+                config_format = provider_config.get('response_format', 'wav')
+                if config_format.lower() in ['mp3', 'wav']:
+                    audio_format = config_format.lower()
+            
+            logger.info(f"Using audio format: {audio_format} (from provider config)")
+            
+            # Validate expression timestamps
+            if not expression.expression_start_time or not expression.expression_end_time:
+                error_msg = f"Expression '{expression.expression}' missing required timestamps for audio extraction"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Create timeline using the original audio extractor
+            logger.info(f"Original video path: {original_video_path}")
+            logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time}")
+            
+            timeline_path, total_duration = create_original_audio_timeline(
+                expression=expression,
+                original_video_path=original_video_path,
+                output_dir=output_dir,
+                expression_index=expression_index,
+                audio_format=audio_format
+            )
+            
+            # Register the created file for cleanup
+            self._register_temp_file(timeline_path)
+            
+            logger.info(f"Successfully created original audio timeline: {timeline_path}")
+            logger.info(f"Timeline duration: {total_duration:.2f}s (3x repetition with pauses)")
+            
+            return timeline_path, total_duration
+            
+        except Exception as e:
+            error_msg = f"Error extracting original audio timeline: {e}"
+            logger.error(error_msg)
+            
+            # Create a fallback silence audio if original extraction fails
+            logger.warning("Original audio extraction failed, creating silence fallback")
+            return self._create_silence_fallback(expression, output_dir, expression_index, provider_config)
+    
+    def _create_silence_fallback(
+        self,
+        expression: ExpressionAnalysis,
+        output_dir: Path,
+        expression_index: int = 0,
+        provider_config: dict = None
+    ) -> Tuple[Path, float]:
+        """
+        Create silence audio as fallback when both TTS and original audio extraction fail.
+        
+        Args:
+            expression: ExpressionAnalysis object
+            output_dir: Directory for output files
+            expression_index: Index for unique filename generation
+            provider_config: TTS provider config (for audio format compatibility)
+            
+        Returns:
+            Tuple of (silence_audio_path, duration)
+        """
+        try:
+            # Determine audio format from provider config
+            audio_format = "wav"
+            if provider_config:
+                config_format = provider_config.get('response_format', 'wav')
+                if config_format.lower() in ['mp3', 'wav']:
+                    audio_format = config_format.lower()
+            
+            # Create silence file with same timeline duration as TTS would have
+            fallback_duration = 5.0  # 1s + 2s + 0.5s + 2s + 0.5s + 1s (approximate)
+            
+            silence_filename = f"silence_fallback_{expression_index}.{audio_format}"
+            silence_path = output_dir / silence_filename
+            
+            # Use ffmpeg to create silence audio with 48kHz (video standard)
+            sample_rate = 48000  # Match video audio standard, not CD audio (44.1kHz)
+            
+            if audio_format.lower() == "mp3":
+                codec_args = ["-c:a", "mp3", "-b:a", "192k", "-ar", str(sample_rate)]
+            else:  # wav
+                codec_args = ["-c:a", "pcm_s16le", "-ar", str(sample_rate)]
+            
+            import subprocess
+            silence_cmd = [
+                "ffmpeg",
+                "-f", "lavfi",
+                "-i", f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
+                "-t", str(fallback_duration),
+                *codec_args,
+                "-y",
+                str(silence_path)
+            ]
+            
+            subprocess.run(silence_cmd, capture_output=True, text=True, check=True)
+            
+            # Register for cleanup
+            self._register_temp_file(silence_path)
+            
+            logger.warning(f"Created silence fallback: {silence_path} ({fallback_duration}s)")
+            return silence_path, fallback_duration
+            
+        except Exception as e:
+            logger.error(f"Failed to create silence fallback: {e}")
+            raise RuntimeError(f"All audio generation methods failed: {e}")
+
+    def _extract_single_original_audio(
+        self, 
+        expression: ExpressionAnalysis, 
+        original_video_path: str, 
+        expression_index: int = 0
+    ) -> Tuple[Path, float]:
+        """
+        Extract single audio segment from original video for short video use.
+        
+        Unlike timeline creation, this extracts just the raw audio segment without repetition.
+        
+        Args:
+            expression: ExpressionAnalysis object with timestamps
+            original_video_path: Path to the original video file
+            expression_index: Index for unique filename generation
+            
+        Returns:
+            Tuple of (audio_path, duration)
+        """
+        try:
+            logger.info(f"Extracting single original audio segment for short video")
+            
+            # Import the original audio extractor
+            from langflix.audio.original_audio_extractor import OriginalAudioExtractor
+            
+            # Create extractor instance
+            extractor = OriginalAudioExtractor(original_video_path)
+            
+            # Create output path for single audio segment
+            audio_dir = self.output_dir / "temp_short_audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            single_audio_filename = f"short_audio_{expression_index}.wav"
+            single_audio_path = audio_dir / single_audio_filename
+            
+            # Extract just the single audio segment (no timeline)
+            extracted_path, duration = extractor.extract_expression_audio(
+                expression=expression,
+                output_path=single_audio_path,
+                audio_format="wav"
+            )
+            
+            # Register for cleanup
+            self._register_temp_file(extracted_path)
+            
+            logger.info(f"Extracted single audio segment: {extracted_path} ({duration:.2f}s)")
+            return extracted_path, duration
+            
+        except Exception as e:
+            error_msg = f"Error extracting single original audio: {e}"
+            logger.error(error_msg)
+            
+            # Create fallback silence audio for short video
+            logger.warning("Original audio extraction failed, creating silence fallback for short video")
+            return self._create_silence_fallback_single(expression_index)
+    
+    def _create_silence_fallback_single(self, expression_index: int = 0) -> Tuple[Path, float]:
+        """
+        Create single silence audio file as fallback for short video.
+        
+        Args:
+            expression_index: Index for unique filename generation
+            
+        Returns:
+            Tuple of (silence_audio_path, duration)
+        """
+        try:
+            # Create simple 2-second silence for short video fallback
+            fallback_duration = 2.0
+            sample_rate = 48000  # Match video audio standard
+            
+            silence_filename = f"short_silence_fallback_{expression_index}.wav"
+            silence_path = self.output_dir / silence_filename
+            
+            # Use ffmpeg to create silence audio
+            codec_args = ["-c:a", "pcm_s16le", "-ar", str(sample_rate)]
+            
+            import subprocess
+            silence_cmd = [
+                "ffmpeg",
+                "-f", "lavfi",
+                "-i", f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
+                "-t", str(fallback_duration),
+                *codec_args,
+                "-y",
+                str(silence_path)
+            ]
+            
+            subprocess.run(silence_cmd, capture_output=True, text=True, check=True)
+            
+            # Register for cleanup
+            self._register_temp_file(silence_path)
+            
+            logger.warning(f"Created silence fallback for short video: {silence_path} ({fallback_duration}s)")
+            return silence_path, fallback_duration
+            
+        except Exception as e:
+            logger.error(f"Failed to create silence fallback for short video: {e}")
+            raise RuntimeError(f"All audio generation methods failed for short video: {e}")
+    
+    def _time_to_seconds(self, time_str: str) -> float:
+        """
+        Convert SRT timestamp to seconds.
+        
+        Args:
+            time_str: Timestamp in format "HH:MM:SS,mmm" or "HH:MM:SS.mmm"
+            
+        Returns:
+            Time in seconds as float
+        """
+        try:
+            # Replace comma with dot for milliseconds if needed
+            time_str = time_str.replace(',', '.')
+            
+            # Split by colon and dot
+            parts = time_str.split(':')
+            if len(parts) != 3:
+                raise ValueError(f"Invalid timestamp format: {time_str}")
+            
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            # Handle seconds and milliseconds
+            seconds_part = parts[2]
+            if '.' in seconds_part:
+                seconds, milliseconds = seconds_part.split('.')
+                seconds = int(seconds)
+                # Pad milliseconds to 3 digits if needed
+                milliseconds = milliseconds.ljust(3, '0')[:3]
+                milliseconds = int(milliseconds)
+            else:
+                seconds = int(seconds_part)
+                milliseconds = 0
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+            return total_seconds
+            
+        except Exception as e:
+            logger.error(f"Error parsing timestamp '{time_str}': {e}")
+            raise ValueError(f"Invalid timestamp: {time_str}") from e
+
+    def _get_original_video_path(self, context_video_path: str, subtitle_file_path: str = None) -> str:
+        """
+        Get original video path for audio extraction using the same logic as educational videos.
+        
+        Context videos are clips without audio, so we need to find the original video file
+        that corresponds to the subtitle file being processed.
+        
+        Args:
+            context_video_path: Path to context video (always a clip)
+            subtitle_file_path: Path to subtitle file for matching (if available)
+            
+        Returns:
+            Path to original video file for accurate timestamp-based audio extraction
+        """
+        context_path = Path(context_video_path)
+        
+        # Context videos are always clips - find the original video file
+        logger.info(f"Finding original video for context clip: {context_path.name}")
+        
+        # If we have subtitle file path, use the same logic as educational videos
+        if subtitle_file_path:
+            from langflix.core.video_processor import VideoProcessor
+            video_processor = VideoProcessor()
+            original_video = video_processor.find_video_file(subtitle_file_path)
+            if original_video and original_video.exists():
+                logger.info(f"Found original video using subtitle matching: {original_video}")
+                return str(original_video)
+        
+        # Fallback: Try to find original video in assets/media (old logic)
+            from langflix.core.video_processor import VideoProcessor
+            media_dir = Path("assets/media")
+            
+            # Look for video files in assets/media
+            for video_file in media_dir.rglob("*.mkv"):
+                if video_file.exists():
+                    logger.info(f"Found original video for audio extraction: {video_file}")
+                    return str(video_file)
+            
+            # Fallback: look for any video file
+            for ext in ['.mkv', '.mp4', '.avi']:
+                for video_file in media_dir.rglob(f"*{ext}"):
+                    if video_file.exists():
+                        logger.info(f"Using fallback original video: {video_file}")
+                        return str(video_file)
+            
+            logger.warning(f"Could not find original video, using context path: {context_video_path}")
+            return context_video_path
+
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
-                                  expression_index: int = 0) -> Tuple[str, float]:
+                                  expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
         """
         Create vertical short-format video (9:16) with context video on top and slide on bottom.
         Total duration = context_duration + (TTS_duration * repeat_count) + (0.5s * (repeat_count - 1))
@@ -1774,27 +2067,73 @@ class VideoEditor:
                 logger.error(f"Error getting context video duration: {e}")
                 context_duration = 10.0  # Fallback duration
             
-            # Generate TTS audio using only expression_dialogue
+            # Generate audio for short video - check TTS setting like main educational video
             tts_text = expression.expression_dialogue
-            logger.info(f"Generating TTS audio for short video: '{tts_text}'")
+            logger.info(f"Generating audio for short video: '{tts_text}'")
             
-            # Edge case: Truncate if too long for TTS provider
-            MAX_TTS_CHARS = 500  # Adjust based on provider
-            if len(tts_text) > MAX_TTS_CHARS:
-                logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
-                tts_text = tts_text[:MAX_TTS_CHARS]
+            # For short videos, use context audio + repeating expression audio
+            logger.info("Short video - using context audio + repeating expression audio")
             
-            logger.info(f"🔍 Calling _generate_single_tts for: '{tts_text}' (index: {expression_index})")
-            tts_audio_path, tts_duration = self._generate_single_tts(tts_text, expression_index)
-            logger.info(f"TTS audio duration: {tts_duration:.2f}s")
+            # 1. Extract context audio (matches visual content)
+            context_audio_path = self.output_dir / f"temp_context_audio_{safe_expression}.wav"
+            self._register_temp_file(context_audio_path)
             
-            # Get repeat count from settings
-            repeat_count = settings.get_tts_repeat_count()
+            try:
+                # Extract audio from context video
+                (ffmpeg.input(context_video_path)
+                 .audio
+                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Get context audio duration
+                context_audio_probe = ffmpeg.probe(str(context_audio_path))
+                context_audio_duration = float(context_audio_probe['format']['duration'])
+                logger.info(f"Context audio duration: {context_audio_duration:.2f}s")
+                
+            except Exception as e:
+                logger.error(f"Failed to extract context audio: {e}")
+                raise
             
-            # Calculate total video duration: context + (TTS * repeat_count) + (0.5s gaps * (repeat_count - 1))
-            gap_duration = 0.5 * (repeat_count - 1) if repeat_count > 1 else 0.0
-            total_duration = context_duration + (tts_duration * repeat_count) + gap_duration
-            logger.info(f"Total short video duration: {total_duration:.2f}s (context: {context_duration:.2f}s + TTS×{repeat_count}: {tts_duration * repeat_count:.2f}s + gaps: {gap_duration:.2f}s)")
+            # 2. Get repeating expression audio (timeline with repetitions)
+            original_video = self._get_original_video_path(context_video_path, subtitle_file_path)
+            tts_audio_dir = self.output_dir.parent / "tts_audio"
+            tts_audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            expression_timeline_path, expression_timeline_duration = self._extract_original_audio_timeline(
+                expression, original_video, tts_audio_dir, expression_index, {}
+            )
+            logger.info(f"Expression timeline duration: {expression_timeline_duration:.2f}s")
+            
+            # 3. Concatenate context audio + expression timeline
+            combined_audio_path = self.output_dir / f"temp_combined_audio_{safe_expression}.wav"
+            self._register_temp_file(combined_audio_path)
+            
+            # Create concat file for audio
+            audio_concat_file = self.output_dir / f"temp_audio_concat_{safe_expression}.txt"
+            self._register_temp_file(audio_concat_file)
+            
+            with open(audio_concat_file, 'w') as f:
+                f.write(f"file '{Path(context_audio_path).absolute()}'\n")
+                f.write(f"file '{Path(expression_timeline_path).absolute()}'\n")
+            
+            # Concatenate context + expression audio
+            (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
+             .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+             .overwrite_output()
+             .run(quiet=True))
+            
+            # Get combined audio duration
+            combined_probe = ffmpeg.probe(str(combined_audio_path))
+            combined_audio_duration = float(combined_probe['format']['duration'])
+            logger.info(f"Combined audio duration: {combined_audio_duration:.2f}s (context: {context_audio_duration:.2f}s + expression: {expression_timeline_duration:.2f}s)")
+            
+            # For short videos, total duration = context duration + expression timeline duration
+            total_duration = context_duration + expression_timeline_duration
+            tts_audio_path = combined_audio_path
+            tts_duration = combined_audio_duration
+            video_audio_duration = combined_audio_duration
+            logger.info(f"Short video: context visual ({context_duration:.2f}s) + freeze frame ({expression_timeline_duration:.2f}s), total audio ({video_audio_duration:.2f}s)")
             
             # Create silent slide with total duration (displays throughout entire video)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
@@ -1811,16 +2150,79 @@ class VideoEditor:
             context_input = ffmpeg.input(context_video_path)
             slide_input = ffmpeg.input(slide_path)
             
-            # Extend context video by freezing last frame
-            # Use tpad filter to clone the last frame for the extended duration
-            freeze_duration = total_duration - context_duration
-            logger.info(f"Extending context video by {freeze_duration:.2f}s with freeze frame")
-            context_extended = ffmpeg.filter(
-                context_input['v'],
-                'tpad',
-                stop_mode='clone',
-                stop_duration=freeze_duration
-            )
+            # Extract expression video clip and concatenate with context video
+            logger.info(f"Creating expression video clip for timeline duration: {expression_timeline_duration:.2f}s")
+            
+            try:
+                # Convert timestamps to seconds for FFmpeg
+                start_seconds = self._time_to_seconds(expression.expression_start_time)
+                end_seconds = self._time_to_seconds(expression.expression_end_time)
+                expression_duration = end_seconds - start_seconds
+                
+                logger.info(f"Extracting expression video: {expression.expression_start_time} - {expression.expression_end_time} ({expression_duration:.2f}s)")
+                
+                # Simple approach: Just extract expression video and concatenate with context
+                expression_video_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
+                self._register_temp_file(expression_video_path)
+                
+                # Extract expression video clip (no looping for now)
+                logger.info(f"Creating expression video clip ({expression_duration:.2f}s)")
+                
+                (ffmpeg.input(original_video, ss=start_seconds, t=expression_duration)
+                 .output(str(expression_video_path), vcodec='libx264', acodec='aac', preset='fast', crf=23)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Loop expression video to match timeline duration if needed
+                if expression_duration < expression_timeline_duration:
+                    # Calculate how many loops we need
+                    num_loops = int(expression_timeline_duration / expression_duration) + 1
+                    logger.info(f"Looping expression video {num_loops} times to match timeline duration ({expression_timeline_duration:.2f}s)")
+                    
+                    # Create looped expression video using loop filter
+                    looped_expression_path = self.output_dir / f"temp_looped_expression_{safe_expression}.mkv"
+                    self._register_temp_file(looped_expression_path)
+                    
+                    (ffmpeg.input(str(expression_video_path))
+                     .video.filter('loop', loop=num_loops-1, size=32767)
+                     .output(str(looped_expression_path), vcodec='libx264', t=expression_timeline_duration, preset='fast', crf=23)
+                     .overwrite_output()
+                     .run(quiet=True))
+                    
+                    final_expression_path = looped_expression_path
+                    final_expression_duration = expression_timeline_duration
+                else:
+                    # Expression video is long enough, just trim to timeline duration
+                    final_expression_path = expression_video_path
+                    final_expression_duration = min(expression_duration, expression_timeline_duration)
+                
+                # Create concatenated video using concat filter
+                logger.info(f"Concatenating context video ({context_duration:.2f}s) + expression video ({final_expression_duration:.2f}s)")
+                
+                concatenated_video_path = self.output_dir / f"temp_concatenated_video_{safe_expression}.mkv"
+                self._register_temp_file(concatenated_video_path)
+                
+                # Use concat filter to join videos (video only, no audio)
+                context_clip = ffmpeg.input(context_video_path)
+                expression_clip = ffmpeg.input(str(final_expression_path))
+                
+                (ffmpeg.concat(context_clip, expression_clip, v=1, a=0)  # Only video, no audio
+                 .output(str(concatenated_video_path), vcodec='libx264', preset='fast', crf=23)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                context_extended = ffmpeg.input(str(concatenated_video_path))['v']
+                logger.info(f"✅ Successfully created expression video with playback (context: {context_duration:.2f}s + expression: {final_expression_duration:.2f}s)")
+                
+            except Exception as e:
+                logger.warning(f"Failed to create expression video, falling back to freeze frame: {e}")
+                # Fallback to freeze frame if expression video creation fails
+                context_extended = ffmpeg.filter(
+                    context_input['v'],
+                    'tpad',
+                    stop_mode='clone',
+                    stop_duration=expression_timeline_duration
+                )
             
             # Scale videos to half height for stacking
             context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
@@ -1829,80 +2231,43 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Create combined audio: context_audio + TTS (repeat_count times with 0.5s gaps)
-            logger.info(f"Creating combined audio timeline: context audio + TTS×{repeat_count} with 0.5s gaps")
+            # Use combined audio (context + expression) + 40% volume boost
+            logger.info(f"Using combined audio with 40% volume boost: {video_audio_duration:.2f}s")
+            logger.info(f"Video duration: {total_duration:.2f}s, Audio duration: {tts_duration:.2f}s")
             
-            # Create audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
-            # Timeline: context_audio + TTS + 0.5s silence + TTS + ... (repeat_count times)
             try:
-                # Create silence for 0.5s gap
-                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_short_{safe_expression}.wav"
-                self._register_temp_file(silence_0_5s_path)
+                # Apply 40% volume boost to combined audio
+                boosted_audio_path = self.output_dir / f"temp_boosted_combined_audio_{safe_expression}.wav"
+                self._register_temp_file(boosted_audio_path)
                 
-                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
-                 .output(str(silence_0_5s_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Convert TTS to WAV with stereo for concatenation
-                tts_wav_path = self.output_dir / f"temp_tts_short_{safe_expression}.wav"
-                self._register_temp_file(tts_wav_path)
-                
+                # Apply volume boost to combined audio
                 (ffmpeg.input(str(tts_audio_path))
-                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .audio.filter('volume', '1.4')  # 40% volume boost
+                 .output(str(boosted_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Extract context audio to WAV
-                context_audio_path = self.output_dir / f"temp_context_audio_short_{safe_expression}.wav"
-                self._register_temp_file(context_audio_path)
+                logger.info(f"✅ Combined audio with 40% volume boost created")
                 
-                (ffmpeg.input(context_video_path)
-                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2, vn=None)
-                 .overwrite_output()
-                 .run(quiet=True))
+                timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 
-                # Create concat file for audio timeline: context_audio + TTS (repeat_count times with 0.5s gaps)
-                audio_concat_file = self.output_dir / f"temp_concat_audio_short_{safe_expression}.txt"
-                self._register_temp_file(audio_concat_file)
+                # Create final video with context audio (no looping needed)
+                logger.info(f"Creating final short video with context audio: video={total_duration:.2f}s")
                 
-                with open(audio_concat_file, 'w') as f:
-                    # Start with context audio
-                    f.write(f"file '{Path(context_audio_path).absolute()}'\n")
-                    
-                    # Add TTS segments with 0.5s silence between them
-                    for i in range(repeat_count):
-                        f.write(f"file '{Path(tts_wav_path).absolute()}'\n")
-                        if i < repeat_count - 1:  # Don't add silence after the last TTS
-                            f.write(f"file '{Path(silence_0_5s_path).absolute()}'\n")
-                
-                # Concatenate all audio segments
-                combined_audio_path = self.output_dir / f"temp_combined_audio_short_{safe_expression}.wav"
-                self._register_temp_file(combined_audio_path)
-                
-                (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
-                 .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                logger.info(f"✅ Combined audio timeline created: {total_duration:.2f}s")
-                
-                # Create final video with combined audio
-                combined_audio_input = ffmpeg.input(str(combined_audio_path))
-                
-                (
-                    ffmpeg
-                    .output(stacked_video, combined_audio_input['a'], str(output_path),
+                (ffmpeg
+                 .output(
+                     stacked_video,
+                     timeline_audio_input['a'],
+                     str(output_path),
                            vcodec='libx264',
                            acodec='aac',
                            preset='fast',
                            crf=23,
                            ac=2,
                            ar=48000,
-                           t=total_duration)
+                     t=total_duration)  # Video duration matches audio duration
                     .overwrite_output()
-                    .run(quiet=True)
-                )
+                 .run())
                 
                 logger.info("✅ Short video created with extended audio successfully")
                 
@@ -1986,7 +2351,7 @@ class VideoEditor:
                 for video_path in video_paths:
                     f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate videos
+            # Concatenate videos with explicit stream mapping and audio parameters
             (
                 ffmpeg
                 .input(str(concat_file), format='concat', safe=0)
@@ -1994,7 +2359,9 @@ class VideoEditor:
                        vcodec='libx264',
                        acodec='aac',
                        preset='fast',
-                       crf=23)
+                       crf=23,
+                       ac=2,  # Force stereo audio
+                       ar=48000)  # Set sample rate to match video audio
                 .overwrite_output()
                 .run(capture_stdout=True, capture_stderr=True)
             )

@@ -177,8 +177,7 @@ tts:
   # TTS provider (lemonfox, google, aws, etc.)
   provider: "google"
   
-  # Number of times to repeat TTS audio for educational slides and short videos
-  repeat_count: 2
+  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
   
   # Gemini TTS Configuration (Google GenAI library)
   google:
@@ -220,13 +219,17 @@ short_video:
   # Allow variance (+/- seconds)
   duration_variance: 10
   
-  # Number of times to repeat expression video in short videos
-  expression_repeat_count: 3
+  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
 
 # ============================================================================
 # Expression-Based Learning Configuration
 # ============================================================================
 expression:
+  # Global expression repeat count for TTS, original audio, and short videos
+  # This unified setting controls how many times expressions are repeated
+  # for educational purposes across all video types (educational videos, short videos)
+  repeat_count: 3
+  
   # Subtitle styling configuration
   subtitle_styling:
     default:

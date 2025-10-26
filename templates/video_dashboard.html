@@ -1187,6 +1187,14 @@
                         </div>
                     </div>
                     
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="color: #34495e; margin-bottom: 10px;">Options</h3>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="testModeCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">Test Mode (Process only first chunk for testing)</span>
+                        </label>
+                    </div>
+                    
                     <div style="margin-bottom: 15px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 3px solid #3498db;">
                         <strong>Note:</strong> This will create both a final video and short videos (2-3 minutes each). Expressions will be selected automatically by AI.
                     </div>
@@ -1218,6 +1226,7 @@
             
             const languageCode = document.getElementById('languageSelect').value;
             const languageLevel = document.getElementById('levelSelect').value;
+            const testMode = document.getElementById('testModeCheckbox').checked;
             
             const mediaId = selectedMedia.value;
             const videoPath = selectedMedia.dataset.video;
@@ -1239,7 +1248,8 @@
                         video_path: videoPath,
                         subtitle_path: subtitlePath,
                         language_code: languageCode,
-                        language_level: languageLevel
+                        language_level: languageLevel,
+                        test_mode: testMode
                     })
                 });
                 

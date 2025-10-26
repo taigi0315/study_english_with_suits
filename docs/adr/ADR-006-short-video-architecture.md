@@ -28,8 +28,9 @@ We will implement a short video generation system that creates 9:16 aspect ratio
 
 2. **Audio Timeline**:
    - Context audio plays during video portion
-   - After context ends: TTS audio plays with configurable repetitions
-   - Freeze frame on context video during TTS playback
+   - After context ends: Expression audio plays with configurable repetitions
+   - **Expression video loops** during expression audio playback (no freeze frame)
+   - 40% volume boost applied for optimal audio quality
 
 3. **Batching System**:
    - Target duration: ~120 seconds per batch
@@ -101,10 +102,34 @@ python -m langflix.main --subtitle "file.srt" --no-shorts
 
 ## Implementation Timeline
 
-1. **Phase 1**: Basic short video creation (context + slide)
-2. **Phase 2**: Audio timeline implementation
-3. **Phase 3**: Batching system
-4. **Phase 4**: CLI integration and configuration
+1. **Phase 1**: Basic short video creation (context + slide) ✅
+2. **Phase 2**: Audio timeline implementation ✅
+3. **Phase 3**: Batching system ✅
+4. **Phase 4**: CLI integration and configuration ✅
+5. **Phase 5**: Expression video playback enhancement ✅
+
+## Recent Enhancements (October 2025)
+
+### Expression Video Playback
+- **Issue**: Previously used freeze frame during expression audio repetition
+- **Solution**: Implemented expression video looping to match audio timeline
+- **Result**: Continuous video motion throughout entire short video
+
+### Audio-Video Synchronization
+- **Issue**: Expression video duration (2-3s) shorter than audio timeline (5-8s)
+- **Solution**: FFmpeg loop filter to repeat expression video seamlessly
+- **Result**: Perfect synchronization between video and audio content
+
+### Video File Matching
+- **Issue**: Incorrect video file selection for audio extraction
+- **Solution**: Use same video matching logic as educational videos
+- **Result**: Accurate expression audio from correct source video
+
+### Technical Improvements
+- **Multiple Expressions**: Support for batching multiple expressions per video
+- **Volume Enhancement**: 40% volume boost for optimal audio quality
+- **Quality Preservation**: Maintained high-quality encoding (1500+ kbps)
+- **Error Handling**: Graceful fallback to freeze frame if video processing fails
 
 ## References
 

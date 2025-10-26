@@ -54,10 +54,22 @@ class RedisJobManager:
         try:
             updates['updated_at'] = datetime.now(timezone.utc).isoformat()
             
-            # Update job data
-            self.redis_client.hset(f"job:{job_id}", mapping=updates)
+            # Convert all values to strings for Redis storage
+            string_updates = {}
+            for key, value in updates.items():
+                if isinstance(value, (int, float)):
+                    string_updates[key] = str(value)
+                elif isinstance(value, bool):
+                    string_updates[key] = str(value).lower()
+                elif isinstance(value, datetime):
+                    string_updates[key] = value.isoformat()
+                else:
+                    string_updates[key] = str(value)
             
-            logger.debug(f"✅ Job {job_id} updated: {updates}")
+            # Update job data
+            self.redis_client.hset(f"job:{job_id}", mapping=string_updates)
+            
+            logger.debug(f"✅ Job {job_id} updated: {string_updates}")
             return True
         except Exception as e:
             logger.error(f"❌ Failed to update job {job_id}: {e}")

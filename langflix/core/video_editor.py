@@ -2128,8 +2128,13 @@ class VideoEditor:
             combined_audio_duration = float(combined_probe['format']['duration'])
             logger.info(f"Combined audio duration: {combined_audio_duration:.2f}s (context: {context_audio_duration:.2f}s + expression: {expression_timeline_duration:.2f}s)")
             
-            # For short videos, total duration = context duration + expression timeline duration
-            total_duration = context_duration + expression_timeline_duration
+            # For short videos, total duration = context duration + required expression duration
+            # Calculate required expression duration based on repeat count
+            from langflix import settings
+            repeat_count = settings.get_tts_repeat_count()
+            expression_audio_duration = expression_timeline_duration / (2.0 + repeat_count + (0.5 * (repeat_count - 1)))  # Extract base duration
+            required_expression_duration = 2.0 + (expression_audio_duration * repeat_count) + (0.5 * (repeat_count - 1))
+            total_duration = context_duration + required_expression_duration
             tts_audio_path = combined_audio_path
             tts_duration = combined_audio_duration
             video_audio_duration = combined_audio_duration
@@ -2165,36 +2170,45 @@ class VideoEditor:
                 expression_video_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
                 self._register_temp_file(expression_video_path)
                 
-                # Extract expression video clip (no looping for now)
-                logger.info(f"Creating expression video clip ({expression_duration:.2f}s)")
+                # Extract expression video clip with audio
+                logger.info(f"Creating expression video clip with audio ({expression_duration:.2f}s)")
                 
                 (ffmpeg.input(original_video, ss=start_seconds, t=expression_duration)
                  .output(str(expression_video_path), vcodec='libx264', acodec='aac', preset='fast', crf=23)
                  .overwrite_output()
                  .run(quiet=True))
                 
-                # Loop expression video to match timeline duration if needed
-                if expression_duration < expression_timeline_duration:
-                    # Calculate how many loops we need
-                    num_loops = int(expression_timeline_duration / expression_duration) + 1
-                    logger.info(f"Looping expression video {num_loops} times to match timeline duration ({expression_timeline_duration:.2f}s)")
-                    
-                    # Create looped expression video using loop filter
-                    looped_expression_path = self.output_dir / f"temp_looped_expression_{safe_expression}.mkv"
-                    self._register_temp_file(looped_expression_path)
-                    
-                    (ffmpeg.input(str(expression_video_path))
-                     .video.filter('loop', loop=num_loops-1, size=32767)
-                     .output(str(looped_expression_path), vcodec='libx264', t=expression_timeline_duration, preset='fast', crf=23)
-                     .overwrite_output()
-                     .run(quiet=True))
-                    
-                    final_expression_path = looped_expression_path
-                    final_expression_duration = expression_timeline_duration
-                else:
-                    # Expression video is long enough, just trim to timeline duration
-                    final_expression_path = expression_video_path
-                    final_expression_duration = min(expression_duration, expression_timeline_duration)
+                # Always loop expression video to match timeline duration (with both video and audio)
+                # Calculate how many loops we need based on repeat count from settings
+                from langflix import settings
+                repeat_count = settings.get_tts_repeat_count()
+                logger.info(f"Using repeat count from settings: {repeat_count}")
+                
+                # Calculate required duration for expression repetition
+                # Pattern: 1s silence + (audio * repeat_count) + (0.5s * (repeat_count-1)) + 1s silence
+                expression_audio_duration = expression_duration
+                required_expression_duration = 2.0 + (expression_audio_duration * repeat_count) + (0.5 * (repeat_count - 1))
+                
+                logger.info(f"Expression duration: {expression_duration:.2f}s, Required duration: {required_expression_duration:.2f}s")
+                
+                # Always create looped expression video to match timeline duration
+                num_loops = int(required_expression_duration / expression_duration) + 1
+                logger.info(f"Looping expression video+audio {num_loops} times to match required duration ({required_expression_duration:.2f}s)")
+                
+                # Create looped expression video with audio using loop filter
+                looped_expression_path = self.output_dir / f"temp_looped_expression_{safe_expression}.mkv"
+                self._register_temp_file(looped_expression_path)
+                
+                # Loop both video and audio together
+                (ffmpeg.input(str(expression_video_path))
+                 .video.filter('loop', loop=num_loops-1, size=32767)
+                 .audio.filter('aloop', loop=num_loops-1, size=32767)
+                 .output(str(looped_expression_path), vcodec='libx264', acodec='aac', t=required_expression_duration, preset='fast', crf=23)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                final_expression_path = looped_expression_path
+                final_expression_duration = required_expression_duration
                 
                 # Create concatenated video using concat filter
                 logger.info(f"Concatenating context video ({context_duration:.2f}s) + expression video ({final_expression_duration:.2f}s)")
@@ -2202,16 +2216,17 @@ class VideoEditor:
                 concatenated_video_path = self.output_dir / f"temp_concatenated_video_{safe_expression}.mkv"
                 self._register_temp_file(concatenated_video_path)
                 
-                # Use concat filter to join videos (video only, no audio)
+                # Use concat filter to join videos with both video and audio
                 context_clip = ffmpeg.input(context_video_path)
                 expression_clip = ffmpeg.input(str(final_expression_path))
                 
-                (ffmpeg.concat(context_clip, expression_clip, v=1, a=0)  # Only video, no audio
-                 .output(str(concatenated_video_path), vcodec='libx264', preset='fast', crf=23)
+                (ffmpeg.concat(context_clip, expression_clip, v=1, a=1)  # Both video and audio
+                 .output(str(concatenated_video_path), vcodec='libx264', acodec='aac', preset='fast', crf=23)
                  .overwrite_output()
                  .run(quiet=True))
                 
                 context_extended = ffmpeg.input(str(concatenated_video_path))['v']
+                concatenated_audio = ffmpeg.input(str(concatenated_video_path))['a']
                 logger.info(f"✅ Successfully created expression video with playback (context: {context_duration:.2f}s + expression: {final_expression_duration:.2f}s)")
                 
             except Exception as e:
@@ -2223,6 +2238,8 @@ class VideoEditor:
                     stop_mode='clone',
                     stop_duration=expression_timeline_duration
                 )
+                # Use combined audio for fallback case
+                concatenated_audio = ffmpeg.input(str(tts_audio_path))
             
             # Scale videos to half height for stacking
             context_scaled = ffmpeg.filter(context_extended, 'scale', width, half_height)
@@ -2231,28 +2248,29 @@ class VideoEditor:
             # Stack videos vertically (context on top, slide on bottom)
             stacked_video = ffmpeg.filter([context_scaled, slide_scaled], 'vstack', inputs=2)
             
-            # Use combined audio (context + expression) + 40% volume boost
-            logger.info(f"Using combined audio with 40% volume boost: {video_audio_duration:.2f}s")
+            # Use concatenated audio (context + expression) + 40% volume boost
+            logger.info(f"Using concatenated audio with 40% volume boost: {video_audio_duration:.2f}s")
             logger.info(f"Video duration: {total_duration:.2f}s, Audio duration: {tts_duration:.2f}s")
             
             try:
-                # Apply 40% volume boost to combined audio
-                boosted_audio_path = self.output_dir / f"temp_boosted_combined_audio_{safe_expression}.wav"
+                # Apply 40% volume boost to concatenated audio
+                boosted_audio_path = self.output_dir / f"temp_boosted_concatenated_audio_{safe_expression}.wav"
                 self._register_temp_file(boosted_audio_path)
                 
-                # Apply volume boost to combined audio
-                (ffmpeg.input(str(tts_audio_path))
+                # Apply volume boost to concatenated audio (or combined audio for fallback)
+                audio_source = concatenated_video_path if 'concatenated_video_path' in locals() else tts_audio_path
+                (ffmpeg.input(str(audio_source))
                  .audio.filter('volume', '1.4')  # 40% volume boost
                  .output(str(boosted_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
                  .run(quiet=True))
                 
-                logger.info(f"✅ Combined audio with 40% volume boost created")
+                logger.info(f"✅ Concatenated audio with 40% volume boost created")
                 
                 timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 
-                # Create final video with context audio (no looping needed)
-                logger.info(f"Creating final short video with context audio: video={total_duration:.2f}s")
+                # Create final video with concatenated audio
+                logger.info(f"Creating final short video with concatenated audio: video={total_duration:.2f}s")
                 
                 (ffmpeg
                  .output(
@@ -2269,7 +2287,7 @@ class VideoEditor:
                     .overwrite_output()
                  .run())
                 
-                logger.info("✅ Short video created with extended audio successfully")
+                logger.info("✅ Short video created with concatenated audio successfully")
                 
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error creating short video: {e}")

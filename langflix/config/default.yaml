@@ -219,6 +219,9 @@ short_video:
   
   # Allow variance (+/- seconds)
   duration_variance: 10
+  
+  # Number of times to repeat expression video in short videos
+  expression_repeat_count: 3
 
 # ============================================================================
 # Expression-Based Learning Configuration

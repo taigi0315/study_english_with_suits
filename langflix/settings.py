@@ -260,6 +260,11 @@ def get_short_video_resolution() -> str:
     return get_short_video_config().get('resolution', '1080x1920')
 
 
+def get_short_video_expression_repeat_count() -> int:
+    """Get number of times to repeat expression video in short videos"""
+    return int(get_short_video_config().get('expression_repeat_count', 3))
+
+
 # ============================================================================
 # Storage Configuration Accessors
 # ============================================================================

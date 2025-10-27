@@ -4,7 +4,7 @@ Language Configuration for LangFlix
 Provides language-specific settings for different target languages
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 from pathlib import Path
 
 class LanguageConfig:
@@ -41,10 +41,16 @@ class LanguageConfig:
         'es': {
             'name': 'Spanish',
             'font_path': '/System/Library/Fonts/HelveticaNeue.ttc',
-            'font_fallback': '/System/Library/Fonts/Arial.ttf',
+            'font_fallback': [
+                '/System/Library/Fonts/Arial.ttf',
+                '/System/Library/Fonts/Helvetica.ttc',
+                '/System/Library/Fonts/Times.ttc',
+                '/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf'
+            ],
             'prompt_language': 'Spanish',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'special_characters': 'ñáéíóúüÑÁÉÍÓÚÜ¿¡'
         },
         'fr': {
             'name': 'French',
@@ -76,7 +82,7 @@ class LanguageConfig:
     @classmethod
     def get_font_path(cls, language_code: str) -> str:
         """
-        Get font path for language
+        Get font path for language with fallback support
         
         Args:
             language_code: Language code
@@ -91,10 +97,20 @@ class LanguageConfig:
         if font_path.exists():
             return str(font_path)
         
-        # Fallback to secondary font
-        fallback_path = Path(config['font_fallback'])
-        if fallback_path.exists():
-            return str(fallback_path)
+        # Handle fallback fonts (can be string or list)
+        fallback = config.get('font_fallback')
+        if fallback:
+            if isinstance(fallback, list):
+                # Try each fallback font in order
+                for fallback_font in fallback:
+                    fallback_path = Path(fallback_font)
+                    if fallback_path.exists():
+                        return str(fallback_path)
+            else:
+                # Single fallback font (backward compatibility)
+                fallback_path = Path(fallback)
+                if fallback_path.exists():
+                    return str(fallback_path)
         
         # Final fallback to system default
         return '/System/Library/Fonts/Arial.ttf'
@@ -122,6 +138,66 @@ class LanguageConfig:
             List of supported language codes
         """
         return list(cls.LANGUAGE_CONFIGS.keys())
+    
+    @classmethod
+    def validate_font_for_language(cls, language_code: str) -> Dict[str, Any]:
+        """
+        Validate font support for language-specific characters
+        
+        Args:
+            language_code: Language code
+            
+        Returns:
+            Dictionary with validation results
+        """
+        config = cls.get_config(language_code)
+        font_path = cls.get_font_path(language_code)
+        special_chars = config.get('special_characters', '')
+        
+        result = {
+            'language_code': language_code,
+            'font_path': font_path,
+            'font_exists': Path(font_path).exists(),
+            'special_characters': special_chars,
+            'validation_status': 'unknown'
+        }
+        
+        if not result['font_exists']:
+            result['validation_status'] = 'font_missing'
+            result['error'] = f"Font file not found: {font_path}"
+            return result
+        
+        # For now, assume font is valid if it exists
+        # TODO: Add actual character support validation using fonttools or similar
+        result['validation_status'] = 'valid'
+        
+        return result
+    
+    @classmethod
+    def get_spanish_font_recommendations(cls) -> List[str]:
+        """
+        Get recommended fonts for Spanish language support
+        
+        Returns:
+            List of recommended font paths
+        """
+        recommendations = [
+            '/System/Library/Fonts/HelveticaNeue.ttc',
+            '/System/Library/Fonts/Arial.ttf', 
+            '/System/Library/Fonts/Helvetica.ttc',
+            '/System/Library/Fonts/Times.ttc',
+            '/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf',
+            '/System/Library/Fonts/Avenir.ttc',
+            '/System/Library/Fonts/San Francisco/SF-Pro-Text-Regular.otf'
+        ]
+        
+        # Filter to only existing fonts
+        existing_fonts = []
+        for font_path in recommendations:
+            if Path(font_path).exists():
+                existing_fonts.append(font_path)
+        
+        return existing_fonts
     
     @classmethod
     def is_supported(cls, language_code: str) -> bool:

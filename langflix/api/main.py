@@ -18,6 +18,28 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     logger.info("LangFlix API starting up...")
+    
+    # Initialize and cleanup Redis on startup
+    try:
+        from langflix.core.redis_client import get_redis_job_manager
+        redis_manager = get_redis_job_manager()
+        
+        # Cleanup expired and stale jobs on startup
+        expired_count = redis_manager.cleanup_expired_jobs()
+        stale_count = redis_manager.cleanup_stale_jobs()
+        
+        logger.info(f"✅ Redis startup cleanup: {expired_count} expired, {stale_count} stale jobs removed")
+        
+        # Test Redis health
+        health = redis_manager.health_check()
+        if health["status"] == "healthy":
+            logger.info(f"✅ Redis connected: {health['active_jobs']} active jobs")
+        else:
+            logger.warning(f"⚠️ Redis health check failed: {health.get('error', 'Unknown error')}")
+            
+    except Exception as e:
+        logger.error(f"❌ Redis initialization failed: {e}")
+    
     # TODO: Initialize database connection
     # TODO: Initialize storage backends
     logger.info("LangFlix API started successfully")

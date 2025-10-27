@@ -5,7 +5,8 @@ Redis client for shared job state management in Phase 7 architecture.
 import redis
 import json
 import logging
-from typing import Dict, Any, Optional
+import time
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 import os
 
@@ -132,28 +133,90 @@ class RedisJobManager:
         """Clean up expired jobs."""
         try:
             job_ids = self.redis_client.smembers("jobs:active")
-            cleaned = 0
+            cleaned_count = 0
             
             for job_id in job_ids:
+                # Check if job data exists
                 if not self.redis_client.exists(f"job:{job_id}"):
+                    # Remove from active jobs set if data doesn't exist
                     self.redis_client.srem("jobs:active", job_id)
-                    cleaned += 1
+                    cleaned_count += 1
+                    logger.info(f"Cleaned up orphaned job reference: {job_id}")
             
-            if cleaned > 0:
-                logger.info(f"✅ Cleaned up {cleaned} expired jobs")
-            
-            return cleaned
+            logger.info(f"Cleaned up {cleaned_count} expired/orphaned jobs")
+            return cleaned_count
         except Exception as e:
             logger.error(f"❌ Failed to cleanup expired jobs: {e}")
             return 0
     
-    # Video Cache Methods
+    def cleanup_stale_jobs(self, max_age_hours: int = 24) -> int:
+        """Clean up stale jobs older than max_age_hours."""
+        try:
+            from datetime import datetime, timezone, timedelta
+            
+            job_ids = self.redis_client.smembers("jobs:active")
+            cleaned_count = 0
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+            
+            for job_id in job_ids:
+                job_data = self.get_job(job_id)
+                if job_data and 'created_at' in job_data:
+                    try:
+                        created_at = datetime.fromisoformat(job_data['created_at'].replace('Z', '+00:00'))
+                        if created_at < cutoff_time:
+                            self.delete_job(job_id)
+                            cleaned_count += 1
+                            logger.info(f"Cleaned up stale job: {job_id} (created: {created_at})")
+                    except ValueError as e:
+                        logger.warning(f"Invalid created_at format for job {job_id}: {e}")
+            
+            logger.info(f"Cleaned up {cleaned_count} stale jobs")
+            return cleaned_count
+        except Exception as e:
+            logger.error(f"❌ Failed to cleanup stale jobs: {e}")
+            return 0
     
-    def get_video_cache(self) -> Optional[list]:
-        """Get cached video list from Redis."""
+    def health_check(self) -> Dict[str, Any]:
+        """Check Redis connection health and return status."""
+        try:
+            # Test basic connectivity
+            start_time = time.time()
+            self.redis_client.ping()
+            ping_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+            
+            # Get Redis info
+            info = self.redis_client.info()
+            
+            # Count active jobs
+            active_jobs_count = self.redis_client.scard("jobs:active")
+            
+            # Get memory usage
+            memory_used = info.get('used_memory_human', 'unknown')
+            
+            return {
+                "status": "healthy",
+                "ping_time_ms": round(ping_time, 2),
+                "active_jobs": active_jobs_count,
+                "memory_used": memory_used,
+                "redis_version": info.get('redis_version', 'unknown'),
+                "connected_clients": info.get('connected_clients', 0),
+                "uptime_seconds": info.get('uptime_in_seconds', 0)
+            }
+        except Exception as e:
+            logger.error(f"❌ Redis health check failed: {e}")
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "ping_time_ms": None,
+                "active_jobs": None
+            }
+    
+    def get_video_cache(self) -> Optional[List[Dict[str, Any]]]:
+        """Get cached video metadata."""
         try:
             cached_data = self.redis_client.get("langflix:video_cache:all")
             if cached_data:
+                import json
                 logger.debug("✅ Video cache hit")
                 return json.loads(cached_data)
             logger.debug("❌ Video cache miss")
@@ -162,21 +225,16 @@ class RedisJobManager:
             logger.error(f"❌ Failed to get video cache: {e}")
             return None
     
-    def set_video_cache(self, videos: list, ttl: int = 300) -> bool:
-        """
-        Cache video list in Redis.
-        
-        Args:
-            videos: List of video dictionaries to cache
-            ttl: Time-to-live in seconds (default: 300 = 5 minutes)
-        """
+    def set_video_cache(self, videos: List[Dict[str, Any]], ttl: int = 300) -> bool:
+        """Set video metadata cache with TTL."""
         try:
+            import json
             self.redis_client.setex(
-                "langflix:video_cache:all",
-                ttl,
-                json.dumps(videos, default=str)  # default=str handles datetime objects
+                "langflix:video_cache:all", 
+                ttl, 
+                json.dumps(videos, default=str)
             )
-            logger.info(f"✅ Video cache set with {len(videos)} videos (TTL: {ttl}s)")
+            logger.info(f"✅ Cached {len(videos)} videos for {ttl} seconds")
             return True
         except Exception as e:
             logger.error(f"❌ Failed to set video cache: {e}")

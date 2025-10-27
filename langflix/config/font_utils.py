@@ -62,14 +62,14 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
     Get font file path for the given language or default.
     
     Args:
-        language_code: Optional language code (e.g., 'ko', 'ja', 'zh')
+        language_code: Optional language code (e.g., 'ko', 'ja', 'zh', 'es')
         
     Returns:
         str: Path to appropriate font file
     """
     # Import here to avoid circular imports
     try:
-        from ..language_config import LanguageConfig
+        from ..core.language_config import LanguageConfig
         
         # If language code is provided, try to get language-specific font
         if language_code:
@@ -80,6 +80,14 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
                     return font_path
                 else:
                     logger.warning(f"Language-specific font not found for {language_code}, falling back to default")
+                    
+                    # Special handling for Spanish - try recommended fonts
+                    if language_code == 'es':
+                        spanish_fonts = LanguageConfig.get_spanish_font_recommendations()
+                        if spanish_fonts:
+                            logger.info(f"Using Spanish-compatible font: {spanish_fonts[0]}")
+                            return spanish_fonts[0]
+                        
             except Exception as e:
                 logger.warning(f"Error getting font for language {language_code}: {e}")
     except ImportError:
@@ -87,4 +95,20 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
     
     # Fallback to platform default
     return get_platform_default_font()
+
+def validate_spanish_font_support() -> dict:
+    """
+    Validate Spanish font support on the current system.
+    
+    Returns:
+        Dictionary with validation results
+    """
+    try:
+        from ..core.language_config import LanguageConfig
+        return LanguageConfig.validate_font_for_language('es')
+    except ImportError:
+        return {
+            'validation_status': 'error',
+            'error': 'LanguageConfig not available'
+        }
 

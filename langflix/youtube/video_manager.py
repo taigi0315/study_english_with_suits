@@ -269,9 +269,9 @@ class VideoFileManager:
     
     def _is_ready_for_upload(self, video_type: str, duration: float) -> bool:
         """Determine if video is ready for YouTube upload"""
-        # Short videos should be under 60 seconds for YouTube Shorts
+        # Short videos should be under 3 minutes (YouTube Shorts can be up to 60s, but our short-form can be longer)
         if video_type == "short":
-            return duration <= 60
+            return 10 <= duration <= 180  # 10 seconds to 3 minutes
         
         # Educational videos should be reasonable length
         if video_type == "educational":
@@ -279,7 +279,7 @@ class VideoFileManager:
         
         # Final videos can be longer
         if video_type == "final":
-            return duration <= 600  # Up to 10 minutes
+            return 10 <= duration <= 600  # 10 seconds to 10 minutes
         
         return False
     

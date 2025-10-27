@@ -147,7 +147,7 @@ async def process_video_task(
         temp_video_dir = tempfile.mkdtemp()
         video_processor = VideoProcessor(temp_video_dir)
         subtitle_processor = SubtitleProcessor(temp_subtitle_path)
-        video_editor = VideoEditor(str(paths['language']['final_videos']), language_code)
+        video_editor = VideoEditor(str(paths['language']['final_videos']), language_code, episode_name)
         
         # Use the uploaded video file directly
         video_file = temp_video_path

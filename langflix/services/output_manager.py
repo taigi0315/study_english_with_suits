@@ -97,9 +97,9 @@ class OutputManager:
         subtitles_dir = lang_dir / "subtitles"
         context_videos_dir = lang_dir / "context_videos"
         slides_dir = lang_dir / "slides"
-        final_videos_dir = lang_dir / "final_videos"
+        final_videos_dir = lang_dir / "long_form_videos"  # Renamed from final_videos
         context_slide_combined_dir = lang_dir / "context_slide_combined"
-        short_videos_dir = lang_dir / "short_videos"
+        short_videos_dir = lang_dir / "short_form_videos"  # Renamed from short_videos
         
         subtitles_dir.mkdir(exist_ok=True)
         context_videos_dir.mkdir(exist_ok=True)

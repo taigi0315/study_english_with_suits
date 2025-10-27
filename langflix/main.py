@@ -629,7 +629,11 @@ class LangFlixPipeline:
             
             logger.info(f"Using {len(valid_videos)} valid videos for final concatenation")
             
-            final_video_path = self.paths['language']['final_videos'] / "final_educational_video_with_slides.mkv"
+            # Use long-form naming convention
+            episode_name = self.paths.get('episode_name', 'Unknown_Episode')
+            original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
+            final_video_filename = f"long-form_{episode_name}_{original_filename}.mkv"
+            final_video_path = self.paths['language']['final_videos'] / final_video_filename
             
             # Create concat file
             concat_file = self.paths['language']['final_videos'] / "final_concat.txt"
@@ -690,8 +694,11 @@ class LangFlixPipeline:
             
             logger.info(f"Creating final video from {len(video_sequence)} components")
             
-            # Final video path
-            final_video_path = final_videos_dir / "final_educational_video_with_slides.mkv"
+            # Final video path - use long-form naming convention
+            episode_name = self.paths.get('episode_name', 'Unknown_Episode')
+            original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
+            final_video_filename = f"long-form_{episode_name}_{original_filename}.mkv"
+            final_video_path = final_videos_dir / final_video_filename
             
             # Create concat file
             concat_file = final_videos_dir / "final_concat.txt"

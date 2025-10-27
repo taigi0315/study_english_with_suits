@@ -385,7 +385,9 @@ async def process_video_task(
         if educational_videos:
             try:
                 # Create final video path
-                final_video_path = paths['language']['final_videos'] / "final_educational_video_with_slides.mkv"
+                # Use long-form naming convention
+                final_video_filename = f"long-form_{episode_name}_{video_filename}.mkv"
+                final_video_path = paths['language']['final_videos'] / final_video_filename
                 
                 # Create concat file for final video
                 concat_file = paths['language']['final_videos'] / "final_concat.txt"

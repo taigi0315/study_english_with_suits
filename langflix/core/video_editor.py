@@ -1707,6 +1707,84 @@ class VideoEditor:
             logger.error(f"Error in _generate_tts_timeline: {e}")
             raise
 
+    def _extract_context_audio_timeline(
+        self, 
+        expression: ExpressionAnalysis, 
+        context_video_path: str, 
+        output_dir: Path, 
+        expression_index: int = 0,
+        repeat_count: int = None
+    ) -> Tuple[Path, float]:
+        """
+        Extract expression audio timeline from context video using relative timestamps.
+        This ensures audio-video synchronization in short videos.
+        
+        Args:
+            expression: Expression analysis object
+            context_video_path: Path to context video (already sliced from original)
+            output_dir: Output directory for audio files
+            expression_index: Index for unique filename generation
+            repeat_count: Number of repetitions for expression
+            
+        Returns:
+            Tuple of (audio_timeline_path, duration)
+        """
+        try:
+            from langflix.audio.original_audio_extractor import create_original_audio_timeline
+            from langflix import settings
+            
+            if repeat_count is None:
+                repeat_count = settings.get_expression_repeat_count()
+            
+            logger.info(f"Extracting context audio timeline with {repeat_count} repetitions")
+            
+            # Calculate relative timestamps within context video
+            context_start_seconds = self._time_to_seconds(expression.context_start_time)
+            expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
+            expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
+            
+            # Convert to relative position within context video (starts at 0)
+            relative_start = expression_start_seconds - context_start_seconds
+            relative_end = expression_end_seconds - context_start_seconds
+            
+            # Create a modified expression object with relative timestamps
+            from langflix.core.models import ExpressionAnalysis
+            relative_expression = ExpressionAnalysis(
+                expression=expression.expression,
+                translation=expression.translation,
+                context_start_time=self._seconds_to_time(0),  # Context starts at 0
+                context_end_time=self._seconds_to_time(relative_end - relative_start + 2),  # Add buffer
+                expression_start_time=self._seconds_to_time(relative_start),
+                expression_end_time=self._seconds_to_time(relative_end),
+                dialogue_line=expression.dialogue_line,
+                dialogue_translation=expression.dialogue_translation,
+                similar_expressions=expression.similar_expressions
+            )
+            
+            logger.info(f"Context audio extraction - relative timestamps: {relative_start:.2f}s - {relative_end:.2f}s")
+            
+            # Extract audio timeline from context video using relative timestamps
+            audio_timeline_path, duration = create_original_audio_timeline(
+                expression=relative_expression,
+                original_video_path=context_video_path,  # Use context video instead of original
+                output_dir=output_dir,
+                expression_index=expression_index,
+                audio_format="wav",
+                repeat_count=repeat_count
+            )
+            
+            logger.info(f"Context audio timeline extracted: {audio_timeline_path} ({duration:.2f}s)")
+            return audio_timeline_path, duration
+            
+        except Exception as e:
+            logger.error(f"Error extracting context audio timeline: {e}")
+            # Fallback to original method if context extraction fails
+            logger.warning("Falling back to original audio extraction method")
+            return self._extract_original_audio_timeline(
+                expression, self._get_original_video_path(context_video_path, None), 
+                output_dir, expression_index, {}, repeat_count
+            )
+    
     def _extract_original_audio_timeline(
         self, 
         expression: ExpressionAnalysis, 
@@ -1986,6 +2064,25 @@ class VideoEditor:
         except Exception as e:
             logger.error(f"Error parsing timestamp '{time_str}': {e}")
             raise ValueError(f"Invalid timestamp: {time_str}") from e
+    
+    def _seconds_to_time(self, seconds: float) -> str:
+        """
+        Convert seconds to SRT timestamp format.
+        
+        Args:
+            seconds: Time in seconds as float
+            
+        Returns:
+            Timestamp in format "HH:MM:SS.mmm"
+        """
+        try:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = seconds % 60
+            return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
+        except Exception as e:
+            logger.error(f"Error converting seconds to timestamp: {e}")
+            return "00:00:00.000"
 
     def _get_original_video_path(self, context_video_path: str, subtitle_file_path: str = None) -> str:
         """
@@ -2107,10 +2204,10 @@ class VideoEditor:
             tts_audio_dir = self.output_dir.parent / "tts_audio"
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             
-            # For audio extraction, we still use original video but with absolute timestamps
-            # (audio extraction needs the full original video for accurate timing)
-            expression_timeline_path, expression_timeline_duration = self._extract_original_audio_timeline(
-                expression, original_video, tts_audio_dir, expression_index, {}, repeat_count=repeat_count
+            # Extract audio from context video using relative timestamps (matching video extraction)
+            # This ensures audio-video synchronization in short videos
+            expression_timeline_path, expression_timeline_duration = self._extract_context_audio_timeline(
+                expression, context_video_path, tts_audio_dir, expression_index, repeat_count=repeat_count
             )
             logger.info(f"Expression timeline duration: {expression_timeline_duration:.2f}s")
             
@@ -2394,7 +2491,9 @@ class VideoEditor:
     def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
         """Create a single batch video from a list of video paths"""
         try:
-            batch_filename = f"short_video_{batch_number:03d}.mkv"
+            # Use short-form naming convention with episode info
+            episode_name = getattr(self, 'episode_name', 'Unknown_Episode')
+            batch_filename = f"short-form_{episode_name}_{batch_number:03d}.mkv"
             batch_path = self.short_videos_dir / batch_filename
             
             logger.info(f"Creating batch {batch_number} with {len(video_paths)} videos")

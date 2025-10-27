@@ -225,26 +225,42 @@ class VideoFileManager:
             filename = video_path.stem.lower()
             parent_dir = video_path.parent.name.lower()
             
-            if "educational" in filename:
+            # New naming convention detection
+            if filename.startswith("long-form_"):
+                video_type = "final"  # Long-form videos are the new final videos
+                # Extract episode info from long-form filename
+                parts = filename.split("_")
+                if len(parts) >= 3:
+                    expression = f"{parts[1]} - Long Form"  # e.g., "S01E01 - Long Form"
+                else:
+                    expression = "Long Form Video"
+            elif filename.startswith("short-form_"):
+                video_type = "short"  # Short-form videos
+                # Extract episode and sequence from short-form filename
+                parts = filename.split("_")
+                if len(parts) >= 3:
+                    expression = f"{parts[1]} - Short #{parts[2]}"  # e.g., "S01E01 - Short #001"
+                else:
+                    expression = "Short Form Video"
+            # Legacy naming convention (for backward compatibility)
+            elif "educational" in filename:
                 video_type = "educational"
-            elif "short" in filename:
+                expression = filename.replace("educational_", "").replace("_", " ").title()
+            elif "short" in filename and not filename.startswith("short-form_"):
                 video_type = "short"
-            elif "final" in filename:
+                expression = filename.replace("short_", "").replace("_", " ").title()
+            elif "final" in filename and not filename.startswith("long-form_"):
                 video_type = "final"
+                expression = filename.replace("final_", "").replace("_", " ").title()
             elif "slide" in filename:
                 video_type = "slide"
+                expression = filename.replace("slide_", "").replace("_", " ").title()
             elif "context" in filename:
                 video_type = "context"
-            
-            # Extract expression from filename
-            if video_type in ["educational", "short", "slide", "context", "final"]:
-                # Remove prefixes and get expression
-                expression = filename
-                for prefix in ["educational_", "short_", "slide_", "context_", "final_"]:
-                    if expression.startswith(prefix):
-                        expression = expression[len(prefix):]
-                        break
-                expression = expression.replace("_", " ").title()
+                expression = filename.replace("context_", "").replace("_", " ").title()
+            else:
+                # Default handling
+                expression = filename.replace("_", " ").title()
             
         except Exception as e:
             logger.warning(f"Error parsing path {video_path}: {e}")
@@ -281,12 +297,25 @@ class VideoFileManager:
     
     def get_uploadable_videos(self, videos: List[VideoMetadata]) -> List[VideoMetadata]:
         """
-        Filter videos that are uploadable (final or short only)
+        Filter videos that are uploadable (only long-form and short-form videos)
+        Excludes intermediate files like educational, slide, context videos
         """
-        return [v for v in videos 
-                if v.video_type in ['final', 'short'] 
-                and v.ready_for_upload 
-                and not v.uploaded_to_youtube]
+        uploadable_videos = []
+        for v in videos:
+            # Only include videos with new naming convention or legacy final videos
+            filename = Path(v.path).stem.lower()
+            
+            # Include long-form and short-form videos (new naming convention)
+            if (filename.startswith("long-form_") or filename.startswith("short-form_")):
+                if v.ready_for_upload and not v.uploaded_to_youtube:
+                    uploadable_videos.append(v)
+            # Include legacy final videos but exclude intermediate files
+            elif (v.video_type == 'final' and 
+                  not any(x in filename for x in ['educational', 'slide', 'context', 'temp_'])):
+                if v.ready_for_upload and not v.uploaded_to_youtube:
+                    uploadable_videos.append(v)
+        
+        return uploadable_videos
     
     def generate_thumbnail(self, video_path: str, output_path: str, timestamp: float = 5.0) -> bool:
         """Generate thumbnail from video using ffmpeg"""

@@ -56,44 +56,23 @@ class OutputManager:
         episode_dir = self.base_output_dir / series_name / episode_name
         episode_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create shared resources directory
-        shared_dir = episode_dir / "shared"
-        shared_dir.mkdir(exist_ok=True)
-        
-        # Create shared subdirectories
-        video_clips_dir = shared_dir / "video_clips"
-        audio_clips_dir = shared_dir / "audio_clips"
-        templates_dir = shared_dir / "templates"
-        
-        video_clips_dir.mkdir(exist_ok=True)
-        audio_clips_dir.mkdir(exist_ok=True)
-        templates_dir.mkdir(exist_ok=True)
-        
-        # Create translations directory
+        # Create translations directory (main output location)
         translations_dir = episode_dir / "translations"
         translations_dir.mkdir(exist_ok=True)
         
-        # Create metadata directory
-        metadata_dir = episode_dir / "metadata"
-        metadata_dir.mkdir(exist_ok=True)
+        # Note: Removed shared/ and metadata/ directories as they are currently unused
+        # All outputs go to translations/ directory structure
+        # If needed in future, these can be re-enabled:
+        # - shared/: for language-independent intermediate files
+        # - metadata/: for processing logs and LLM outputs
         
-        # Create llm_outputs subdirectory
-        llm_outputs_dir = metadata_dir / "llm_outputs"
-        llm_outputs_dir.mkdir(exist_ok=True)
-        
-        # Return path mappings
+        # Return path mappings (simplified structure)
         paths = {
             'episode_dir': episode_dir,
-            'shared': {
-                'video_clips': video_clips_dir,
-                'audio_clips': audio_clips_dir,
-                'templates': templates_dir
-            },
             'translations': translations_dir,
-            'metadata': {
-                'main': metadata_dir,
-                'llm_outputs': llm_outputs_dir
-            }
+            # Removed unused shared and metadata paths
+            # 'shared': {...},
+            # 'metadata': {...}
         }
         
         logger.info(f"Created episode structure: {episode_dir}")
@@ -216,7 +195,8 @@ class OutputManager:
         """
         import json
         
-        metadata_file = episode_paths['metadata']['main'] / "expressions.json"
+        # Save metadata directly in episode directory since metadata folder is removed
+        metadata_file = episode_paths['episode_dir'] / "expressions.json"
         
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
@@ -236,7 +216,8 @@ class OutputManager:
             Path to saved log file
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = episode_paths['metadata']['main'] / f"processing_log_{timestamp}.txt"
+        # Save log directly in episode directory since metadata folder is removed
+        log_file = episode_paths['episode_dir'] / f"processing_log_{timestamp}.txt"
         
         with open(log_file, 'w', encoding='utf-8') as f:
             f.write(log_content)

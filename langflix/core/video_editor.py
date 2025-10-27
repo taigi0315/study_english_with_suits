@@ -1764,28 +1764,132 @@ class VideoEditor:
             )
             
             logger.info(f"Context audio extraction - relative timestamps: {relative_start:.2f}s - {relative_end:.2f}s")
+            logger.info(f"🎵 Using context video for audio extraction: {context_video_path}")
             
             # Extract audio timeline from context video using relative timestamps
-            audio_timeline_path, duration = create_original_audio_timeline(
-                expression=relative_expression,
-                original_video_path=context_video_path,  # Use context video instead of original
-                output_dir=output_dir,
-                expression_index=expression_index,
-                audio_format="wav",
-                repeat_count=repeat_count
+            # Use direct context video extraction to avoid any confusion
+            audio_timeline_path, duration = self._create_context_audio_timeline_direct(
+                relative_expression, context_video_path, output_dir, expression_index, repeat_count
             )
             
             logger.info(f"Context audio timeline extracted: {audio_timeline_path} ({duration:.2f}s)")
             return audio_timeline_path, duration
             
         except Exception as e:
-            logger.error(f"Error extracting context audio timeline: {e}")
-            # Fallback to original method if context extraction fails
-            logger.warning("Falling back to original audio extraction method")
+            logger.error(f"❌ Error extracting context audio timeline: {e}")
+            # Fallback: Use context video directly with original timestamps
+            logger.warning(f"⚠️ Falling back to direct context video audio extraction")
+            logger.warning(f"⚠️ Using context video: {context_video_path}")
+            
+            # Use context video directly with original expression timestamps
+            # This may not be perfectly aligned but is better than using original video
             return self._extract_original_audio_timeline(
-                expression, self._get_original_video_path(context_video_path, None), 
+                expression, context_video_path,  # Use context video instead of original
                 output_dir, expression_index, {}, repeat_count
             )
+    
+    def _create_context_audio_timeline_direct(
+        self, 
+        expression: ExpressionAnalysis, 
+        context_video_path: str, 
+        output_dir: Path, 
+        expression_index: int = 0,
+        repeat_count: int = None
+    ) -> Tuple[Path, float]:
+        """
+        Create audio timeline directly from context video without using OriginalAudioExtractor.
+        This ensures we use the context video path directly.
+        
+        Args:
+            expression: Expression analysis object with relative timestamps
+            context_video_path: Path to context video
+            output_dir: Output directory for audio files
+            expression_index: Index for unique filename generation
+            repeat_count: Number of repetitions for expression
+            
+        Returns:
+            Tuple of (audio_timeline_path, duration)
+        """
+        try:
+            logger.info(f"🎵 Creating context audio timeline directly from: {context_video_path}")
+            
+            # Parse timestamps
+            start_seconds = self._time_to_seconds(expression.expression_start_time)
+            end_seconds = self._time_to_seconds(expression.expression_end_time)
+            segment_duration = end_seconds - start_seconds
+            
+            logger.info(f"🎵 Expression segment: {start_seconds:.2f}s - {end_seconds:.2f}s ({segment_duration:.2f}s)")
+            
+            # Create temporary directory for audio processing
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Extract base audio segment from context video
+                base_audio_path = temp_path / f"expression_{expression_index}_base.wav"
+                
+                # Extract audio segment using FFmpeg
+                (ffmpeg.input(context_video_path, ss=start_seconds, t=segment_duration)
+                 .audio
+                 .output(str(base_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                logger.info(f"🎵 Base audio segment extracted: {segment_duration:.2f}s")
+                
+                # Create silence files
+                silence_1s_path = temp_path / "silence_1s.wav"
+                silence_05s_path = temp_path / "silence_0.5s.wav"
+                
+                # Generate silence files
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=1.0)
+                 .output(str(silence_1s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
+                 .output(str(silence_05s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Create concatenation list for timeline
+                concat_list_path = temp_path / "concat_list.txt"
+                with open(concat_list_path, 'w') as f:
+                    f.write(f"file '{silence_1s_path}'\n")  # 1s start silence
+                    
+                    # Add audio segments with 0.5s silence between them
+                    for i in range(repeat_count):
+                        f.write(f"file '{base_audio_path}'\n")  # Expression audio
+                        if i < repeat_count - 1:  # Don't add silence after the last repetition
+                            f.write(f"file '{silence_05s_path}'\n")  # 0.5s silence
+                    
+                    f.write(f"file '{silence_1s_path}'\n")  # 1s end silence
+                
+                # Create final timeline audio
+                safe_expression = self._sanitize_filename(expression.expression)
+                timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
+                timeline_path = output_dir / timeline_filename
+                
+                # Concatenate all segments
+                (ffmpeg.input(str(concat_list_path), format='concat', safe=0)
+                 .output(str(timeline_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Calculate total duration
+                total_duration = 2.0 + (segment_duration * repeat_count) + (0.5 * (repeat_count - 1))
+                
+                logger.info(f"🎵 Context audio timeline created: {timeline_path}")
+                logger.info(f"🎵 Timeline duration: {total_duration:.2f}s ({repeat_count} repetitions)")
+                
+                # Register for cleanup
+                self._register_temp_file(timeline_path)
+                
+                return timeline_path, total_duration
+                
+        except Exception as e:
+            logger.error(f"❌ Error creating context audio timeline directly: {e}")
+            raise
     
     def _extract_original_audio_timeline(
         self, 
@@ -2201,6 +2305,7 @@ class VideoEditor:
             # Use unified expression repeat count for all expression-related operations
             from langflix import settings
             repeat_count = settings.get_expression_repeat_count()
+            logger.info(f"🔄 Using expression repeat count: {repeat_count}")
             
             original_video = self._get_original_video_path(context_video_path, subtitle_file_path)
             tts_audio_dir = self.output_dir.parent / "tts_audio"
@@ -2211,7 +2316,7 @@ class VideoEditor:
             expression_timeline_path, expression_timeline_duration = self._extract_context_audio_timeline(
                 expression, context_video_path, tts_audio_dir, expression_index, repeat_count=repeat_count
             )
-            logger.info(f"Expression timeline duration: {expression_timeline_duration:.2f}s")
+            logger.info(f"🎵 Expression timeline duration: {expression_timeline_duration:.2f}s (with {repeat_count} repetitions)")
             
             # 3. Concatenate context audio + expression timeline
             combined_audio_path = self.output_dir / f"temp_combined_audio_{safe_expression}.wav"
@@ -2303,8 +2408,19 @@ class VideoEditor:
                 
                 # Always create looped expression video to match timeline duration
                 # Use concat demuxer for reliable video looping (no audio, video only)
-                num_loops = int(required_expression_duration / expression_duration) + 1
-                logger.info(f"Looping expression video {num_loops} times to match required duration ({required_expression_duration:.2f}s)")
+                # Calculate exact number of loops needed to match or exceed the required duration
+                num_loops = max(1, int(required_expression_duration / expression_duration))
+                total_looped_duration = num_loops * expression_duration
+                
+                # If we're still short, add one more loop
+                if total_looped_duration < required_expression_duration:
+                    num_loops += 1
+                    total_looped_duration = num_loops * expression_duration
+                
+                logger.info(f"Expression duration: {expression_duration:.2f}s")
+                logger.info(f"Required timeline duration: {required_expression_duration:.2f}s") 
+                logger.info(f"Looping expression video {num_loops} times (total: {total_looped_duration:.2f}s)")
+                logger.info(f"Will trim to exact duration: {required_expression_duration:.2f}s")
                 
                 # Create concat list file for expression video loop
                 concat_file = self.output_dir / f"temp_expression_concat_{safe_expression}.txt"
@@ -2322,12 +2438,13 @@ class VideoEditor:
                     (ffmpeg.input(str(concat_file), format='concat', safe=0)
                      .output(str(looped_expression_path), 
                              vcodec='libx264', 
-                             t=required_expression_duration, 
+                             t=required_expression_duration,  # Trim to exact audio timeline duration
                              preset='fast', 
                              crf=23)
                      .overwrite_output()
                      .run(quiet=True))
                     logger.info(f"✅ Successfully created looped expression video using concat demuxer")
+                    logger.info(f"✅ Video trimmed to exact duration: {required_expression_duration:.2f}s")
                 except ffmpeg.Error as e:
                     logger.error(f"Failed to create looped expression video with concat demuxer: {e}")
                     if e.stderr:
@@ -2407,7 +2524,10 @@ class VideoEditor:
                 timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 
                 # Create final video with concatenated audio
-                logger.info(f"Creating final short video with concatenated audio: video={total_duration:.2f}s")
+                logger.info(f"🎬 Creating final short video with synchronized audio")
+                logger.info(f"   Video duration: {total_duration:.2f}s")
+                logger.info(f"   Audio duration: {tts_duration:.2f}s")
+                logger.info(f"   Context: {context_duration:.2f}s + Expression: {expression_timeline_duration:.2f}s")
                 
                 (ffmpeg
                  .output(
@@ -2424,7 +2544,8 @@ class VideoEditor:
                     .overwrite_output()
                  .run())
                 
-                logger.info("✅ Short video created with concatenated audio successfully")
+                logger.info("✅ Short video created with synchronized audio successfully")
+                logger.info(f"✅ Final video duration: {total_duration:.2f}s")
                 
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error creating short video: {e}")

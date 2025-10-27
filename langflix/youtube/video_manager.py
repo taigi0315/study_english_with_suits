@@ -174,27 +174,52 @@ class VideoFileManager:
                     episode = part
                     break
             
-            # Find language info - check all path parts for language indicators
-            for part in path_parts:
-                part_lower = part.lower()
-                if "ko" in part_lower or "korean" in part_lower:
-                    language = "ko"
-                    break
-                elif "ja" in part_lower or "japanese" in part_lower:
-                    language = "ja"
-                    break
-                elif "zh" in part_lower or "chinese" in part_lower:
-                    language = "zh"
-                    break
-                elif "es" in part_lower or "spanish" in part_lower:
-                    language = "es"
-                    break
-                elif "fr" in part_lower or "french" in part_lower:
-                    language = "fr"
-                    break
-                elif "en" in part_lower or "english" in part_lower:
-                    language = "en"
-                    break
+            # Find language info - prioritize translations directory structure
+            # Look for /translations/{language}/ pattern first
+            for i, part in enumerate(path_parts):
+                if part == "translations" and i + 1 < len(path_parts):
+                    lang_part = path_parts[i + 1].lower()
+                    if lang_part in ["ko", "korean"]:
+                        language = "ko"
+                        break
+                    elif lang_part in ["ja", "japanese"]:
+                        language = "ja"
+                        break
+                    elif lang_part in ["zh", "chinese"]:
+                        language = "zh"
+                        break
+                    elif lang_part in ["es", "spanish"]:
+                        language = "es"
+                        break
+                    elif lang_part in ["fr", "french"]:
+                        language = "fr"
+                        break
+                    elif lang_part in ["en", "english"]:
+                        language = "en"
+                        break
+            
+            # Fallback: check all path parts for language indicators if not found in translations
+            if language == "unknown":
+                for part in path_parts:
+                    part_lower = part.lower()
+                    if "ko" in part_lower or "korean" in part_lower:
+                        language = "ko"
+                        break
+                    elif "ja" in part_lower or "japanese" in part_lower:
+                        language = "ja"
+                        break
+                    elif "zh" in part_lower or "chinese" in part_lower:
+                        language = "zh"
+                        break
+                    elif "es" in part_lower or "spanish" in part_lower:
+                        language = "es"
+                        break
+                    elif "fr" in part_lower or "french" in part_lower:
+                        language = "fr"
+                        break
+                    elif "en" in part_lower or "english" in part_lower:
+                        language = "en"
+                        break
             
             # Determine video type from filename and directory
             filename = video_path.stem.lower()

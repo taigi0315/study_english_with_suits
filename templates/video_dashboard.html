@@ -263,6 +263,23 @@
             background: #e67e22;
         }
         
+        .btn-white {
+            background: white;
+            color: #2c3e50;
+            border: 1px solid #ddd;
+        }
+        
+        .btn-white:hover {
+            background: #f8f9fa;
+            border-color: #bbb;
+            color: #1a252f;
+        }
+        
+        .btn-white:active {
+            background: #e9ecef;
+            border-color: #999;
+        }
+        
         .btn-create-content {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -619,6 +636,21 @@
             renderVideos();
         }
 
+        // Language code to display name mapping
+        const languageNames = {
+            'ko': 'Korean',
+            'ja': 'Japanese', 
+            'zh': 'Chinese',
+            'es': 'Spanish',
+            'fr': 'French',
+            'en': 'English',
+            'unknown': 'Unknown'
+        };
+
+        function getLanguageDisplayName(languageCode) {
+            return languageNames[languageCode] || languageCode;
+        }
+
         function renderVideos() {
             const container = document.getElementById('videosContainer');
             
@@ -632,6 +664,7 @@
                 const uploadStatus = video.upload_status || 'not_uploaded';
                 const isUploaded = uploadStatus === 'uploaded';
                 const uploadIcon = isUploaded ? '✅' : '📤';
+                const languageDisplay = getLanguageDisplayName(video.language);
                 
                 return `
                 <div class="video-row ${video.ready_for_upload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}">
@@ -649,17 +682,17 @@
                             <span>🎞️ ${video.video_type}</span>
                             <span>⏱️ ${video.duration_formatted}</span>
                             <span>💾 ${video.size_mb} MB</span>
-                            <span>🌐 ${video.language}</span>
+                            <span>🌐 ${languageDisplay}</span>
                             <span>${uploadIcon} ${isUploaded ? 'Uploaded' : 'Not Uploaded'}</span>
                         </div>
                     </div>
                     <div class="video-actions-compact">
-                        <button class="action-btn-icon btn-primary" 
+                        <button class="action-btn-icon btn-white" 
                                 onclick="previewVideo('${video.path}')" 
                                 title="Preview">
                             <img src="/assets/icon/play.png" alt="Play" style="width: 20px; height: 20px;">
                         </button>
-                        <button class="action-btn-icon btn-success" 
+                        <button class="action-btn-icon btn-white" 
                                 onclick="uploadToYouTube('${video.path}')" 
                                 ${!video.ready_for_upload ? 'disabled' : ''}
                                 title="Upload to YouTube">

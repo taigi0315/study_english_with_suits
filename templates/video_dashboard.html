@@ -509,8 +509,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">📺 All Videos</button>
-                    <button class="filter-btn" data-filter="short">⚡ Shorts</button>
-                    <button class="filter-btn" data-filter="final">🎬 Final Videos</button>
+                    <button class="filter-btn" data-filter="short-form">⚡ Short-Form</button>
+                    <button class="filter-btn" data-filter="long-form">🎬 Long-Form</button>
                     <button class="filter-btn" data-filter="uploaded">📤 Uploaded</button>
                     <button class="filter-btn" data-filter="not-uploaded">⏳ Not Uploaded</button>
                 </div>
@@ -603,7 +603,16 @@
                 if (currentFilter !== 'all' && 
                     currentFilter !== 'uploaded' && 
                     currentFilter !== 'not-uploaded') {
-                    if (video.video_type !== currentFilter) return false;
+                    // Support both new and legacy video types
+                    let matchesFilter = false;
+                    if (currentFilter === 'short-form') {
+                        matchesFilter = video.video_type === 'short-form' || video.video_type === 'short';
+                    } else if (currentFilter === 'long-form') {
+                        matchesFilter = video.video_type === 'long-form' || video.video_type === 'final';
+                    } else {
+                        matchesFilter = video.video_type === currentFilter;
+                    }
+                    if (!matchesFilter) return false;
                 }
                 
                 // Apply uploaded filter

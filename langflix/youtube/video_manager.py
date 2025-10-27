@@ -227,7 +227,7 @@ class VideoFileManager:
             
             # New naming convention detection
             if filename.startswith("long-form_"):
-                video_type = "final"  # Long-form videos are the new final videos
+                video_type = "long-form"  # Updated to use long-form as video type
                 # Extract episode info from long-form filename
                 parts = filename.split("_")
                 if len(parts) >= 3:
@@ -235,7 +235,7 @@ class VideoFileManager:
                 else:
                     expression = "Long Form Video"
             elif filename.startswith("short-form_"):
-                video_type = "short"  # Short-form videos
+                video_type = "short-form"  # Updated to use short-form as video type
                 # Extract episode and sequence from short-form filename
                 parts = filename.split("_")
                 if len(parts) >= 3:
@@ -269,16 +269,16 @@ class VideoFileManager:
     
     def _is_ready_for_upload(self, video_type: str, duration: float) -> bool:
         """Determine if video is ready for YouTube upload"""
-        # Short videos should be under 3 minutes (YouTube Shorts can be up to 60s, but our short-form can be longer)
-        if video_type == "short":
+        # Short-form videos should be under 3 minutes
+        if video_type in ["short", "short-form"]:
             return 10 <= duration <= 180  # 10 seconds to 3 minutes
         
         # Educational videos should be reasonable length
         if video_type == "educational":
             return 10 <= duration <= 300  # 10 seconds to 5 minutes
         
-        # Final videos can be longer
-        if video_type == "final":
+        # Long-form videos can be longer
+        if video_type in ["final", "long-form"]:
             return 10 <= duration <= 600  # 10 seconds to 10 minutes
         
         return False
@@ -309,8 +309,8 @@ class VideoFileManager:
             if (filename.startswith("long-form_") or filename.startswith("short-form_")):
                 if v.ready_for_upload and not v.uploaded_to_youtube:
                     uploadable_videos.append(v)
-            # Include legacy final videos but exclude intermediate files
-            elif (v.video_type == 'final' and 
+            # Include legacy final/short videos but exclude intermediate files
+            elif (v.video_type in ['final', 'short', 'long-form', 'short-form'] and 
                   not any(x in filename for x in ['educational', 'slide', 'context', 'temp_'])):
                 if v.ready_for_upload and not v.uploaded_to_youtube:
                     uploadable_videos.append(v)

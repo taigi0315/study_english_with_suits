@@ -2107,6 +2107,8 @@ class VideoEditor:
             tts_audio_dir = self.output_dir.parent / "tts_audio"
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             
+            # For audio extraction, we still use original video but with absolute timestamps
+            # (audio extraction needs the full original video for accurate timing)
             expression_timeline_path, expression_timeline_duration = self._extract_original_audio_timeline(
                 expression, original_video, tts_audio_dir, expression_index, {}, repeat_count=repeat_count
             )
@@ -2162,23 +2164,30 @@ class VideoEditor:
             logger.info(f"Creating expression video clip for timeline duration: {expression_timeline_duration:.2f}s")
             
             try:
-                # Convert timestamps to seconds for FFmpeg
-                start_seconds = self._time_to_seconds(expression.expression_start_time)
-                end_seconds = self._time_to_seconds(expression.expression_end_time)
-                expression_duration = end_seconds - start_seconds
+                # Calculate relative timestamps within context video
+                context_start_seconds = self._time_to_seconds(expression.context_start_time)
+                expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
+                expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
                 
-                logger.info(f"Extracting expression video: {expression.expression_start_time} - {expression.expression_end_time} ({expression_duration:.2f}s)")
-                logger.info(f"Using original_video: {original_video}")
+                # Convert to relative position within context video (starts at 0)
+                relative_start = expression_start_seconds - context_start_seconds
+                relative_end = expression_end_seconds - context_start_seconds
+                expression_duration = relative_end - relative_start
+                
+                logger.info(f"Context range: {expression.context_start_time} - {expression.context_end_time}")
+                logger.info(f"Expression absolute: {expression.expression_start_time} - {expression.expression_end_time}")
+                logger.info(f"Expression relative in context: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
+                logger.info(f"Using context_video: {context_video_path}")
                 logger.info(f"Expression text: '{expression.expression}'")
                 
                 # Simple approach: Just extract expression video and concatenate with context
                 expression_video_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
                 self._register_temp_file(expression_video_path)
                 
-                # Extract expression video clip with audio
-                logger.info(f"Creating expression video clip with audio ({expression_duration:.2f}s)")
+                # Extract expression video clip from context video (no audio)
+                logger.info(f"Creating expression video clip from context video ({expression_duration:.2f}s)")
                 
-                (ffmpeg.input(original_video, ss=start_seconds, t=expression_duration)
+                (ffmpeg.input(context_video_path, ss=relative_start, t=expression_duration)
                  .output(str(expression_video_path), vcodec='libx264', an=None, preset='fast', crf=23)
                  .overwrite_output()
                  .run(quiet=True))

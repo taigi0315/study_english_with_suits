@@ -21,13 +21,14 @@ class VideoEditor:
     Creates educational video sequences from expression analysis results
     """
     
-    def __init__(self, output_dir: str = "output", language_code: str = None):
+    def __init__(self, output_dir: str = "output", language_code: str = None, episode_name: str = None):
         """
         Initialize VideoEditor
         
         Args:
             output_dir: Directory for output files
             language_code: Target language code for font selection
+            episode_name: Episode name for file naming
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
@@ -35,11 +36,12 @@ class VideoEditor:
         self._tts_cache = {}  # Legacy cache for backward compatibility
         self.cache_manager = get_cache_manager()  # Advanced cache manager
         self.language_code = language_code
+        self.episode_name = episode_name or "Unknown_Episode"
         
         # Set up paths for different video types
-        self.final_videos_dir = self.output_dir  # This will be final_videos
+        self.final_videos_dir = self.output_dir  # This will be long_form_videos
         self.context_slide_combined_dir = self.output_dir.parent / "context_slide_combined"
-        self.short_videos_dir = self.output_dir.parent / "short_videos"
+        self.short_videos_dir = self.output_dir.parent / "short_form_videos"  # Updated to new name
         
         # Ensure directories exist
         self.context_slide_combined_dir.mkdir(exist_ok=True)

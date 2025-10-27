@@ -1764,28 +1764,132 @@ class VideoEditor:
             )
             
             logger.info(f"Context audio extraction - relative timestamps: {relative_start:.2f}s - {relative_end:.2f}s")
+            logger.info(f"🎵 Using context video for audio extraction: {context_video_path}")
             
             # Extract audio timeline from context video using relative timestamps
-            audio_timeline_path, duration = create_original_audio_timeline(
-                expression=relative_expression,
-                original_video_path=context_video_path,  # Use context video instead of original
-                output_dir=output_dir,
-                expression_index=expression_index,
-                audio_format="wav",
-                repeat_count=repeat_count
+            # Use direct context video extraction to avoid any confusion
+            audio_timeline_path, duration = self._create_context_audio_timeline_direct(
+                relative_expression, context_video_path, output_dir, expression_index, repeat_count
             )
             
             logger.info(f"Context audio timeline extracted: {audio_timeline_path} ({duration:.2f}s)")
             return audio_timeline_path, duration
             
         except Exception as e:
-            logger.error(f"Error extracting context audio timeline: {e}")
-            # Fallback to original method if context extraction fails
-            logger.warning("Falling back to original audio extraction method")
+            logger.error(f"❌ Error extracting context audio timeline: {e}")
+            # Fallback: Use context video directly with original timestamps
+            logger.warning(f"⚠️ Falling back to direct context video audio extraction")
+            logger.warning(f"⚠️ Using context video: {context_video_path}")
+            
+            # Use context video directly with original expression timestamps
+            # This may not be perfectly aligned but is better than using original video
             return self._extract_original_audio_timeline(
-                expression, self._get_original_video_path(context_video_path, None), 
+                expression, context_video_path,  # Use context video instead of original
                 output_dir, expression_index, {}, repeat_count
             )
+    
+    def _create_context_audio_timeline_direct(
+        self, 
+        expression: ExpressionAnalysis, 
+        context_video_path: str, 
+        output_dir: Path, 
+        expression_index: int = 0,
+        repeat_count: int = None
+    ) -> Tuple[Path, float]:
+        """
+        Create audio timeline directly from context video without using OriginalAudioExtractor.
+        This ensures we use the context video path directly.
+        
+        Args:
+            expression: Expression analysis object with relative timestamps
+            context_video_path: Path to context video
+            output_dir: Output directory for audio files
+            expression_index: Index for unique filename generation
+            repeat_count: Number of repetitions for expression
+            
+        Returns:
+            Tuple of (audio_timeline_path, duration)
+        """
+        try:
+            logger.info(f"🎵 Creating context audio timeline directly from: {context_video_path}")
+            
+            # Parse timestamps
+            start_seconds = self._time_to_seconds(expression.expression_start_time)
+            end_seconds = self._time_to_seconds(expression.expression_end_time)
+            segment_duration = end_seconds - start_seconds
+            
+            logger.info(f"🎵 Expression segment: {start_seconds:.2f}s - {end_seconds:.2f}s ({segment_duration:.2f}s)")
+            
+            # Create temporary directory for audio processing
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Extract base audio segment from context video
+                base_audio_path = temp_path / f"expression_{expression_index}_base.wav"
+                
+                # Extract audio segment using FFmpeg
+                (ffmpeg.input(context_video_path, ss=start_seconds, t=segment_duration)
+                 .audio
+                 .output(str(base_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                logger.info(f"🎵 Base audio segment extracted: {segment_duration:.2f}s")
+                
+                # Create silence files
+                silence_1s_path = temp_path / "silence_1s.wav"
+                silence_05s_path = temp_path / "silence_0.5s.wav"
+                
+                # Generate silence files
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=1.0)
+                 .output(str(silence_1s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
+                 .output(str(silence_05s_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Create concatenation list for timeline
+                concat_list_path = temp_path / "concat_list.txt"
+                with open(concat_list_path, 'w') as f:
+                    f.write(f"file '{silence_1s_path}'\n")  # 1s start silence
+                    
+                    # Add audio segments with 0.5s silence between them
+                    for i in range(repeat_count):
+                        f.write(f"file '{base_audio_path}'\n")  # Expression audio
+                        if i < repeat_count - 1:  # Don't add silence after the last repetition
+                            f.write(f"file '{silence_05s_path}'\n")  # 0.5s silence
+                    
+                    f.write(f"file '{silence_1s_path}'\n")  # 1s end silence
+                
+                # Create final timeline audio
+                safe_expression = self._sanitize_filename(expression.expression)
+                timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
+                timeline_path = output_dir / timeline_filename
+                
+                # Concatenate all segments
+                (ffmpeg.input(str(concat_list_path), format='concat', safe=0)
+                 .output(str(timeline_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .overwrite_output()
+                 .run(quiet=True))
+                
+                # Calculate total duration
+                total_duration = 2.0 + (segment_duration * repeat_count) + (0.5 * (repeat_count - 1))
+                
+                logger.info(f"🎵 Context audio timeline created: {timeline_path}")
+                logger.info(f"🎵 Timeline duration: {total_duration:.2f}s ({repeat_count} repetitions)")
+                
+                # Register for cleanup
+                self._register_temp_file(timeline_path)
+                
+                return timeline_path, total_duration
+                
+        except Exception as e:
+            logger.error(f"❌ Error creating context audio timeline directly: {e}")
+            raise
     
     def _extract_original_audio_timeline(
         self, 

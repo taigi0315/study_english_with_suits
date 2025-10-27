@@ -60,7 +60,7 @@ class VideoManagementUI:
         
         # Flask 앱 초기화 시 템플릿 디렉토리 경로 설정
         import os
-        template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'templates')
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         self.app = Flask(__name__, template_folder=template_dir)
         self._setup_routes()
         

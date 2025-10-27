@@ -2201,6 +2201,7 @@ class VideoEditor:
             # Use unified expression repeat count for all expression-related operations
             from langflix import settings
             repeat_count = settings.get_expression_repeat_count()
+            logger.info(f"🔄 Using expression repeat count: {repeat_count}")
             
             original_video = self._get_original_video_path(context_video_path, subtitle_file_path)
             tts_audio_dir = self.output_dir.parent / "tts_audio"
@@ -2211,7 +2212,7 @@ class VideoEditor:
             expression_timeline_path, expression_timeline_duration = self._extract_context_audio_timeline(
                 expression, context_video_path, tts_audio_dir, expression_index, repeat_count=repeat_count
             )
-            logger.info(f"Expression timeline duration: {expression_timeline_duration:.2f}s")
+            logger.info(f"🎵 Expression timeline duration: {expression_timeline_duration:.2f}s (with {repeat_count} repetitions)")
             
             # 3. Concatenate context audio + expression timeline
             combined_audio_path = self.output_dir / f"temp_combined_audio_{safe_expression}.wav"
@@ -2303,8 +2304,19 @@ class VideoEditor:
                 
                 # Always create looped expression video to match timeline duration
                 # Use concat demuxer for reliable video looping (no audio, video only)
-                num_loops = int(required_expression_duration / expression_duration) + 1
-                logger.info(f"Looping expression video {num_loops} times to match required duration ({required_expression_duration:.2f}s)")
+                # Calculate exact number of loops needed to match or exceed the required duration
+                num_loops = max(1, int(required_expression_duration / expression_duration))
+                total_looped_duration = num_loops * expression_duration
+                
+                # If we're still short, add one more loop
+                if total_looped_duration < required_expression_duration:
+                    num_loops += 1
+                    total_looped_duration = num_loops * expression_duration
+                
+                logger.info(f"Expression duration: {expression_duration:.2f}s")
+                logger.info(f"Required timeline duration: {required_expression_duration:.2f}s") 
+                logger.info(f"Looping expression video {num_loops} times (total: {total_looped_duration:.2f}s)")
+                logger.info(f"Will trim to exact duration: {required_expression_duration:.2f}s")
                 
                 # Create concat list file for expression video loop
                 concat_file = self.output_dir / f"temp_expression_concat_{safe_expression}.txt"
@@ -2322,12 +2334,13 @@ class VideoEditor:
                     (ffmpeg.input(str(concat_file), format='concat', safe=0)
                      .output(str(looped_expression_path), 
                              vcodec='libx264', 
-                             t=required_expression_duration, 
+                             t=required_expression_duration,  # Trim to exact audio timeline duration
                              preset='fast', 
                              crf=23)
                      .overwrite_output()
                      .run(quiet=True))
                     logger.info(f"✅ Successfully created looped expression video using concat demuxer")
+                    logger.info(f"✅ Video trimmed to exact duration: {required_expression_duration:.2f}s")
                 except ffmpeg.Error as e:
                     logger.error(f"Failed to create looped expression video with concat demuxer: {e}")
                     if e.stderr:
@@ -2407,7 +2420,10 @@ class VideoEditor:
                 timeline_audio_input = ffmpeg.input(str(boosted_audio_path))
                 
                 # Create final video with concatenated audio
-                logger.info(f"Creating final short video with concatenated audio: video={total_duration:.2f}s")
+                logger.info(f"🎬 Creating final short video with synchronized audio")
+                logger.info(f"   Video duration: {total_duration:.2f}s")
+                logger.info(f"   Audio duration: {tts_duration:.2f}s")
+                logger.info(f"   Context: {context_duration:.2f}s + Expression: {expression_timeline_duration:.2f}s")
                 
                 (ffmpeg
                  .output(
@@ -2424,7 +2440,8 @@ class VideoEditor:
                     .overwrite_output()
                  .run())
                 
-                logger.info("✅ Short video created with concatenated audio successfully")
+                logger.info("✅ Short video created with synchronized audio successfully")
+                logger.info(f"✅ Final video duration: {total_duration:.2f}s")
                 
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error creating short video: {e}")

@@ -2327,22 +2327,38 @@ class VideoEditor:
             # For short videos, use context audio + repeating expression audio
             logger.info("Short video - using context audio + repeating expression audio")
             
-            # 1. Extract context audio (matches visual content)
+            # First, probe the context video to get audio properties (needed for both context and expression audio)
+            probe = ffmpeg.probe(context_video_path)
+            audio_stream = next((s for s in probe['streams'] if s['codec_type'] == 'audio'), None)
+            
+            if audio_stream:
+                sample_rate = int(audio_stream.get('sample_rate', 48000))
+                channels = int(audio_stream.get('channels', 2))
+                logger.info(f"🎵 Context video audio properties: {sample_rate}Hz, {channels} channels")
+            else:
+                sample_rate = 48000
+                channels = 2
+                logger.warning(f"⚠️ Could not probe audio, using defaults: {sample_rate}Hz, {channels} channels")
+            
+            # 1. Extract context audio (matches visual content) - use detected sample rate
             context_audio_path = self.output_dir / f"temp_context_audio_{safe_expression}.wav"
             self._register_temp_file(context_audio_path)
             
             try:
-                # Extract audio from context video
+                # Extract audio from context video with proper downmix and sample rate
                 (ffmpeg.input(context_video_path)
                  .audio
-                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .output(str(context_audio_path), 
+                        acodec='pcm_s16le', 
+                        ar=sample_rate,  # Use detected sample rate from source
+                        ac=2)  # Force stereo downmix
                  .overwrite_output()
                  .run(quiet=True))
                 
                 # Get context audio duration
                 context_audio_probe = ffmpeg.probe(str(context_audio_path))
                 context_audio_duration = float(context_audio_probe['format']['duration'])
-                logger.info(f"Context audio duration: {context_audio_duration:.2f}s")
+                logger.info(f"🎵 Context audio extracted: {context_audio_duration:.2f}s at {sample_rate}Hz")
                 
             except Exception as e:
                 logger.error(f"Failed to extract context audio: {e}")
@@ -2377,9 +2393,13 @@ class VideoEditor:
                 f.write(f"file '{Path(context_audio_path).absolute()}'\n")
                 f.write(f"file '{Path(expression_timeline_path).absolute()}'\n")
             
-            # Concatenate context + expression audio
+            # Concatenate context + expression audio with consistent sample rate
+            logger.info(f"🎵 Concatenating context audio ({context_audio_duration:.2f}s) + expression timeline ({expression_timeline_duration:.2f}s) at {sample_rate}Hz")
             (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
-             .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+             .output(str(combined_audio_path), 
+                    acodec='pcm_s16le', 
+                    ar=sample_rate,  # Use same sample rate as both inputs
+                    ac=2)  # Force stereo
              .overwrite_output()
              .run(quiet=True))
             
@@ -2560,9 +2580,13 @@ class VideoEditor:
                 # Apply volume boost to combined audio (context + expression timeline)
                 # Note: concatenated_video_path is video-only, so use tts_audio_path (combined audio)
                 audio_source = tts_audio_path
+                logger.info(f"🎵 Boosting audio volume by 40% at {sample_rate}Hz")
                 (ffmpeg.input(str(audio_source))
                  .audio.filter('volume', '1.4')  # 40% volume boost
-                 .output(str(boosted_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                 .output(str(boosted_audio_path), 
+                        acodec='pcm_s16le', 
+                        ar=sample_rate,  # Keep same sample rate
+                        ac=2)  # Force stereo
                  .overwrite_output()
                  .run(quiet=True))
                 
@@ -2586,7 +2610,7 @@ class VideoEditor:
                            preset='fast',
                            crf=23,
                            ac=2,
-                           ar=48000,
+                           ar=sample_rate,  # Use detected sample rate
                      t=total_duration)  # Video duration matches audio duration
                     .overwrite_output()
                  .run())

@@ -1820,72 +1820,119 @@ class VideoEditor:
             
             logger.info(f"🎵 Expression segment: {start_seconds:.2f}s - {end_seconds:.2f}s ({segment_duration:.2f}s)")
             
-            # Create temporary directory for audio processing
-            import tempfile
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
+            # Create temporary directory within output_dir to avoid premature deletion
+            temp_audio_dir = output_dir / f"temp_audio_{expression_index}"
+            temp_audio_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Extract base audio segment from context video
+            base_audio_path = temp_audio_dir / f"expression_{expression_index}_base.wav"
+            
+            # First, probe the context video to get audio properties
+            probe = ffmpeg.probe(context_video_path)
+            audio_stream = next((s for s in probe['streams'] if s['codec_type'] == 'audio'), None)
+            
+            if audio_stream:
+                sample_rate = int(audio_stream.get('sample_rate', 48000))
+                channels = int(audio_stream.get('channels', 2))
+                logger.info(f"🎵 Context video audio: {sample_rate}Hz, {channels} channels")
+            else:
+                sample_rate = 48000
+                channels = 2
+                logger.warning(f"⚠️ Could not probe audio, using defaults: {sample_rate}Hz, {channels} channels")
+            
+            # Extract audio segment using FFmpeg with proper downmix
+            logger.info(f"🎵 Extracting audio segment from context video...")
+            (ffmpeg.input(context_video_path, ss=start_seconds, t=segment_duration)
+             .audio
+             .output(str(base_audio_path), 
+                    acodec='pcm_s16le', 
+                    ar=sample_rate,  # Use same sample rate as source
+                    ac=2,  # Force stereo downmix
+                    avoid_negative_ts='make_zero')  # Fix timestamp issues
+             .overwrite_output()
+             .run(quiet=True))
+            
+            logger.info(f"✅ Base audio segment extracted: {base_audio_path} ({segment_duration:.2f}s)")
+            
+            # Verify the file was created and has content
+            if not base_audio_path.exists():
+                raise RuntimeError(f"Audio extraction failed - file not created: {base_audio_path}")
+            
+            file_size = base_audio_path.stat().st_size
+            if file_size == 0:
+                raise RuntimeError(f"Audio extraction failed - empty file: {base_audio_path}")
+            
+            logger.info(f"✅ Audio file verified: {file_size} bytes")
+            
+            # Create silence files with same sample rate
+            silence_1s_path = temp_audio_dir / "silence_1s.wav"
+            silence_05s_path = temp_audio_dir / "silence_0.5s.wav"
+            
+            # Generate silence files
+            logger.info(f"🎵 Creating silence segments...")
+            (ffmpeg.input(f'anullsrc=r={sample_rate}:cl=stereo', f='lavfi', t=1.0)
+             .output(str(silence_1s_path), acodec='pcm_s16le', ar=sample_rate, ac=2)
+             .overwrite_output()
+             .run(quiet=True))
+            
+            (ffmpeg.input(f'anullsrc=r={sample_rate}:cl=stereo', f='lavfi', t=0.5)
+             .output(str(silence_05s_path), acodec='pcm_s16le', ar=sample_rate, ac=2)
+             .overwrite_output()
+             .run(quiet=True))
+            
+            logger.info(f"✅ Silence files created")
+            
+            # Create concatenation list for timeline
+            concat_list_path = temp_audio_dir / "concat_list.txt"
+            with open(concat_list_path, 'w') as f:
+                f.write(f"file '{silence_1s_path.absolute()}'\n")  # 1s start silence
                 
-                # Extract base audio segment from context video
-                base_audio_path = temp_path / f"expression_{expression_index}_base.wav"
+                # Add audio segments with 0.5s silence between them
+                for i in range(repeat_count):
+                    f.write(f"file '{base_audio_path.absolute()}'\n")  # Expression audio
+                    if i < repeat_count - 1:  # Don't add silence after the last repetition
+                        f.write(f"file '{silence_05s_path.absolute()}'\n")  # 0.5s silence
                 
-                # Extract audio segment using FFmpeg
-                (ffmpeg.input(context_video_path, ss=start_seconds, t=segment_duration)
-                 .audio
-                 .output(str(base_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                logger.info(f"🎵 Base audio segment extracted: {segment_duration:.2f}s")
-                
-                # Create silence files
-                silence_1s_path = temp_path / "silence_1s.wav"
-                silence_05s_path = temp_path / "silence_0.5s.wav"
-                
-                # Generate silence files
-                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=1.0)
-                 .output(str(silence_1s_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                (ffmpeg.input('anullsrc=r=48000:cl=stereo', f='lavfi', t=0.5)
-                 .output(str(silence_05s_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Create concatenation list for timeline
-                concat_list_path = temp_path / "concat_list.txt"
-                with open(concat_list_path, 'w') as f:
-                    f.write(f"file '{silence_1s_path}'\n")  # 1s start silence
-                    
-                    # Add audio segments with 0.5s silence between them
-                    for i in range(repeat_count):
-                        f.write(f"file '{base_audio_path}'\n")  # Expression audio
-                        if i < repeat_count - 1:  # Don't add silence after the last repetition
-                            f.write(f"file '{silence_05s_path}'\n")  # 0.5s silence
-                    
-                    f.write(f"file '{silence_1s_path}'\n")  # 1s end silence
-                
-                # Create final timeline audio
-                safe_expression = self._sanitize_filename(expression.expression)
-                timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
-                timeline_path = output_dir / timeline_filename
-                
-                # Concatenate all segments
-                (ffmpeg.input(str(concat_list_path), format='concat', safe=0)
-                 .output(str(timeline_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Calculate total duration
-                total_duration = 2.0 + (segment_duration * repeat_count) + (0.5 * (repeat_count - 1))
-                
-                logger.info(f"🎵 Context audio timeline created: {timeline_path}")
-                logger.info(f"🎵 Timeline duration: {total_duration:.2f}s ({repeat_count} repetitions)")
-                
-                # Register for cleanup
-                self._register_temp_file(timeline_path)
-                
-                return timeline_path, total_duration
+                f.write(f"file '{silence_1s_path.absolute()}'\n")  # 1s end silence
+            
+            logger.info(f"✅ Concat list created: {concat_list_path}")
+            
+            # Create final timeline audio
+            safe_expression = self._sanitize_filename(expression.expression)
+            timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
+            timeline_path = output_dir / timeline_filename
+            
+            # Concatenate all segments
+            logger.info(f"🎵 Concatenating audio timeline...")
+            (ffmpeg.input(str(concat_list_path), format='concat', safe=0)
+             .output(str(timeline_path), acodec='pcm_s16le', ar=sample_rate, ac=2)
+             .overwrite_output()
+             .run(quiet=True))
+            
+            # Verify the final timeline file
+            if not timeline_path.exists():
+                raise RuntimeError(f"Timeline creation failed - file not created: {timeline_path}")
+            
+            timeline_size = timeline_path.stat().st_size
+            if timeline_size == 0:
+                raise RuntimeError(f"Timeline creation failed - empty file: {timeline_path}")
+            
+            logger.info(f"✅ Timeline audio verified: {timeline_size} bytes")
+            
+            # Calculate total duration
+            total_duration = 2.0 + (segment_duration * repeat_count) + (0.5 * (repeat_count - 1))
+            
+            logger.info(f"✅ Context audio timeline created: {timeline_path}")
+            logger.info(f"✅ Timeline duration: {total_duration:.2f}s ({repeat_count} repetitions)")
+            
+            # Register all temp files for cleanup
+            self._register_temp_file(timeline_path)
+            self._register_temp_file(base_audio_path)
+            self._register_temp_file(silence_1s_path)
+            self._register_temp_file(silence_05s_path)
+            self._register_temp_file(concat_list_path)
+            
+            return timeline_path, total_duration
                 
         except Exception as e:
             logger.error(f"❌ Error creating context audio timeline directly: {e}")

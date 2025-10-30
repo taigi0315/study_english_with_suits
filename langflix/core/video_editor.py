@@ -2430,10 +2430,35 @@ class VideoEditor:
                     # Reuse existing looped expression from long-form
                     logger.info(f"Reusing looped expression from long-form: {looped_expression_path}")
 
-                # Concat context AV + expression AV with explicit mapping
+                # Concat context AV + expression AV with explicit mapping and optional transition
                 concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
                 self._register_temp_file(concatenated_video_path)
-                concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                
+                # Try to apply transition if enabled
+                from langflix import settings
+                transitions_config = settings.get_transitions_config()
+                transition_enabled = transitions_config.get('enabled', False)
+                
+                if transition_enabled:
+                    try:
+                        context_to_expr_config = transitions_config.get('context_to_expression', {})
+                        transition_type = context_to_expr_config.get('type', 'none')
+                        if transition_type != 'none':
+                            transition_effect = context_to_expr_config.get('effect', 'fade')
+                            transition_duration = context_to_expr_config.get('duration', 0.5)
+                            
+                            logger.info(f"Applying {transition_type} transition ({transition_effect}, {transition_duration}s)")
+                            self._apply_context_to_expression_transition(
+                                str(context_video_path), str(looped_expression_path), str(concatenated_video_path),
+                                transition_effect, transition_duration
+                            )
+                        else:
+                            concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                    except Exception as e:
+                        logger.warning(f"Transition failed, falling back to simple concat: {e}")
+                        concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                else:
+                    concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
 
                 # Probe logs for debugging
                 try:
@@ -2532,6 +2557,51 @@ class VideoEditor:
             logger.error(f"Error creating batched short videos: {e}")
             raise
 
+    def _apply_context_to_expression_transition(
+        self, context_path: str, expression_path: str, output_path: str, 
+        transition_effect: str, transition_duration: float
+    ) -> None:
+        """Apply xfade transition between context and expression video for short-form."""
+        try:
+            # Get video durations
+            context_duration = get_duration_seconds(context_path)
+            logger.info(f"Context duration: {context_duration:.2f}s")
+            
+            # Create inputs
+            context_input = ffmpeg.input(context_path)
+            expr_input = ffmpeg.input(expression_path)
+            
+            # Normalize frame rates for compatibility
+            v0 = ffmpeg.filter(context_input['v'], 'fps', fps=25)
+            v1 = ffmpeg.filter(expr_input['v'], 'fps', fps=25)
+            
+            # Apply xfade transition - offset is context duration minus transition duration
+            transition_offset = max(0, context_duration - transition_duration)
+            
+            video_out = ffmpeg.filter([v0, v1], 'xfade',
+                                     transition=transition_effect,
+                                     duration=transition_duration,
+                                     offset=transition_offset)
+            
+            # Concatenate audio streams separately for proper sequencing
+            audio_out = ffmpeg.filter([context_input['a'], expr_input['a']], 'concat', n=2, v=0, a=1)
+            
+            # Combine video with transition and audio concatenation
+            (
+                ffmpeg
+                .output(video_out, audio_out, str(output_path),
+                       vcodec='libx264', acodec='aac', preset='fast',
+                       ac=2, ar=48000, crf=23)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            logger.info(f"✅ Applied {transition_effect} transition ({transition_duration}s)")
+            
+        except Exception as e:
+            logger.error(f"Error applying transition: {e}")
+            raise
+    
     def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
         """Create a single batch video from a list of video paths"""
         try:

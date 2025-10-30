@@ -161,6 +161,12 @@ transitions:
     effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
     duration: 0.3           # Duration in seconds
   
+  # Transition from context video to expression repetition (within same expression)
+  context_to_expression:
+    type: "xfade"           # Options: xfade, fade, none
+    effect: "fade"          # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
+    duration: 0.5           # Duration in seconds (increased for smooth transition)
+  
   # Transition between different expressions
   expression_to_expression:
     type: "xfade"            # Options: fade, xfade, none

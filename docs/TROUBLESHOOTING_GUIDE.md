@@ -22,6 +22,22 @@ curl http://localhost:8000/health  # Check API
 
 ## Common Issues by Category
 
+### Media Pipeline: Audio missing after concat/stack
+
+**Symptoms**
+- Final video has no audio stream or players show 0 audio tracks
+- Audio disappears after side-by-side/stack or concat steps
+
+**Checklist**
+- Use explicit stream mapping on outputs (pass video and audio nodes separately)
+- Normalize audio to stereo/48k before concat/stack
+- If inputs differ in params, use filter-concat (v=1,a=1) instead of demuxer concat
+- Avoid unnecessary scaling; keep original resolution/codec unless filters are needed
+
+**References**
+- `langflix/media/ffmpeg_utils.py` → `concat_filter_with_explicit_map`, `vstack_keep_width`, `hstack_keep_height`
+- `langflix/core/video_editor.py` → context+slide path uses explicit mapping to preserve audio
+
 ### Installation & Setup Issues
 
 #### Issue: "ModuleNotFoundError: No module named 'langflix'"

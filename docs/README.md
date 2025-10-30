@@ -26,6 +26,11 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 
 ## 🚀 Quick Start
 
+### Media Pipeline Updates (Unreleased)
+- New modules: `langflix/media/ffmpeg_utils.py`, `langflix/audio/timeline.py`, `langflix/subtitles/overlay.py`, `langflix/slides/generator.py`
+- Goals: keep original video format when possible, normalize audio to stereo/48k, avoid audio loss with explicit stream mapping
+- See ADR-015 for design details
+
 ### Installation (5 minutes)
 
 ```bash

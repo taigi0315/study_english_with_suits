@@ -40,6 +40,12 @@ open http://localhost:8000/docs
 
 ## API Endpoints
 
+## Media Pipeline Notes (Unreleased)
+- Video: keep original codec/resolution when possible; re-encode only when filters are applied
+- Audio: normalized to stereo (ac=2), 48kHz (ar=48000) at concat/stack boundaries
+- Explicit stream mapping is used to prevent audio loss
+- Related modules: `langflix/media/ffmpeg_utils.py`, `langflix/audio/timeline.py`, `langflix/subtitles/overlay.py`, `langflix/slides/generator.py`
+
 ### Health Check
 
 ```bash

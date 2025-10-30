@@ -27,7 +27,7 @@ tickets/review-required/ 에 티켓을 생성해줘
 
 ### 3️⃣ **아키텍트 리뷰**
 ```
-먼저 @docs/project.md 를 읽고 시스템을 이해한 다음
+먼저 @docs/ 모든 다큐먼트를 읽고 시스템을 이해한 다음
 
 @tickets/review-required/ 의 모든 티켓을 리뷰해서:
 - 승인할 것은 tickets/approved/ 로

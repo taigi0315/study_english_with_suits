@@ -241,27 +241,33 @@ class LangFlixPipeline:
             media_id = None
             if DB_AVAILABLE and settings.get_database_enabled():
                 logger.info("📊 Database integration enabled")
-                db_manager.initialize()
-                db = db_manager.get_session()
                 try:
-                    # Create media record
-                    media = MediaCRUD.create(
-                        db=db,
-                        show_name=settings.get_show_name(),
-                        episode_name=self.episode_name,
-                        language_code=self.language_code,
-                        subtitle_file_path=str(self.subtitle_file),
-                        video_file_path=str(self.video_dir)
-                    )
-                    media_id = str(media.id)
-                    logger.info(f"Created media record: {media_id}")
+                    db_manager.initialize()
+                    db = db_manager.get_session()
+                    try:
+                        # Create media record
+                        media = MediaCRUD.create(
+                            db=db,
+                            show_name=settings.get_show_name(),
+                            episode_name=self.episode_name,
+                            language_code=self.language_code,
+                            subtitle_file_path=str(self.subtitle_file),
+                            video_file_path=str(self.video_dir)
+                        )
+                        media_id = str(media.id)
+                        logger.info(f"Created media record: {media_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to create media record: {e}")
+                        logger.warning("⚠️ Continuing pipeline without database integration")
+                        db.rollback()
+                        media_id = None  # Disable database operations for this run
+                    finally:
+                        db.close()
                 except Exception as e:
-                    logger.error(f"Failed to create media record: {e}")
-                    db.rollback()
-                    db.close()
-                    raise
-                finally:
-                    db.close()
+                    logger.error(f"Failed to initialize database connection: {e}")
+                    logger.warning("⚠️ Database connection failed. Continuing pipeline in file-only mode.")
+                    logger.warning("⚠️ To disable database integration, set 'database.enabled: false' in config.yaml")
+                    media_id = None  # Disable database operations for this run
             else:
                 logger.info("📁 File-only mode (database disabled)")
             
@@ -290,10 +296,14 @@ class LangFlixPipeline:
             if not self.expressions:
                 raise ValueError("No expressions found")
             
-            # Save expressions to database if enabled
+            # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:
-                logger.info("Step 3.5: Saving expressions to database...")
-                self._save_expressions_to_database(media_id)
+                try:
+                    logger.info("Step 3.5: Saving expressions to database...")
+                    self._save_expressions_to_database(media_id)
+                except Exception as e:
+                    logger.error(f"Failed to save expressions to database: {e}")
+                    logger.warning("⚠️ Continuing pipeline without saving expressions to database")
             
             # Step 4: Process expressions (if not dry run)
             if not dry_run:

@@ -7,7 +7,7 @@ import sys
 import argparse
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Callable
 from datetime import datetime
 import ffmpeg
 
@@ -180,7 +180,8 @@ class LangFlixPipeline:
     """
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media", 
-                 output_dir: str = "output", language_code: str = "ko"):
+                 output_dir: str = "output", language_code: str = "ko",
+                 progress_callback: Optional[Callable[[int, str], None]] = None):
         """
         Initialize the LangFlix pipeline
         
@@ -189,11 +190,13 @@ class LangFlixPipeline:
             video_dir: Directory containing video files
             output_dir: Directory for output files
             language_code: Target language code (e.g., 'ko', 'ja', 'zh')
+            progress_callback: Optional callback function(progress: int, message: str) -> None
         """
         self.subtitle_file = Path(subtitle_file)
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
         self.language_code = language_code
+        self.progress_callback = progress_callback
         
         # Create organized output structure
         self.paths = create_output_structure(str(self.subtitle_file), language_code, str(self.output_dir))
@@ -264,12 +267,16 @@ class LangFlixPipeline:
             
             # Step 1: Parse subtitles
             logger.info("Step 1: Parsing subtitles...")
+            if self.progress_callback:
+                self.progress_callback(10, "Parsing subtitles...")
             self.subtitles = self._parse_subtitles()
             if not self.subtitles:
                 raise ValueError("No subtitles found")
             
             # Step 2: Chunk subtitles
             logger.info("Step 2: Chunking subtitles...")
+            if self.progress_callback:
+                self.progress_callback(20, "Chunking subtitles...")
             self.chunks = chunk_subtitles(self.subtitles)
             logger.info(f"Created {len(self.chunks)} chunks")
             
@@ -277,6 +284,8 @@ class LangFlixPipeline:
             logger.info("Step 3: Analyzing expressions...")
             if test_mode:
                 logger.info("🧪 TEST MODE: Processing only first chunk")
+            if self.progress_callback:
+                self.progress_callback(30, "Analyzing expressions...")
             self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
                 raise ValueError("No expressions found")
@@ -289,15 +298,21 @@ class LangFlixPipeline:
             # Step 4: Process expressions (if not dry run)
             if not dry_run:
                 logger.info("Step 4: Processing expressions...")
+                if self.progress_callback:
+                    self.progress_callback(50, "Processing expressions...")
                 self._process_expressions()
                 
                 # Step 5: Create educational videos
                 logger.info("Step 5: Creating educational videos...")
+                if self.progress_callback:
+                    self.progress_callback(70, "Creating educational videos...")
                 self._create_educational_videos()
                 
                 # Step 6: Create short-format videos (unless disabled)
                 if not no_shorts:
                     logger.info("Step 6: Creating short-format videos...")
+                    if self.progress_callback:
+                        self.progress_callback(80, "Creating short-format videos...")
                     self._create_short_videos()
                 else:
                     logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
@@ -305,12 +320,18 @@ class LangFlixPipeline:
                 logger.info("Step 4: Dry run - skipping video processing")
             
             # Step 7: Generate summary
+            if self.progress_callback:
+                self.progress_callback(95, "Generating summary...")
             summary = self._generate_summary()
             
             # Step 8: Cleanup temporary files
             logger.info("Step 8: Cleaning up temporary files...")
+            if self.progress_callback:
+                self.progress_callback(98, "Cleaning up temporary files...")
             self._cleanup_resources()
             
+            if self.progress_callback:
+                self.progress_callback(100, "Pipeline completed successfully!")
             logger.info("✅ Pipeline completed successfully!")
             
             return summary

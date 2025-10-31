@@ -66,11 +66,25 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - `/api/v1/jobs` (GET): List all jobs from Redis.
 
 ## Job Processing (Background Task)
-Defined in `routes/jobs.py` as `process_video_task(...)`:
-- Stores uploads to `/tmp` and updates Redis job progress.
-- Uses `langflix.core` modules for parsing, chunking, analyzing expressions, creating subtitles, extracting clips, generating educational and short-format videos, batching, and final concatenation via `ffmpeg`.
-- Writes outputs using `services.output_manager.create_output_structure`.
-- Cleans temporary files; updates Redis job status/results; invalidates video cache.
+
+### Unified Pipeline Service
+
+The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.py`) which provides a unified interface for both API and CLI processing. This eliminates code duplication and ensures consistent behavior.
+
+**Key Features:**
+- Single source of truth for video processing pipeline
+- Progress callback support for real-time job status updates
+- Consistent result format across API and CLI
+
+**Implementation:**
+- Defined in `routes/jobs.py` as `process_video_task(...)` (simplified from 450+ lines to ~110 lines)
+- Uses `VideoPipelineService.process_video()` which wraps `LangFlixPipeline`
+- Stores uploads to `/tmp` and updates Redis job progress via callback
+- Cleans temporary files; updates Redis job status/results; invalidates video cache
+
+**Progress Tracking:**
+- Progress callbacks automatically update Redis job status
+- Progress milestones: 10% (init), 20% (saving files), 30% (parsing), 50% (processing), 70% (educational videos), 80% (short videos), 100% (complete)
 
 ## Error Handling and Logging
 - Centralized exception handler returns consistent JSON payloads.

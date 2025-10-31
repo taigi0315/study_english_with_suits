@@ -178,7 +178,7 @@ Return ONLY expressions that pass ALL checks. Be selective. Quality matters more
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
 If you find expressions, respond with this exact format:
-{"expressions":[{"expression":"key phrase here","translation":"translation here","context":"context here","expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"start_time":"00:00:00.000","end_time":"00:00:00.000"}]}
+{{"expressions":[{{"expression":"key phrase here","translation":"translation here","context":"context here","expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"start_time":"00:00:00.000","end_time":"00:00:00.000"}}]}}
 
 If you find NO expressions, respond with:
-{"expressions":[]}
+{{"expressions":[]}}

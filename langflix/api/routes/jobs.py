@@ -234,23 +234,24 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
 async def get_job_expressions(job_id: str) -> Dict[str, Any]:
     """Get expressions extracted from the job."""
     
-    if job_id not in jobs_db:
+    redis_manager = get_redis_job_manager()
+    job = redis_manager.get_job(job_id)
+    
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    job = jobs_db[job_id]
-    
     # Return ACTUAL expressions from processing
-    if job["status"] != "COMPLETED":
+    if job.get("status") != "COMPLETED":
         return {
             "job_id": job_id,
-            "status": job["status"],
+            "status": job.get("status", "UNKNOWN"),
             "message": "Processing not completed yet",
             "expressions": []
         }
     
     return {
         "job_id": job_id,
-        "status": job["status"],
+        "status": job.get("status", "UNKNOWN"),
         "expressions": job.get("expressions", []),
         "total_expressions": len(job.get("expressions", [])),
         "completed_at": job.get("completed_at")

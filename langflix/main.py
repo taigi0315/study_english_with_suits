@@ -7,7 +7,7 @@ import sys
 import argparse
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Callable
 from datetime import datetime
 import ffmpeg
 
@@ -180,7 +180,8 @@ class LangFlixPipeline:
     """
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media", 
-                 output_dir: str = "output", language_code: str = "ko"):
+                 output_dir: str = "output", language_code: str = "ko",
+                 progress_callback: Optional[Callable[[int, str], None]] = None):
         """
         Initialize the LangFlix pipeline
         
@@ -189,11 +190,13 @@ class LangFlixPipeline:
             video_dir: Directory containing video files
             output_dir: Directory for output files
             language_code: Target language code (e.g., 'ko', 'ja', 'zh')
+            progress_callback: Optional callback function(progress: int, message: str) -> None
         """
         self.subtitle_file = Path(subtitle_file)
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
         self.language_code = language_code
+        self.progress_callback = progress_callback
         
         # Create organized output structure
         self.paths = create_output_structure(str(self.subtitle_file), language_code, str(self.output_dir))
@@ -238,38 +241,48 @@ class LangFlixPipeline:
             media_id = None
             if DB_AVAILABLE and settings.get_database_enabled():
                 logger.info("📊 Database integration enabled")
-                db_manager.initialize()
-                db = db_manager.get_session()
                 try:
-                    # Create media record
-                    media = MediaCRUD.create(
-                        db=db,
-                        show_name=settings.get_show_name(),
-                        episode_name=self.episode_name,
-                        language_code=self.language_code,
-                        subtitle_file_path=str(self.subtitle_file),
-                        video_file_path=str(self.video_dir)
-                    )
-                    media_id = str(media.id)
-                    logger.info(f"Created media record: {media_id}")
+                    db_manager.initialize()
+                    db = db_manager.get_session()
+                    try:
+                        # Create media record
+                        media = MediaCRUD.create(
+                            db=db,
+                            show_name=settings.get_show_name(),
+                            episode_name=self.episode_name,
+                            language_code=self.language_code,
+                            subtitle_file_path=str(self.subtitle_file),
+                            video_file_path=str(self.video_dir)
+                        )
+                        media_id = str(media.id)
+                        logger.info(f"Created media record: {media_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to create media record: {e}")
+                        logger.warning("⚠️ Continuing pipeline without database integration")
+                        db.rollback()
+                        media_id = None  # Disable database operations for this run
+                    finally:
+                        db.close()
                 except Exception as e:
-                    logger.error(f"Failed to create media record: {e}")
-                    db.rollback()
-                    db.close()
-                    raise
-                finally:
-                    db.close()
+                    logger.error(f"Failed to initialize database connection: {e}")
+                    logger.warning("⚠️ Database connection failed. Continuing pipeline in file-only mode.")
+                    logger.warning("⚠️ To disable database integration, set 'database.enabled: false' in config.yaml")
+                    media_id = None  # Disable database operations for this run
             else:
                 logger.info("📁 File-only mode (database disabled)")
             
             # Step 1: Parse subtitles
             logger.info("Step 1: Parsing subtitles...")
+            if self.progress_callback:
+                self.progress_callback(10, "Parsing subtitles...")
             self.subtitles = self._parse_subtitles()
             if not self.subtitles:
                 raise ValueError("No subtitles found")
             
             # Step 2: Chunk subtitles
             logger.info("Step 2: Chunking subtitles...")
+            if self.progress_callback:
+                self.progress_callback(20, "Chunking subtitles...")
             self.chunks = chunk_subtitles(self.subtitles)
             logger.info(f"Created {len(self.chunks)} chunks")
             
@@ -277,40 +290,76 @@ class LangFlixPipeline:
             logger.info("Step 3: Analyzing expressions...")
             if test_mode:
                 logger.info("🧪 TEST MODE: Processing only first chunk")
+            if self.progress_callback:
+                self.progress_callback(30, "Analyzing expressions...")
             self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
-                raise ValueError("No expressions found")
-            
-            # Save expressions to database if enabled
-            if DB_AVAILABLE and settings.get_database_enabled() and media_id:
-                logger.info("Step 3.5: Saving expressions to database...")
-                self._save_expressions_to_database(media_id)
-            
-            # Step 4: Process expressions (if not dry run)
-            if not dry_run:
-                logger.info("Step 4: Processing expressions...")
-                self._process_expressions()
-                
-                # Step 5: Create educational videos
-                logger.info("Step 5: Creating educational videos...")
-                self._create_educational_videos()
-                
-                # Step 6: Create short-format videos (unless disabled)
-                if not no_shorts:
-                    logger.info("Step 6: Creating short-format videos...")
-                    self._create_short_videos()
+                logger.error("❌ No expressions found after analysis")
+                logger.error("This could be due to:")
+                logger.error("  1. LLM API response parsing failure")
+                logger.error("  2. All expressions failed validation")
+                logger.error("  3. Empty or invalid subtitle chunks")
+                logger.error("  4. Gemini API response format issue")
+                # In test mode, allow continuing with empty expressions for debugging
+                if test_mode:
+                    logger.warning("⚠️ TEST MODE: Continuing with empty expressions for debugging")
+                    self.expressions = []
                 else:
-                    logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+                    raise ValueError("No expressions found")
+            
+            # Save expressions to database if enabled and media_id is available
+            if DB_AVAILABLE and settings.get_database_enabled() and media_id:
+                try:
+                    logger.info("Step 3.5: Saving expressions to database...")
+                    self._save_expressions_to_database(media_id)
+                except Exception as e:
+                    logger.error(f"Failed to save expressions to database: {e}")
+                    logger.warning("⚠️ Continuing pipeline without saving expressions to database")
+            
+            # Step 4: Process expressions (if not dry run and expressions exist)
+            if not dry_run and self.expressions:
+                logger.info("Step 4: Processing expressions...")
+                if self.progress_callback:
+                    self.progress_callback(50, "Processing expressions...")
+                self._process_expressions()
+            elif not dry_run and not self.expressions:
+                logger.warning("⚠️ Skipping expression processing - no expressions found")
+                
+                # Step 5: Create educational videos (only if expressions exist)
+                if self.expressions:
+                    logger.info("Step 5: Creating educational videos...")
+                    if self.progress_callback:
+                        self.progress_callback(70, "Creating educational videos...")
+                    self._create_educational_videos()
+                    
+                    # Step 6: Create short-format videos (unless disabled)
+                    if not no_shorts:
+                        logger.info("Step 6: Creating short-format videos...")
+                        if self.progress_callback:
+                            self.progress_callback(80, "Creating short-format videos...")
+                        self._create_short_videos()
+                    else:
+                        logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+                else:
+                    logger.warning("⚠️ Skipping video creation - no expressions to process")
+                    if self.progress_callback:
+                        self.progress_callback(80, "No expressions found, skipping video creation...")
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             
             # Step 7: Generate summary
+            if self.progress_callback:
+                self.progress_callback(95, "Generating summary...")
             summary = self._generate_summary()
             
             # Step 8: Cleanup temporary files
             logger.info("Step 8: Cleaning up temporary files...")
+            if self.progress_callback:
+                self.progress_callback(98, "Cleaning up temporary files...")
             self._cleanup_resources()
             
+            if self.progress_callback:
+                self.progress_callback(100, "Pipeline completed successfully!")
             logger.info("✅ Pipeline completed successfully!")
             
             return summary
@@ -346,7 +395,26 @@ class LangFlixPipeline:
             logger.info(f"Analyzing chunk {chunk_index+1}/{total_chunks}{' (TEST MODE)' if test_mode else ''}...")
             
             try:
-                expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, str(self.paths['episode']['metadata']['llm_outputs']))
+                # Get output directory for LLM outputs if save_llm_output is enabled
+                output_dir = None
+                if save_llm_output:
+                    # Check if metadata directory exists in paths structure
+                    # Note: metadata directory may not exist if OutputManager doesn't create it
+                    try:
+                        metadata_paths = self.paths.get('episode', {}).get('metadata', {})
+                        if metadata_paths and 'llm_outputs' in metadata_paths:
+                            output_dir = str(metadata_paths['llm_outputs'])
+                        else:
+                            # Fallback: use episode directory for LLM outputs
+                            episode_dir = self.paths.get('episode', {}).get('episode_dir')
+                            if episode_dir:
+                                output_dir = str(episode_dir / 'llm_outputs')
+                                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                    except (KeyError, AttributeError) as e:
+                        logger.warning(f"Could not determine LLM output directory: {e}. LLM outputs will not be saved.")
+                        output_dir = None
+                
+                expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, output_dir)
                 if expressions:
                     all_expressions.extend(expressions)
                     logger.info(f"Found {len(expressions)} expressions in chunk {chunk_index+1}")
@@ -383,29 +451,35 @@ class LangFlixPipeline:
         if not DB_AVAILABLE or not settings.get_database_enabled():
             return
         
-        db = db_manager.get_session()
         try:
-            for expression in self.expressions:
-                try:
-                    ExpressionCRUD.create_from_analysis(
-                        db=db,
-                        media_id=media_id,
-                        analysis_data=expression
-                    )
-                    logger.debug(f"Saved expression to database: {expression.expression}")
-                except Exception as e:
-                    logger.error(f"Failed to save expression '{expression.expression}': {e}")
-                    continue
-            
-            db.commit()
-            logger.info(f"Saved {len(self.expressions)} expressions to database")
-            
+            db = db_manager.get_session()
+            try:
+                for expression in self.expressions:
+                    try:
+                        ExpressionCRUD.create_from_analysis(
+                            db=db,
+                            media_id=media_id,
+                            analysis_data=expression
+                        )
+                        logger.debug(f"Saved expression to database: {expression.expression}")
+                    except Exception as e:
+                        logger.error(f"Failed to save expression '{expression.expression}': {e}")
+                        continue
+                
+                db.commit()
+                logger.info(f"Saved {len(self.expressions)} expressions to database")
+                
+            except Exception as e:
+                logger.error(f"Database error during expression save: {e}")
+                db.rollback()
+                logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
+                # Don't raise - allow pipeline to continue
+            finally:
+                db.close()
         except Exception as e:
-            logger.error(f"Database error: {e}")
-            db.rollback()
-            raise
-        finally:
-            db.close()
+            logger.error(f"Database connection error: {e}")
+            logger.warning("⚠️ Failed to connect to database. Pipeline will continue in file-only mode.")
+            # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):
         """Process each expression (video + subtitles)"""

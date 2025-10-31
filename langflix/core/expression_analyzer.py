@@ -105,7 +105,14 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         
         if cached_result and isinstance(cached_result, list):
             logger.info(f"Using cached expression analysis for chunk with {len(cached_result)} expressions")
-            return [ExpressionAnalysis(**expr) for expr in cached_result]
+            try:
+                return [ExpressionAnalysis(**expr) for expr in cached_result]
+            except Exception as cache_error:
+                logger.error(f"Error parsing cached expressions: {cache_error}")
+                logger.error(f"Cached result type: {type(cached_result)}, first item: {cached_result[0] if cached_result else None}")
+                # Clear invalid cache and continue with fresh analysis
+                cache_manager.delete(cache_key)
+                logger.warning("Cleared invalid cache, will re-analyze")
         
         # Generate prompt
         prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
@@ -146,15 +153,21 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             
             # Extract structured response
             if hasattr(response, 'text') and response.text:
-                # Parse the structured response
-                response_obj = ExpressionAnalysisResponse.model_validate_json(response.text)
-                expressions = response_obj.expressions
-                
-                # Validate and filter expressions
-                validated_expressions = _validate_and_filter_expressions(expressions)
-                
-                logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
-                return validated_expressions
+                try:
+                    # Parse the structured response
+                    response_obj = ExpressionAnalysisResponse.model_validate_json(response.text)
+                    expressions = response_obj.expressions
+                    
+                    # Validate and filter expressions
+                    validated_expressions = _validate_and_filter_expressions(expressions)
+                    
+                    logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
+                    return validated_expressions
+                except Exception as validation_error:
+                    # If structured output validation fails, log and fall through to text parsing
+                    logger.warning(f"Structured output validation failed: {validation_error}")
+                    logger.debug(f"Response text preview: {response.text[:500]}")
+                    raise  # Re-raise to trigger fallback
             else:
                 logger.error("Empty or invalid structured response from Gemini API")
                 return []
@@ -191,15 +204,29 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 return validated_expressions
                 
             except Exception as parse_error:
+                import traceback
                 logger.error(f"Failed to parse response: {parse_error}")
-                logger.error(f"Raw response: {response_text}")
+                logger.error(f"Error type: {type(parse_error).__name__}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                # Log more details if it's a validation error
+                if hasattr(parse_error, 'errors'):
+                    logger.error(f"Validation errors: {parse_error.errors()}")
+                # Log first 500 chars of response for debugging
+                response_preview = response_text[:500] if response_text else "No response text"
+                logger.error(f"Raw response preview: {response_preview}")
                 
                 # If all parsing fails, return empty list
                 logger.warning("All parsing methods failed, returning empty list")
                 return []
         
     except Exception as e:
+        import traceback
         logger.error(f"Unexpected error in analyze_chunk: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.debug(f"Full traceback: {traceback.format_exc()}")
+        # Log more details if it's a validation error
+        if hasattr(e, 'errors'):
+            logger.error(f"Validation errors: {e.errors()}")
         return []
 
 
@@ -246,12 +273,46 @@ def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
                 raise ValueError(f"Could not extract valid JSON from response: {json_error}")
         
         # Validate using Pydantic
-        if isinstance(data, dict) and "expressions" in data:
-            response_obj = ExpressionAnalysisResponse(expressions=data["expressions"])
+        # Handle different response formats
+        if isinstance(data, dict):
+            # Check what keys are available
+            available_keys = list(data.keys())
+            logger.debug(f"Parsed JSON has keys: {available_keys}")
+            
+            # Try to find expressions key (case-insensitive, handle quotes)
+            expressions_data = None
+            
+            # Try exact match first
+            if "expressions" in data:
+                expressions_data = data["expressions"]
+            # Try with quotes (in case key was parsed as string with quotes)
+            elif '"expressions"' in data:
+                logger.warning("Found key '\"expressions\"' instead of 'expressions', attempting to use it")
+                expressions_data = data['"expressions"']
+            # Try case variations
+            elif "Expressions" in data:
+                logger.warning("Found key 'Expressions' instead of 'expressions', attempting to use it")
+                expressions_data = data["Expressions"]
+            else:
+                # Log all keys for debugging
+                logger.error(f"Response dict keys: {available_keys}")
+                logger.error(f"Response dict sample: {str(data)[:500]}")
+                raise ValueError(
+                    f"Expected 'expressions' key in response, but found keys: {available_keys}. "
+                    f"Response structure: {type(data)}"
+                )
+            
+            if expressions_data is None:
+                raise ValueError(f"'expressions' key found but value is None")
+            
+            response_obj = ExpressionAnalysisResponse(expressions=expressions_data)
         elif isinstance(data, list):
+            # If response is directly a list, treat it as expressions
+            logger.debug(f"Response is a list with {len(data)} items, treating as expressions")
             response_obj = ExpressionAnalysisResponse(expressions=data)
         else:
-            raise ValueError(f"Invalid JSON structure: {data}")
+            logger.error(f"Invalid JSON structure type: {type(data)}, value: {str(data)[:500]}")
+            raise ValueError(f"Invalid JSON structure: expected dict or list, got {type(data).__name__}")
         
         return response_obj
         

@@ -62,7 +62,7 @@
 - `/api/v1/files/{file_id}` (DELETE): 파일 삭제 스텁(TODO).
 - `/api/v1/jobs` (POST): 영상+자막 업로드와 폼 필드로 새 잡 생성, 백그라운드 처리 시작.
 - `/api/v1/jobs/{job_id}` (GET): Redis에서 현재 잡 상태 조회.
-- `/api/v1/jobs/{job_id}/expressions` (GET): 인메모리 소스(`jobs_db`)에서 표현식 반환(상태/영속은 Redis 사용—정합성 위해 통합 권장).
+- `/api/v1/jobs/{job_id}/expressions` (GET): Redis에서 표현식 반환(작업 상태와 동일한 소스).
 - `/api/v1/jobs` (GET): 모든 잡 나열(출처: Redis).
 
 ## 잡 처리(백그라운드 태스크)
@@ -88,7 +88,7 @@
 ## 확장 포인트
 - `dependencies.get_db/get_storage` 구현으로 DB/스토리지 연계.
 - 파일 상세/삭제 스텁을 실제 스토리지 연동으로 대체.
-- `/jobs/{id}/expressions`를 Redis 기반 단일 소스 진실로 통합하여 `jobs_db` 의존 제거.
+- ✅ `/jobs/{id}/expressions`를 Redis 기반 단일 소스 진실로 통합 완료 - `jobs_db` 의존 제거됨 (TICKET-003).
 
 ## 사용 예시
 ```bash

@@ -2445,35 +2445,25 @@ class VideoEditor:
                     # Reuse existing looped expression from long-form
                     logger.info(f"Reusing looped expression from long-form: {looped_expression_path}")
 
-                # Concat context AV + expression AV with explicit mapping and optional transition
+                # Concat context AV + expression AV using demuxer concat (copy mode for A-V sync)
+                # Use demuxer concat directly to avoid re-encoding and timestamp issues
                 concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
                 self._register_temp_file(concatenated_video_path)
                 
-                # Try to apply transition if enabled
-                from langflix import settings
-                transitions_config = settings.get_transitions_config()
-                transition_enabled = transitions_config.get('enabled', False)
+                # Create concat file for demuxer concat
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                    f.write(f"file '{Path(context_with_subtitles).absolute()}'\n")
+                    f.write(f"file '{Path(looped_expression_path).absolute()}'\n")
+                    concat_file = f.name
                 
-                if transition_enabled:
-                    try:
-                        context_to_expr_config = transitions_config.get('context_to_expression', {})
-                        transition_type = context_to_expr_config.get('type', 'none')
-                        if transition_type != 'none':
-                            transition_effect = context_to_expr_config.get('effect', 'fade')
-                            transition_duration = context_to_expr_config.get('duration', 0.5)
-                            
-                            logger.info(f"Applying {transition_type} transition ({transition_effect}, {transition_duration}s)")
-                            self._apply_context_to_expression_transition(
-                                context_with_subtitles, str(looped_expression_path), str(concatenated_video_path),
-                                transition_effect, transition_duration
-                            )
-                        else:
-                            concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
-                    except Exception as e:
-                        logger.warning(f"Transition failed, falling back to simple concat: {e}")
-                        concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
-                else:
-                    concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
+                try:
+                    logger.info("Using demuxer concat for context + expression (copy mode, no re-encode)")
+                    concat_demuxer_if_uniform(concat_file, concatenated_video_path)
+                finally:
+                    import os
+                    if os.path.exists(concat_file):
+                        os.unlink(concat_file)
 
                 # Probe logs for debugging
                 try:

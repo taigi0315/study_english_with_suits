@@ -226,7 +226,8 @@ class OutputManager:
         return log_file
 
 
-def create_output_structure(subtitle_file_path: str, language_code: str = "ko", base_output_dir: str = "output") -> Dict[str, Path]:
+def create_output_structure(subtitle_file_path: str, language_code: str = "ko", base_output_dir: str = "output", 
+                            series_name: str = None, episode_name: str = None) -> Dict[str, Path]:
     """
     Convenience function to create complete output structure
     
@@ -234,14 +235,20 @@ def create_output_structure(subtitle_file_path: str, language_code: str = "ko", 
         subtitle_file_path: Path to subtitle file
         language_code: Target language code
         base_output_dir: Base output directory (default: "output")
+        series_name: Optional series name (if not provided, extracted from subtitle path)
+        episode_name: Optional episode name (if not provided, extracted from subtitle path)
         
     Returns:
         Complete path mappings for the episode and language
     """
     manager = OutputManager(base_output_dir)
     
-    # Extract series and episode names
-    series_name, episode_name = manager.get_series_episode_name(subtitle_file_path)
+    # Extract series and episode names (use provided values if available)
+    if series_name and episode_name:
+        logger.info(f"Using provided series/episode names: {series_name}/{episode_name}")
+    else:
+        series_name, episode_name = manager.get_series_episode_name(subtitle_file_path)
+        logger.info(f"Extracted series/episode names from path: {series_name}/{episode_name}")
     
     # Create episode structure
     episode_paths = manager.create_episode_structure(series_name, episode_name)

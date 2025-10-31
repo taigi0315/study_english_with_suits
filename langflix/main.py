@@ -294,7 +294,18 @@ class LangFlixPipeline:
                 self.progress_callback(30, "Analyzing expressions...")
             self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
-                raise ValueError("No expressions found")
+                logger.error("❌ No expressions found after analysis")
+                logger.error("This could be due to:")
+                logger.error("  1. LLM API response parsing failure")
+                logger.error("  2. All expressions failed validation")
+                logger.error("  3. Empty or invalid subtitle chunks")
+                logger.error("  4. Gemini API response format issue")
+                # In test mode, allow continuing with empty expressions for debugging
+                if test_mode:
+                    logger.warning("⚠️ TEST MODE: Continuing with empty expressions for debugging")
+                    self.expressions = []
+                else:
+                    raise ValueError("No expressions found")
             
             # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:
@@ -305,27 +316,34 @@ class LangFlixPipeline:
                     logger.error(f"Failed to save expressions to database: {e}")
                     logger.warning("⚠️ Continuing pipeline without saving expressions to database")
             
-            # Step 4: Process expressions (if not dry run)
-            if not dry_run:
+            # Step 4: Process expressions (if not dry run and expressions exist)
+            if not dry_run and self.expressions:
                 logger.info("Step 4: Processing expressions...")
                 if self.progress_callback:
                     self.progress_callback(50, "Processing expressions...")
                 self._process_expressions()
+            elif not dry_run and not self.expressions:
+                logger.warning("⚠️ Skipping expression processing - no expressions found")
                 
-                # Step 5: Create educational videos
-                logger.info("Step 5: Creating educational videos...")
-                if self.progress_callback:
-                    self.progress_callback(70, "Creating educational videos...")
-                self._create_educational_videos()
-                
-                # Step 6: Create short-format videos (unless disabled)
-                if not no_shorts:
-                    logger.info("Step 6: Creating short-format videos...")
+                # Step 5: Create educational videos (only if expressions exist)
+                if self.expressions:
+                    logger.info("Step 5: Creating educational videos...")
                     if self.progress_callback:
-                        self.progress_callback(80, "Creating short-format videos...")
-                    self._create_short_videos()
+                        self.progress_callback(70, "Creating educational videos...")
+                    self._create_educational_videos()
+                    
+                    # Step 6: Create short-format videos (unless disabled)
+                    if not no_shorts:
+                        logger.info("Step 6: Creating short-format videos...")
+                        if self.progress_callback:
+                            self.progress_callback(80, "Creating short-format videos...")
+                        self._create_short_videos()
+                    else:
+                        logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
                 else:
-                    logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+                    logger.warning("⚠️ Skipping video creation - no expressions to process")
+                    if self.progress_callback:
+                        self.progress_callback(80, "No expressions found, skipping video creation...")
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             

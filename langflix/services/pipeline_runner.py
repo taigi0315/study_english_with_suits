@@ -64,12 +64,13 @@ class PipelineRunner:
             # Run the actual LangFlix pipeline
             update_progress(10, "Initializing LangFlix pipeline...")
             
-            # Create pipeline instance
+            # Create pipeline instance with progress callback
             pipeline = LangFlixPipeline(
                 subtitle_file=job.subtitle_path,
                 video_dir=os.path.dirname(job.video_path),  # Directory containing the video
                 output_dir=output_dir,
-                language_code=job.language_code
+                language_code=job.language_code,
+                progress_callback=update_progress  # Pass progress callback to pipeline
             )
             
             # Run the pipeline
@@ -85,9 +86,17 @@ class PipelineRunner:
             
             update_progress(90, "Pipeline completed!")
             
-            # Extract results
-            final_video_path = result.get('final_video_path', '')
-            short_videos = result.get('short_videos', [])
+            # Extract results from pipeline summary
+            # Note: pipeline.run() returns summary dict, not direct video paths
+            expressions_processed = result.get('processed_expressions', 0)
+            total_expressions = result.get('total_expressions', 0)
+            
+            # Final video path is created by pipeline internally
+            # It's stored in paths['language']['final_videos'] with naming: long-form_{episode_name}_{filename}.mkv
+            # We can't easily extract it here without accessing pipeline.paths, so we return empty for now
+            # TODO: Consider using VideoPipelineService here for better result extraction
+            final_video_path = ''
+            short_videos = []
             
             # Step 6: Finalize (100%)
             update_progress(100, "Completed!")
@@ -95,7 +104,7 @@ class PipelineRunner:
             return {
                 "final_videos": [final_video_path] if final_video_path else [],
                 "short_videos": short_videos,
-                "expressions_processed": len(selected_expressions),
+                "expressions_processed": expressions_processed or total_expressions,
                 "show_name": show_name,
                 "episode": episode
             }

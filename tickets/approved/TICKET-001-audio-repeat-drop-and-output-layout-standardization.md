@@ -351,11 +351,24 @@ None - backward compatibility maintained with deprecated `build_repeated_av()` f
 - Short-form reuses long-form's intermediate files
 - Both formats use identical source videos
 
-⏳ **PENDING USER TESTING:**
-- User must re-run pipeline to verify all fixes work end-to-end
-- Verify no A-V sync lag in short-form batches
-- Verify all 3 expressions appear in short-form output
-- Verify long-form shows proper side-by-side layout
+**Phase 5: Short-form Logic Simplification (2025-01-30)**
+- **Problem**: Short-form had overly complex logic with unnecessary audio extraction/processing (~180 lines) causing A-V sync issues
+- **Root cause**: Short-form was extracting audio separately, processing it, and calculating durations from audio instead of video
+- **Solution**: Completely simplified short-form to match long-form pattern exactly:
+  - Removed unnecessary audio extraction/processing logic
+  - Removed duplicate expression processing block
+  - Changed duration calculation from audio-based to video-based (same as long-form)
+  - Simplified flow: context_with_subtitles → expression clip → repeat → concat → vstack → final gain
+  - Short-form now follows exact same pattern as long-form (only difference: vstack vs hstack)
+- **Result**: Fixed 0.5s A-V sync delay issue, code is now much simpler and maintainable
+- **Files changed**: `langflix/core/video_editor.py` (~180 lines removed)
+- **Commit**: `3df2207` - refactor: simplify short-form video logic to match long-form pattern
+
+✅ **VERIFIED & WORKING:**
+- User confirmed all fixes work correctly
+- No A-V sync delay in short-form videos
+- Smooth transitions between segments
+- Proper audio-video synchronization throughout
 
 🚫 **NOT YET TESTED:**
 - Multiple episodes with different codecs

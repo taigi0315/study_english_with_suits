@@ -334,28 +334,25 @@ class LangFlixPipeline:
                 if self.progress_callback:
                     self.progress_callback(50, "Processing expressions...")
                 self._process_expressions()
-            elif not dry_run and not self.expressions:
-                logger.warning("⚠️ Skipping expression processing - no expressions found")
                 
                 # Step 5: Create educational videos (only if expressions exist)
-                if self.expressions:
-                    logger.info("Step 5: Creating educational videos...")
+                logger.info("Step 5: Creating educational videos...")
+                if self.progress_callback:
+                    self.progress_callback(70, "Creating educational videos...")
+                self._create_educational_videos()
+                
+                # Step 6: Create short-format videos (unless disabled)
+                if not no_shorts:
+                    logger.info("Step 6: Creating short-format videos...")
                     if self.progress_callback:
-                        self.progress_callback(70, "Creating educational videos...")
-                    self._create_educational_videos()
-                    
-                    # Step 6: Create short-format videos (unless disabled)
-                    if not no_shorts:
-                        logger.info("Step 6: Creating short-format videos...")
-                        if self.progress_callback:
-                            self.progress_callback(80, "Creating short-format videos...")
-                        self._create_short_videos()
-                    else:
-                        logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+                        self.progress_callback(80, "Creating short-format videos...")
+                    self._create_short_videos()
                 else:
-                    logger.warning("⚠️ Skipping video creation - no expressions to process")
-                    if self.progress_callback:
-                        self.progress_callback(80, "No expressions found, skipping video creation...")
+                    logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+            elif not dry_run and not self.expressions:
+                logger.warning("⚠️ Skipping expression processing - no expressions found")
+                if self.progress_callback:
+                    self.progress_callback(80, "No expressions found, skipping video creation...")
             else:
                 logger.info("Step 4: Dry run - skipping video processing")
             

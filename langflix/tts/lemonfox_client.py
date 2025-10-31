@@ -199,15 +199,15 @@ class LemonFoxTTSClient(TTSClient):
             
             # Determine output path
             if output_path is None:
-                # Create temporary file with proper extension
+                # Create temporary file with proper extension using temp file manager
+                from langflix.utils.temp_file_manager import get_temp_manager
+                temp_manager = get_temp_manager()
                 suffix = f".{self.response_format}"
-                temp_file = tempfile.NamedTemporaryFile(
-                    delete=False, 
-                    suffix=suffix, 
-                    prefix="langflix_tts_"
-                )
-                output_path = Path(temp_file.name)
-                temp_file.close()
+                # Create temp file with delete=False since it may be used after function returns
+                with temp_manager.create_temp_file(suffix=suffix, prefix="langflix_tts_", delete=False) as temp_path:
+                    output_path = temp_path
+                # Register for cleanup
+                temp_manager.register_file(output_path)
             else:
                 output_path = Path(output_path)
                 # Ensure directory exists

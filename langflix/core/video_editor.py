@@ -34,7 +34,9 @@ class VideoEditor:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        self._temp_files = []  # Track temporary files for cleanup
+        # Use centralized temp file manager instead of local tracking
+        from langflix.utils.temp_file_manager import get_temp_manager
+        self.temp_manager = get_temp_manager()
         self._tts_cache = {}  # Legacy cache for backward compatibility
         self.cache_manager = get_cache_manager()  # Advanced cache manager
         self.language_code = language_code
@@ -254,7 +256,7 @@ class VideoEditor:
     
     def _register_temp_file(self, file_path: Path) -> None:
         """Register a temporary file for cleanup later"""
-        self._temp_files.append(file_path)
+        self.temp_manager.register_file(file_path)
     
     def _get_subtitle_style_config(self) -> Dict[str, Any]:
         """Get subtitle styling configuration from expression settings"""
@@ -436,21 +438,19 @@ class VideoEditor:
     
     def _cleanup_temp_files(self) -> None:
         """Clean up all registered temporary files"""
-        for temp_file in self._temp_files:
-            try:
-                if temp_file.exists():
-                    temp_file.unlink()
-                    logger.debug(f"Cleaned up temporary file: {temp_file}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_file}: {e}")
-        self._temp_files.clear()
+        # Note: This method is kept for backward compatibility
+        # Actual cleanup is handled by TempFileManager's cleanup_all()
+        # which is called on exit. Individual file cleanup happens
+        # automatically when using context managers.
+        # Files registered via _register_temp_file will be cleaned up
+        # by the global temp manager's cleanup_all() on exit.
+        pass
     
     def __del__(self):
         """Ensure temporary files are cleaned up when object is destroyed"""
-        try:
-            self._cleanup_temp_files()
-        except Exception:
-            pass  # Ignore errors during cleanup in destructor
+        # TempFileManager handles cleanup automatically via atexit
+        # Individual files are tracked globally, so no action needed here
+        pass
     
     def _add_subtitles_to_context(self, video_path: str, expression: ExpressionAnalysis) -> str:
         """Add target language subtitles to context video (translation only) using overlay helpers."""

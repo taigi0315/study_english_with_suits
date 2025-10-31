@@ -191,15 +191,29 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 return validated_expressions
                 
             except Exception as parse_error:
+                import traceback
                 logger.error(f"Failed to parse response: {parse_error}")
-                logger.error(f"Raw response: {response_text}")
+                logger.error(f"Error type: {type(parse_error).__name__}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                # Log more details if it's a validation error
+                if hasattr(parse_error, 'errors'):
+                    logger.error(f"Validation errors: {parse_error.errors()}")
+                # Log first 500 chars of response for debugging
+                response_preview = response_text[:500] if response_text else "No response text"
+                logger.error(f"Raw response preview: {response_preview}")
                 
                 # If all parsing fails, return empty list
                 logger.warning("All parsing methods failed, returning empty list")
                 return []
         
     except Exception as e:
+        import traceback
         logger.error(f"Unexpected error in analyze_chunk: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.debug(f"Full traceback: {traceback.format_exc()}")
+        # Log more details if it's a validation error
+        if hasattr(e, 'errors'):
+            logger.error(f"Validation errors: {e.errors()}")
         return []
 
 

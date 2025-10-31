@@ -13,7 +13,7 @@ from .models import ExpressionAnalysis
 from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
-from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform
+from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain
 from langflix.subtitles import overlay as subs_overlay
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,13 @@ class VideoEditor:
             # Step 5: Use hstack to create side-by-side layout (long-form)
             # Left: context → expression repeat, Right: educational slide
             logger.info("Creating long-form side-by-side layout with hstack")
-            hstack_keep_height(str(left_side_path), str(educational_slide), str(output_path))
+            hstack_temp_path = self.output_dir / f"temp_hstack_long_{safe_expression}.mkv"
+            self._register_temp_file(hstack_temp_path)
+            hstack_keep_height(str(left_side_path), str(educational_slide), str(hstack_temp_path))
+            
+            # Step 6: Apply final audio gain (+25%) as separate pass
+            logger.info("Applying final audio gain (+25%) to long-form output")
+            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.25)
             
             logger.info(f"Educational sequence created: {output_path}")
             return str(output_path)
@@ -2289,222 +2295,75 @@ class VideoEditor:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
             
-            # Step 0: Create context video with dual-language subtitles (same as long-form)
+            # Step 1: Create context video with dual-language subtitles (same as long-form)
             context_with_subtitles = self._add_subtitles_to_context(
                 context_video_path, expression
             )
             
-            # Get context video duration from context_with_subtitles
-            try:
-                context_probe = ffmpeg.probe(context_with_subtitles)
-                context_duration = float(context_probe['format']['duration'])
-                logger.info(f"Context video duration: {context_duration:.2f}s")
-            except Exception as e:
-                logger.error(f"Error getting context video duration: {e}")
-                context_duration = 10.0  # Fallback duration
+            # Step 2: Extract expression video clip from context and repeat it (same as long-form)
+            # Calculate relative timestamps within context video
+            context_start_seconds = self._time_to_seconds(expression.context_start_time)
+            expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
+            expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
             
-            # Generate audio for short video - check TTS setting like main educational video
-            tts_text = expression.expression_dialogue
-            logger.info(f"Generating audio for short video: '{tts_text}'")
+            relative_start = expression_start_seconds - context_start_seconds
+            relative_end = expression_end_seconds - context_start_seconds
+            expression_duration = relative_end - relative_start
             
-            # For short videos, use context audio + repeating expression audio
-            logger.info("Short video - using context audio + repeating expression audio")
+            logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # 1. Extract context audio (matches visual content)
-            context_audio_path = self.output_dir / f"temp_context_audio_{safe_expression}.wav"
-            self._register_temp_file(context_audio_path)
+            # Extract expression video clip with audio (same as long-form)
+            expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
+            self._register_temp_file(expression_video_clip_path)
             
-            try:
-                # Extract audio from context_with_subtitles (same as long-form)
-                (ffmpeg.input(context_with_subtitles)
-                 .audio
-                 .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Get context audio duration
-                context_audio_probe = ffmpeg.probe(str(context_audio_path))
-                context_audio_duration = float(context_audio_probe['format']['duration'])
-                logger.info(f"Context audio duration: {context_audio_duration:.2f}s")
-                
-            except Exception as e:
-                logger.error(f"Failed to extract context audio: {e}")
-                raise
+            if not expression_video_clip_path.exists():
+                logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
+                (ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+                 .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
+                 .overwrite_output().run(quiet=True))
+            else:
+                logger.info(f"Reusing expression clip from long-form: {expression_video_clip_path}")
             
-            # 2. Get repeating expression audio (timeline with repetitions)
-            # Use unified expression repeat count for all expression-related operations
+            # Repeat expression clip (same as long-form, using shared filename)
             from langflix import settings
             repeat_count = settings.get_expression_repeat_count()
-            logger.info(f"🔄 Using expression repeat count: {repeat_count}")
+            repeated_expression_path = self.output_dir / f"temp_expr_repeated_{safe_expression}.mkv"
+            self._register_temp_file(repeated_expression_path)
             
-            original_video = self._get_original_video_path(context_video_path, subtitle_file_path)
-            tts_audio_dir = self.output_dir.parent / "tts_audio"
-            tts_audio_dir.mkdir(parents=True, exist_ok=True)
+            if not repeated_expression_path.exists():
+                logger.info(f"Repeating expression clip {repeat_count} times")
+                repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
+            else:
+                logger.info(f"Reusing repeated expression from long-form: {repeated_expression_path}")
             
-            # Extract audio from context_with_subtitles using relative timestamps (matching video extraction)
-            # This ensures audio-video synchronization in short videos (same as long-form)
-            expression_timeline_path, expression_timeline_duration = self._extract_context_audio_timeline(
-                expression, context_with_subtitles, tts_audio_dir, expression_index, repeat_count=repeat_count
+            # Step 3: Concatenate context + repeated expression (same as long-form)
+            concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
+            self._register_temp_file(concatenated_video_path)
+            logger.info("Concatenating context + expression repeat (same as long-form)")
+            concat_filter_with_explicit_map(
+                str(context_with_subtitles),
+                str(repeated_expression_path),
+                str(concatenated_video_path)
             )
-            logger.info(f"🎵 Expression timeline duration: {expression_timeline_duration:.2f}s (with {repeat_count} repetitions)")
             
-            # 3. Concatenate context audio + expression timeline
-            combined_audio_path = self.output_dir / f"temp_combined_audio_{safe_expression}.wav"
-            self._register_temp_file(combined_audio_path)
+            # Step 4: Get total duration from concatenated video (same approach as long-form uses left_duration)
+            total_duration = get_duration_seconds(str(concatenated_video_path))
+            logger.info(f"Total concatenated video duration: {total_duration:.2f}s")
             
-            # Create concat file for audio
-            audio_concat_file = self.output_dir / f"temp_audio_concat_{safe_expression}.txt"
-            self._register_temp_file(audio_concat_file)
-            
-            with open(audio_concat_file, 'w') as f:
-                f.write(f"file '{Path(context_audio_path).absolute()}'\n")
-                f.write(f"file '{Path(expression_timeline_path).absolute()}'\n")
-            
-            # Concatenate context + expression audio
-            (ffmpeg.input(str(audio_concat_file), format='concat', safe=0)
-             .output(str(combined_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-             .overwrite_output()
-             .run(quiet=True))
-            
-            # Get combined audio duration
-            combined_probe = ffmpeg.probe(str(combined_audio_path))
-            combined_audio_duration = float(combined_probe['format']['duration'])
-            logger.info(f"Combined audio duration: {combined_audio_duration:.2f}s (context: {context_audio_duration:.2f}s + expression: {expression_timeline_duration:.2f}s)")
-            
-            # For short videos, total duration = context duration + expression timeline duration
-            # Use the expression_timeline_duration directly (already includes repetitions)
-            total_duration = context_duration + expression_timeline_duration
-            tts_audio_path = combined_audio_path
-            tts_duration = combined_audio_duration
-            video_audio_duration = combined_audio_duration
-            logger.info(f"Short video: context visual ({context_duration:.2f}s) + expression loop ({expression_timeline_duration:.2f}s), total audio ({video_audio_duration:.2f}s)")
-            
-            # Create silent slide with total duration (displays throughout entire video)
+            # Step 5: Create silent slide with total duration (same approach as long-form uses left_duration)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
             
-            # Get resolution from configuration
-            resolution = settings.get_short_video_resolution()
-            width, height = map(int, resolution.split('x'))
-            half_height = height // 2
+            # Step 6: Use vstack to create vertical layout (short-form) - same approach as long-form hstack
+            # Top: context → expression repeat, Bottom: educational slide
+            logger.info("Creating short-form vertical layout with vstack")
+            vstack_temp_path = self.output_dir / f"temp_vstack_short_{safe_expression}.mkv"
+            self._register_temp_file(vstack_temp_path)
+            vstack_keep_width(str(concatenated_video_path), str(slide_path), str(vstack_temp_path))
             
-            logger.info(f"Creating vertical short-format video layout ({resolution})")
-            logger.info(f"Top half: {width}x{half_height}, Bottom half: {width}x{half_height}")
-            
-            # Create inputs (using context_with_subtitles, same as long-form)
-            context_input = ffmpeg.input(context_with_subtitles)
-            slide_input = ffmpeg.input(slide_path)
-            
-            # Extract expression video clip and concatenate with context video
-            logger.info(f"Creating expression video clip for timeline duration: {expression_timeline_duration:.2f}s")
-            
-            try:
-                # Calculate relative timestamps within context video
-                context_start_seconds = self._time_to_seconds(expression.context_start_time)
-                expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
-                expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
-                
-                # Convert to relative position within context video (starts at 0)
-                relative_start = expression_start_seconds - context_start_seconds
-                relative_end = expression_end_seconds - context_start_seconds
-                expression_duration = relative_end - relative_start
-                
-                logger.info(f"Context range: {expression.context_start_time} - {expression.context_end_time}")
-                logger.info(f"Expression absolute: {expression.expression_start_time} - {expression.expression_end_time}")
-                logger.info(f"Expression relative in context: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
-                logger.info(f"Using context_with_subtitles (same as long-form)")
-                logger.info(f"Expression text: '{expression.expression}'")
-                
-                # Try to reuse expression clip from long-form if it exists
-                expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
-                
-                if not expression_video_clip_path.exists():
-                    # Extract expression video clip from context_with_subtitles WITH audio (same as long-form)
-                    expression_video_clip_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
-                    self._register_temp_file(expression_video_clip_path)
-                    logger.info(f"Creating expression AV clip from context ({expression_duration:.2f}s)")
-                    
-                    # IMPORTANT: Extract from context_with_subtitles (same as long-form)
-                    (ffmpeg.input(context_with_subtitles, ss=relative_start, t=expression_duration)
-                     .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
-                     .overwrite_output().run(quiet=True))
-                else:
-                    logger.info(f"Reusing expression clip from long-form: {expression_video_clip_path}")
-
-                # Loop expression AV to match timeline using demuxer-concat (preserves audio reliably)
-                # Try to reuse looped expression from long-form if it exists
-                required_expression_duration = expression_timeline_duration
-                looped_expression_path = self.output_dir / f"temp_expr_repeated_{safe_expression}.mkv"
-                
-                # Check if long-form already created this file
-                if not looped_expression_path.exists():
-                    # Create new looped expression
-                    logger.info(f"Building repeated AV using demuxer (target ~{required_expression_duration:.2f}s)")
-                    repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(looped_expression_path))
-                    self._register_temp_file(looped_expression_path)
-                else:
-                    # Reuse existing looped expression from long-form
-                    logger.info(f"Reusing looped expression from long-form: {looped_expression_path}")
-
-                # Concat context AV + expression AV using demuxer concat (copy mode for A-V sync)
-                # Use demuxer concat directly to avoid re-encoding and timestamp issues
-                concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
-                self._register_temp_file(concatenated_video_path)
-                
-                # Create concat file for demuxer concat
-                import tempfile
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                    f.write(f"file '{Path(context_with_subtitles).absolute()}'\n")
-                    f.write(f"file '{Path(looped_expression_path).absolute()}'\n")
-                    concat_file = f.name
-                
-                try:
-                    logger.info("Using demuxer concat for context + expression (copy mode, no re-encode)")
-                    concat_demuxer_if_uniform(concat_file, concatenated_video_path)
-                finally:
-                    import os
-                    if os.path.exists(concat_file):
-                        os.unlink(concat_file)
-
-                # Probe logs for debugging
-                try:
-                    log_media_params(str(looped_expression_path), label="expr_loop_av")
-                    log_media_params(str(concatenated_video_path), label="concat_ctx_expr_av")
-                except Exception:
-                    pass
-
-                # Use concatenated AV video as top track
-                context_extended = ffmpeg.input(str(concatenated_video_path))['v']
-                
-            except Exception as e:
-                logger.error(f"Failed to create expression video: {e}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise Exception(f"Expression video creation failed: {e}") from e
-            
-            # Stack videos vertically keeping original width of the concatenated video (short-form layout)
-            # Use vstack helper for consistent, reliable stacking with proper audio handling
-            # vstack_keep_width already preserves audio from concatenated_video_path
-            stacked_video_temp = self.output_dir / f"temp_vstacked_av_{safe_expression}.mkv"
-            self._register_temp_file(stacked_video_temp)
-            vstack_keep_width(str(concatenated_video_path), str(slide_path), str(stacked_video_temp))
-            
-            # stacked_video_temp already has video + audio from concatenated_video_path
-            # No need to extract/boost audio separately - just copy to final output
-            logger.info(f"Creating final short video from stacked output (already has audio)")
+            # Step 7: Apply final audio gain (+25%) as separate pass (same as long-form)
+            logger.info("Applying final audio gain (+25%) to short-form output")
             logger.info(f"Video duration: {total_duration:.2f}s")
-            logger.info(f"Context: {context_duration:.2f}s + Expression: {expression_timeline_duration:.2f}s")
-            
-            try:
-                import shutil
-                # Copy stacked video directly to output (already has correct audio)
-                shutil.copy2(stacked_video_temp, output_path)
-                
-                logger.info("✅ Short video created successfully with audio from vstack")
-                logger.info(f"✅ Final video duration: {total_duration:.2f}s")
-                
-            except Exception as e:
-                logger.error(f"Error copying stacked video to final output: {e}")
-                raise
+            apply_final_audio_gain(str(vstack_temp_path), str(output_path), gain_factor=1.25)
             
             logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
             return str(output_path), total_duration

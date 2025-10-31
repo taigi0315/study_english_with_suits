@@ -181,7 +181,9 @@ class LangFlixPipeline:
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media", 
                  output_dir: str = "output", language_code: str = "ko",
-                 progress_callback: Optional[Callable[[int, str], None]] = None):
+                 progress_callback: Optional[Callable[[int, str], None]] = None,
+                 series_name: str = None, episode_name: str = None,
+                 video_file: str = None):
         """
         Initialize the LangFlix pipeline
         
@@ -191,22 +193,32 @@ class LangFlixPipeline:
             output_dir: Directory for output files
             language_code: Target language code (e.g., 'ko', 'ja', 'zh')
             progress_callback: Optional callback function(progress: int, message: str) -> None
+            series_name: Optional series name (if not provided, extracted from subtitle path)
+            episode_name: Optional episode name (if not provided, extracted from subtitle path)
+            video_file: Optional direct path to video file (if not provided, searched in video_dir)
         """
         self.subtitle_file = Path(subtitle_file)
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
         self.language_code = language_code
         self.progress_callback = progress_callback
+        self.video_file = Path(video_file) if video_file else None
         
-        # Create organized output structure
-        self.paths = create_output_structure(str(self.subtitle_file), language_code, str(self.output_dir))
+        # Create organized output structure (pass series_name/episode_name if provided)
+        self.paths = create_output_structure(
+            str(self.subtitle_file), 
+            language_code, 
+            str(self.output_dir),
+            series_name=series_name,
+            episode_name=episode_name
+        )
         
         # Extract series and episode names from paths
         self.series_name = self.paths['series_name']
         self.episode_name = self.paths['episode_name']
         
         # Initialize processors
-        self.video_processor = VideoProcessor(str(self.video_dir))
+        self.video_processor = VideoProcessor(str(self.video_dir), video_file=str(self.video_file) if self.video_file else None)
         self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file))
         self.video_editor = VideoEditor(str(self.paths['language']['final_videos']), self.language_code, self.episode_name)
         

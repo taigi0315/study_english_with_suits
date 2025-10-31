@@ -229,6 +229,9 @@ class TestVideoPipelineService(unittest.TestCase):
         mock_expression_2.context_end_time = "00:02:10,000"
         mock_expression_2.expression_start_time = None
         mock_expression_2.expression_end_time = None
+        # Explicitly set optional attributes to None to avoid MagicMock auto-creation
+        delattr(mock_expression_2, 'difficulty') if hasattr(mock_expression_2, 'difficulty') else None
+        delattr(mock_expression_2, 'category') if hasattr(mock_expression_2, 'category') else None
         
         # Test extraction
         expressions = [mock_expression_1, mock_expression_2]

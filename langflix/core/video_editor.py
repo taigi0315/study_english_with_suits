@@ -2284,9 +2284,14 @@ class VideoEditor:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
             
-            # Get context video duration
+            # Step 0: Create context video with dual-language subtitles (same as long-form)
+            context_with_subtitles = self._add_subtitles_to_context(
+                context_video_path, expression
+            )
+            
+            # Get context video duration from context_with_subtitles
             try:
-                context_probe = ffmpeg.probe(context_video_path)
+                context_probe = ffmpeg.probe(context_with_subtitles)
                 context_duration = float(context_probe['format']['duration'])
                 logger.info(f"Context video duration: {context_duration:.2f}s")
             except Exception as e:
@@ -2305,8 +2310,8 @@ class VideoEditor:
             self._register_temp_file(context_audio_path)
             
             try:
-                # Extract audio from context video
-                (ffmpeg.input(context_video_path)
+                # Extract audio from context_with_subtitles (same as long-form)
+                (ffmpeg.input(context_with_subtitles)
                  .audio
                  .output(str(context_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                  .overwrite_output()
@@ -2331,10 +2336,10 @@ class VideoEditor:
             tts_audio_dir = self.output_dir.parent / "tts_audio"
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             
-            # Extract audio from context video using relative timestamps (matching video extraction)
-            # This ensures audio-video synchronization in short videos
+            # Extract audio from context_with_subtitles using relative timestamps (matching video extraction)
+            # This ensures audio-video synchronization in short videos (same as long-form)
             expression_timeline_path, expression_timeline_duration = self._extract_context_audio_timeline(
-                expression, context_video_path, tts_audio_dir, expression_index, repeat_count=repeat_count
+                expression, context_with_subtitles, tts_audio_dir, expression_index, repeat_count=repeat_count
             )
             logger.info(f"🎵 Expression timeline duration: {expression_timeline_duration:.2f}s (with {repeat_count} repetitions)")
             
@@ -2380,8 +2385,8 @@ class VideoEditor:
             logger.info(f"Creating vertical short-format video layout ({resolution})")
             logger.info(f"Top half: {width}x{half_height}, Bottom half: {width}x{half_height}")
             
-            # Create inputs
-            context_input = ffmpeg.input(context_video_path)
+            # Create inputs (using context_with_subtitles, same as long-form)
+            context_input = ffmpeg.input(context_with_subtitles)
             slide_input = ffmpeg.input(slide_path)
             
             # Extract expression video clip and concatenate with context video
@@ -2401,21 +2406,20 @@ class VideoEditor:
                 logger.info(f"Context range: {expression.context_start_time} - {expression.context_end_time}")
                 logger.info(f"Expression absolute: {expression.expression_start_time} - {expression.expression_end_time}")
                 logger.info(f"Expression relative in context: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
-                logger.info(f"Using context_video: {context_video_path}")
+                logger.info(f"Using context_with_subtitles (same as long-form)")
                 logger.info(f"Expression text: '{expression.expression}'")
                 
                 # Try to reuse expression clip from long-form if it exists
                 expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
                 
                 if not expression_video_clip_path.exists():
-                    # Extract expression video clip from context video WITH audio
+                    # Extract expression video clip from context_with_subtitles WITH audio (same as long-form)
                     expression_video_clip_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
                     self._register_temp_file(expression_video_clip_path)
                     logger.info(f"Creating expression AV clip from context ({expression_duration:.2f}s)")
                     
-                    # IMPORTANT: Extract from context_video_path (has audio), not from context_video which might be video-only
-                    context_video_with_audio = context_video_path
-                    (ffmpeg.input(str(context_video_with_audio), ss=relative_start, t=expression_duration)
+                    # IMPORTANT: Extract from context_with_subtitles (same as long-form)
+                    (ffmpeg.input(context_with_subtitles, ss=relative_start, t=expression_duration)
                      .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
                      .overwrite_output().run(quiet=True))
                 else:
@@ -2455,16 +2459,16 @@ class VideoEditor:
                             
                             logger.info(f"Applying {transition_type} transition ({transition_effect}, {transition_duration}s)")
                             self._apply_context_to_expression_transition(
-                                str(context_video_path), str(looped_expression_path), str(concatenated_video_path),
+                                context_with_subtitles, str(looped_expression_path), str(concatenated_video_path),
                                 transition_effect, transition_duration
                             )
                         else:
-                            concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                            concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
                     except Exception as e:
                         logger.warning(f"Transition failed, falling back to simple concat: {e}")
-                        concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                        concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
                 else:
-                    concat_filter_with_explicit_map(str(context_video_path), str(looped_expression_path), str(concatenated_video_path))
+                    concat_filter_with_explicit_map(context_with_subtitles, str(looped_expression_path), str(concatenated_video_path))
 
                 # Probe logs for debugging
                 try:

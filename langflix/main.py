@@ -414,29 +414,34 @@ class LangFlixPipeline:
         if not DB_AVAILABLE or not settings.get_database_enabled():
             return
         
-        db = db_manager.get_session()
         try:
-            for expression in self.expressions:
-                try:
-                    ExpressionCRUD.create_from_analysis(
-                        db=db,
-                        media_id=media_id,
-                        analysis_data=expression
-                    )
-                    logger.debug(f"Saved expression to database: {expression.expression}")
-                except Exception as e:
-                    logger.error(f"Failed to save expression '{expression.expression}': {e}")
-                    continue
-            
-            db.commit()
-            logger.info(f"Saved {len(self.expressions)} expressions to database")
-            
+            db = db_manager.get_session()
+            try:
+                for expression in self.expressions:
+                    try:
+                        ExpressionCRUD.create_from_analysis(
+                            db=db,
+                            media_id=media_id,
+                            analysis_data=expression
+                        )
+                        logger.debug(f"Saved expression to database: {expression.expression}")
+                    except Exception as e:
+                        logger.error(f"Failed to save expression '{expression.expression}': {e}")
+                        continue
+                
+                db.commit()
+                logger.info(f"Saved {len(self.expressions)} expressions to database")
+                
+            except Exception as e:
+                logger.error(f"Database error during expression save: {e}")
+                db.rollback()
+                raise
+            finally:
+                db.close()
         except Exception as e:
-            logger.error(f"Database error: {e}")
-            db.rollback()
-            raise
-        finally:
-            db.close()
+            logger.error(f"Database connection error: {e}")
+            logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
+            raise  # Re-raise to be caught by caller
     
     def _process_expressions(self):
         """Process each expression (video + subtitles)"""

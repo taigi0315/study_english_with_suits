@@ -169,14 +169,14 @@ class GoogleTTSClient(TTSClient):
 
             # Determine output path
             if output_path is None:
-                # Create temporary file with MP3 extension
-                temp_file = tempfile.NamedTemporaryFile(
-                    delete=False, 
-                    suffix=".mp3", 
-                    prefix="langflix_google_tts_"
-                )
-                output_path = Path(temp_file.name)
-                temp_file.close()
+                # Create temporary file with MP3 extension using temp file manager
+                from langflix.utils.temp_file_manager import get_temp_manager
+                temp_manager = get_temp_manager()
+                # Create temp file with delete=False since it may be used after function returns
+                with temp_manager.create_temp_file(suffix=".mp3", prefix="langflix_google_tts_", delete=False) as temp_path:
+                    output_path = temp_path
+                # Register for cleanup
+                temp_manager.register_file(output_path)
             else:
                 output_path = Path(output_path)
                 # Ensure directory exists

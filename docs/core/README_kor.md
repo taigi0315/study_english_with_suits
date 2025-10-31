@@ -24,6 +24,12 @@
 
 **위치:** `langflix/core/video_editor.py`
 
+**임시 파일 관리 (TICKET-002):**
+- 모든 임시 파일 작업에 `TempFileManager` 사용
+- 컨텍스트 관리자를 통해 임시 파일 자동 정리
+- 수동 정리 불필요 - `TempFileManager`가 `atexit` 등록을 통해 처리
+- 배치 생성 후 개별 short 비디오 파일 자동 정리
+
 **주요 메서드:**
 
 #### `create_educational_sequence()`

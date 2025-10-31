@@ -163,7 +163,7 @@ transitions:
   
   # Transition from context video to expression repetition (within same expression)
   context_to_expression:
-    type: "xfade"           # Options: xfade, fade, none
+    type: "none"            # Options: xfade, fade, none (disabled due to A-V sync issues)
     effect: "fade"          # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
     duration: 0.5           # Duration in seconds (increased for smooth transition)
   

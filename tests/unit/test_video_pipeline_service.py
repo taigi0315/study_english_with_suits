@@ -2,8 +2,7 @@
 Unit tests for VideoPipelineService
 """
 import unittest
-from unittest import mock as unittest
-from unittest.mock import Mock, patch, MagicMock, call
+from unittest.mock import Mock, patch, MagicMock, call, ANY
 from pathlib import Path
 import tempfile
 import os
@@ -391,11 +390,11 @@ class TestVideoPipelineService(unittest.TestCase):
                 'series_name': 'TestSeries',
                 'episode_name': 'S01E01',
                 'video_file': video_path,
-                'progress_callback': unittest.mock.ANY
+                'progress_callback': ANY
             }
             
             for param_name, expected_value in required_params.items():
-                if expected_value is unittest.mock.ANY:
+                if expected_value is ANY:
                     self.assertIn(param_name, call_kwargs, 
                                 f"Missing parameter: {param_name}")
                 else:

@@ -6,6 +6,7 @@ from langflix.media.ffmpeg_utils import (
     get_audio_params,
     concat_filter_with_explicit_map,
     hstack_keep_height,
+    apply_final_audio_gain,
 )
 
 
@@ -39,5 +40,14 @@ def test_concat_and_stack_pipeline(tmp_path: Path):
     sap = get_audio_params(str(stack_out))
     # Audio should exist
     assert sap.channels is not None and sap.sample_rate is not None
+
+    # Test final audio gain application
+    gain_output = tmp_path / "gain_output.mkv"
+    apply_final_audio_gain(str(stack_out), str(gain_output), gain_factor=1.25)
+    gain_ap = get_audio_params(str(gain_output))
+    # Audio should still exist after gain application
+    # Note: gain application encodes to aac with normalization, so params may change
+    assert gain_ap.channels is not None and gain_ap.sample_rate is not None
+    assert gain_ap.codec == 'aac'  # Should be encoded to aac
 
 

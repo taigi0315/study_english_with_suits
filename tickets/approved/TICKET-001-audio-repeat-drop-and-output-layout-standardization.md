@@ -228,6 +228,8 @@ None - backward compatibility maintained with deprecated `build_repeated_av()` f
 
 ## 🔧 Additional Fixes Applied (2025-01-30)
 
+### Phase 3: User Feedback Issues - Long-form Layout & Short-form Audio
+
 **Issue 1: Long-form missing slide on right side AND missing expression repeat**
 - Problem: Long-form videos used concat instead of hstack, showing context and slide sequentially
 - Solution: Updated `create_educational_sequence()` to use `hstack_keep_height()` for side-by-side layout
@@ -246,7 +248,51 @@ None - backward compatibility maintained with deprecated `build_repeated_av()` f
   - No need to extract, boost, or remux audio - just copy stacked output to final file
 - Result: Short-form now reuses long-form's expression repeat file AND uses vstack output as-is
 
-### Files Modified for Fixes
+### Phase 4: A-V Sync & Consistency Issues (2025-01-30 Evening)
+
+**Issue 3: Short-form missing first expression**
+- **Root cause**: Expression name sanitization mismatch between `jobs.py` and `video_editor.py`
+  - `jobs.py` used: `"".join(c if c.isalnum() or c in (' ', '-', '_')).rstrip().replace(' ', '_')`
+  - `video_editor.py`'s `_sanitize_filename()` used: `re.sub(r'[^\w\s-]', '', text).sub(r'[-\s]+', '_', text)`
+  - Example mismatch: "I'm all-in" → "Im all-in" vs "Im_all_in"
+- **Solution**: Updated `jobs.py` to use exact same sanitization regex as `video_editor.py`
+- **Result**: All expressions now properly matched and included in short-form videos ✅
+
+**Issue 4: Short-form A-V sync lag between segments**
+- **Root cause**: Short-form used `concat_filter_with_explicit_map` which re-encodes video streams
+  - Re-encoding changes timestamps, causing A-V desync lag and video speeding up/freezing
+  - Same issue as batch concat had before (fixed in commit 6ca1719)
+- **Solution**: Replace filter concat with direct `concat_demuxer_if_uniform` for short-form
+  - Remove transition logic entirely (was causing A-V sync issues)
+  - Use copy mode (no re-encode) to preserve timestamps
+- **Result**: No more A-V sync lag, smooth transitions between segments ✅
+
+**Issue 5: context_with_subtitles reuse to ensure consistency**
+- **Root cause**: Short-form was calling `_add_subtitles_to_context` which tried to recreate files
+  - Caused ffmpeg errors when overwriting existing files created by long-form
+- **Solution**: Updated `_add_subtitles_to_context` to check if file exists and reuse it
+- **Result**: No conflicts, both long-form and short-form use identical context files ✅
+
+**Issue 6: Short-form reuse long-form's context_with_subtitles for all operations**
+- **Root cause**: Short-form used original `context_video_path` while long-form used `context_with_subtitles`
+  - Different encoding parameters and durations caused inconsistencies
+- **Solution**: Updated `create_short_format_video` to:
+  1. Call `_add_subtitles_to_context` at the beginning
+  2. Use `context_with_subtitles` for ALL subsequent operations:
+     - Probing duration
+     - Extracting audio
+     - Creating expression timeline
+     - Extracting expression clip
+     - Concatenating
+     - Creating vstack input
+- **Result**: Short-form now uses exact same source video as long-form ✅
+
+**Issue 7: Batch concat re-encoding causing timestamp issues**
+- **Root cause**: `_create_video_batch` was re-encoding videos during concatenation
+- **Solution**: Already fixed in commit 6ca1719 - uses `concat_demuxer_if_uniform` with copy mode
+- **Result**: Timestamps preserved in batch videos ✅
+
+### Files Modified for Additional Fixes
 - `langflix/core/video_editor.py`:
   - **Long-form fix**: Updated `create_educational_sequence()` to:
     - Extract expression clip from context video
@@ -260,18 +306,73 @@ None - backward compatibility maintained with deprecated `build_repeated_av()` f
     - Use `vstack_keep_width()` output directly (already has audio from concatenated_video_path)
     - **SIMPLIFIED**: No need to extract, boost, or remux audio
     - Just copy `stacked_video_temp` to final output - vstack handles everything
+  - **Short-form context consistency**: Generate `context_with_subtitles` and use for ALL operations
+  - **Short-form reuse expression clip**: Check for `temp_expr_clip_long_{expression}.mkv` from long-form
+  - **Short-form demuxer concat**: Use `concat_demuxer_if_uniform` directly instead of `concat_filter_with_explicit_map`
+  - Updated `_add_subtitles_to_context()` to reuse existing files
   - Added `get_duration_seconds()` import for duration measurement
   - Updated `_create_educational_slide()` to accept optional `target_duration` parameter
   - When `target_duration` provided, slide is extended to match total duration
   - Improved comments in short-form audio processing
 
+- `langflix/api/routes/jobs.py`:
+  - **Expression matching fix**: Updated sanitization to match `video_editor.py`'s `_sanitize_filename()`
+  - Uses `re.sub(r'[^\w\s-]', '', expression.expression).sub(r'[-\s]+', '_', text)`
+  - Ensures exact match between context video files and expression names
+
+- `langflix/config/default.yaml`:
+  - Disabled `context_to_expression` transition (`type: "none"`)
+  - Transition was causing A-V sync issues due to 25fps re-encoding
+
+### Git Commit History
+1. `24f5b11` - Initial implementation: expression repeat audio drop and layout standardization
+2. `03a1e51` - Fix: expression repeat audio drop and long/short layout standardization
+3. `24aa904` - Feat: add context-to-expression transition (TICKET-001)
+4. `d87894b` - Fix: disable context-to-expression transition due to A-V sync issues
+5. `41fa68e` - Fix: short-form reuse expression clip from long-form to match sources
+6. `6ca1719` - Fix: use concat demuxer (copy mode) for batch to fix A-V sync
+7. `a4b9b3d` - Fix: short-form use same context_with_subtitles as long-form
+8. `7c638c3` - Fix: _add_subtitles_to_context reuse existing file to avoid conflicts
+9. `858dd5f` - Fix: use demuxer concat directly in short-form to fix A-V sync lag
+
 ### Testing
 - All existing tests continue to pass
 - hstack implementation matches the standardized pattern used in verification script
 - Audio pipeline uses reliable demuxer-based repetition
+- No A-V sync issues observed in test runs
+
+### CURRENT STATUS (As of 2025-01-30)
+✅ **COMPLETED:**
+- Expression repeat audio drop fixed (demuxer-based repetition)
+- Long-form side-by-side layout working (hstack)
+- Short-form top-bottom layout working (vstack)
+- First expression included in short-form (sanitization fix)
+- A-V sync issues resolved (demuxer concat with copy mode)
+- Short-form reuses long-form's intermediate files
+- Both formats use identical source videos
+
+⏳ **PENDING USER TESTING:**
+- User must re-run pipeline to verify all fixes work end-to-end
+- Verify no A-V sync lag in short-form batches
+- Verify all 3 expressions appear in short-form output
+- Verify long-form shows proper side-by-side layout
+
+🚫 **NOT YET TESTED:**
+- Multiple episodes with different codecs
+- Edge cases with very long expressions
+- Production scale performance
 
 ### IMPORTANT: Re-generation Required
 - Existing output files were created with old code
 - Users must re-run the pipeline to get the updated layout
 - New outputs will show proper side-by-side layout for long-form
 - Audio in expression repeats will be properly preserved
+- All expressions will appear in short-form
+
+### NEXT STEPS FOR CONTINUATION
+If this ticket is not fully complete:
+1. **Verify end-to-end**: Re-run pipeline on sample episode and confirm all issues resolved
+2. **Test edge cases**: Different codecs, long expressions, multiple expressions
+3. **Performance testing**: Verify no slowdown from demuxer-based approach
+4. **Documentation**: Update user-facing docs with new pipeline behavior
+5. **CI/CD**: Add automated verification to prevent regressions

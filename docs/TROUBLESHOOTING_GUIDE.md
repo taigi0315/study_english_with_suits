@@ -22,6 +22,22 @@ curl http://localhost:8000/health  # Check API
 
 ## Common Issues by Category
 
+### Media Pipeline: Audio missing after concat/stack
+
+**Symptoms**
+- Final video has no audio stream or players show 0 audio tracks
+- Audio disappears after side-by-side/stack or concat steps
+
+**Checklist**
+- Use explicit stream mapping on outputs (pass video and audio nodes separately)
+- Normalize audio to stereo/48k before concat/stack
+- If inputs differ in params, use filter-concat (v=1,a=1) instead of demuxer concat
+- Avoid unnecessary scaling; keep original resolution/codec unless filters are needed
+
+**References**
+- `langflix/media/ffmpeg_utils.py` → `concat_filter_with_explicit_map`, `vstack_keep_width`, `hstack_keep_height`
+- `langflix/core/video_editor.py` → context+slide path uses explicit mapping to preserve audio
+
 ### Installation & Setup Issues
 
 #### Issue: "ModuleNotFoundError: No module named 'langflix'"
@@ -418,40 +434,61 @@ ffmpeg -v error -i video.mkv -f null -
 
 ---
 
-#### Issue: Video/Audio Sync Problems
+#### Issue: Video/Audio Sync Problems (A-V Sync)
 
 **Symptoms**:
 - Audio doesn't match video
 - Subtitles appear at wrong time
 - Expression timing is off
+- Short-form videos: 0.5s delay after expression video, video speeds up to catch audio
+- Context video starts late in short-form videos
 
 **Solutions**:
 
-1. Check frame rate:
-```bash
-ffprobe -v error -select_streams v:0 \
-  -show_entries stream=r_frame_rate \
-  input.mkv
-```
+1. **General A-V Sync Fixes**:
+   - Check frame rate:
+   ```bash
+   ffprobe -v error -select_streams v:0 \
+     -show_entries stream=r_frame_rate \
+     input.mkv
+   ```
+   
+   - Match in config:
+   ```yaml
+   video:
+     frame_rate: 23.976  # Match source
+   ```
+   
+   - Handle Variable Frame Rate (VFR):
+   ```bash
+   # Convert VFR to CFR
+   ffmpeg -i input_vfr.mkv -vsync cfr -r 23.976 output_cfr.mkv
+   ```
+   
+   - Check subtitle timing:
+   ```bash
+   # Open subtitle in text editor
+   nano subtitle.srt
+   # Verify timestamps match video
+   ```
 
-2. Match in config:
-```yaml
-video:
-  frame_rate: 23.976  # Match source
-```
+2. **Short-form Specific A-V Sync Issues (Fixed in TICKET-001, 2025-01-30)**:
+   - **Problem**: Short-form videos had 0.5s delay after expression video, with video speeding up to catch audio
+   - **Root cause**: Short-form was using complex audio extraction/processing logic causing timestamp mismatches
+   - **Solution**: Short-form logic was simplified to match long-form exactly:
+     - Uses demuxer concat (copy mode) to preserve timestamps
+     - No separate audio processing - audio stays with video throughout pipeline
+     - Duration calculated from concatenated video, not from separate audio files
+   - **Verification**: This issue has been fixed in commit `3df2207`. If you experience it:
+     - Ensure you're using the latest code
+     - Re-run the pipeline (old outputs were created with previous code)
+     - Both long-form and short-form now use identical logic (only difference: vstack vs hstack)
 
-3. Handle Variable Frame Rate (VFR):
-```bash
-# Convert VFR to CFR
-ffmpeg -i input_vfr.mkv -vsync cfr -r 23.976 output_cfr.mkv
-```
-
-4. Check subtitle timing:
-```bash
-# Open subtitle in text editor
-nano subtitle.srt
-# Verify timestamps match video
-```
+3. **If A-V Sync Issues Persist**:
+   - Verify you're using the latest version of `langflix/core/video_editor.py`
+   - Check that `concat_filter_with_explicit_map()` includes frame rate normalization (should normalize to 25fps)
+   - Ensure demuxer concat is used where possible (preserves timestamps better than filter concat)
+   - Run verification script: `python tools/verify_media_pipeline.py`
 
 ---
 

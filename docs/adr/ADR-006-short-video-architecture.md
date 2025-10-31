@@ -125,11 +125,23 @@ python -m langflix.main --subtitle "file.srt" --no-shorts
 - **Solution**: Use same video matching logic as educational videos
 - **Result**: Accurate expression audio from correct source video
 
+### Phase 4: Logic Simplification (January 2025 - TICKET-001)
+- **Issue**: Short-form had overly complex logic with unnecessary audio extraction/processing (~180 lines) causing 0.5s A-V sync delay
+- **Root cause**: Short-form was extracting audio separately, processing it, and calculating durations from audio instead of video
+- **Solution**: Completely simplified short-form to match long-form pattern exactly
+  - Removed unnecessary audio extraction/processing logic
+  - Changed duration calculation from audio-based to video-based
+  - Simplified flow: context_with_subtitles → expression clip → repeat → concat → vstack → final gain
+  - Short-form now follows exact same pattern as long-form (only difference: vstack vs hstack)
+- **Result**: Fixed 0.5s A-V sync delay issue, code is now much simpler and maintainable
+- **Commit**: `3df2207` - refactor: simplify short-form video logic to match long-form pattern
+
 ### Technical Improvements
 - **Multiple Expressions**: Support for batching multiple expressions per video
-- **Volume Enhancement**: 40% volume boost for optimal audio quality
+- **Volume Enhancement**: 25% volume boost applied as separate final pass
 - **Quality Preservation**: Maintained high-quality encoding (1500+ kbps)
-- **Error Handling**: Graceful fallback to freeze frame if video processing fails
+- **Error Handling**: Graceful fallback mechanisms built into pipeline
+- **Code Simplicity**: Short-form and long-form use identical logic for easier maintenance
 
 ## References
 

@@ -325,8 +325,10 @@ async def process_video_task(
                     
                     for i, expression in enumerate(expressions):
                         # Find matching context video by expression name
-                        # Sanitize expression name to match filename format
-                        safe_expression_name = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip().replace(' ', '_')
+                        # Use the same sanitization method as video_editor to ensure consistency
+                        import re
+                        safe_expression_name = re.sub(r'[^\w\s-]', '', expression.expression)
+                        safe_expression_name = re.sub(r'[-\s]+', '_', safe_expression_name)
                         logger.info(f"Looking for context video: context_{safe_expression_name}.mkv")
                         
                         # Try exact match first

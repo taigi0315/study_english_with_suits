@@ -1,0 +1,307 @@
+Here is a segment of dialogue from the TV show "{show_name}":
+
+---
+{dialogues}
+---
+
+**YOUR MISSION:**
+Find 1-3 expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
+
+**LANGUAGE LEVEL:** {level_description}
+
+---
+
+**THE NORTH STAR PRINCIPLE:**
+Ask yourself: "Would I be excited to teach THIS expression to a friend learning English?"
+
+If the answer is YES because:
+- ✓ It's used frequently in real English conversations
+- ✓ It sounds natural and native-like
+- ✓ It's memorable because of the scene's energy (funny/dramatic/tense)
+- ✓ Learners would actually say this in their daily life
+
+Then it's worth extracting.
+
+If the answer is NO because:
+- ✗ It's too obvious or simple
+- ✗ It's too specific to this one situation
+- ✗ The scene is boring or flat
+- ✗ It's awkward phrasing or too formal/legal jargon
+- ✗ You can't imagine when learners would use this
+
+Then skip it.
+
+---
+
+**WHAT MAKES AN EXPRESSION "BEST":**
+
+**1. COMMON & REUSABLE** (Most Important!)
+- Used frequently by native speakers across different situations
+- Not tied to just legal/office settings - can be used in everyday life
+- Something you'd hear in conversations, movies, casual settings
+- Test: "Would native speakers use this expression at least once a week?"
+- **COMPLEXITY REQUIREMENT:** The expression should be substantial enough to be worth learning:
+  * Multi-word phrases (3+ words preferred): "get on my nerves", "blow off steam", "cut to the chase"
+  * Phrasal verbs with interesting usage: "put up with", "come up with", "figure out"
+  * NOT simple curses or basic 1-2 word phrases: avoid "bullshit", "screw you", "damn it"
+  * The expression should have a non-obvious meaning or usage pattern
+
+**2. ENGAGING SCENE**
+The expression appears in a scene that is:
+- Humorous, dramatic, tense, emotional, or witty
+- NOT boring procedural talk or flat information delivery
+- Has energy and personality
+- Makes the expression memorable
+
+**3. CLEARLY USEFUL**
+- Idiomatic expressions, phrasal verbs, or colloquial phrases
+- Not just regular vocabulary or obvious statements
+- Appropriate for your target level: {level_description}
+
+---
+
+**STRICT FILTERS - NEVER EXTRACT:**
+- ✗ Plain statements with no special expression ("I agree", "That's good")
+- ✗ Scene-specific phrases that only work in this exact context
+- ✗ Overly formal legal jargon (unless it's commonly used in general conversation)
+- ✗ Random sentence fragments that aren't actual expressions
+- ✗ Boring exchanges with no emotional energy
+- ✗ Expressions that are self-explanatory and obvious
+
+---
+
+**UNDERSTANDING THE STORY FIRST:**
+
+Before extracting expressions, take time to understand:
+1. **What's happening in this scene?** - The situation, conflict, or interaction
+2. **Who are the characters?** - Their relationships and motivations
+3. **What's the emotional tone?** - Is it tense? Funny? Dramatic?
+4. **Why does this moment matter?** - What makes it interesting or memorable?
+
+This understanding will help you:
+- Select the most engaging expressions
+- Provide context that tells a mini-story
+- Create translations that capture the natural flow and meaning (의역), not just literal words (직역)
+
+---
+
+**CONTEXT DESIGN - TELL A MINI-STORY:**
+
+**GOAL:** Learners should be able to follow the story AND learn the expression naturally.
+
+**CRITICAL PRINCIPLES:**
+
+1. **LONGER, STORY-RICH CONTEXT (25-45 seconds typical)**
+   - Give enough dialogue to understand WHO these people are and WHAT'S happening
+   - Include the setup that makes the expression make sense
+   - Include reactions that show the impact or meaning
+   - Let viewers follow the narrative flow naturally
+
+2. **EXPRESSION PLACEMENT:**
+   - The expression should appear naturally in the middle of the story
+   - NOT at the very beginning (needs setup)
+   - NOT at the very end (needs reaction/closure)
+
+3. **COMPLETE STORY ARC:**
+   - **Beginning:** Establish situation/conflict (3-8 seconds)
+   - **Middle:** Expression appears in context (2-5 seconds)
+   - **End:** Reaction/response that completes the moment (3-8 seconds)
+
+4. **START AND END POINTS:**
+   - **Start Time:** Begin when the situation/topic begins (NEVER mid-sentence)
+   - **End Time:** End when the moment feels complete and resolved (NEVER cutting someone off)
+   - Include full sentences at boundaries - no partial phrases
+
+**LENGTH GUIDELINES:**
+- **Minimum:** 25 seconds (rarely shorter - only for very simple, self-contained exchanges)
+- **Sweet Spot:** 30-40 seconds (most expressions work best here)
+- **Maximum:** 45 seconds (for complex situations requiring more setup)
+
+**Quick Test:**
+- Can someone who's never seen the show understand what's happening?
+- Does it feel like a complete mini-scene, not a random fragment?
+- Would learners enjoy watching this clip for the story itself?
+- Is the expression's usage crystal clear from the context?
+
+---
+
+**EXTRACTING THE EXPRESSION - GIVE MORE CONTEXT:**
+
+**NEW APPROACH: Expand the phrase to include meaningful context**
+
+Instead of extracting just the bare minimum phrase, include enough surrounding words to make the expression's usage pattern clear and natural.
+
+**EXAMPLES:**
+
+❌ TOO SHORT (old way):
+- "figure out"
+- "deal with"
+- "come up with"
+
+✅ BETTER (new way - includes usage context):
+- "figure out what to do"
+- "deal with this situation"
+- "come up with a solution"
+- "I can't deal with this right now"
+- "We need to figure out how to handle this"
+
+**GUIDELINES:**
+- Include the verb AND its natural object/complement when relevant
+- Include necessary prepositions or particles that show usage
+- Include subject pronouns if they're part of the natural usage pattern
+- Make it a chunk that learners can memorize and reuse
+- Still focus on the KEY phrase, but give it breathing room
+
+**BALANCE:**
+- Don't make it so long it becomes a full sentence
+- Don't make it so short it's unclear how to use it
+- Aim for 4-8 words typically
+- It should feel like a natural "chunk" of language
+
+---
+
+**TRANSLATION STRATEGY - 의역 (Natural Translation):**
+
+**CRITICAL: Translations should feel natural in {target_language}, not word-for-word.**
+
+**For DIALOGUE translations:**
+- Translate how a real person would say it in {target_language}
+- Capture the emotion and intention, not just literal words
+- Consider the relationship between speakers and the situation
+- Make it flow naturally as if it were originally in {target_language}
+
+**For EXPRESSION translations:**
+- Focus on the functional meaning in this specific context
+- Use {target_language} expressions that convey the same feeling
+- Adapt to the story and emotional tone
+- If there's a perfect {target_language} equivalent idiom, use it
+- If not, explain the meaning naturally in {target_language}
+
+**EXAMPLE:**
+- Literal (직역): "그것을 공원 밖으로 치다" ❌
+- Natural (의역): "완벽하게 해내다" ✓
+
+---
+
+**EXPRESSION_DIALOGUE - COMPLETE SENTENCES ONLY:**
+
+**CRITICAL RULE: Never cut a sentence in the middle**
+
+- **expression_dialogue** must be a COMPLETE, FULL sentence from the subtitles
+- Start from the beginning of the sentence (capital letter or after period/question mark/exclamation)
+- End at the sentence's natural end (period, question mark, exclamation point)
+- Include all words from start to finish - no cutting
+
+**EXAMPLES:**
+
+❌ WRONG (cut in middle):
+- "really need to figure this out"
+- "can't believe you would"
+
+✅ CORRECT (full sentence):
+- "We really need to figure this out."
+- "I can't believe you would do this to me."
+- "Are you seriously going to make me deal with this alone?"
+
+**WHY THIS MATTERS:**
+- Learners need to see proper sentence structure
+- Partial sentences confuse grammar understanding
+- Complete sentences show natural English rhythm and flow
+
+---
+
+**PROCESS:**
+
+**STEP 0:** Read and understand the entire scene
+   - What's the story here?
+   - Who are these people and what do they want?
+   - What's the emotion or tension?
+
+**STEP 1:** Scan the dialogue for expressions that pass the North Star test.
+
+**STEP 2:** Rank them by:
+   1. How common/reusable the expression is
+   2. How engaging the scene is
+   3. How appropriate for the target level
+
+**STEP 3:** For each top expression, design story-rich context:
+   - Plan 25-45 seconds that tells a complete mini-story
+   - Ensure the expression appears naturally in the middle
+   - Verify learners can follow what's happening
+
+**STEP 4:** Select the TOP 1-3 BEST expressions only. Quality over quantity.
+
+---
+
+**OUTPUT FORMAT (JSON):**
+
+[
+  {{
+    "dialogues": [
+      // EXACT dialogue text from subtitles (NO speaker names like "Mike:" or "Harvey:")
+      // ALL lines between context_start_time and context_end_time
+      // Must be long enough to tell the story (25-45 seconds typically)
+    ],
+    "translation": [
+      // MUST have SAME NUMBER of items as dialogues
+      // Natural, contextual translation in {target_language} (의역 not 직역)
+      // Should flow naturally and capture the emotion/intention
+    ],
+    "expression_dialogue": "COMPLETE FULL sentence from subtitles where expression appears - NEVER cut in middle",
+    "expression_dialogue_translation": "natural translation of the complete sentence in {target_language} (의역)",
+    "expression": "expanded phrase with context (4-8 words typical) - not just bare minimum",
+    "expression_translation": "natural translation of the expression in {target_language} (의역)",
+    "context_start_time": "00:00:00,000",
+    "context_end_time": "00:00:00,000",
+    "similar_expressions": ["alternative 1", "alternative 2"],
+    "scene_type": "humor|drama|tension|emotional|witty|confrontation"
+  }}
+]
+
+---
+
+**EXPRESSION vs EXPRESSION_DIALOGUE:**
+
+- **expression_dialogue**: The COMPLETE, FULL sentence from the subtitles where the expression is used (never cut in middle)
+  Example: "I'll knock it out of the park for you."
+  
+- **expression**: The KEY PHRASE with enough context to show usage (4-8 words typical)
+  Example: "knock it out of the park" (old way - too short)
+  Example: "I'll knock it out of the park" (new way - better, shows usage with subject)
+
+- **expression_dialogue_translation**: Natural translation of the full sentence (의역)
+  Example: "제가 완벽하게 처리해드릴게요."
+  
+- **expression_translation**: Natural translation of the key phrase (의역)
+  Example: "완벽하게 해내다"
+
+---
+
+**FINAL CHECKLIST:**
+- ✓ You UNDERSTAND the story and situation before extracting
+- ✓ Each expression is COMMON and REUSABLE in real life
+- ✓ Each expression is SUBSTANTIAL (3+ words or has non-obvious idiomatic meaning)
+- ✓ Expression includes enough context to show usage (4-8 words typical, not bare minimum)
+- ✓ Each scene is ENGAGING (not boring)
+- ✓ The expression fits the target level: {level_description}
+- ✓ Context is 25-45 seconds and tells a complete mini-story
+- ✓ Learners can follow what's happening without knowing the show
+- ✓ Context has beginning (setup), middle (expression), end (reaction)
+- ✓ 1-3 expressions total (minimum 1, maximum 3)
+- ✓ expression_dialogue is a COMPLETE, FULL sentence (NEVER cut in middle)
+- ✓ expression is expanded with context, not just bare phrase
+- ✓ Dialogue and translation arrays have EXACTLY the same number of items
+- ✓ All translations are natural (의역), not literal (직역)
+- ✓ Translations capture the story context and emotion
+- ✓ NO simple curses, basic 1-2 word phrases, or obvious expressions
+- ✓ Context start/end times create a satisfying, complete clip
+
+Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.
+
+**CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
+
+If you find expressions, respond with this exact format:
+{{"expressions":[{{"expression":"key phrase here","translation":"translation here","context":"context here","expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"start_time":"00:00:00.000","end_time":"00:00:00.000"}}]}}
+
+If you find NO expressions, respond with:
+{{"expressions":[]}}

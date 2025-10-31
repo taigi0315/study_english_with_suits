@@ -508,9 +508,14 @@ class LangFlixPipeline:
                 safe_filename = self._sanitize_filename(expression.expression)
                 
                 # Don't save raw clips - use temp directory
-                import tempfile
-                temp_dir = Path(tempfile.gettempdir())
-                video_output = temp_dir / f"temp_expression_{i+1:02d}_{safe_filename[:30]}.mkv"
+                from langflix.utils.temp_file_manager import get_temp_manager
+                temp_manager = get_temp_manager()
+                # Create temp file using manager (will be cleaned up later)
+                # Use delete=False so file persists for later use in _create_educational_videos
+                with temp_manager.create_temp_file(suffix='.mkv', prefix=f'temp_expression_{i+1:02d}_{safe_filename[:30]}_', delete=False) as temp_file_path:
+                    video_output = temp_file_path
+                    # Register file for cleanup after processing
+                    temp_manager.register_file(video_output)
                 subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_filename[:30]}.srt"
                 
                 # Ensure the subtitle directory exists
@@ -550,8 +555,10 @@ class LangFlixPipeline:
         logger.info(f"Creating educational videos for {len(self.expressions)} expressions...")
         
         # First, find all actual video files that were created from temp directory
-        import tempfile
-        temp_dir = Path(tempfile.gettempdir())
+        from langflix.utils.temp_file_manager import get_temp_manager
+        temp_manager = get_temp_manager()
+        # Get temp directory from manager
+        temp_dir = temp_manager.base_dir
         video_files = list(temp_dir.glob("temp_expression_*.mkv"))
         video_files.sort()
         
@@ -601,12 +608,17 @@ class LangFlixPipeline:
             # Fallback: Try to create final video from temp files if available
             self._create_final_video_from_temp_files()
         
-        # Clean up temp video clips after processing
+        # Clean up temp video clips after processing using temp manager
         logger.info("Cleaning up temporary video clips...")
+        from langflix.utils.temp_file_manager import get_temp_manager
+        temp_manager = get_temp_manager()
         for video_file in video_files:
             try:
                 if video_file.exists():
-                    video_file.unlink()
+                    # Remove from manager's tracking if registered
+                    if Path(video_file) in temp_manager.temp_files:
+                        temp_manager.temp_files.remove(Path(video_file))
+                    Path(video_file).unlink()
                     logger.debug(f"Deleted temp file: {video_file}")
             except Exception as e:
                 logger.warning(f"Could not delete temp file {video_file}: {e}")

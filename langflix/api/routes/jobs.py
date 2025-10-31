@@ -8,8 +8,6 @@ from typing import Dict, Any, List
 import uuid
 import logging
 import asyncio
-import tempfile
-import os
 from pathlib import Path
 import sys
 
@@ -24,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Redis-based job storage for Phase 7 architecture
 from langflix.core.redis_client import get_redis_job_manager
+from langflix.utils.temp_file_manager import get_temp_manager
 
 async def process_video_task(
     job_id: str,
@@ -44,8 +43,8 @@ async def process_video_task(
     
     logger.info(f"Starting video processing for job {job_id}")
     
-    temp_video_path = None
-    temp_subtitle_path = None
+    # Get temp file manager for automatic cleanup
+    temp_manager = get_temp_manager()
     
     try:
         # Get Redis job manager
@@ -58,77 +57,68 @@ async def process_video_task(
             "current_step": "Initializing video processing..."
         })
         
-        # Save uploaded file contents to local filesystem
-        temp_video_path = f"/tmp/{job_id}_video.mkv"
-        temp_subtitle_path = f"/tmp/{job_id}_subtitle.srt"
-        
-        with open(temp_video_path, 'wb') as f:
-            f.write(video_content)
-        
-        with open(temp_subtitle_path, 'wb') as f:
-            f.write(subtitle_content)
-        
-        logger.info(f"Processing video: {video_filename}")
-        logger.info(f"Processing subtitle: {subtitle_filename}")
-        
-        # Progress callback wrapper for Redis updates
-        def update_progress(progress: int, message: str):
-            """Update job progress in Redis"""
-            redis_manager.update_job(job_id, {
-                "progress": progress,
-                "current_step": message
-            })
-        
-        # Use unified pipeline service
-        from langflix.services.video_pipeline_service import VideoPipelineService
-        
-        service = VideoPipelineService(
-            language_code=language_code,
-            output_dir=output_dir
-        )
-        
-        # Process video using unified service
-        result = service.process_video(
-            video_path=temp_video_path,
-            subtitle_path=temp_subtitle_path,
-            show_name=show_name,
-            episode_name=episode_name,
-            max_expressions=max_expressions,
-            language_level=language_level,
-            test_mode=test_mode,
-            no_shorts=no_shorts,
-            progress_callback=update_progress
-        )
-        
-        # Update job with results
-        redis_manager.update_job(job_id, {
-            "status": "COMPLETED",
-            "progress": 100,
-            "current_step": "Completed successfully!",
-            "expressions": result.get("expressions", []),
-            "educational_videos": result.get("educational_videos", []),
-            "short_videos": result.get("short_videos", []),
-            "final_video": result.get("final_video"),
-            "completed_at": datetime.now(timezone.utc).isoformat()
-        })
-        
-        # Invalidate video cache since new videos were created
-        logger.info("Invalidating video cache after job completion...")
-        redis_manager.invalidate_video_cache()
-        
-        logger.info(f"✅ Completed processing for job {job_id}")
+        # Save uploaded file contents using temp file manager
+        # Files will be automatically cleaned up when context exits
+        with temp_manager.create_temp_file(suffix='.mkv', prefix=f'{job_id}_video_') as temp_video_path:
+            with temp_manager.create_temp_file(suffix='.srt', prefix=f'{job_id}_subtitle_') as temp_subtitle_path:
+                # Write file contents
+                temp_video_path.write_bytes(video_content)
+                temp_subtitle_path.write_bytes(subtitle_content)
+                
+                logger.info(f"Processing video: {video_filename}")
+                logger.info(f"Processing subtitle: {subtitle_filename}")
+                
+                # Progress callback wrapper for Redis updates
+                def update_progress(progress: int, message: str):
+                    """Update job progress in Redis"""
+                    redis_manager.update_job(job_id, {
+                        "progress": progress,
+                        "current_step": message
+                    })
+                
+                # Use unified pipeline service
+                from langflix.services.video_pipeline_service import VideoPipelineService
+                
+                service = VideoPipelineService(
+                    language_code=language_code,
+                    output_dir=output_dir
+                )
+                
+                # Process video using unified service
+                # Note: Convert Path to string for compatibility
+                result = service.process_video(
+                    video_path=str(temp_video_path),
+                    subtitle_path=str(temp_subtitle_path),
+                    show_name=show_name,
+                    episode_name=episode_name,
+                    max_expressions=max_expressions,
+                    language_level=language_level,
+                    test_mode=test_mode,
+                    no_shorts=no_shorts,
+                    progress_callback=update_progress
+                )
+                
+                # Update job with results
+                redis_manager.update_job(job_id, {
+                    "status": "COMPLETED",
+                    "progress": 100,
+                    "current_step": "Completed successfully!",
+                    "expressions": result.get("expressions", []),
+                    "educational_videos": result.get("educational_videos", []),
+                    "short_videos": result.get("short_videos", []),
+                    "final_video": result.get("final_video"),
+                    "completed_at": datetime.now(timezone.utc).isoformat()
+                })
+                
+                # Invalidate video cache since new videos were created
+                logger.info("Invalidating video cache after job completion...")
+                redis_manager.invalidate_video_cache()
+                
+                logger.info(f"✅ Completed processing for job {job_id}")
+                # Temp files automatically cleaned up when context exits
         
     except Exception as e:
         logger.error(f"Error processing job {job_id}: {e}", exc_info=True)
-        
-        # Clean up temporary files
-        try:
-            if temp_video_path and os.path.exists(temp_video_path):
-                os.unlink(temp_video_path)
-            if temp_subtitle_path and os.path.exists(temp_subtitle_path):
-                os.unlink(temp_subtitle_path)
-        except Exception as cleanup_error:
-            logger.warning(f"Error cleaning up temp files: {cleanup_error}")
         
         # Update job with error
         redis_manager = get_redis_job_manager()
@@ -137,6 +127,7 @@ async def process_video_task(
             "error": str(e),
             "failed_at": datetime.now(timezone.utc).isoformat()
         })
+        # Temp files automatically cleaned up by context manager even on exception
 
 @router.post("/jobs")
 async def create_job(

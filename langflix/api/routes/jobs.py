@@ -37,7 +37,8 @@ async def process_video_task(
     max_expressions: int,
     language_level: str,
     test_mode: bool,
-    no_shorts: bool
+    no_shorts: bool,
+    output_dir: str = "output"
 ):
     """Process video in background task using unified VideoPipelineService."""
     
@@ -83,7 +84,7 @@ async def process_video_task(
         
         service = VideoPipelineService(
             language_code=language_code,
-            output_dir="output"
+            output_dir=output_dir
         )
         
         # Process video using unified service
@@ -148,6 +149,7 @@ async def create_job(
     language_level: str = Form("intermediate"),
     test_mode: bool = Form(False),
     no_shorts: bool = Form(False),
+    output_dir: str = Form("output"),
     background_tasks: BackgroundTasks = BackgroundTasks()
 ) -> Dict[str, Any]:
     """Create a new video processing job."""
@@ -209,7 +211,8 @@ async def create_job(
             max_expressions=max_expressions,
             language_level=language_level,
             test_mode=test_mode,
-            no_shorts=no_shorts
+            no_shorts=no_shorts,
+            output_dir=output_dir
         )
         
         return {

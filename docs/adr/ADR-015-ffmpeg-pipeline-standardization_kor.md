@@ -26,17 +26,55 @@ Accepted
 - **견고한 fallback**: Filter concat 실패 시 demuxer concat으로 자동 전환.
 - **검증**: `tools/verify_media_pipeline.py`에 ffprobe 기반 체크를 추가하여 오디오 존재 확인.
 
-**3단계 (Short-form 로직 단순화 - TICKET-001, 2025-01-30):**
+**3단계 (사용자 피드백 - Long-form 레이아웃 & Short-form 오디오, 2025-01-30):**
+- **이슈 1: Long-form에서 오른쪽 슬라이드 누락 및 expression 반복 누락**
+  - 문제: Long-form 비디오가 hstack 대신 concat을 사용하여 context와 slide를 순차적으로 표시함
+  - 해결: `create_educational_sequence()`를 업데이트하여 side-by-side 레이아웃에 `hstack_keep_height()` 사용
+  - 핵심 수정: Expression 반복 추가 - 왼쪽에 context + expression 반복, 오른쪽에 slide
+  - Duration 매칭 추가 - slide를 context+expression duration과 일치하도록 확장하여 적절한 hstack 생성
+  - 결과: Long-form이 이제 왼쪽에 context → expression 반복, 오른쪽에 slide를 표시 (오디오 포함 ✅)
+
+- **이슈 2: Expression 반복에서 Short-form 오디오**
+  - 근본 원인 #1: Short-form이 long-form의 출력을 재사용하지 않고 `temp_expr_repeated_xxx`를 재생성함
+  - 근본 원인 #2: Short-form이 연결된 비디오 오디오 대신 별도의 `tts_audio_path`를 사용함
+  - 근본 원인 #3: Short-form이 불필요하게 오디오를 추출/부스팅함
+  - 해결: `vstack_keep_width()` 출력을 직접 사용 - 이미 concatenated_video_path에서 오디오를 보존함
+  - 오디오를 추출, 부스팅, 재믹스할 필요 없음 - 스택된 출력을 최종 파일로 복사하기만 하면 됨
+  - 결과: Short-form이 이제 long-form의 expression 반복 파일을 재사용하고 vstack 출력을 그대로 사용함
+
+**4단계 (A-V 동기화 및 일관성 문제, 2025-01-30 저녁):**
+- **이슈 3: Short-form에서 첫 번째 expression 누락**
+  - 근본 원인: `jobs.py`와 `video_editor.py` 간 expression 이름 정리(sanitization) 불일치
+  - 해결: `jobs.py`를 업데이트하여 `video_editor.py`와 정확히 동일한 정리 정규식 사용
+  - 결과: 모든 expression이 short-form 비디오에 적절히 일치되고 포함됨 ✅
+
+- **이슈 4: 세그먼트 간 Short-form A-V 동기화 지연**
+  - 근본 원인: Short-form이 비디오 스트림을 재인코딩하는 `concat_filter_with_explicit_map` 사용
+  - 재인코딩이 타임스탬프를 변경하여 A-V 동기화 지연 및 비디오 가속/정지 발생
+  - 해결: Short-form에 대해 filter concat을 직접 `concat_demuxer_if_uniform`으로 교체
+  - 전환 로직 완전 제거 (A-V 동기화 문제 유발)
+  - 복사 모드 사용 (재인코딩 없음)으로 타임스탬프 보존
+  - 결과: 더 이상 A-V 동기화 지연 없음, 세그먼트 간 부드러운 전환 ✅
+
+- **이슈 5 & 6: 일관성 보장을 위한 context_with_subtitles 재사용**
+  - 근본 원인: Short-form이 파일을 재생성하려는 `_add_subtitles_to_context`를 호출하여 충돌 발생
+  - 또한 short-form이 원본 `context_video_path`를 사용한 반면 long-form은 `context_with_subtitles` 사용 (다른 인코딩 파라미터)
+  - 해결: `_add_subtitles_to_context`를 업데이트하여 기존 파일 재사용
+  - `create_short_format_video`를 업데이트하여 모든 후속 작업에 `context_with_subtitles` 사용
+  - 결과: 충돌 없음, long-form과 short-form이 동일한 소스 비디오 사용 ✅
+
+**5단계 (Short-form 로직 단순화, 2025-01-30):**
 - **문제**: Short-form이 불필요한 오디오 추출/처리 로직으로 인해 과도하게 복잡했고 (~180줄), A-V sync 문제를 발생시켰습니다.
 - **근본 원인**: Short-form이 오디오를 별도로 추출하고 처리하며, 비디오 대신 오디오에서 duration을 계산했습니다.
 - **해결책**: Short-form을 long-form 패턴과 완전히 동일하게 단순화:
-  - 불필요한 오디오 추출/처리 로직 제거
+  - 불필요한 오디오 추출/처리 로직 제거 (~180줄 제거됨)
   - 중복된 expression 처리 블록 제거
   - Duration 계산을 오디오 기반에서 비디오 기반으로 변경 (long-form과 동일)
   - 단순화된 흐름: context_with_subtitles → expression clip → repeat → concat → vstack → final gain
   - Short-form이 이제 long-form과 정확히 동일한 패턴을 따름 (유일한 차이: vstack vs hstack)
 - **결과**: 0.5초 A-V sync 지연 문제 해결, 코드가 훨씬 간단하고 유지보수 가능해짐.
 - **핵심 인사이트**: Short-form과 long-form은 동일한 로직을 사용해야 함 - 유일한 차이는 레이아웃 (수직 vs 수평).
+- **커밋**: `3df2207` - refactor: simplify short-form video logic to match long-form pattern
 
 ## 결과
 **긍정적:**

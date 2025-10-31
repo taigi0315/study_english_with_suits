@@ -13,7 +13,7 @@ from .models import ExpressionAnalysis
 from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
-from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds
+from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform
 from langflix.subtitles import overlay as subs_overlay
 
 logger = logging.getLogger(__name__)
@@ -2626,20 +2626,8 @@ class VideoEditor:
                 for video_path in video_paths:
                     f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate videos with explicit stream mapping and audio parameters
-            (
-                ffmpeg
-                .input(str(concat_file), format='concat', safe=0)
-                .output(str(batch_path),
-                       vcodec='libx264',
-                       acodec='aac',
-                       preset='fast',
-                       crf=23,
-                       ac=2,  # Force stereo audio
-                       ar=48000)  # Set sample rate to match video audio
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
-            )
+            # Concatenate videos with concat demuxer (copy mode to preserve timestamps)
+            concat_demuxer_if_uniform(concat_file, batch_path)
             
             logger.info(f"✅ Batch {batch_number} created: {batch_path}")
             return str(batch_path)

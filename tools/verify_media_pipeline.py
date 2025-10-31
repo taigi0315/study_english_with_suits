@@ -28,6 +28,7 @@ from langflix.media.ffmpeg_utils import (
     repeat_av_demuxer,
     run_ffprobe,
     get_duration_seconds,
+    apply_final_audio_gain,
 )
 
 
@@ -147,6 +148,18 @@ def main():
     vstack_keep_width(str(a), str(b), str(vstack_out))
     assert_audio(vstack_out, "vstack")
     assert_layout(vstack_out, "vstack", "vstack")
+
+    # Test final audio gain application
+    print("\n7. Testing final audio gain (+25%) application...")
+    gain_input = tmp / "gain_input.mkv"
+    # Use one of the existing files as input for gain test
+    import shutil
+    shutil.copy2(vstack_out, gain_input)
+    
+    gain_output = tmp / "gain_output.mkv"
+    apply_final_audio_gain(str(gain_input), str(gain_output), gain_factor=1.25)
+    assert_audio(gain_output, "final_gain")
+    print(f"[final_gain] ✅ Final audio gain applied successfully (+25%)")
 
     print("\n✅ All checks passed!")
 

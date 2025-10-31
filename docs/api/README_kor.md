@@ -67,10 +67,13 @@
 
 ## 잡 처리(백그라운드 태스크)
 `routes/jobs.py`의 `process_video_task(...)`:
-- 업로드를 `/tmp`에 저장하고 Redis 진행률 업데이트.
+- `TempFileManager`를 사용한 임시 파일 처리 (참조: `langflix/utils/temp_file_manager.py`)
+  - 컨텍스트가 종료되면 예외 발생 시에도 임시 파일이 자동으로 정리됨
+  - 하드코딩된 `/tmp` 경로 없음 - `tempfile` 모듈을 통해 시스템 temp 디렉토리 사용
+  - 컨텍스트 관리자가 처리 실패 시에도 정리 보장
 - `langflix.core` 모듈로 자막 파싱/청크/표현식 분석, 자막 생성, 클립 추출, 교육용/쇼츠 영상 생성 및 배치, 최종 `ffmpeg` 병합 수행.
 - `services.output_manager.create_output_structure`로 출력 디렉터리 구조 생성.
-- 임시 파일 정리, Redis 상태/결과 업데이트, 비디오 캐시 무효화.
+- Redis 상태/결과 업데이트, 비디오 캐시 무효화.
 
 ## 에러 처리 및 로깅
 - 통합 예외 핸들러로 일관된 JSON 페이로드 반환.

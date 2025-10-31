@@ -454,6 +454,11 @@ class VideoEditor:
 
             safe_name = self._sanitize_filename(expression.expression)
             output_path = context_videos_dir / f"context_{safe_name}.mkv"
+            
+            # Check if file already exists (created by long-form)
+            if output_path.exists():
+                logger.info(f"Reusing existing context_with_subtitles: {output_path.name}")
+                return str(output_path)
 
             subtitle_dir = self.output_dir.parent / "subtitles"
             sub_path = subs_overlay.find_subtitle_file(subtitle_dir, expression.expression)

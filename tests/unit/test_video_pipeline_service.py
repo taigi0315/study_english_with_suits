@@ -2,7 +2,7 @@
 Unit tests for VideoPipelineService
 """
 import unittest
-from unittest.mock import Mock, patch, MagicMock, call
+from unittest.mock import Mock, patch, MagicMock, call, ANY
 from pathlib import Path
 import tempfile
 import os
@@ -72,6 +72,13 @@ class TestVideoPipelineService(unittest.TestCase):
             call_kwargs = mock_pipeline_class.call_args[1]
             self.assertEqual(call_kwargs['language_code'], 'ko')
             self.assertEqual(call_kwargs['output_dir'], 'test_output')
+            # Verify critical parameters are passed to pipeline
+            self.assertEqual(call_kwargs.get('series_name'), 'TestShow')
+            self.assertEqual(call_kwargs.get('episode_name'), 'TestEpisode')
+            self.assertEqual(call_kwargs.get('video_file'), video_path)
+            # Verify subtitle_file and video_dir are set
+            self.assertIn('subtitle_file', call_kwargs)
+            self.assertIn('video_dir', call_kwargs)
             
             # Verify pipeline.run was called
             mock_pipeline.run.assert_called_once_with(
@@ -222,6 +229,9 @@ class TestVideoPipelineService(unittest.TestCase):
         mock_expression_2.context_end_time = "00:02:10,000"
         mock_expression_2.expression_start_time = None
         mock_expression_2.expression_end_time = None
+        # Explicitly set optional attributes to None to avoid MagicMock auto-creation
+        delattr(mock_expression_2, 'difficulty') if hasattr(mock_expression_2, 'difficulty') else None
+        delattr(mock_expression_2, 'category') if hasattr(mock_expression_2, 'category') else None
         
         # Test extraction
         expressions = [mock_expression_1, mock_expression_2]
@@ -328,6 +338,79 @@ class TestVideoPipelineService(unittest.TestCase):
             
             # Verify None is returned
             self.assertIsNone(result)
+    
+    @patch('langflix.services.video_pipeline_service.LangFlixPipeline')
+    def test_pipeline_parameters_validation(self, mock_pipeline_class):
+        """Test that all required parameters are correctly passed to LangFlixPipeline"""
+        # Setup mocks
+        mock_pipeline = MagicMock()
+        mock_pipeline_class.return_value = mock_pipeline
+        mock_pipeline.expressions = []
+        mock_pipeline.paths = {
+            'language': {
+                'final_videos': Path('test_output/test/final_videos'),
+                'short_videos': Path('test_output/test/short_videos')
+            },
+            'episode': {
+                'episode_dir': Path('test_output/test')
+            }
+        }
+        mock_pipeline.run.return_value = {
+            'total_expressions': 0,
+            'processed_expressions': 0
+        }
+        
+        # Create temporary files
+        with tempfile.NamedTemporaryFile(suffix='.mkv', delete=False) as video_file:
+            video_path = video_file.name
+        with tempfile.NamedTemporaryFile(suffix='.srt', delete=False) as subtitle_file:
+            subtitle_path = subtitle_file.name
+        
+        try:
+            # Test processing with all parameters
+            result = self.service.process_video(
+                video_path=video_path,
+                subtitle_path=subtitle_path,
+                show_name="TestSeries",
+                episode_name="S01E01",
+                max_expressions=10,
+                language_level="advanced",
+                test_mode=False,
+                no_shorts=False,
+                progress_callback=lambda p, m: None
+            )
+            
+            # Verify pipeline was instantiated
+            mock_pipeline_class.assert_called_once()
+            call_kwargs = mock_pipeline_class.call_args[1]
+            
+            # Verify all required parameters are present and correct
+            required_params = {
+                'subtitle_file': subtitle_path,
+                'video_dir': str(Path(video_path).parent),
+                'output_dir': 'test_output',
+                'language_code': 'ko',
+                'series_name': 'TestSeries',
+                'episode_name': 'S01E01',
+                'video_file': video_path,
+                'progress_callback': ANY
+            }
+            
+            for param_name, expected_value in required_params.items():
+                if expected_value is ANY:
+                    self.assertIn(param_name, call_kwargs, 
+                                f"Missing parameter: {param_name}")
+                else:
+                    self.assertEqual(call_kwargs.get(param_name), expected_value,
+                                   f"Parameter {param_name} mismatch: "
+                                   f"expected {expected_value}, got {call_kwargs.get(param_name)}")
+            
+        finally:
+            # Cleanup
+            if os.path.exists(video_path):
+                os.unlink(video_path)
+            if os.path.exists(subtitle_path):
+                os.unlink(subtitle_path)
 
 
 if __name__ == '__main__':

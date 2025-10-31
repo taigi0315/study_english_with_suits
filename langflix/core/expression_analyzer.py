@@ -169,17 +169,46 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             # Remove 'example' field if present (from json_schema_extra)
             if 'example' in json_schema:
                 del json_schema['example']
-            # Also remove from nested schemas if present (check both 'definitions' and '$defs')
-            for def_key in ['definitions', '$defs']:
-                if def_key in json_schema:
-                    for def_name, def_schema in json_schema[def_key].items():
-                        if isinstance(def_schema, dict):
-                            if 'example' in def_schema:
-                                del def_schema['example']
-                            if 'properties' in def_schema:
-                                for prop_name, prop_schema in def_schema['properties'].items():
-                                    if isinstance(prop_schema, dict) and 'example' in prop_schema:
-                                        del prop_schema['example']
+            
+            # Inline $defs references - Gemini API doesn't support $defs or $ref
+            if '$defs' in json_schema:
+                defs = json_schema['$defs']
+                # Inline ExpressionAnalysis schema if it's referenced
+                if 'properties' in json_schema and 'expressions' in json_schema['properties']:
+                    expr_prop = json_schema['properties']['expressions']
+                    if 'items' in expr_prop and '$ref' in expr_prop['items']:
+                        ref_path = expr_prop['items']['$ref']
+                        if ref_path.startswith('#/$defs/'):
+                            def_name = ref_path.split('/')[-1]
+                            if def_name in defs:
+                                # Replace $ref with inline schema
+                                expr_prop['items'] = defs[def_name].copy()
+                                # Also remove example from inlined schema
+                                if 'example' in expr_prop['items']:
+                                    del expr_prop['items']['example']
+                                logger.debug(f"Inlined {def_name} schema from $defs")
+                # Now remove $defs
+                del json_schema['$defs']
+                logger.debug("Removed $defs from JSON schema for Gemini compatibility")
+            
+            # Also check 'definitions' (older Pydantic versions) and clean up examples
+            if 'definitions' in json_schema:
+                for def_name, def_schema in json_schema['definitions'].items():
+                    if isinstance(def_schema, dict):
+                        if 'example' in def_schema:
+                            del def_schema['example']
+                        if 'properties' in def_schema:
+                            for prop_name, prop_schema in def_schema['properties'].items():
+                                if isinstance(prop_schema, dict) and 'example' in prop_schema:
+                                    del prop_schema['example']
+            
+            # Clean up example fields from inlined ExpressionAnalysis schema properties
+            if 'properties' in json_schema and 'expressions' in json_schema['properties']:
+                expr_items = json_schema['properties']['expressions'].get('items', {})
+                if isinstance(expr_items, dict) and 'properties' in expr_items:
+                    for prop_name, prop_schema in expr_items['properties'].items():
+                        if isinstance(prop_schema, dict) and 'example' in prop_schema:
+                            del prop_schema['example']
             
             # Create generation config dict
             gen_config_dict = {

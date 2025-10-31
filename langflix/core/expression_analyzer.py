@@ -103,13 +103,35 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         cache_key = cache_manager.get_expression_key(chunk_text, language_code)
         cached_result = cache_manager.get(cache_key)
         
-        if cached_result and isinstance(cached_result, list):
-            logger.info(f"Using cached expression analysis for chunk with {len(cached_result)} expressions")
+        if cached_result:
+            logger.info(f"Found cached result for chunk, type: {type(cached_result)}")
             try:
-                return [ExpressionAnalysis(**expr) for expr in cached_result]
+                # Handle different cache formats
+                if isinstance(cached_result, list):
+                    # New format: list of expression dicts
+                    logger.info(f"Using cached expression analysis for chunk with {len(cached_result)} expressions")
+                    return [ExpressionAnalysis(**expr) for expr in cached_result]
+                elif isinstance(cached_result, dict):
+                    # Old format: might be wrapped in dict with "expressions" key
+                    if "expressions" in cached_result:
+                        expressions_list = cached_result["expressions"]
+                        logger.info(f"Using cached expression analysis from dict format with {len(expressions_list)} expressions")
+                        return [ExpressionAnalysis(**expr) for expr in expressions_list]
+                    else:
+                        logger.warning(f"Cached dict doesn't have 'expressions' key, keys: {list(cached_result.keys())}")
+                        # Clear invalid cache and continue
+                        cache_manager.delete(cache_key)
+                        logger.warning("Cleared invalid cache, will re-analyze")
+                else:
+                    logger.warning(f"Unexpected cached result type: {type(cached_result)}")
+                    cache_manager.delete(cache_key)
+                    logger.warning("Cleared invalid cache, will re-analyze")
             except Exception as cache_error:
+                import traceback
                 logger.error(f"Error parsing cached expressions: {cache_error}")
-                logger.error(f"Cached result type: {type(cached_result)}, first item: {cached_result[0] if cached_result else None}")
+                logger.error(f"Error type: {type(cache_error).__name__}")
+                logger.error(f"Cached result type: {type(cached_result)}")
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
                 # Clear invalid cache and continue with fresh analysis
                 cache_manager.delete(cache_key)
                 logger.warning("Cleared invalid cache, will re-analyze")

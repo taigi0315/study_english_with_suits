@@ -8,22 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Expression video playback during audio repetition (replaces freeze frames)
-- Perfect audio-video synchronization with FFmpeg loop filter
-- 40% volume boost for optimal audio quality
-- Multiple expression support in short video batches
-- Correct video file matching for accurate audio extraction
+- Media pipeline utilities: `langflix/media/ffmpeg_utils.py`
+  - Safe ffprobe wrappers, explicit stream mapping outputs
+  - Concat filter helper with v=1,a=1 mapping to prevent audio loss
+  - hstack/vstack helpers preserving source dimensions (no forced scaling)
+- Audio timeline module: `langflix/audio/timeline.py`
+  - Repeated timeline builder (1.0s start, 0.5s gaps, 1.0s end)
+  - Segment extraction to WAV with stereo/48k normalization
+- Subtitle overlay module: `langflix/subtitles/overlay.py`
+  - Subtitle file discovery, dual-language copy, ASS style builder
+  - Drawtext fallback for translation-only overlays
+- Slide generator: `langflix/slides/generator.py`
+  - Silent slide creation with text layout; no forced 720p/1080p
 
 ### Changed
-- Short videos now show continuous motion throughout entire duration
-- Expression videos loop seamlessly to match audio timeline duration
-- Improved video-audio synchronization prevents breaking during repetition
+- VideoEditor orchestration updated to use the new modules
+  - Context+Slide concatenation switched to explicit filter concat to avoid audio drops
+  - Subtitle application routed through overlay helpers for stability
 
 ### Fixed
-- Expression video duration mismatch with audio timeline
-- Incorrect video file selection for audio extraction
-- Single expression limitation in short video generation
-- Audio-video desynchronization during expression repetition
+- Intermittent audio loss during concatenation by enforcing explicit stream mapping
+- Audio param mismatches by normalizing to stereo (ac=2) and 48kHz (ar=48000)
+
+### Notes
+- Video tracks preserve original codec/resolution when possible. Re-encoding occurs only when filters are required.
 
 ## [1.0.0] - 2025-10-25
 

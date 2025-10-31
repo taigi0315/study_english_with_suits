@@ -163,14 +163,36 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         
         try:
             # Use structured output with Pydantic model
+            # Generate JSON schema from Pydantic model and remove 'example' field
+            # which is not supported by Gemini API's structured output
+            json_schema = ExpressionAnalysisResponse.model_json_schema()
+            # Remove 'example' field if present (from json_schema_extra)
+            if 'example' in json_schema:
+                del json_schema['example']
+            # Also remove from nested schemas if present (check both 'definitions' and '$defs')
+            for def_key in ['definitions', '$defs']:
+                if def_key in json_schema:
+                    for def_name, def_schema in json_schema[def_key].items():
+                        if isinstance(def_schema, dict):
+                            if 'example' in def_schema:
+                                del def_schema['example']
+                            if 'properties' in def_schema:
+                                for prop_name, prop_schema in def_schema['properties'].items():
+                                    if isinstance(prop_schema, dict) and 'example' in prop_schema:
+                                        del prop_schema['example']
+            
+            # Create generation config dict
+            gen_config_dict = {
+                "response_mime_type": "application/json",
+                "response_schema": json_schema,  # Use cleaned JSON schema instead of Pydantic model
+            }
+            if generation_config:
+                gen_config_dict.update(generation_config)
+            
             # Create model with response schema configuration
             model_with_schema = genai.GenerativeModel(
                 model_name=model_name,
-                generation_config=genai.types.GenerationConfig(
-                    response_mime_type="application/json",
-                    response_schema=ExpressionAnalysisResponse,
-                    **generation_config if generation_config else {}
-                )
+                generation_config=genai.types.GenerationConfig(**gen_config_dict)
             )
             
             response = model_with_schema.generate_content(prompt)

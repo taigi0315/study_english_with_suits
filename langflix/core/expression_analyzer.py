@@ -131,6 +131,8 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 logger.error(f"Error parsing cached expressions: {cache_error}")
                 logger.error(f"Error type: {type(cache_error).__name__}")
                 logger.error(f"Cached result type: {type(cached_result)}")
+                if isinstance(cached_result, dict):
+                    logger.error(f"Cached dict keys: {list(cached_result.keys())}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 # Clear invalid cache and continue with fresh analysis
                 cache_manager.delete(cache_key)
@@ -245,10 +247,15 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         import traceback
         logger.error(f"Unexpected error in analyze_chunk: {e}")
         logger.error(f"Error type: {type(e).__name__}")
+        # Log the full traceback at debug level, but provide more context at error level
+        error_msg = str(e)
+        logger.error(f"Error message: {error_msg}")
         logger.debug(f"Full traceback: {traceback.format_exc()}")
         # Log more details if it's a validation error
         if hasattr(e, 'errors'):
             logger.error(f"Validation errors: {e.errors()}")
+        # Don't log as "No expressions found" - this is an actual error
+        logger.warning(f"No expressions found in chunk due to error: {type(e).__name__}")
         return []
 
 
@@ -307,14 +314,14 @@ def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
             # Try exact match first
             if "expressions" in data:
                 expressions_data = data["expressions"]
-            # Try with quotes (in case key was parsed as string with quotes)
-            elif '"expressions"' in data:
-                logger.warning("Found key '\"expressions\"' instead of 'expressions', attempting to use it")
-                expressions_data = data['"expressions"']
             # Try case variations
             elif "Expressions" in data:
                 logger.warning("Found key 'Expressions' instead of 'expressions', attempting to use it")
                 expressions_data = data["Expressions"]
+            # Try other case variations
+            elif "EXPRESSIONS" in data:
+                logger.warning("Found key 'EXPRESSIONS' instead of 'expressions', attempting to use it")
+                expressions_data = data["EXPRESSIONS"]
             else:
                 # Log all keys for debugging
                 logger.error(f"Response dict keys: {available_keys}")

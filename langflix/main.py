@@ -435,13 +435,14 @@ class LangFlixPipeline:
             except Exception as e:
                 logger.error(f"Database error during expression save: {e}")
                 db.rollback()
-                raise
+                logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
+                # Don't raise - allow pipeline to continue
             finally:
                 db.close()
         except Exception as e:
             logger.error(f"Database connection error: {e}")
-            logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
-            raise  # Re-raise to be caught by caller
+            logger.warning("⚠️ Failed to connect to database. Pipeline will continue in file-only mode.")
+            # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):
         """Process each expression (video + subtitles)"""

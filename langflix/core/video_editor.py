@@ -2404,16 +2404,22 @@ class VideoEditor:
                 logger.info(f"Using context_video: {context_video_path}")
                 logger.info(f"Expression text: '{expression.expression}'")
                 
-                # Extract expression video clip from context video WITH audio
-                expression_video_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
-                self._register_temp_file(expression_video_path)
-                logger.info(f"Creating expression AV clip from context ({expression_duration:.2f}s)")
+                # Try to reuse expression clip from long-form if it exists
+                expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
                 
-                # IMPORTANT: Extract from context_video_path (has audio), not from context_video which might be video-only
-                context_video_with_audio = context_video_path
-                (ffmpeg.input(str(context_video_with_audio), ss=relative_start, t=expression_duration)
-                 .output(str(expression_video_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
-                 .overwrite_output().run(quiet=True))
+                if not expression_video_clip_path.exists():
+                    # Extract expression video clip from context video WITH audio
+                    expression_video_clip_path = self.output_dir / f"temp_expression_video_{safe_expression}.mkv"
+                    self._register_temp_file(expression_video_clip_path)
+                    logger.info(f"Creating expression AV clip from context ({expression_duration:.2f}s)")
+                    
+                    # IMPORTANT: Extract from context_video_path (has audio), not from context_video which might be video-only
+                    context_video_with_audio = context_video_path
+                    (ffmpeg.input(str(context_video_with_audio), ss=relative_start, t=expression_duration)
+                     .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
+                     .overwrite_output().run(quiet=True))
+                else:
+                    logger.info(f"Reusing expression clip from long-form: {expression_video_clip_path}")
 
                 # Loop expression AV to match timeline using demuxer-concat (preserves audio reliably)
                 # Try to reuse looped expression from long-form if it exists
@@ -2424,7 +2430,7 @@ class VideoEditor:
                 if not looped_expression_path.exists():
                     # Create new looped expression
                     logger.info(f"Building repeated AV using demuxer (target ~{required_expression_duration:.2f}s)")
-                    repeat_av_demuxer(str(expression_video_path), repeat_count, str(looped_expression_path))
+                    repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(looped_expression_path))
                     self._register_temp_file(looped_expression_path)
                 else:
                     # Reuse existing looped expression from long-form

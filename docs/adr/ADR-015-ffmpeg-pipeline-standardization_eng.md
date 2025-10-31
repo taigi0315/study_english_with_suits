@@ -26,6 +26,18 @@ Accepted
 - **Robust fallback**: Filter concat falls back to demuxer concat on failure.
 - **Verification**: Add ffprobe-based checks in `tools/verify_media_pipeline.py` to ensure audio presence.
 
+**Phase 3 (Short-form Simplification - TICKET-001, 2025-01-30):**
+- **Problem**: Short-form had overly complex logic with unnecessary audio extraction/processing (~180 lines) causing A-V sync issues.
+- **Root cause**: Short-form was extracting audio separately, processing it, and calculating durations from audio instead of video.
+- **Solution**: Completely simplified short-form to match long-form pattern exactly:
+  - Removed unnecessary audio extraction/processing logic
+  - Removed duplicate expression processing block
+  - Changed duration calculation from audio-based to video-based (same as long-form)
+  - Simplified flow: context_with_subtitles → expression clip → repeat → concat → vstack → final gain
+  - Short-form now follows exact same pattern as long-form (only difference: vstack vs hstack)
+- **Result**: Fixed 0.5s A-V sync delay issue, code is now much simpler and maintainable.
+- **Key insight**: Short-form and long-form should use identical logic - only difference is layout (vertical vs horizontal).
+
 ## Consequences
 **Positive:**
 - Audio drops are mitigated via explicit mapping, demuxer-first approach, and robust fallbacks.

@@ -26,6 +26,18 @@ Accepted
 - **견고한 fallback**: Filter concat 실패 시 demuxer concat으로 자동 전환.
 - **검증**: `tools/verify_media_pipeline.py`에 ffprobe 기반 체크를 추가하여 오디오 존재 확인.
 
+**3단계 (Short-form 로직 단순화 - TICKET-001, 2025-01-30):**
+- **문제**: Short-form이 불필요한 오디오 추출/처리 로직으로 인해 과도하게 복잡했고 (~180줄), A-V sync 문제를 발생시켰습니다.
+- **근본 원인**: Short-form이 오디오를 별도로 추출하고 처리하며, 비디오 대신 오디오에서 duration을 계산했습니다.
+- **해결책**: Short-form을 long-form 패턴과 완전히 동일하게 단순화:
+  - 불필요한 오디오 추출/처리 로직 제거
+  - 중복된 expression 처리 블록 제거
+  - Duration 계산을 오디오 기반에서 비디오 기반으로 변경 (long-form과 동일)
+  - 단순화된 흐름: context_with_subtitles → expression clip → repeat → concat → vstack → final gain
+  - Short-form이 이제 long-form과 정확히 동일한 패턴을 따름 (유일한 차이: vstack vs hstack)
+- **결과**: 0.5초 A-V sync 지연 문제 해결, 코드가 훨씬 간단하고 유지보수 가능해짐.
+- **핵심 인사이트**: Short-form과 long-form은 동일한 로직을 사용해야 함 - 유일한 차이는 레이아웃 (수직 vs 수평).
+
 ## 결과
 **긍정적:**
 - 명시적 매핑, demuxer 우선 접근, 견고한 fallback으로 오디오 드랍 문제가 완화됩니다.

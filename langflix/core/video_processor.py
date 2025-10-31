@@ -16,14 +16,16 @@ class VideoProcessor:
     Handles video file operations including loading, validation, and clip extraction
     """
     
-    def __init__(self, media_dir: str = "assets/media"):
+    def __init__(self, media_dir: str = "assets/media", video_file: str = None):
         """
         Initialize video processor
         
         Args:
             media_dir: Directory containing video files
+            video_file: Optional direct path to video file (if provided, will be used directly)
         """
         self.media_dir = Path(media_dir)
+        self.video_file = Path(video_file) if video_file else None
         self.supported_formats = {'.mp4', '.mkv', '.avi', '.mov', '.wmv'}
         
     def find_video_file(self, subtitle_file_path: str) -> Optional[Path]:
@@ -36,6 +38,11 @@ class VideoProcessor:
         Returns:
             Path to corresponding video file, or None if not found
         """
+        # If video_file was provided directly, use it (priority)
+        if self.video_file and self.video_file.exists():
+            logger.info(f"Using directly specified video file: {self.video_file}")
+            return self.video_file
+        
         subtitle_path = Path(subtitle_file_path)
         subtitle_name = subtitle_path.stem  # Remove extension
         

@@ -10,7 +10,7 @@ app:
   show_name: "Suits"
   
   # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt.txt"
+  template_file: "expression_analysis_prompt_v2.txt"
 
 # ============================================================================
 # Database Configuration

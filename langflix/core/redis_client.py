@@ -64,6 +64,11 @@ class RedisJobManager:
                     string_updates[key] = str(value).lower()
                 elif isinstance(value, datetime):
                     string_updates[key] = value.isoformat()
+                elif isinstance(value, (list, dict)):
+                    # Serialize lists and dicts as JSON for proper storage/retrieval
+                    string_updates[key] = json.dumps(value, default=str)
+                elif value is None:
+                    string_updates[key] = "None"
                 else:
                     string_updates[key] = str(value)
             
@@ -92,6 +97,35 @@ class RedisJobManager:
                 job_data['test_mode'] = job_data['test_mode'].lower() == 'true'
             if 'no_shorts' in job_data:
                 job_data['no_shorts'] = job_data['no_shorts'].lower() == 'true'
+            
+            # Deserialize JSON fields (expressions, educational_videos, short_videos)
+            json_fields = ['expressions', 'educational_videos', 'short_videos']
+            for field in json_fields:
+                if field in job_data:
+                    try:
+                        # Try to parse as JSON
+                        if job_data[field] and job_data[field] != 'None' and job_data[field] != '[]':
+                            job_data[field] = json.loads(job_data[field])
+                        else:
+                            job_data[field] = []
+                    except (json.JSONDecodeError, TypeError):
+                        # If parsing fails, try to handle legacy string format
+                        if job_data[field] == '[]' or job_data[field] == 'None':
+                            job_data[field] = []
+                        # Otherwise keep as string (for backwards compatibility)
+                        pass
+            
+            # Handle final_video field (might be "None" string or JSON)
+            if 'final_video' in job_data:
+                if job_data['final_video'] == 'None' or job_data['final_video'] == '':
+                    job_data['final_video'] = None
+                else:
+                    try:
+                        # Try to parse as JSON in case it's a dict
+                        job_data['final_video'] = json.loads(job_data['final_video'])
+                    except (json.JSONDecodeError, TypeError):
+                        # Keep as string if not valid JSON
+                        pass
             
             return job_data
         except Exception as e:

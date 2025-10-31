@@ -377,7 +377,26 @@ class LangFlixPipeline:
             logger.info(f"Analyzing chunk {chunk_index+1}/{total_chunks}{' (TEST MODE)' if test_mode else ''}...")
             
             try:
-                expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, str(self.paths['episode']['metadata']['llm_outputs']))
+                # Get output directory for LLM outputs if save_llm_output is enabled
+                output_dir = None
+                if save_llm_output:
+                    # Check if metadata directory exists in paths structure
+                    # Note: metadata directory may not exist if OutputManager doesn't create it
+                    try:
+                        metadata_paths = self.paths.get('episode', {}).get('metadata', {})
+                        if metadata_paths and 'llm_outputs' in metadata_paths:
+                            output_dir = str(metadata_paths['llm_outputs'])
+                        else:
+                            # Fallback: use episode directory for LLM outputs
+                            episode_dir = self.paths.get('episode', {}).get('episode_dir')
+                            if episode_dir:
+                                output_dir = str(episode_dir / 'llm_outputs')
+                                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                    except (KeyError, AttributeError) as e:
+                        logger.warning(f"Could not determine LLM output directory: {e}. LLM outputs will not be saved.")
+                        output_dir = None
+                
+                expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, output_dir)
                 if expressions:
                     all_expressions.extend(expressions)
                     logger.info(f"Found {len(expressions)} expressions in chunk {chunk_index+1}")

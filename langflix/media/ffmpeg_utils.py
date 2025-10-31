@@ -235,6 +235,7 @@ def concat_filter_with_explicit_map(
     """Concat two segments with filter concat ensuring v=1,a=1 and explicit mapping.
 
     This is safer when input parameters differ.
+    Normalizes frame rate to ensure A-V sync and prevent freezing.
     Falls back to demuxer concat if filter concat fails.
     """
     left_in = ffmpeg.input(left_path)
@@ -242,11 +243,34 @@ def concat_filter_with_explicit_map(
     left_dur = get_duration_seconds(left_path)
     right_dur = get_duration_seconds(right_path)
 
-    left_v = left_in["v"]
-    right_v = right_in["v"]
-    # Use original audio streams as-is (no reformatting, no volume change)
-    left_a = left_in["a"]
-    right_a = right_in["a"]
+    # Get frame rates to ensure consistency and prevent A-V sync issues
+    left_vp = get_video_params(left_path)
+    
+    # Normalize frame rate to a common value to prevent freezing and A-V sync issues
+    target_fps = 25.0  # Default frame rate for smooth playback
+    if left_vp.r_frame_rate:
+        try:
+            # Parse frame rate (e.g., "25/1" or "30/1")
+            if '/' in left_vp.r_frame_rate:
+                num, den = map(float, left_vp.r_frame_rate.split('/'))
+                target_fps = num / den if den > 0 else 25.0
+            else:
+                target_fps = float(left_vp.r_frame_rate)
+        except (ValueError, ZeroDivisionError):
+            target_fps = 25.0
+    
+    # Apply fps filter to both videos to ensure consistent frame rate and prevent A-V sync issues
+    # Reset timestamps after fps filter to prevent 0.5s delay and A-V sync issues
+    # setpts=PTS-STARTPTS ensures timestamps start from 0 for proper concat
+    left_v = ffmpeg.filter(left_in["v"], 'fps', fps=target_fps)
+    left_v = ffmpeg.filter(left_v, 'setpts', 'PTS-STARTPTS')
+    right_v = ffmpeg.filter(right_in["v"], 'fps', fps=target_fps)
+    right_v = ffmpeg.filter(right_v, 'setpts', 'PTS-STARTPTS')
+    
+    # Reset audio timestamps as well to ensure A-V sync
+    # asetpts=PTS-STARTPTS ensures audio timestamps start from 0
+    left_a = ffmpeg.filter(left_in["a"], 'asetpts', 'PTS-STARTPTS')
+    right_a = ffmpeg.filter(right_in["a"], 'asetpts', 'PTS-STARTPTS')
 
     # Use .node to obtain stream tuple indices safely
     concat_node = ffmpeg.concat(left_v, left_a, right_v, right_a, v=1, a=1, n=2).node
@@ -467,4 +491,55 @@ def repeat_av_demuxer(input_path: str, repeat_count: int, out_path: Path | str) 
                 os.unlink(concat_file)
         ensure_dir(Path(out_path))
 
+
+# --------------------------- Final audio gain helpers ---------------------------
+
+def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: float = 1.25) -> None:
+    """Apply audio gain as a separate final pass (simple map, no filter_complex).
+    
+    This function applies volume boost to audio stream while preserving video stream
+    as-is. Used as the final step in the pipeline to boost audio without modifying
+    the video stream or using complex filter graphs.
+    
+    Args:
+        input_path: Path to input video file
+        out_path: Path to output video file
+        gain_factor: Audio gain multiplier (default 1.25 = +25%)
+    
+    Returns:
+        None (writes to out_path)
+    """
+    input_stream = ffmpeg.input(str(input_path))
+    
+    # Get video and audio streams
+    video_stream = input_stream['v']
+    audio_stream = input_stream['a']
+    
+    # Apply volume filter to audio only
+    boosted_audio = audio_stream.filter('volume', str(gain_factor))
+    
+    # Output with explicit stream mapping
+    # Video: copy if possible, Audio: boosted (requires encoding due to filter)
+    if should_copy_video(str(input_path)):
+        encode_args = {
+            'vcodec': 'copy',
+            'acodec': 'aac',
+            'ac': 2,
+            'ar': 48000
+        }
+    else:
+        encode_args = {
+            **make_video_encode_args_from_source(str(input_path)),
+            'acodec': 'aac',
+            'ac': 2,
+            'ar': 48000
+        }
+    
+    (
+        ffmpeg
+        .output(video_stream, boosted_audio, str(out_path), **encode_args)
+        .overwrite_output()
+        .run(quiet=True)
+    )
+    ensure_dir(Path(out_path))
 

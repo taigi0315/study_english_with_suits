@@ -62,7 +62,7 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - `/api/v1/files/{file_id}` (DELETE): Stub for deletion (TODO).
 - `/api/v1/jobs` (POST): Create a new job with `UploadFile` video+subtitle and form fields; starts background processing.
 - `/api/v1/jobs/{job_id}` (GET): Fetch current job state from Redis.
-- `/api/v1/jobs/{job_id}/expressions` (GET): Returns expressions from in-memory store in `jobs.py` (note: relies on `jobs_db`, but actual persistence is Redis for status—consider consolidation).
+- `/api/v1/jobs/{job_id}/expressions` (GET): Returns expressions from Redis (same source as job status).
 - `/api/v1/jobs` (GET): List all jobs from Redis.
 
 ## Job Processing (Background Task)
@@ -102,7 +102,7 @@ The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.p
 ## Extensibility
 - Implement `dependencies.get_db/get_storage` to integrate DB/storage.
 - Replace stubbed file detail/delete with actual storage-backed operations.
-- Align `/jobs/{id}/expressions` with Redis (source of truth) to remove `jobs_db` dependency.
+- ✅ `/jobs/{id}/expressions` aligned with Redis (source of truth) - `jobs_db` dependency removed (TICKET-003).
 
 ## Usage Example
 ```bash

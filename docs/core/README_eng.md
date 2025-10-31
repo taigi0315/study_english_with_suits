@@ -58,6 +58,12 @@ The main class that orchestrates video creation.
 
 **Location:** `langflix/core/video_editor.py`
 
+**Temporary File Management (TICKET-002):**
+- Uses `TempFileManager` for all temporary file operations
+- Temporary files are automatically cleaned up via context managers
+- No manual cleanup required - `TempFileManager` handles it via `atexit` registration
+- Individual short video files are automatically cleaned up after batch creation
+
 **Key Methods:**
 
 #### `create_educational_sequence()`

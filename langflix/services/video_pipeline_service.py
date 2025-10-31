@@ -84,7 +84,10 @@ class VideoPipelineService:
                 video_dir=video_dir,
                 output_dir=self.output_dir,
                 language_code=self.language_code,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                series_name=show_name,  # Pass show_name to pipeline
+                episode_name=episode_name,  # Pass episode_name to pipeline
+                video_file=video_path  # Pass direct video file path
             )
             
             if progress_callback:

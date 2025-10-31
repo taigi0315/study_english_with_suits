@@ -11,7 +11,7 @@ import sys
 # Add the parent directory to the path so we can import langflix
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from langflix.video_processor import VideoProcessor, get_video_file_for_subtitle
+from langflix.core.video_processor import VideoProcessor, get_video_file_for_subtitle
 
 
 class TestVideoProcessor(unittest.TestCase):
@@ -24,6 +24,54 @@ class TestVideoProcessor(unittest.TestCase):
         self.media_dir.mkdir()
         
         self.processor = VideoProcessor(str(self.media_dir))
+    
+    def test_init_with_video_file(self):
+        """Test VideoProcessor initialization with video_file parameter."""
+        video_file_path = self.media_dir / "direct_video.mkv"
+        video_file_path.touch()
+        
+        processor = VideoProcessor(str(self.media_dir), video_file=str(video_file_path))
+        
+        self.assertEqual(processor.media_dir, Path(self.media_dir))
+        self.assertEqual(processor.video_file, Path(video_file_path))
+        self.assertIsNotNone(processor.video_file)
+    
+    def test_find_video_file_uses_direct_video_file(self):
+        """Test that find_video_file uses directly provided video_file when available."""
+        # Create a direct video file
+        direct_video = self.media_dir / "direct_video.mkv"
+        direct_video.touch()
+        
+        # Create another video file that would match the subtitle
+        subtitle_video = self.media_dir / "Subtitle.mkv"
+        subtitle_video.touch()
+        
+        # Initialize processor with direct video file
+        processor = VideoProcessor(str(self.media_dir), video_file=str(direct_video))
+        
+        # Should return the direct video file, not the subtitle-matched one
+        result = processor.find_video_file("Subtitle.srt")
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result, direct_video)
+    
+    def test_find_video_file_falls_back_to_search_when_direct_not_exists(self):
+        """Test that find_video_file falls back to search when direct video_file doesn't exist."""
+        # Create a non-existent direct video file path
+        non_existent_video = self.media_dir / "non_existent.mkv"
+        
+        # Create a video file that matches subtitle
+        matching_video = self.media_dir / "Test.mkv"
+        matching_video.touch()
+        
+        # Initialize processor with non-existent direct video file
+        processor = VideoProcessor(str(self.media_dir), video_file=str(non_existent_video))
+        
+        # Should fall back to searching and find the matching video
+        result = processor.find_video_file("Test.srt")
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result, matching_video)
     
     def tearDown(self):
         """Clean up test fixtures."""
@@ -73,7 +121,7 @@ class TestVideoProcessor(unittest.TestCase):
         
         self.assertIsNone(result)
     
-    @patch('langflix.video_processor.ffmpeg.probe')
+    @patch('langflix.core.video_processor.ffmpeg.probe')
     def test_validate_video_file_success(self, mock_probe):
         """Test successful video file validation."""
         # Mock ffmpeg probe response
@@ -114,7 +162,7 @@ class TestVideoProcessor(unittest.TestCase):
         self.assertIn("Video file not found", result['error'])
         self.assertIsNone(result['metadata'])
     
-    @patch('langflix.video_processor.ffmpeg.probe')
+    @patch('langflix.core.video_processor.ffmpeg.probe')
     def test_validate_video_file_no_video_stream(self, mock_probe):
         """Test video file validation with no video stream."""
         # Mock ffmpeg probe response with no video stream
@@ -163,7 +211,7 @@ class TestVideoProcessor(unittest.TestCase):
                 result = self.processor._time_to_seconds(invalid_time)
                 self.assertEqual(result, 0.0)
     
-    @patch('langflix.video_processor.ffmpeg')
+    @patch('langflix.core.video_processor.ffmpeg')
     def test_extract_clip_success(self, mock_ffmpeg):
         """Test successful video clip extraction."""
         # Mock ffmpeg operations
@@ -190,7 +238,7 @@ class TestVideoProcessor(unittest.TestCase):
         # Note: run() is called on the output object, not mock_output
         mock_output.run.assert_called_once()
     
-    @patch('langflix.video_processor.ffmpeg')
+    @patch('langflix.core.video_processor.ffmpeg')
     def test_extract_clip_failure(self, mock_ffmpeg):
         """Test video clip extraction failure."""
         # Mock ffmpeg to raise exception
@@ -288,7 +336,7 @@ class TestVideoProcessor(unittest.TestCase):
         
         self.assertFalse(result)
     
-    @patch('langflix.video_processor.ffmpeg.probe')
+    @patch('langflix.core.video_processor.ffmpeg.probe')
     def test_validate_video_file_corrupted_streams(self, mock_probe):
         """Test video file validation with corrupted stream data."""
         # Mock ffmpeg probe response with missing stream data
@@ -330,7 +378,7 @@ class TestVideoProcessor(unittest.TestCase):
                 else:
                     self.assertAlmostEqual(result, expected_seconds, places=3)
     
-    @patch('langflix.video_processor.ffmpeg')
+    @patch('langflix.core.video_processor.ffmpeg')
     def test_extract_clip_permission_error(self, mock_ffmpeg):
         """Test video clip extraction with permission error."""
         # Mock ffmpeg to raise permission error
@@ -363,7 +411,7 @@ class TestVideoProcessor(unittest.TestCase):
         if result is not None:
             self.assertIsInstance(result, Path)
     
-    @patch('langflix.video_processor.ffmpeg')
+    @patch('langflix.core.video_processor.ffmpeg')
     def test_extract_clip_large_timestamps(self, mock_ffmpeg):
         """Test video clip extraction with large timestamps."""
         mock_input = MagicMock()

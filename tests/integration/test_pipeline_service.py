@@ -77,6 +77,13 @@ class TestPipelineServiceIntegration(unittest.TestCase):
         call_kwargs = mock_pipeline_class.call_args[1]
         self.assertEqual(call_kwargs['language_code'], 'ko')
         self.assertEqual(call_kwargs['output_dir'], 'test_output')
+        # Verify critical parameters are passed to pipeline
+        self.assertEqual(call_kwargs.get('series_name'), 'TestShow')
+        self.assertEqual(call_kwargs.get('episode_name'), 'TestEpisode')
+        self.assertEqual(call_kwargs.get('video_file'), self.test_video_path)
+        # Verify subtitle_file and video_dir are set
+        self.assertIn('subtitle_file', call_kwargs)
+        self.assertIn('video_dir', call_kwargs)
         
         # Verify run was called with same parameters
         run_call = mock_pipeline.run.call_args[1]

@@ -79,8 +79,11 @@ The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.p
 **Implementation:**
 - Defined in `routes/jobs.py` as `process_video_task(...)` (simplified from 450+ lines to ~110 lines)
 - Uses `VideoPipelineService.process_video()` which wraps `LangFlixPipeline`
-- Stores uploads to `/tmp` and updates Redis job progress via callback
-- Cleans temporary files; updates Redis job status/results; invalidates video cache
+- Uses `TempFileManager` for temporary file handling (see `langflix/utils/temp_file_manager.py`)
+  - Temporary files are automatically cleaned up when context exits, even on exceptions
+  - No hardcoded `/tmp` paths - uses system temp directory via `tempfile` module
+  - Context managers ensure cleanup even if processing fails
+- Updates Redis job status/results via callback; invalidates video cache
 
 **Progress Tracking:**
 - Progress callbacks automatically update Redis job status

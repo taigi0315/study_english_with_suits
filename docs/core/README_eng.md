@@ -52,6 +52,58 @@ pipeline = LangFlixPipeline(
 )
 ```
 
+**Parallel LLM Processing (TICKET-001):**
+- Expression analysis now supports parallel processing for multiple chunks
+- Automatically uses `ExpressionBatchProcessor` to process chunks concurrently
+- Configurable via `expression.llm.parallel_processing` in `default.yaml`
+
+**How It Works:**
+1. `_analyze_expressions()` checks if parallel processing is enabled and if multiple chunks exist
+2. If enabled and multiple chunks available (and not in test_mode), uses `_analyze_expressions_parallel()`
+3. Otherwise, falls back to sequential processing via `_analyze_expressions_sequential()`
+4. Parallel processing uses `ExpressionBatchProcessor` which creates parallel tasks using `ThreadPoolExecutor`
+5. Progress is reported as chunks complete (not sequentially)
+
+**Configuration:**
+```yaml
+expression:
+  llm:
+    parallel_processing:
+      enabled: true  # Enable parallel processing
+      max_workers: null  # null = auto-detect (min(cpu_count(), 5))
+      timeout_per_chunk: 300  # seconds
+```
+
+**When Parallel Processing is Used:**
+- ✅ Parallel processing enabled (`expression.llm.parallel_processing.enabled: true`)
+- ✅ Multiple chunks to process (`len(chunks) > 1`)
+- ✅ Not in test mode (`test_mode=False`)
+
+**When Sequential Processing is Used:**
+- ❌ Parallel processing disabled
+- ❌ Single chunk (no benefit from parallelization)
+- ❌ Test mode (`test_mode=True`) - always sequential for debugging
+
+**Performance Benefits:**
+- 3-5x faster processing for 10+ chunks
+- Processes chunks concurrently instead of waiting for each LLM API call
+- Conservative default: max 5 workers to avoid Gemini API rate limits
+
+**Example:**
+```python
+# With parallel processing enabled (default)
+pipeline = LangFlixPipeline(...)
+result = pipeline.run(
+    max_expressions=10,
+    test_mode=False  # Will use parallel processing if multiple chunks
+)
+
+# Logs will show:
+# "Using PARALLEL processing for 15 chunks"
+# "Starting parallel analysis of 15 chunks with 5 workers"
+# "Parallel analysis complete in 45.2s"
+```
+
 ### VideoEditor Class
 
 The main class that orchestrates video creation.

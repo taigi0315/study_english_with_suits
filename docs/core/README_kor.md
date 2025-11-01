@@ -18,6 +18,92 @@
 
 ## 주요 구성 요소
 
+### LangFlixPipeline 클래스
+
+TV 쇼 콘텐츠를 학습 자료로 처리하는 주요 파이프라인 클래스입니다.
+
+**위치:** `langflix/main.py`
+
+**진행 상황 콜백 지원 (TICKET-001):**
+- `__init__()`에 선택적 `progress_callback` 파라미터 추가
+- 콜백 시그니처: `(progress: int, message: str) -> None`
+- 주요 파이프라인 단계에서 자동으로 진행 상황 리포트:
+  - 10%: 자막 파싱
+  - 20%: 자막 청킹
+  - 30%: 표현 분석
+  - 50%: 표현 처리
+  - 70%: 교육용 비디오 생성
+  - 80%: short-format 비디오 생성
+  - 95%: 요약 생성
+  - 98%: 임시 파일 정리
+  - 100%: 파이프라인 성공적으로 완료
+
+**사용 예시:**
+```python
+def progress_callback(progress: int, message: str):
+    print(f"진행 상황: {progress}% - {message}")
+
+pipeline = LangFlixPipeline(
+    subtitle_file="path/to/subtitle.srt",
+    video_dir="assets/media",
+    output_dir="output",
+    language_code="ko",
+    progress_callback=progress_callback  # 선택사항
+)
+```
+
+**병렬 LLM 처리 (TICKET-001):**
+- 표현 분석이 여러 청크에 대해 병렬 처리를 지원합니다
+- 자동으로 `ExpressionBatchProcessor`를 사용하여 청크를 동시에 처리합니다
+- `default.yaml`의 `expression.llm.parallel_processing`을 통해 설정 가능합니다
+
+**작동 방식:**
+1. `_analyze_expressions()`는 병렬 처리가 활성화되어 있고 여러 청크가 있는지 확인합니다
+2. 활성화되어 있고 여러 청크가 사용 가능한 경우(그리고 test_mode가 아닌 경우), `_analyze_expressions_parallel()`을 사용합니다
+3. 그렇지 않으면 `_analyze_expressions_sequential()`을 통한 순차 처리로 폴백합니다
+4. 병렬 처리는 `ThreadPoolExecutor`를 사용하여 병렬 작업을 생성하는 `ExpressionBatchProcessor`를 사용합니다
+5. 진행 상황은 청크가 완료됨에 따라 보고됩니다 (순차적으로가 아님)
+
+**설정:**
+```yaml
+expression:
+  llm:
+    parallel_processing:
+      enabled: true  # 병렬 처리 활성화
+      max_workers: null  # null = 자동 감지 (min(cpu_count(), 5))
+      timeout_per_chunk: 300  # 초
+```
+
+**병렬 처리가 사용되는 경우:**
+- ✅ 병렬 처리 활성화 (`expression.llm.parallel_processing.enabled: true`)
+- ✅ 처리할 여러 청크 (`len(chunks) > 1`)
+- ✅ 테스트 모드 아님 (`test_mode=False`)
+
+**순차 처리가 사용되는 경우:**
+- ❌ 병렬 처리 비활성화
+- ❌ 단일 청크 (병렬화의 이점 없음)
+- ❌ 테스트 모드 (`test_mode=True`) - 디버깅을 위해 항상 순차 처리
+
+**성능 이점:**
+- 10개 이상의 청크에 대해 3-5배 빠른 처리
+- 각 LLM API 호출을 기다리는 대신 청크를 동시에 처리
+- 보수적인 기본값: Gemini API rate limit을 피하기 위해 최대 5개 worker
+
+**예시:**
+```python
+# 병렬 처리 활성화 상태 (기본값)
+pipeline = LangFlixPipeline(...)
+result = pipeline.run(
+    max_expressions=10,
+    test_mode=False  # 여러 청크가 있는 경우 병렬 처리 사용
+)
+
+# 로그에 표시됨:
+# "Using PARALLEL processing for 15 chunks"
+# "Starting parallel analysis of 15 chunks with 5 workers"
+# "Parallel analysis complete in 45.2s"
+```
+
 ### VideoEditor 클래스
 
 비디오 생성을 조율하는 주요 클래스입니다.

@@ -956,8 +956,11 @@ class LangFlixPipeline:
             valid_videos = []
             for video_path in educational_videos:
                 video_name = Path(video_path).name
-                # Only include individual educational videos, not slides or context videos
-                if video_name.startswith('educational_') and Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
+                # Include educational videos and context multi-slide videos
+                is_educational = video_name.startswith('educational_')
+                is_context_multi_slide = video_name.startswith('context_multi_slide_')
+                
+                if (is_educational or is_context_multi_slide) and Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
                     valid_videos.append(video_path)
                     logger.info(f"Valid video: {video_name}")
                 else:

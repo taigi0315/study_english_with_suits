@@ -26,6 +26,7 @@ from langflix.core.subtitle_processor import SubtitleProcessor
 from langflix.core.video_editor import VideoEditor
 from langflix.services.output_manager import OutputManager, create_output_structure
 from langflix.core.models import ExpressionAnalysis
+from langflix.utils.filename_utils import sanitize_for_expression_filename
 from langflix import settings
 
 # Database imports (optional)
@@ -503,9 +504,8 @@ class LangFlixPipeline:
                     continue
                 
                 # Create output filenames using organized structure
-                safe_expression = "".join(c for c in expression.expression if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 # Use proper filename sanitization for file system safety
-                safe_filename = self._sanitize_filename(expression.expression)
+                safe_filename = sanitize_for_expression_filename(expression.expression)
                 
                 # Don't save raw clips - use temp directory
                 from langflix.utils.temp_file_manager import get_temp_manager
@@ -659,7 +659,7 @@ class LangFlixPipeline:
             
             for i, expression in enumerate(self.expressions):
                 # Sanitize expression name to match filename format
-                safe_expression_name = self._sanitize_filename(expression.expression)
+                safe_expression_name = sanitize_for_expression_filename(expression.expression)
                 logger.info(f"Looking for context video: context_{safe_expression_name}.mkv")
                 
                 if safe_expression_name in context_video_map:
@@ -818,13 +818,6 @@ class LangFlixPipeline:
             
         except Exception as e:
             logger.error(f"Error creating final video from temp files: {e}")
-    
-    def _sanitize_filename(self, text: str) -> str:
-        """Sanitize text for filename"""
-        import re
-        sanitized = re.sub(r'[^\w\s-]', '', text)
-        sanitized = re.sub(r'[-\s]+', '_', sanitized)
-        return sanitized[:50]
     
     def _cleanup_resources(self):
         """Clean up temporary files and resources"""

@@ -20,12 +20,12 @@ except ImportError:
 
 # Import our modules
 from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.core.expression_analyzer import analyze_chunk
+from langflix.core.expression_analyzer import analyze_chunk, group_expressions_by_context
 from langflix.core.video_processor import VideoProcessor
 from langflix.core.subtitle_processor import SubtitleProcessor
 from langflix.core.video_editor import VideoEditor
 from langflix.services.output_manager import OutputManager, create_output_structure
-from langflix.core.models import ExpressionAnalysis
+from langflix.core.models import ExpressionAnalysis, ExpressionGroup
 from langflix.utils.filename_utils import sanitize_for_expression_filename
 from langflix import settings
 
@@ -184,7 +184,8 @@ class LangFlixPipeline:
                  output_dir: str = "output", language_code: str = "ko",
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
-                 video_file: str = None):
+                 video_file: str = None,
+                 enable_expression_grouping: bool = True):
         """
         Initialize the LangFlix pipeline
         
@@ -227,7 +228,9 @@ class LangFlixPipeline:
         self.subtitles = []
         self.chunks = []
         self.expressions = []
+        self.expression_groups = []  # Grouped expressions by context
         self.processed_expressions = 0
+        self.enable_expression_grouping = enable_expression_grouping
         
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False) -> Dict[str, Any]:
         """
@@ -317,8 +320,37 @@ class LangFlixPipeline:
                 if test_mode:
                     logger.warning("⚠️ TEST MODE: Continuing with empty expressions for debugging")
                     self.expressions = []
+                    self.expression_groups = []
                 else:
                     raise ValueError("No expressions found")
+            
+            # Group expressions by context (if enabled and we have expressions)
+            if self.enable_expression_grouping and len(self.expressions) > 0:
+                logger.info("Grouping expressions by shared context...")
+                self.expression_groups = group_expressions_by_context(self.expressions)
+                
+                # Log grouping statistics
+                single_expr_groups = sum(1 for g in self.expression_groups if len(g.expressions) == 1)
+                multi_expr_groups = sum(1 for g in self.expression_groups if len(g.expressions) > 1)
+                
+                logger.info(
+                    f"Created {len(self.expression_groups)} expression groups: "
+                    f"{single_expr_groups} single-expression groups, {multi_expr_groups} multi-expression groups"
+                )
+                
+                if multi_expr_groups > 0:
+                    logger.info(f"Efficiency gain: {len(self.expressions) - len(self.expression_groups)} duplicate context clips avoided")
+            else:
+                # Create single-expression groups for backward compatibility
+                logger.info("Creating single-expression groups (grouping disabled or single expression)")
+                self.expression_groups = [
+                    ExpressionGroup(
+                        context_start_time=expr.context_start_time,
+                        context_end_time=expr.context_end_time,
+                        expressions=[expr]
+                    )
+                    for expr in self.expressions
+                ]
             
             # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:

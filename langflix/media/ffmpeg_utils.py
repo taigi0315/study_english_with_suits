@@ -284,21 +284,22 @@ def concat_filter_with_explicit_map(
             **make_audio_encode_args_copy(),
         )
     except ffmpeg.Error as e:
-        logger.warning(f"Filter concat failed, falling back to demuxer concat: {e}")
-        # Fallback to demuxer concat
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write(f"file '{Path(left_path).absolute()}'\n")
-            f.write(f"file '{Path(right_path).absolute()}'\n")
-            concat_file = f.name
-        
-        try:
-            concat_demuxer_if_uniform(concat_file, out_path)
-        finally:
-            import os
-            if os.path.exists(concat_file):
-                os.unlink(concat_file)
-        ensure_dir(Path(out_path))
+        # Read stderr for detailed error information
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ concat_filter_with_explicit_map FAILED: Cannot concatenate videos\n"
+            f"   Left: {left_path}\n"
+            f"   Right: {right_path}\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr}\n"
+            f"   This usually means:\n"
+            f"   1. Video codecs/resolutions are incompatible\n"
+            f"   2. One or both videos have no audio stream\n"
+            f"   3. Frame rate mismatch causing filter issues\n"
+            f"   4. File corruption or incomplete files\n"
+            f"   Fix: Check files with 'ffprobe {left_path}' and 'ffprobe {right_path}'"
+        )
+        raise RuntimeError(f"concat_filter_with_explicit_map failed: {stderr}") from e
 
 
 def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> None:
@@ -376,20 +377,23 @@ def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) ->
     
     # Check if left has audio stream before processing
     # Use try/except to handle cases where audio stream doesn't exist
+    has_audio = False
+    left_a = None
+    
     try:
         left_ap = get_audio_params(left_path)
-        has_audio = left_ap.codec is not None
-    except Exception:
+        if left_ap.codec:
+            # Try to access audio stream
+            try:
+                left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
+                has_audio = True
+            except (KeyError, AttributeError, Exception) as e:
+                logger.warning(f"Left video has audio codec but stream access failed: {e}, proceeding without audio")
+                has_audio = False
+                left_a = None
+    except Exception as e:
+        logger.debug(f"Left video has no audio stream: {e}")
         has_audio = False
-    
-    if has_audio:
-        try:
-            left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
-        except Exception:
-            # If audio stream exists in file but can't be accessed, skip it
-            has_audio = False
-            left_a = None
-    else:
         left_a = None
     
     # Scale right to match left height, preserve aspect ratio
@@ -490,43 +494,49 @@ def repeat_av_demuxer(input_path: str, repeat_count: int, out_path: Path | str) 
     # Write concat file
     concat_content = '\n'.join(concat_list)
     
-    # Use concat demuxer
+    # Use concat demuxer - try file-based method first (more reliable than pipe)
+    # Write concat file to disk for better error messages
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        f.write(concat_content)
+        concat_file = f.name
+    
     try:
         (
             ffmpeg
-            .input('pipe:', format='concat', safe=0)
+            .input(concat_file, format='concat', safe=0)
             .output(
                 str(out_path),
                 **make_video_encode_args_from_source(input_path),
                 **make_audio_encode_args_copy()
             )
             .overwrite_output()
-            .run(input=concat_content.encode('utf-8'), quiet=True)
+            .run(capture_stdout=True, capture_stderr=True)
         )
     except ffmpeg.Error as e:
-        logger.error(f"concat demuxer failed, falling back to file-based method: {e}")
-        # Fallback: write concat file to disk
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write(concat_content)
-            concat_file = f.name
-        
-        try:
-            (
-                ffmpeg
-                .input(concat_file, format='concat', safe=0)
-                .output(
-                    str(out_path),
-                    **make_video_encode_args_from_source(input_path),
-                    **make_audio_encode_args_copy()
-                )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        finally:
-            import os
-            if os.path.exists(concat_file):
-                os.unlink(concat_file)
-        ensure_dir(Path(out_path))
+        # Read stderr for detailed error information
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ repeat_av_demuxer FAILED: Cannot repeat video segment\n"
+            f"   Input: {input_path}\n"
+            f"   Repeat count: {repeat_count}\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr}\n"
+            f"   This usually means:\n"
+            f"   1. Input file has no audio stream (concat demuxer requires audio)\n"
+            f"   2. Input file is corrupted or incomplete\n"
+            f"   3. File permissions issue\n"
+            f"   Fix: Check input file with 'ffprobe {input_path}'"
+        )
+        # Clean up temp file before raising
+        if os.path.exists(concat_file):
+            os.unlink(concat_file)
+        raise RuntimeError(f"repeat_av_demuxer failed: {stderr}") from e
+    finally:
+        if os.path.exists(concat_file):
+            os.unlink(concat_file)
+    ensure_dir(Path(out_path))
 
 
 # --------------------------- Final audio gain helpers ---------------------------

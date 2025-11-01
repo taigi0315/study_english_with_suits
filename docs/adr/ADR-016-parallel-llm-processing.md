@@ -106,3 +106,4 @@ expression:
 - `langflix/core/parallel_processor.py:168-229`
 - `langflix/main.py:391-457` (현재 순차 처리)
 
+

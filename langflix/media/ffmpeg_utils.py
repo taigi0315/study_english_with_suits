@@ -362,18 +362,26 @@ def vstack_keep_width(top_path: str, bottom_path: str, out_path: Path | str) -> 
 
 
 def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) -> None:
-    """Stack two videos horizontally keeping source heights; widths scale proportionally."""
+    """Stack two videos horizontally keeping source heights; widths scale proportionally.
+    
+    Resets timestamps to prevent delay at video start.
+    """
     left_vp = get_video_params(left_path)
     left_in = ffmpeg.input(left_path)
     right_in = ffmpeg.input(right_path)
 
+    # Reset timestamps to prevent delay
+    left_v = ffmpeg.filter(left_in["v"], "setpts", "PTS-STARTPTS")
+    left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
+    
     # Scale right to match left height, preserve aspect ratio
     right_scaled = ffmpeg.filter(right_in["v"], "scale", -2, left_vp.height or -1)
-    left_v = left_in["v"]
+    # Reset right video timestamps as well
+    right_scaled = ffmpeg.filter(right_scaled, "setpts", "PTS-STARTPTS")
+    
     stacked_v = ffmpeg.filter([left_v, right_scaled], "hstack", inputs=2)
 
-    # Prefer audio from left input as-is
-    left_a = left_in["a"]
+    # Use left audio (with reset timestamps) as-is
     output_with_explicit_streams(
         stacked_v,
         left_a,

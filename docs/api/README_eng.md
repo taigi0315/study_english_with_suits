@@ -63,11 +63,12 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - `/api/v1/jobs` (POST): Create a new job with `UploadFile` video+subtitle and form fields; starts background processing.
 - `/api/v1/jobs/{job_id}` (GET): Fetch current job state from Redis.
 - `/api/v1/jobs/{job_id}/expressions` (GET): Returns expressions from Redis (same source as job status).
+  - **TICKET-003 Fix:** Fixed undefined `jobs_db` variable - now correctly uses Redis via `get_redis_job_manager()`
 - `/api/v1/jobs` (GET): List all jobs from Redis.
 
 ## Job Processing (Background Task)
 
-### Unified Pipeline Service
+### Unified Pipeline Service (TICKET-001)
 
 The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.py`) which provides a unified interface for both API and CLI processing. This eliminates code duplication and ensures consistent behavior.
 
@@ -79,15 +80,21 @@ The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.p
 **Implementation:**
 - Defined in `routes/jobs.py` as `process_video_task(...)` (simplified from 450+ lines to ~110 lines)
 - Uses `VideoPipelineService.process_video()` which wraps `LangFlixPipeline`
-- Uses `TempFileManager` for temporary file handling (see `langflix/utils/temp_file_manager.py`)
+- **Temporary File Management (TICKET-002):**
+  - Uses `TempFileManager` for temporary file handling (see `langflix/utils/temp_file_manager.py`)
   - Temporary files are automatically cleaned up when context exits, even on exceptions
   - No hardcoded `/tmp` paths - uses system temp directory via `tempfile` module
   - Context managers ensure cleanup even if processing fails
+  - Global singleton instance manages all temporary files across the application
 - Updates Redis job status/results via callback; invalidates video cache
 
 **Progress Tracking:**
 - Progress callbacks automatically update Redis job status
 - Progress milestones: 10% (init), 20% (saving files), 30% (parsing), 50% (processing), 70% (educational videos), 80% (short videos), 100% (complete)
+
+**Related Documentation:**
+- [Services Module Documentation](../services/README_eng.md) - VideoPipelineService details
+- [Utils Module Documentation](../utils/temp_file_manager_eng.md) - TempFileManager usage
 
 ## Error Handling and Logging
 

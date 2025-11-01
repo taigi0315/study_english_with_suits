@@ -1043,18 +1043,13 @@ class LangFlixPipeline:
             # Use all found videos in order
             video_sequence = [str(video.absolute()) for video in all_videos]
             
-            # Create sequence: context1, slide1, context2, slide2, ...
-            video_sequence = []
-            for i in range(min(len(context_videos), len(slide_videos))):
-                video_sequence.append(str(context_videos[i].absolute()))
-                video_sequence.append(str(slide_videos[i].absolute()))
-            
             logger.info(f"Creating final video from {len(video_sequence)} components")
             
             # Final video path - use long-form naming convention
             episode_name = self.paths.get('episode_name', 'Unknown_Episode')
             original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
             final_video_filename = f"long-form_{episode_name}_{original_filename}.mkv"
+            final_videos_dir = self.paths['language']['final_videos']
             final_video_path = final_videos_dir / final_video_filename
             
             # Create concat file

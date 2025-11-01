@@ -101,17 +101,38 @@ except Exception as e:
 - `/api/v1/jobs` (POST): 영상+자막 업로드와 폼 필드로 새 잡 생성, 백그라운드 처리 시작.
 - `/api/v1/jobs/{job_id}` (GET): Redis에서 현재 잡 상태 조회.
 - `/api/v1/jobs/{job_id}/expressions` (GET): Redis에서 표현식 반환(작업 상태와 동일한 소스).
+  - **TICKET-003 수정:** 정의되지 않은 `jobs_db` 변수 수정 - 이제 `get_redis_job_manager()`를 통해 Redis를 올바르게 사용함
 - `/api/v1/jobs` (GET): 모든 잡 나열(출처: Redis).
 
 ## 잡 처리(백그라운드 태스크)
-`routes/jobs.py`의 `process_video_task(...)`:
-- `TempFileManager`를 사용한 임시 파일 처리 (참조: `langflix/utils/temp_file_manager.py`)
+
+### 통합 파이프라인 서비스 (TICKET-001)
+
+API는 API와 CLI 처리 모두에 대한 통합 인터페이스를 제공하는 `VideoPipelineService` (`langflix/services/video_pipeline_service.py`)를 사용합니다. 이를 통해 코드 중복을 제거하고 일관된 동작을 보장합니다.
+
+**주요 기능:**
+- 비디오 처리 파이프라인에 대한 단일 진실 공급원
+- 실시간 작업 상태 업데이트를 위한 진행 상황 콜백 지원
+- API와 CLI 간 일관된 결과 형식
+
+**구현:**
+- `routes/jobs.py`에서 `process_video_task(...)`로 정의 (450+ 줄에서 ~110 줄로 간소화)
+- `LangFlixPipeline`을 래핑하는 `VideoPipelineService.process_video()` 사용
+- **임시 파일 관리 (TICKET-002):**
+  - 임시 파일 처리를 위해 `TempFileManager` 사용 (참조: `langflix/utils/temp_file_manager.py`)
   - 컨텍스트가 종료되면 예외 발생 시에도 임시 파일이 자동으로 정리됨
   - 하드코딩된 `/tmp` 경로 없음 - `tempfile` 모듈을 통해 시스템 temp 디렉토리 사용
   - 컨텍스트 관리자가 처리 실패 시에도 정리 보장
-- `langflix.core` 모듈로 자막 파싱/청크/표현식 분석, 자막 생성, 클립 추출, 교육용/쇼츠 영상 생성 및 배치, 최종 `ffmpeg` 병합 수행.
-- `services.output_manager.create_output_structure`로 출력 디렉터리 구조 생성.
-- Redis 상태/결과 업데이트, 비디오 캐시 무효화.
+  - 전역 싱글톤 인스턴스가 애플리케이션 전체에서 모든 임시 파일 관리
+- 콜백을 통해 Redis 작업 상태/결과 업데이트; 비디오 캐시 무효화
+
+**진행 상황 추적:**
+- 진행 상황 콜백이 자동으로 Redis 작업 상태 업데이트
+- 진행 마일스톤: 10% (초기화), 20% (파일 저장), 30% (파싱), 50% (처리), 70% (교육용 비디오), 80% (짧은 비디오), 100% (완료)
+
+**관련 문서:**
+- [Services 모듈 문서](../services/README_kor.md) - VideoPipelineService 세부사항
+- [Utils 모듈 문서](../utils/temp_file_manager_kor.md) - TempFileManager 사용법
 
 ## 에러 처리 및 로깅
 - 통합 예외 핸들러로 일관된 JSON 페이로드 반환.

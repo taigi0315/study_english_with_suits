@@ -389,13 +389,124 @@ class LangFlixPipeline:
             raise
     
     def _analyze_expressions(self, max_expressions: int = None, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False) -> List[ExpressionAnalysis]:
-        """Analyze expressions from subtitle chunks"""
-        all_expressions = []
+        """Analyze expressions from subtitle chunks (parallel or sequential)"""
+        import time
         
         # In test mode, process only the first chunk
         chunks_to_process = [self.chunks[0]] if test_mode and self.chunks else self.chunks
         
-        for i, chunk in enumerate(chunks_to_process):
+        # Check if parallel processing is enabled
+        parallel_enabled = settings.get_parallel_llm_processing_enabled()
+        
+        # Use parallel processing if enabled and we have multiple chunks (or not in test mode with multiple chunks)
+        should_use_parallel = parallel_enabled and len(chunks_to_process) > 1 and not test_mode
+        
+        if should_use_parallel:
+            logger.info(f"Using PARALLEL processing for {len(chunks_to_process)} chunks")
+            return self._analyze_expressions_parallel(chunks_to_process, max_expressions, language_level, save_llm_output)
+        else:
+            logger.info(f"Using SEQUENTIAL processing for {len(chunks_to_process)} chunks")
+            return self._analyze_expressions_sequential(chunks_to_process, max_expressions, language_level, save_llm_output, test_mode)
+    
+    def _analyze_expressions_parallel(
+        self,
+        chunks: List[List[Dict[str, Any]]],
+        max_expressions: int = None,
+        language_level: str = None,
+        save_llm_output: bool = False
+    ) -> List[ExpressionAnalysis]:
+        """Analyze expressions in parallel using ExpressionBatchProcessor"""
+        import time
+        from langflix.core.parallel_processor import ExpressionBatchProcessor
+        
+        # Get parallel processor configuration
+        max_workers = settings.get_parallel_llm_max_workers()
+        timeout_per_chunk = settings.get_parallel_llm_timeout()
+        
+        # Get output directory for LLM outputs if save_llm_output is enabled
+        output_dir = None
+        if save_llm_output:
+            try:
+                metadata_paths = self.paths.get('episode', {}).get('metadata', {})
+                if metadata_paths and 'llm_outputs' in metadata_paths:
+                    output_dir = str(metadata_paths['llm_outputs'])
+                else:
+                    episode_dir = self.paths.get('episode', {}).get('episode_dir')
+                    if episode_dir:
+                        output_dir = str(episode_dir / 'llm_outputs')
+                        Path(output_dir).mkdir(parents=True, exist_ok=True)
+            except (KeyError, AttributeError) as e:
+                logger.warning(f"Could not determine LLM output directory: {e}. LLM outputs will not be saved.")
+                output_dir = None
+        
+        # Progress callback
+        completed_chunks = [0]
+        total_chunks = len(chunks)
+        
+        def progress_callback(completed: int, total: int):
+            completed_chunks[0] = completed
+            progress_pct = int((completed / total) * 100) if total > 0 else 0
+            logger.info(f"Analyzed {completed}/{total} chunks ({progress_pct}%)")
+            if self.progress_callback:
+                self.progress_callback(30 + (progress_pct * 0.5), f"Analyzing expressions... {completed}/{total} chunks")
+        
+        # Create ExpressionBatchProcessor with configuration
+        processor = ExpressionBatchProcessor(max_workers=max_workers)
+        
+        # Analyze chunks in parallel
+        logger.info(f"Starting parallel analysis of {len(chunks)} chunks with {max_workers} workers")
+        start_time = time.time()
+        
+        # Use ExpressionBatchProcessor directly (no sequential loop!)
+        all_results = processor.analyze_expression_chunks(
+            chunks,
+            language_level=language_level,
+            language_code=self.language_code,
+            save_output=save_llm_output,
+            output_dir=output_dir,
+            progress_callback=progress_callback
+        )
+        
+        duration = time.time() - start_time
+        logger.info(f"Parallel analysis complete in {duration:.2f}s")
+        
+        # Flatten results from all chunks
+        all_expressions = []
+        for chunk_results in all_results:
+            if chunk_results:  # Skip empty results (failed chunks)
+                all_expressions.extend(chunk_results)
+        
+        logger.info(f"Total expressions found: {len(all_expressions)}")
+        
+        # Limit to max_expressions if specified
+        limited_expressions = all_expressions[:max_expressions] if max_expressions else all_expressions
+        logger.info(f"Processing {len(limited_expressions)} expressions")
+        
+        # Find expression timing for each expression
+        logger.info("Finding exact expression timings from subtitles...")
+        for expression in limited_expressions:
+            try:
+                expression_start, expression_end = self.subtitle_processor.find_expression_timing(expression)
+                expression.expression_start_time = expression_start
+                expression.expression_end_time = expression_end
+                logger.info(f"Expression '{expression.expression}' timing: {expression_start} to {expression_end}")
+            except Exception as e:
+                logger.warning(f"Could not find timing for expression '{expression.expression}': {e}")
+        
+        return limited_expressions
+    
+    def _analyze_expressions_sequential(
+        self,
+        chunks: List[List[Dict[str, Any]]],
+        max_expressions: int = None,
+        language_level: str = None,
+        save_llm_output: bool = False,
+        test_mode: bool = False
+    ) -> List[ExpressionAnalysis]:
+        """Analyze expressions sequentially (original implementation)"""
+        all_expressions = []
+        
+        for i, chunk in enumerate(chunks):
             if max_expressions is not None and len(all_expressions) >= max_expressions:
                 break
                 
@@ -408,14 +519,11 @@ class LangFlixPipeline:
                 # Get output directory for LLM outputs if save_llm_output is enabled
                 output_dir = None
                 if save_llm_output:
-                    # Check if metadata directory exists in paths structure
-                    # Note: metadata directory may not exist if OutputManager doesn't create it
                     try:
                         metadata_paths = self.paths.get('episode', {}).get('metadata', {})
                         if metadata_paths and 'llm_outputs' in metadata_paths:
                             output_dir = str(metadata_paths['llm_outputs'])
                         else:
-                            # Fallback: use episode directory for LLM outputs
                             episode_dir = self.paths.get('episode', {}).get('episode_dir')
                             if episode_dir:
                                 output_dir = str(episode_dir / 'llm_outputs')
@@ -440,7 +548,7 @@ class LangFlixPipeline:
                 break
         
         # Limit to max_expressions
-        limited_expressions = all_expressions[:max_expressions]
+        limited_expressions = all_expressions[:max_expressions] if max_expressions else all_expressions
         logger.info(f"Total expressions found: {len(limited_expressions)}")
         
         # Find expression timing for each expression

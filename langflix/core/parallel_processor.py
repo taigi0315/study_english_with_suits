@@ -186,6 +186,8 @@ class ExpressionBatchProcessor:
         chunks: List[List[Dict[str, Any]]],
         language_level: str = None,
         language_code: str = "ko",
+        save_output: bool = False,
+        output_dir: str = None,
         progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> List[List[Any]]:
         """
@@ -195,6 +197,8 @@ class ExpressionBatchProcessor:
             chunks: List of subtitle chunks
             language_level: Target language level
             language_code: Target language code
+            save_output: Whether to save LLM output to file
+            output_dir: Directory to save LLM output (if save_output is True)
             progress_callback: Progress callback
             
         Returns:
@@ -209,7 +213,7 @@ class ExpressionBatchProcessor:
                 task_id=f"chunk_{i}",
                 function=analyze_chunk,
                 args=(chunk, language_level, language_code),
-                kwargs={},
+                kwargs={"save_output": save_output, "output_dir": output_dir},
                 priority=len(chunk)  # Prioritize larger chunks
             )
             tasks.append(task)
@@ -353,6 +357,8 @@ def process_expressions_parallel(
     chunks: List[List[Dict[str, Any]]],
     language_level: str = None,
     language_code: str = "ko",
+    save_output: bool = False,
+    output_dir: str = None,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[List[Any]]:
     """
@@ -362,11 +368,13 @@ def process_expressions_parallel(
         chunks: List of subtitle chunks
         language_level: Target language level
         language_code: Target language code
+        save_output: Whether to save LLM output to file
+        output_dir: Directory to save LLM output (if save_output is True)
         progress_callback: Progress callback
         
     Returns:
         List of expression analysis results
     """
     return _expression_processor.analyze_expression_chunks(
-        chunks, language_level, language_code, progress_callback
+        chunks, language_level, language_code, save_output, output_dir, progress_callback
     )

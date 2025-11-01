@@ -50,10 +50,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TICKET-001:** Context file conflicts (now checks and reuses existing files)
 - **TICKET-001:** Short-form using different source video (now uses same as long-form)
 
+### Added (Continued)
+- **TICKET-001-extract-pipeline-logic:** `VideoPipelineService` - unified video processing service for API and CLI
+  - Eliminates 450+ lines of duplicate code between API and CLI
+  - Progress callback support for real-time job status updates
+  - Standardized result format across entry points
+- **TICKET-002:** `TempFileManager` - centralized temporary file management utility
+  - Automatic cleanup using context managers
+  - Cross-platform compatibility via Python's `tempfile` module
+  - Global singleton pattern for application-wide temp file management
+  - Exit handler for cleanup on application exit
+- **TICKET-004:** `filename_utils` - consolidated filename sanitization utilities
+  - `sanitize_filename()` - general-purpose filename sanitization
+  - `sanitize_for_expression_filename()` - expression-specific sanitization
+  - Cross-platform support (Windows, macOS, Linux)
+  - Security enhancement (filename injection protection)
+- **TICKET-005:** Error handler integration throughout codebase
+  - `@handle_error_decorator` - automatic error handling for functions
+  - `@retry_on_error` - automatic retry with exponential backoff
+  - Structured error reports with context (operation, component, metadata)
+  - Error categorization (NETWORK, PROCESSING, VALIDATION, RESOURCE, SYSTEM)
+  - Error severity classification (LOW, MEDIUM, HIGH, CRITICAL)
+
+### Changed (Continued)
+- **TICKET-001-extract-pipeline-logic:** API job processing simplified
+  - `process_video_task()` reduced from 450+ lines to ~110 lines
+  - Uses `VideoPipelineService` instead of inline pipeline logic
+  - Progress tracking via callback mechanism
+- **TICKET-002:** Temporary file management standardized across codebase
+  - Replaced hardcoded `/tmp/` paths with `TempFileManager`
+  - Replaced manual cleanup with automatic context manager cleanup
+  - Removed `VideoEditor._temp_files` tracking in favor of `TempFileManager`
+  - All temp file creation now uses consistent pattern
+- **TICKET-004:** Filename sanitization consolidated
+  - All filename sanitization now uses `filename_utils` module
+  - Removed 7+ duplicate sanitization implementations
+  - Consistent sanitization across all modules (main.py, jobs.py, video_editor.py, etc.)
+  - Expression matching now uses unified sanitization (fixes TICKET-001 Issue 3)
+- **TICKET-005:** Error handling integrated in core workflows
+  - `VideoEditor.create_educational_sequence()` - wrapped with error handler
+  - `VideoEditor.create_short_format_video()` - wrapped with error handler
+  - `ExpressionAnalyzer.analyze_chunk()` - wrapped with error handler
+  - `ExpressionAnalyzer._generate_content_with_retry()` - uses error handler retry
+  - Custom retry logic replaced with error_handler decorators
+
+### Fixed (Continued)
+- **TICKET-003:** Fixed undefined `jobs_db` variable in `get_job_expressions` endpoint
+  - Now correctly uses Redis via `get_redis_job_manager()`
+  - Endpoint now functional (was completely broken before)
+  - Consistent with other endpoints (get_job_status, list_jobs)
+
 ### Notes
 - Video tracks preserve original codec/resolution when possible. Re-encoding occurs only when filters are required.
 - **TICKET-001:** Demuxer-first approach significantly improves reliability compared to filter-based repetition
 - **TICKET-001:** Both long-form and short-form now follow identical pipeline pattern (only layout differs)
+- **TICKET-001-extract-pipeline-logic:** Single source of truth for video processing pipeline - eliminates maintenance burden of duplicate code
+- **TICKET-002:** Automatic temp file cleanup prevents disk space leaks and ensures system stability
+- **TICKET-004:** Unified filename sanitization ensures consistent behavior and security across the codebase
+- **TICKET-005:** Structured error handling provides foundation for monitoring, alerting, and better debugging
 
 ## [1.0.0] - 2025-10-25
 

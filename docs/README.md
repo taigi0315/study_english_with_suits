@@ -13,6 +13,15 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 - **[Configuration Guide](CONFIGURATION_GUIDE.md)** - Advanced configuration and customization
 - **[API Reference](API_REFERENCE.md)** - Web API usage and integration
 
+### Module Documentation
+- **[Core Module](core/README_eng.md)** - Video editing and pipeline logic (`video_editor.py`, `expression_analyzer.py`)
+- **[Media Module](media/README_eng.md)** - FFmpeg utilities and media processing (`ffmpeg_utils.py`)
+- **[Services Module](services/README_eng.md)** - Service layer classes (`VideoPipelineService`)
+- **[API Module](api/README_eng.md)** - FastAPI routes and endpoints
+- **[Utils Module](utils/)** - Utility functions
+  - [TempFileManager](utils/temp_file_manager_eng.md) - Temporary file management
+  - [Filename Utils](utils/filename_utils_eng.md) - Filename sanitization
+
 ### Troubleshooting
 - **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Common issues and solutions
 
@@ -26,10 +35,19 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 
 ## 🚀 Quick Start
 
-### Media Pipeline Updates (Unreleased)
-- New modules: `langflix/media/ffmpeg_utils.py`, `langflix/audio/timeline.py`, `langflix/subtitles/overlay.py`, `langflix/slides/generator.py`
-- Goals: keep original video format when possible, normalize audio to stereo/48k, avoid audio loss with explicit stream mapping
-- See ADR-015 for design details
+### Recent Improvements (2025-01-30)
+
+**Code Quality & Architecture:**
+- **TICKET-001-extract-pipeline-logic:** Unified `VideoPipelineService` - eliminates 450+ lines of duplicate code between API and CLI
+- **TICKET-002:** Standardized `TempFileManager` - automatic temp file cleanup prevents disk leaks
+- **TICKET-004:** Consolidated `filename_utils` - single source of truth for filename sanitization (7+ duplicates removed)
+- **TICKET-005:** Error handler integration - structured error reporting with automatic retry
+
+**Media Pipeline:**
+- **TICKET-001:** Demuxer-first approach for reliable audio preservation
+- **TICKET-001:** Standardized layouts (hstack for long-form, vstack for short-form)
+- **TICKET-001:** Fixed A-V sync issues with copy mode concatenation
+- See [ADR-015](adr/ADR-015-ffmpeg-pipeline-standardization_eng.md) for design details
 
 ### Installation (5 minutes)
 

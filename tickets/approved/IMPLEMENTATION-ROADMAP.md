@@ -3,281 +3,245 @@
 **Architect:** Architect Agent
 
 ## Executive Summary
-- Total tickets approved: 5
-- Estimated timeline: 3-4 weeks (2 sprints)
-- Critical path: TICKET-003 → TICKET-001 → TICKET-004
-- Key milestones: Critical bug fix (Week 1), Service layer refactoring (Week 2), Code quality improvements (Week 3-4)
+- Total tickets approved: 3
+- Estimated timeline: 4-6 weeks (2-3 sprints)
+- Critical path: TICKET-001 → TICKET-002 → TICKET-003
+- Key milestones: Parallel processing (Week 2), Multi-expression support (Week 4), Production deployment (Week 6)
 
 ## Strategic Context
 This implementation plan addresses:
-1. **Critical Bug Fix** - TICKET-003 (1 ticket)
-2. **Foundation Refactoring** - TICKET-001, TICKET-002 (2 tickets)
-3. **Code Quality Improvements** - TICKET-004, TICKET-005 (2 tickets)
+1. **Performance Optimization** - TICKET-001 (1 ticket)
+2. **Feature Enhancement** - TICKET-002 (1 ticket)
+3. **Production Readiness** - TICKET-003 (1 ticket)
 
 ### Architectural Vision
 Where we're headed:
-- **Unified Service Layer**: Single source of truth for video processing pipeline
-- **Standardized Resource Management**: Consistent patterns for temp files and error handling
-- **Reduced Technical Debt**: Eliminated code duplication, improved maintainability
-- **Better Reliability**: Automatic cleanup, structured error handling, automatic retry
+- **Performance**: 3-5x faster expression analysis through parallel processing
+- **Richness**: Multiple expressions per context for richer educational content
+- **Reliability**: Production-grade deployment with Docker, CI/CD, and monitoring
 
 ### Expected Outcomes
 After completing this roadmap:
-- **Code Reduction**: ~500 lines of duplicate code eliminated
-- **Maintainability**: Single source of truth for video processing, easier to modify and extend
-- **Reliability**: Automatic temp file cleanup, structured error handling, better debugging
-- **Quality**: Consistent filename sanitization, unified error handling patterns
-
----
-
-## Phase 0: Immediate (This Week)
-**Focus:** Critical bug fix
-**Duration:** 1 day
-
-### TICKET-003: Fix Undefined Variable Bug in get_job_expressions Endpoint
-- **Priority:** Critical
-- **Effort:** < 2 hours
-- **Why now:** Runtime error breaks API endpoint, blocks users from accessing expression results
-- **Owner:** Any developer (straightforward fix)
-- **Dependencies:** None
-- **Success metric:** Endpoint works without NameError, tests pass
-
-**Implementation:**
-- Replace `jobs_db` with Redis usage (same pattern as other endpoints)
-- Add integration tests for endpoint
-- Verify Redis job data structure
-
-**Rollback:** Simple revert if issues arise
+- **Performance**: Expression analysis 3-5x faster
+- **Content Quality**: Richer educational content with multiple expressions per context
+- **Deployment**: Consistent, reproducible production environments
+- **Automation**: CI/CD pipeline for reliable releases
 
 ---
 
 ## Phase 1: Sprint 1 (Weeks 1-2)
-**Focus:** Foundation refactoring - service layer and resource management
+**Focus:** Performance optimization - parallel LLM processing
 **Duration:** 2 weeks
-**Dependencies:** Phase 0 complete
+**Dependencies:** None
 
-### Implementation Sequence
+### TICKET-001: Implement Parallel LLM Request Processing
+- **Priority:** High
+- **Effort:** 2-3 days
+- **Why first:** Performance foundation, unblocks larger expression sets for TICKET-002
+- **Owner:** Senior engineer
 
-#### Week 1
-1. **TICKET-001: Extract Pipeline Logic from API Task**
-   - Effort: 2-3 days
-   - Depends on: Phase 0 complete
-   - Blocks: TICKET-004
-   - Why first: Largest code duplication, foundation for other improvements
-   
-   **Key Deliverables:**
-   - `VideoPipelineService` class created
-   - `process_video_task` reduced from 450+ lines to ~100 lines
-   - API and CLI both use unified service
-   - Progress callbacks integrated with Redis job updates
-   - `pipeline_runner.py` evaluated and fixed or removed
-   
-   **Success Criteria:**
-   - All existing tests pass
-   - Integration tests verify identical results from API and CLI
-   - Code duplication reduced by 80%+
+**Key Deliverables:**
+- `ExpressionBatchProcessor` extended to support `save_output` parameter
+- `LangFlixPipeline._analyze_expressions` uses parallel processing
+- Configuration for enabling/disabling parallel processing
+- Rate limiting and error handling
+- Performance benchmarks (3x+ improvement verified)
 
-2. **TICKET-002: Standardize Temp File Management**
-   - Effort: 1-2 days
-   - Depends on: None (can work in parallel with TICKET-001)
-   - Can parallel with: TICKET-001 (coordinate for integration)
-   - Why now: Prevents disk space leaks, improves reliability
-   
-   **Key Deliverables:**
-   - `TempFileManager` utility created
-   - Context manager pattern implemented
-   - Existing temp file usage migrated gradually
-   - Integration tests verify cleanup even on exceptions
-   
-   **Success Criteria:**
-   - All new temp file creation uses `TempFileManager`
-   - Hardcoded `/tmp/` paths removed
-   - Exception-safe cleanup verified
-
-#### Week 2
-**Phase 1 Completion & Testing:**
-- Complete TICKET-001 and TICKET-002 integration
-- Comprehensive integration tests
-- Performance benchmarking
-- Documentation updates
-
-**Phase 1 Success Criteria:**
-- [ ] Service layer established and working
-- [ ] Temp file management standardized
-- [ ] All tests passing
-- [ ] Performance impact < 5%
-- [ ] Documentation updated
+**Success Criteria:**
+- [ ] Parallel processing actually works (no sequential loops!)
+- [ ] 3x+ performance improvement for 10+ chunks
+- [ ] Rate limit handling with circuit breaker
+- [ ] Graceful degradation on partial failures
+- [ ] All existing tests pass
 
 **Phase 1 Risks:**
-- Risk: Breaking API behavior
-  - Mitigation: Comprehensive integration tests, ensure response format unchanged
-- Risk: Temp file cleanup issues
-  - Mitigation: Integration tests verify cleanup, gradual migration
+- Risk: Gemini API rate limits
+  - Mitigation: Conservative default (max 5 workers), auto-adjust
+- Risk: Implementation bug (sequential loop)
+  - Mitigation: Code review, integration tests
 
 ---
 
 ## Phase 2: Sprint 2 (Weeks 3-4)
-**Focus:** Code quality improvements - filename sanitization and error handling
+**Focus:** Feature enhancement - multiple expressions per context
 **Duration:** 2 weeks
-**Dependencies:** Phase 1 complete
+**Dependencies:** Phase 1 complete (helps with larger expression sets)
 
-### Implementation Sequence
+### TICKET-002: Support Multiple Expressions Per Context
+- **Priority:** High
+- **Effort:** 4-5 days (Phase 1: separate mode) + 3-4 days (Phase 2: combined mode) = 7-9 days total
+- **Why now:** Builds on parallel processing, enables richer content
+- **Owner:** Senior engineer
 
-#### Week 3
-3. **TICKET-004: Consolidate Filename Sanitization**
-   - Effort: < 1 day
-   - Depends on: TICKET-001 complete (service layer established)
-   - Blocks: None
-   - Why now: Code quality improvement, security enhancement, follows TICKET-001
-   
-   **Key Deliverables:**
-   - `filename_utils.py` utility created
-   - All filename sanitization consolidated
-   - Cross-platform testing (Windows, macOS, Linux)
-   - Comprehensive edge case tests
-   
-   **Success Criteria:**
-   - All filename sanitization uses unified utility
-   - Expression matching verified (critical for video workflow)
-   - Cross-platform compatibility verified
+**Key Deliverables:**
+- `ExpressionGroup` model (backward compatible)
+- Expression grouping logic
+- Shared context clip reuse
+- Separate mode (default, backward compatible)
+- Optional combined mode (Phase 2)
 
-#### Week 4
-4. **TICKET-005: Integrate Error Handler**
-   - Effort: 2-3 days
-   - Depends on: TICKET-001 complete (service layer for integration)
-   - Blocks: None
-   - Why now: Leverages existing investment, improves reliability
-   
-   **Key Deliverables:**
-   - Core workflows use error handler (expression analysis, video processing)
-   - Custom retry logic replaced with error_handler
-   - Error reports generated with context
-   - API endpoints integrated (gradual)
-   
-   **Success Criteria:**
-   - Core workflows use error handler
-   - Retry logic tested with various failure scenarios
-   - Error reports generated with useful context
-   - Performance impact < 5%
-
-**Phase 2 Success Criteria:**
-- [ ] Filename sanitization consolidated and tested
-- [ ] Error handler integrated in core workflows
-- [ ] All tests passing
-- [ ] Documentation updated
+**Success Criteria:**
+- [ ] ExpressionGroup model working
+- [ ] Grouping logic handles edge cases
+- [ ] Separate mode fully backward compatible
+- [ ] Video clip caching/reuse verified
+- [ ] Integration tests pass
 
 **Phase 2 Risks:**
-- Risk: Filename format changes break lookups
-  - Mitigation: Expression matching verified, comprehensive tests
-- Risk: Error handler changes behavior
-  - Mitigation: Gradual integration, verify existing behavior preserved
+- Risk: Breaking existing workflows
+  - Mitigation: Separate mode default, single expressions = groups of 1
+- Risk: Video processing complexity
+  - Mitigation: Start with separate mode, add combined later
+
+---
+
+## Phase 3: Sprint 3+ (Weeks 5-6+)
+**Focus:** Production deployment infrastructure
+**Duration:** 2+ weeks
+**Dependencies:** Core features stable (Phase 1-2)
+
+### TICKET-003: Production Dockerization & TrueNAS Deployment
+- **Priority:** High
+- **Effort:** 4-5 days (simplified without Celery)
+- **Why now:** Production readiness after core features stable
+- **Owner:** DevOps engineer or senior backend engineer
+
+**Key Deliverables:**
+- Multi-stage Dockerfile (builder, runtime, api)
+- Docker Compose for TrueNAS (API + Redis + optional PostgreSQL)
+- GitHub Actions CI/CD pipeline
+- Health checks and monitoring
+- Security hardening (non-root, secrets)
+- Deployment documentation
+
+**Success Criteria:**
+- [ ] Docker images build successfully (< 500MB)
+- [ ] Services start correctly (API + Redis)
+- [ ] Health checks passing
+- [ ] CI/CD pipeline working
+- [ ] Security scan passes
+- [ ] TrueNAS deployment tested
+
+**Phase 3 Risks:**
+- Risk: Over-engineering
+  - Mitigation: Simplified stack (no Celery unless needed)
+- Risk: Complex deployment
+  - Mitigation: Phased rollout, comprehensive docs
 
 ---
 
 ## Dependency Graph
 ```
-TICKET-003 (Phase 0)
-  └─> TICKET-001 (Phase 1, Week 1)
-       └─> TICKET-004 (Phase 2, Week 3)
-       └─> TICKET-005 (Phase 2, Week 4)
-       
-TICKET-002 (Phase 1, Week 1)
-  └─> Can integrate with TICKET-001 service layer
-  └─> TICKET-005 can use for temp file cleanup errors
+TICKET-001 (Phase 1)
+  └─> TICKET-002 (Phase 2) - parallel processing helps with larger expression sets
+  
+TICKET-003 (Phase 3)
+  └─> Independent (can proceed after core features stable)
 ```
 
 ## Critical Path
 The longest dependency chain:
-1. TICKET-003 → TICKET-001 → TICKET-004
-   Total: ~2.5 weeks
+1. TICKET-001 → TICKET-002
+   Total: ~4 weeks
 
 **Timeline Impact:**
-Cannot complete TICKET-004 before Week 3 due to dependency on TICKET-001.
+Cannot start TICKET-002 before TICKET-001 complete (helps with performance).
 
 ---
 
 ## Resource Requirements
 **Skills needed:**
-- Backend engineer: 2-3 weeks (TICKET-001, TICKET-005)
-- Mid-level engineer: 1-2 weeks (TICKET-002, TICKET-004)
-- Any developer: < 1 day (TICKET-003)
+- Senior engineer: 2 weeks (TICKET-001, TICKET-002)
+- DevOps engineer: 1 week (TICKET-003)
+- Or: Senior backend engineer: 1 week (TICKET-003)
 
 **Infrastructure needs:**
-- None (all code changes)
+- None for Phase 1-2
+- Docker, GitHub Actions for Phase 3
 
 ---
 
 ## Risk Management
 
-### High-Risk Tickets
-1. **TICKET-001:** Breaking API behavior
-   - Impact if fails: Users unable to process videos via API
-   - Mitigation: Comprehensive integration tests, ensure response format unchanged
-   - Contingency: Keep old `process_video_task` as backup until fully tested
+### High-Risk Items
+1. **TICKET-001:** Implementation bug (sequential loop defeats parallelization)
+   - Impact: No performance improvement
+   - Mitigation: Code review, integration tests, performance benchmarks
+   
+2. **TICKET-002:** Breaking backward compatibility
+   - Impact: Existing workflows fail
+   - Mitigation: Default to separate mode, single expressions = groups of 1
+
+3. **TICKET-003:** Over-engineering with unused services
+   - Impact: Complex deployment, maintenance burden
+   - Mitigation: Simplified stack (API + Redis only, optional DB)
 
 ### Rollback Strategy
-For each phase:
-- **Phase 0:** Simple revert - restore old code (though it was broken)
-- **Phase 1:** Keep old implementations until fully tested - gradual migration
-- **Phase 2:** Can revert individual integrations if issues arise
+- **Phase 1:** Disable parallel processing via config (`parallel_processing.enabled: false`)
+- **Phase 2:** Feature flag to disable grouping (falls back to single-expression)
+- **Phase 3:** Keep existing deployment method, Docker as additional option
 
 ---
 
 ## Success Metrics
 
 ### Short-term (After Phase 1)
-- Code duplication reduced by 80%+ (from ~500 lines)
-- Temp file cleanup verified (no disk leaks)
-- Service layer established and tested
-- Performance impact < 5%
+- Expression analysis 3x+ faster
+- Parallel processing stable (no rate limit issues)
+- Memory usage acceptable
 
-### Long-term (After All Phases)
-- Single source of truth for video processing pipeline
-- Consistent error handling patterns across codebase
-- Improved maintainability (easier to add features)
-- Better debugging capabilities (error reports, temp file tracking)
+### Medium-term (After Phase 2)
+- Multiple expressions per context working
+- Video processing efficient (no duplicate clips)
+- Backward compatibility maintained
+
+### Long-term (After Phase 3)
+- Production deployment automated
+- Consistent environments (dev/staging/prod)
+- CI/CD pipeline reduces manual errors
 
 ---
 
 ## Review Checkpoints
-**After Phase 0:** Verify critical bug fix deployed and working
-**After Phase 1:** Measure code reduction, verify service layer stability, adjust Phase 2 if needed
-**After Phase 2:** Evaluate code quality improvements, measure error handling effectiveness
-**Monthly:** Review progress against roadmap, adjust priorities if needed
+**After Phase 1:** Verify performance improvement, check rate limit handling
+**After Phase 2:** Test backward compatibility, verify video clip reuse
+**After Phase 3:** Validate deployment process, check security scan results
 
 ---
 
 ## Notes for Engineering Team
 
+### Critical Implementation Notes
+
+**TICKET-001 - CRITICAL FIX:**
+The proposed Step 2 implementation has a **bug** - it still uses a sequential loop! Must use `ExpressionBatchProcessor.analyze_expression_chunks()` directly. See ticket for corrected code.
+
+**TICKET-002 - Phased Approach:**
+- Phase 1: ExpressionGroup + separate mode (backward compatible)
+- Phase 2: Combined mode (optional, can defer)
+
+**TICKET-003 - Simplified Stack:**
+- Remove Celery from initial implementation (use FastAPI background tasks)
+- Essential: API + Redis
+- Optional: PostgreSQL (if DB enabled)
+- Add Celery later if distributed workers needed
+
 ### Coordination Points
-- **TICKET-001 & TICKET-002:** Coordinate on temp file management integration in new service layer
-- **TICKET-001 & TICKET-004:** Coordinate on filename sanitization usage in new service
-- **TICKET-001 & TICKET-005:** Coordinate on error handler integration in new service
+- TICKET-001 & TICKET-002: Parallel processing helps with larger expression sets
+- All tickets: Maintain backward compatibility where possible
 
 ### Testing Strategy
-- **Unit Tests:** Each ticket includes unit tests
-- **Integration Tests:** Critical for TICKET-001 (verify API/CLI identical results)
-- **Regression Tests:** Run full test suite after each phase
-
-### Documentation Updates
-- Update `docs/api/README.md` after TICKET-001 (service layer)
-- Update `docs/core/README.md` after TICKET-001 (pipeline service)
-- Add examples for new utilities (TICKET-002, TICKET-004)
-
-### Patterns to Follow
-- **Service Layer Pattern:** TICKET-001 establishes pattern
-- **Context Manager Pattern:** TICKET-002 establishes pattern
-- **Utility Pattern:** TICKET-004 establishes pattern
-- **Decorator Pattern:** TICKET-005 uses for error handling
+- **TICKET-001:** Performance benchmarks required
+- **TICKET-002:** Backward compatibility tests critical
+- **TICKET-003:** Integration tests with Docker Compose
 
 ---
 
 ## Next Steps
-1. **Immediate:** Start TICKET-003 (critical bug fix)
-2. **This Week:** Complete Phase 0, plan Phase 1
-3. **Next Sprint:** Execute Phase 1 (TICKET-001, TICKET-002)
-4. **Following Sprint:** Execute Phase 2 (TICKET-004, TICKET-005)
-5. **Ongoing:** Monitor progress, adjust timeline as needed
+1. **Week 1-2:** Execute TICKET-001 (parallel processing)
+2. **Week 3-4:** Execute TICKET-002 (multi-expression support)
+3. **Week 5-6+:** Execute TICKET-003 (production deployment)
+4. **Ongoing:** Monitor performance, adjust as needed
 
 ---
 

@@ -173,10 +173,13 @@ When all extracted clips are played in chronological order, learners should be a
    - Skip the other one, even if it's good
 
 4. **CONTEXT BOUNDARIES MUST NOT OVERLAP:**
-   - Before finalizing your selection, review all `context_start_time` and `context_end_time`
-   - Sort them chronologically
-   - Verify that each clip's start time is ≥ previous clip's end time
-   - If you find ANY overlap, adjust or remove clips
+   - **CRITICAL:** Different contexts (different `context_start_time`/`context_end_time`) must NEVER overlap
+   - Before finalizing your selection, review all `context_start_time` and `context_end_time` values
+   - Sort contexts chronologically by `context_start_time`
+   - Verify that each context's start time is ≥ previous context's end time
+   - **Rule:** Context A ends at X, Context B must start at X or later (X < Context B start)
+   - If you find ANY overlap between different contexts, adjust or remove one of them
+   - **Remember:** Multiple expressions can share the SAME context (same context times), but DIFFERENT contexts must not overlap
 
 **VERIFICATION CHECKLIST:**
 Before submitting your JSON output, verify:

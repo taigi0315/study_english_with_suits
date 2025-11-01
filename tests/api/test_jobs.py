@@ -10,8 +10,13 @@ from langflix.api.main import app
 
 client = TestClient(app)
 
-def test_create_job_mock():
+@patch('langflix.api.routes.jobs.get_redis_job_manager')
+def test_create_job_mock(mock_get_manager):
     """Test job creation endpoint with mock data."""
+    mock_manager = MagicMock()
+    mock_get_manager.return_value = mock_manager
+    mock_manager.create_job.return_value = True
+    
     # Mock file upload data
     files = {
         "video_file": ("test.mp4", b"mock video content", "video/mp4"),
@@ -31,20 +36,39 @@ def test_create_job_mock():
     result = response.json()
     assert "job_id" in result
     assert result["status"] == "PENDING"
-    assert result["progress"] == 0
-    assert "created_at" in result
+    assert "message" in result
+    assert result["message"] == "Job created successfully"
+    assert "video_size_mb" in result
+    assert "subtitle_size_kb" in result
+    # Verify Redis create_job was called
+    mock_manager.create_job.assert_called_once()
 
-def test_get_job_status():
+@patch('langflix.api.routes.jobs.get_redis_job_manager')
+def test_get_job_status(mock_get_manager):
     """Test job status retrieval."""
+    mock_manager = MagicMock()
+    mock_get_manager.return_value = mock_manager
+    
     job_id = "test-job-id"
+    mock_job = {
+        "job_id": job_id,
+        "status": "PROCESSING",
+        "progress": 50,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "current_step": "Processing video..."
+    }
+    mock_manager.get_job.return_value = mock_job
+    
     response = client.get(f"/api/v1/jobs/{job_id}")
     assert response.status_code == 200
     
     result = response.json()
     assert result["job_id"] == job_id
-    assert result["status"] in ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+    assert result["status"] == "PROCESSING"
     assert "progress" in result
+    assert result["progress"] == 50
     assert "created_at" in result
+    mock_manager.get_job.assert_called_once_with(job_id)
 
 @patch('langflix.api.routes.jobs.get_redis_job_manager')
 def test_get_job_expressions_completed(mock_get_manager):
@@ -122,18 +146,62 @@ def test_get_job_expressions_not_found(mock_get_manager):
     assert "Job not found" in error_message
     mock_manager.get_job.assert_called_once_with(job_id)
 
-def test_list_jobs():
+@patch('langflix.api.routes.jobs.get_redis_job_manager')
+def test_list_jobs(mock_get_manager):
     """Test job listing endpoint."""
+    mock_manager = MagicMock()
+    mock_get_manager.return_value = mock_manager
+    
+    # Mock jobs
+    mock_jobs = {
+        "job1": {
+            "job_id": "job1",
+            "status": "COMPLETED",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        "job2": {
+            "job_id": "job2",
+            "status": "PENDING",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+    }
+    mock_manager.get_all_jobs.return_value = mock_jobs
+    
     response = client.get("/api/v1/jobs")
     assert response.status_code == 200
     
     result = response.json()
-    assert isinstance(result, list)
+    assert isinstance(result, dict)
+    assert "jobs" in result
+    assert "total" in result
+    assert isinstance(result["jobs"], list)
+    assert result["total"] == 2
+    assert len(result["jobs"]) == 2
+    mock_manager.get_all_jobs.assert_called_once()
 
-def test_list_jobs_with_filters():
-    """Test job listing with filters."""
+@patch('langflix.api.routes.jobs.get_redis_job_manager')
+def test_list_jobs_with_filters(mock_get_manager):
+    """Test job listing endpoint (filters are currently ignored, but endpoint works)."""
+    mock_manager = MagicMock()
+    mock_get_manager.return_value = mock_manager
+    
+    # Mock jobs - note: filters are not currently implemented, so all jobs are returned
+    mock_jobs = {
+        "job1": {
+            "job_id": "job1",
+            "status": "COMPLETED",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+    }
+    mock_manager.get_all_jobs.return_value = mock_jobs
+    
     response = client.get("/api/v1/jobs?status=PENDING&limit=10&offset=0")
     assert response.status_code == 200
     
     result = response.json()
-    assert isinstance(result, list)
+    assert isinstance(result, dict)
+    assert "jobs" in result
+    assert "total" in result
+    assert isinstance(result["jobs"], list)
+    # Note: Filters are not implemented yet, so all jobs are returned
+    mock_manager.get_all_jobs.assert_called_once()

@@ -114,8 +114,19 @@ result = pipeline.run(
 1. After expression analysis, `group_expressions_by_context()` groups expressions by shared context times
 2. `_process_expressions()` extracts ONE context clip per group (shared by all expressions in group)
 3. Separate subtitle files are created for each expression
-4. `_create_educational_videos()` creates individual educational videos for each expression (separate mode)
+4. `_create_educational_videos()` creates videos in this order:
+   - **Multi-expression groups**: First creates a context video with multi-expression slide (left: context video, right: slide showing all expressions)
+   - **Each expression**: Creates individual educational video (left: expression repeat only for multi-expression groups, or context + expression repeat for single-expression groups; right: expression's own slide)
 5. Context clips are cached to avoid duplicate extractions
+
+**Video Output Structure:**
+- **Multi-expression group** (2+ expressions):
+  1. Context video: left (context video) | right (multi-expression slide with all expressions)
+  2. Expression 1 video: left (expression repeat only) | right (expression 1's slide)
+  3. Expression 2 video: left (expression repeat only) | right (expression 2's slide)
+  
+- **Single-expression group** (backward compatible):
+  1. Expression video: left (context + expression repeat) | right (expression's slide)
 
 **Configuration:**
 ```yaml

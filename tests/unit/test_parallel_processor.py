@@ -389,12 +389,10 @@ class TestGlobalFunctions:
         processor = get_video_processor()
         assert isinstance(processor, VideoBatchProcessor)
     
-    @patch('langflix.core.parallel_processor.get_expression_processor')
-    def test_process_expressions_parallel(self, mock_get_processor):
+    @patch('langflix.core.parallel_processor._expression_processor')
+    def test_process_expressions_parallel(self, mock_processor):
         """Test process_expressions_parallel convenience function"""
-        mock_processor = Mock()
         mock_processor.analyze_expression_chunks.return_value = [["result1"], ["result2"]]
-        mock_get_processor.return_value = mock_processor
         
         chunks = [["chunk1"], ["chunk2"]]
         results = process_expressions_parallel(chunks, "intermediate", "ko")
@@ -404,12 +402,10 @@ class TestGlobalFunctions:
             chunks, "intermediate", "ko", False, None, None
         )
     
-    @patch('langflix.core.parallel_processor.get_expression_processor')
-    def test_process_expressions_parallel_with_save_output(self, mock_get_processor):
+    @patch('langflix.core.parallel_processor._expression_processor')
+    def test_process_expressions_parallel_with_save_output(self, mock_processor):
         """Test process_expressions_parallel with save_output parameter"""
-        mock_processor = Mock()
         mock_processor.analyze_expression_chunks.return_value = [["result1"]]
-        mock_get_processor.return_value = mock_processor
         
         chunks = [["chunk1"]]
         results = process_expressions_parallel(

@@ -6,8 +6,13 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 from pathlib import Path
 
-from langflix.main import LangFlixPipeline
 from langflix import settings
+
+# Import LangFlixPipeline for type hints only, not for direct instantiation in tests
+try:
+    from langflix.main import LangFlixPipeline
+except ImportError:
+    LangFlixPipeline = None
 
 
 class TestParallelExpressionAnalysisSettings(unittest.TestCase):
@@ -111,6 +116,8 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
     @patch('langflix.settings.get_parallel_llm_processing_enabled')
     def test_analyze_expressions_uses_sequential_for_test_mode(self, mock_enabled, mock_sequential):
         """Test that test_mode always uses sequential processing"""
+        from langflix.main import LangFlixPipeline
+        
         mock_enabled.return_value = True
         mock_sequential.return_value = []
         
@@ -125,9 +132,6 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
         pipeline.paths = {'episode': {}}
         
         # Call _analyze_expressions directly with test_mode=True
-        from langflix.main import LangFlixPipeline
-        LangFlixPipeline._analyze_expressions = LangFlixPipeline._analyze_expressions.__func__
-        
         result = LangFlixPipeline._analyze_expressions(
             pipeline,
             max_expressions=None,
@@ -144,6 +148,8 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
     @patch('langflix.settings.get_parallel_llm_processing_enabled')
     def test_analyze_expressions_uses_parallel_when_enabled(self, mock_enabled, mock_parallel):
         """Test that parallel mode is used when enabled and multiple chunks exist"""
+        from langflix.main import LangFlixPipeline
+        
         mock_enabled.return_value = True
         mock_parallel.return_value = []
         
@@ -159,9 +165,6 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
         pipeline.paths = {'episode': {}}
         
         # Call _analyze_expressions directly with test_mode=False
-        from langflix.main import LangFlixPipeline
-        LangFlixPipeline._analyze_expressions = LangFlixPipeline._analyze_expressions.__func__
-        
         result = LangFlixPipeline._analyze_expressions(
             pipeline,
             max_expressions=None,
@@ -178,6 +181,8 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
     @patch('langflix.settings.get_parallel_llm_processing_enabled')
     def test_analyze_expressions_uses_sequential_for_single_chunk(self, mock_enabled, mock_sequential):
         """Test that single chunk uses sequential processing"""
+        from langflix.main import LangFlixPipeline
+        
         mock_enabled.return_value = True
         mock_sequential.return_value = []
         
@@ -191,9 +196,6 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
         pipeline.paths = {'episode': {}}
         
         # Call _analyze_expressions directly
-        from langflix.main import LangFlixPipeline
-        LangFlixPipeline._analyze_expressions = LangFlixPipeline._analyze_expressions.__func__
-        
         result = LangFlixPipeline._analyze_expressions(
             pipeline,
             max_expressions=None,
@@ -211,6 +213,8 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
     @patch('langflix.settings.get_parallel_llm_timeout')
     def test_analyze_expressions_parallel_creates_processor(self, mock_timeout, mock_workers, mock_processor_class):
         """Test that parallel analysis creates ExpressionBatchProcessor with correct config"""
+        from langflix.main import LangFlixPipeline
+        
         mock_workers.return_value = 5
         mock_timeout.return_value = 300
         mock_processor = MagicMock()
@@ -231,9 +235,7 @@ class TestLangFlixPipelineParallelAnalysis(unittest.TestCase):
                 'episode_dir': Path("test_output/test")
             }
         }
-        
-        from langflix.main import LangFlixPipeline
-        LangFlixPipeline._analyze_expressions_parallel = LangFlixPipeline._analyze_expressions_parallel.__func__
+        pipeline.progress_callback = None
         
         result = LangFlixPipeline._analyze_expressions_parallel(
             pipeline,

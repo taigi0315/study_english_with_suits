@@ -151,12 +151,31 @@ class VideoEditor:
             )
             
             # Extract expression video clip with audio and subtitles from context
+            # Reset timestamps to start from 0 to prevent delay in repeated clips
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
-            (ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
-             .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
-             .overwrite_output().run(quiet=True))
+            
+            # Use filter to reset timestamps and prevent delay in repeated clips
+            input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+            video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
+            audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
+            
+            (
+                ffmpeg.output(
+                    video_stream,
+                    audio_stream,
+                    str(expression_video_clip_path),
+                    vcodec='libx264',
+                    acodec='aac',
+                    ac=2,
+                    ar=48000,
+                    preset='fast',
+                    crf=23
+                )
+                .overwrite_output()
+                .run(quiet=True)
+            )
             
             # Repeat expression clip
             from langflix import settings

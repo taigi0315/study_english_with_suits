@@ -22,11 +22,13 @@ from langflix import settings
 logger = logging.getLogger(__name__)
 
 
+# Note: sanitize_expression_for_filename is now imported from langflix.utils.filename_utils
+# This function is kept for backward compatibility
+from langflix.utils.filename_utils import sanitize_for_expression_filename
+
 def sanitize_expression_for_filename(text: str) -> str:
-    import re
-    sanitized = re.sub(r"[^\w\s-]", "", text)
-    sanitized = re.sub(r"[-\s]+", "_", sanitized)
-    return sanitized[:50]
+    """Backward compatibility wrapper - use sanitize_for_expression_filename directly."""
+    return sanitize_for_expression_filename(text)
 
 
 def find_subtitle_file(subtitle_dir: Path, expression_text: str) -> Optional[Path]:

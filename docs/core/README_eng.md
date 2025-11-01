@@ -129,12 +129,13 @@ Adds dual-language subtitles to context video.
 - Checks if file exists and reuses it (prevents conflicts between long-form and short-form)
 - Uses consistent subtitle styling
 
-#### `_sanitize_filename()`
-Sanitizes expression names for filename usage.
+#### Filename Sanitization
+The `VideoEditor` class uses `sanitize_for_expression_filename()` from `langflix.utils.filename_utils` for consistent filename sanitization across the codebase. See [Filename Utils Documentation](../utils/filename_utils_eng.md) for details.
 
 **Critical for TICKET-001 Phase 4:**
-- Uses regex: `re.sub(r'[^\w\s-]', '', text)` then `re.sub(r'[-\s]+', '_', text)`
-- Must match exactly with `jobs.py` sanitization to ensure expression matching
+- All filename sanitization now uses `sanitize_for_expression_filename()` from `langflix.utils.filename_utils`
+- Ensures consistent sanitization across codebase (TICKET-004)
+- Must match exactly between job creation and video file naming to ensure expression matching
 
 #### `_create_educational_slide()`
 Creates educational slide with background image/text and optional TTS audio.
@@ -254,15 +255,16 @@ The pipeline follows a clear separation:
 ### Expression Name Sanitization
 
 ⚠️ **Critical:** Expression name sanitization must match exactly between:
-- `langflix/core/video_editor.py::_sanitize_filename()`
+- `langflix/utils/filename_utils.py::sanitize_for_expression_filename()` - See [Filename Utils Documentation](../utils/filename_utils_eng.md)
 - `langflix/api/routes/jobs.py` (sanitization in job creation)
 
 **Mismatch causes:** Short-form missing first expression (TICKET-001 Issue 3)
 
-**Solution:** Use identical regex pattern in both places:
+**Solution:** Use `sanitize_for_expression_filename()` from `langflix.utils.filename_utils` in both places (TICKET-004):
 ```python
-sanitized = re.sub(r'[^\w\s-]', '', text)
-sanitized = re.sub(r'[-\s]+', '_', sanitized)
+from langflix.utils.filename_utils import sanitize_for_expression_filename
+
+sanitized = sanitize_for_expression_filename(expression_text)
 ```
 
 ### File Reuse and Conflicts

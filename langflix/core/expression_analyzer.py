@@ -10,6 +10,12 @@ from langflix import settings
 from langflix.utils.prompts import get_prompt_for_chunk
 from .models import ExpressionAnalysisResponse, ExpressionAnalysis
 from .cache_manager import get_cache_manager
+from .error_handler import (
+    retry_on_error,
+    handle_error_decorator,
+    ErrorContext,
+    handle_error
+)
 
 import google.generativeai as genai
 
@@ -82,6 +88,14 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
     
     return validated_expressions
 
+@handle_error_decorator(
+    ErrorContext(
+        operation="analyze_chunk",
+        component="expression_analyzer"
+    ),
+    retry=False,  # Retry is handled by _generate_content_with_retry
+    fallback=False
+)
 def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None) -> List[ExpressionAnalysis]:
     """
     Analyzes a chunk of subtitles using Gemini API with structured output (with caching).
@@ -549,6 +563,7 @@ def _extract_response_text(response) -> str:
 def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, generation_config: dict = None) -> Any:
     """
     Generate content with exponential backoff retry logic for API failures.
+    Now integrated with error_handler for structured error reporting.
     
     Args:
         model: Gemini GenerativeModel instance
@@ -563,6 +578,11 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, gener
         Exception: If all retry attempts fail
     """
     last_error = None
+    error_context = ErrorContext(
+        operation="generate_content",
+        component="expression_analyzer",
+        additional_data={"max_retries": max_retries, "prompt_length": len(prompt)}
+    )
     
     for attempt in range(max_retries + 1):  # +1 for initial attempt
         try:
@@ -621,17 +641,30 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, gener
             # Check for specific error types that warrant retries
             if any(keyword in error_str.lower() for keyword in ['timeout', '504', '503', '502', '500']):
                 logger.warning(f"API error on attempt {attempt + 1}: {error_str}")
+                
+                # Report error to error handler (but don't raise yet if we can retry)
+                error_context.additional_data["attempt"] = attempt + 1
+                error_context.additional_data["max_retries"] = max_retries + 1
+                handle_error(e, error_context, retry=False, fallback=False)
+                
                 if attempt == max_retries:
                     logger.error(f"Max retries reached. Final error: {error_str}")
                     break
             else:
-                # Non-retryable error
+                # Non-retryable error - report and raise immediately
+                error_context.additional_data["attempt"] = attempt + 1
+                handle_error(e, error_context, retry=False, fallback=False)
                 logger.error(f"Non-retryable API error: {error_str}")
                 raise e
     
-    # If we get here, all retries failed
-    logger.error(f"All {max_retries + 1} API attempts failed. Last error: {last_error}")
-    raise last_error
+    # If we get here, all retries failed - report final error
+    if last_error:
+        error_context.additional_data["final_attempt"] = max_retries + 1
+        handle_error(last_error, error_context, retry=False, fallback=False)
+        logger.error(f"All {max_retries + 1} API attempts failed. Last error: {last_error}")
+        raise last_error
+    else:
+        raise RuntimeError("All API attempts failed with unknown error")
 
 
 def _remove_duplicates(expressions: List[ExpressionAnalysis]) -> List[ExpressionAnalysis]:

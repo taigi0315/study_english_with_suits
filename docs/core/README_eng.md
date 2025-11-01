@@ -5,7 +5,7 @@
 The `langflix/core/` module contains the core video editing functionality for LangFlix. This module orchestrates the creation of educational video sequences, including long-form (side-by-side) and short-form (vertical) video layouts.
 
 **Last Updated:** 2025-01-30  
-**Related Ticket:** TICKET-001
+**Related Tickets:** TICKET-001, TICKET-005
 
 ## Purpose
 
@@ -57,6 +57,13 @@ pipeline = LangFlixPipeline(
 The main class that orchestrates video creation.
 
 **Location:** `langflix/core/video_editor.py`
+
+**Error Handler Integration (TICKET-005):**
+- `create_educational_sequence()` is wrapped with `@handle_error_decorator` for structured error reporting
+- `create_short_format_video()` is wrapped with `@handle_error_decorator` for structured error reporting
+- `_create_timeline_from_tts()` uses `@retry_on_error` decorator for automatic retry on transient failures (max 2 attempts, 1s delay)
+- All errors are automatically logged with context (operation, component) via error handler
+- Error reports include operation context for easier debugging
 
 **Temporary File Management (TICKET-002):**
 - Uses `TempFileManager` for all temporary file operations
@@ -193,6 +200,25 @@ The pipeline follows a clear separation:
 - Easier to test each stage
 - Clearer error handling
 - Better maintainability
+
+### ExpressionAnalyzer Class
+
+The class responsible for analyzing subtitle chunks using Gemini API.
+
+**Location:** `langflix/core/expression_analyzer.py`
+
+**Error Handler Integration (TICKET-005):**
+- `analyze_chunk()` is wrapped with `@handle_error_decorator` for structured error reporting
+- `_generate_content_with_retry()` now reports errors to error handler for each retry attempt
+- Error context includes: `operation`, `component`, `max_retries`, `attempt`, `prompt_length`
+- Errors are automatically categorized (NETWORK for timeouts/connection errors, PROCESSING for parsing errors)
+- Error reports include retry attempt information for debugging API failures
+
+**Key Features:**
+- Automatic retry with exponential backoff for API failures
+- Structured error reporting for all API errors
+- Error categorization for better monitoring
+- Detailed error context for debugging
 
 ## Dependencies
 

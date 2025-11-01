@@ -236,6 +236,20 @@ expression:
   # for educational purposes across all video types (educational videos, short videos)
   repeat_count: 3
   
+  # LLM processing configuration
+  llm:
+    # Parallel processing configuration for expression analysis
+    parallel_processing:
+      enabled: true  # Enable parallel processing for multiple chunks
+      max_workers: null  # null = auto-detect (min(cpu_count(), 5))
+      timeout_per_chunk: 300  # seconds (5 minutes per chunk)
+      batch_size: null  # null = process all chunks at once
+    
+    # Chunking configuration
+    min_expressions_per_chunk: 1
+    max_expressions_per_chunk: 3
+    max_llm_input_length: 5000
+  
   # Subtitle styling configuration
   subtitle_styling:
     default:

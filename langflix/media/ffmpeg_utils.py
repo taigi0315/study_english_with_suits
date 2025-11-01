@@ -276,12 +276,14 @@ def concat_filter_with_explicit_map(
     concat_node = ffmpeg.concat(left_v, left_a, right_v, right_a, v=1, a=1, n=2).node
     
     try:
+        # Must re-encode audio when using filters (setpts, asetpts) - cannot use streamcopy
+        # Filtering and streamcopy cannot be used together
         output_with_explicit_streams(
             concat_node[0],
             concat_node[1],
             out_path,
             **make_video_encode_args_from_source(left_path),
-            **make_audio_encode_args_copy(),
+            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
         )
     except ffmpeg.Error as e:
         # Read stderr for detailed error information

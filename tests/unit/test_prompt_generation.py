@@ -5,8 +5,8 @@ import pysrt
 # Add the project root to the Python path to allow for module imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from langflix.subtitle_parser import chunk_subtitles
-from langflix.expression_analyzer import get_prompt_for_chunk
+from langflix.core.subtitle_parser import chunk_subtitles
+from langflix.utils.prompts import get_prompt_for_chunk
 
 srt_content = """
 1

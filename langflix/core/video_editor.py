@@ -15,6 +15,7 @@ from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
 from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain
 from langflix.subtitles import overlay as subs_overlay
+from langflix.utils.filename_utils import sanitize_for_expression_filename
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ class VideoEditor:
         """
         try:
             # Create output filename - save to context_slide_combined directory
-            safe_expression = self._sanitize_filename(expression.expression)
+            safe_expression = sanitize_for_expression_filename(expression.expression)
             output_filename = f"educational_{safe_expression}.mkv"
             output_path = self.context_slide_combined_dir / output_filename
             
@@ -187,13 +188,6 @@ class VideoEditor:
             logger.error(f"Error creating educational sequence: {e}")
             raise
     
-    def _sanitize_filename(self, text: str) -> str:
-        """Sanitize text for filename"""
-        import re
-        # Remove special characters and replace spaces with underscores
-        sanitized = re.sub(r'[^\w\s-]', '', text)
-        sanitized = re.sub(r'[-\s]+', '_', sanitized)
-        return sanitized[:50]  # Limit length
     
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext"""
@@ -399,7 +393,7 @@ class VideoEditor:
             total_duration = pause_duration + (tts_duration * repeat_count) + (gap_duration * (repeat_count - 1)) + pause_duration
             
             # Create timeline audio file
-            timeline_filename = f"timeline_{self._sanitize_filename(tts_path.split('/')[-1])}"
+            timeline_filename = f"timeline_{sanitize_for_expression_filename(tts_path.split('/')[-1])}"
             timeline_path = tts_audio_dir / timeline_filename
             
             # Build FFmpeg filter for timeline
@@ -458,7 +452,7 @@ class VideoEditor:
             context_videos_dir = self.output_dir.parent / "context_videos"
             context_videos_dir.mkdir(exist_ok=True)
 
-            safe_name = self._sanitize_filename(expression.expression)
+            safe_name = sanitize_for_expression_filename(expression.expression)
             output_path = context_videos_dir / f"context_{safe_name}.mkv"
             
             # Check if file already exists (created by long-form)
@@ -523,7 +517,7 @@ class VideoEditor:
             import re
             
             # Create multiple search strategies
-            sanitized_expr = self._sanitize_filename(expression.expression)
+            sanitized_expr = sanitize_for_expression_filename(expression.expression)
             patterns = [
                 # Strategy 1: Try exact match with index prefix
                 str(subtitle_dir / f"expression_*_{safe_expression[:30]}.srt"),
@@ -666,7 +660,7 @@ class VideoEditor:
         try:
             # For now, use the full video as expression clip
             # TODO: Implement precise expression timing extraction
-            output_path = self.output_dir / f"temp_expression_{self._sanitize_filename(expression.expression)}.mkv"
+            output_path = self.output_dir / f"temp_expression_{sanitize_for_expression_filename(expression.expression)}.mkv"
             
             # Copy video as-is for now
             (
@@ -691,7 +685,7 @@ class VideoEditor:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
             
-            output_path = self.output_dir / f"temp_slide_{self._sanitize_filename(expression.expression)}.mkv"
+            output_path = self.output_dir / f"temp_slide_{sanitize_for_expression_filename(expression.expression)}.mkv"
             self._register_temp_file(output_path)
             
             # Get background configuration with proper fallbacks
@@ -1084,7 +1078,7 @@ class VideoEditor:
             # Move temp slide to final location in slides directory
             slides_dir = self.output_dir.parent / "slides"
             slides_dir.mkdir(exist_ok=True)
-            final_slide_path = slides_dir / f"slide_{self._sanitize_filename(expression.expression)}.mkv"
+            final_slide_path = slides_dir / f"slide_{sanitize_for_expression_filename(expression.expression)}.mkv"
             
             try:
                 # Copy the slide (which now already includes audio) to final location
@@ -1108,7 +1102,7 @@ class VideoEditor:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
             
-            output_path = self.output_dir / f"temp_slide_silent_{self._sanitize_filename(expression.expression)}.mkv"
+            output_path = self.output_dir / f"temp_slide_silent_{sanitize_for_expression_filename(expression.expression)}.mkv"
             self._register_temp_file(output_path)
             
             # Get background configuration with proper fallbacks
@@ -1655,13 +1649,13 @@ class VideoEditor:
             logger.info(f"Using TTS repeat count: {repeat_count}")
             
             # Create timeline: 1s pause - TTS - 0.5s pause - TTS - ... - 1s pause (repeat_count repetitions)
-            timeline_path = self.output_dir / f"temp_timeline_{self._sanitize_filename(text)}.wav"
+            timeline_path = self.output_dir / f"temp_timeline_{sanitize_for_expression_filename(text)}.wav"
             self._register_temp_file(timeline_path)
             
             try:
                 # Create silence segments
-                silence_1s_path = self.output_dir / f"temp_silence_1s_{self._sanitize_filename(text)}.wav"
-                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_{self._sanitize_filename(text)}.wav"
+                silence_1s_path = self.output_dir / f"temp_silence_1s_{sanitize_for_expression_filename(text)}.wav"
+                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_{sanitize_for_expression_filename(text)}.wav"
                 
                 self._register_temp_file(silence_1s_path)
                 self._register_temp_file(silence_0_5s_path)
@@ -1678,7 +1672,7 @@ class VideoEditor:
                  .run(quiet=True))
                 
                 # Convert the single TTS file to WAV for concatenation
-                tts_wav_path = self.output_dir / f"temp_tts_{self._sanitize_filename(text)}.wav"
+                tts_wav_path = self.output_dir / f"temp_tts_{sanitize_for_expression_filename(text)}.wav"
                 self._register_temp_file(tts_wav_path)
                 
                 (ffmpeg.input(str(temp_tts_path))
@@ -1698,7 +1692,7 @@ class VideoEditor:
                 input_files.append(str(silence_1s_path))  # End with 1s silence
                 
                 # Create concat file
-                concat_file = self.output_dir / f"temp_concat_timeline_{self._sanitize_filename(text)}.txt"
+                concat_file = self.output_dir / f"temp_concat_timeline_{sanitize_for_expression_filename(text)}.txt"
                 self._register_temp_file(concat_file)
                 
                 with open(concat_file, 'w') as f:
@@ -1722,7 +1716,7 @@ class VideoEditor:
                 # Save the original TTS file permanently (for reference)
                 audio_format = provider_config.get('response_format', 'mp3')
                 if audio_format:
-                    original_audio_filename = f"tts_original_{self._sanitize_filename(text)}.{audio_format}"
+                    original_audio_filename = f"tts_original_{sanitize_for_expression_filename(text)}.{audio_format}"
                     original_audio_path = tts_audio_dir / original_audio_filename
                     
                     # Copy the TTS file as the "original"
@@ -1897,7 +1891,7 @@ class VideoEditor:
                     f.write(f"file '{silence_1s_path}'\n")  # 1s end silence
                 
                 # Create final timeline audio
-                safe_expression = self._sanitize_filename(expression.expression)
+                safe_expression = sanitize_for_expression_filename(expression.expression)
                 timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
                 timeline_path = output_dir / timeline_filename
                 
@@ -2286,7 +2280,7 @@ class VideoEditor:
         """
         try:
             # Create output filename
-            safe_expression = self._sanitize_filename(expression.expression)
+            safe_expression = sanitize_for_expression_filename(expression.expression)
             output_filename = f"short_{safe_expression}.mkv"
             output_path = self.context_slide_combined_dir / output_filename
             

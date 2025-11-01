@@ -9,8 +9,7 @@ from langflix.settings import (
     get_expression_subtitle_styling,
     get_expression_playback,
     get_expression_layout,
-    get_expression_llm,
-    get_expression_whisper
+    get_expression_llm
 )
 from langflix.config.expression_config import (
     ExpressionConfig,
@@ -31,7 +30,7 @@ class TestExpressionConfiguration:
         assert 'playback' in config
         assert 'layout' in config
         assert 'llm' in config
-        assert 'whisper' in config
+        # Note: whisper config removed - using external transcription
     
     def test_subtitle_styling_defaults(self):
         """Test subtitle styling default values"""
@@ -90,13 +89,7 @@ class TestExpressionConfiguration:
         assert 'model' in llm
         assert 'temperature' in llm
     
-    def test_whisper_config(self):
-        """Test WhisperX configuration"""
-        whisper = get_expression_whisper()
-        assert isinstance(whisper, dict)
-        assert 'model_size' in whisper
-        assert 'device' in whisper
-        assert 'compute_type' in whisper
+    # Note: test_whisper_config removed - whisper functionality no longer exists
 
 
 class TestExpressionConfigDataclass:
@@ -177,7 +170,7 @@ class TestExpressionConfigDataclass:
         assert 'playback' in result_dict
         assert 'layout' in result_dict
         assert 'llm' in result_dict
-        assert 'whisper' in result_dict
+        # Note: whisper field removed - using external transcription
         
         # Check structure matches original
         assert result_dict['playback']['expression_repeat_count'] == 2
@@ -195,14 +188,13 @@ class TestExpressionConfigIntegration:
         playback = get_expression_playback()
         layout = get_expression_layout()
         llm = get_expression_llm()
-        whisper = get_expression_whisper()
+        # Note: whisper removed - using external transcription
         
         # Verify all sections are present in main config
         assert main_config['subtitle_styling'] == styling
         assert main_config['playback'] == playback
         assert main_config['layout'] == layout
         assert main_config['llm'] == llm
-        assert main_config['whisper'] == whisper
     
     def test_dataclass_roundtrip(self):
         """Test that dataclass can be created from config and converted back"""

@@ -95,12 +95,13 @@ Vertical 레이아웃으로 short-form 교육용 비디오 시퀀스를 생성�
 - 파일이 존재하는지 확인하고 재사용 (long-form과 short-form 간 충돌 방지)
 - 일관된 자막 스타일링 사용
 
-#### `_sanitize_filename()`
-파일명 사용을 위해 표현 이름을 정리합니다.
+#### 파일명 Sanitization
+`VideoEditor` 클래스는 코드베이스 전반에서 일관된 파일명 sanitization을 위해 `langflix.utils.filename_utils`의 `sanitize_for_expression_filename()`을 사용합니다. 자세한 내용은 [Filename Utils 문서](../utils/filename_utils_kor.md)를 참조하세요.
 
 **TICKET-001 Phase 4에 중요:**
-- 정규식 사용: `re.sub(r'[^\w\s-]', '', text)` 그 다음 `re.sub(r'[-\s]+', '_', text)`
-- 표현 일치를 보장하기 위해 `jobs.py` 정리와 정확히 일치해야 함
+- 모든 파일명 sanitization은 이제 `langflix.utils.filename_utils`의 `sanitize_for_expression_filename()`을 사용합니다
+- 코드베이스 전반에서 일관된 sanitization 보장 (TICKET-004)
+- 표현 일치를 보장하기 위해 작업 생성과 비디오 파일 명명 간에 정확히 일치해야 합니다
 
 #### `_create_educational_slide()`
 배경 이미지/텍스트 및 선택적 TTS 오디오가 있는 교육 슬라이드를 생성합니다.
@@ -220,15 +221,16 @@ Vertical 레이아웃으로 short-form 교육용 비디오 시퀀스를 생성�
 ### 표현 이름 정리
 
 ⚠️ **중요:** 표현 이름 정리는 다음 사이에서 정확히 일치해야 합니다:
-- `langflix/core/video_editor.py::_sanitize_filename()`
+- `langflix/utils/filename_utils.py::sanitize_for_expression_filename()` - [Filename Utils 문서](../utils/filename_utils_kor.md) 참조
 - `langflix/api/routes/jobs.py` (작업 생성 시 정리)
 
 **불일치 시 문제:** Short-form에서 첫 번째 표현 누락 (TICKET-001 이슈 3)
 
-**해결책:** 두 위치에서 동일한 정규식 패턴 사용:
+**해결책:** 두 위치에서 `langflix.utils.filename_utils`의 `sanitize_for_expression_filename()` 사용 (TICKET-004):
 ```python
-sanitized = re.sub(r'[^\w\s-]', '', text)
-sanitized = re.sub(r'[-\s]+', '_', sanitized)
+from langflix.utils.filename_utils import sanitize_for_expression_filename
+
+sanitized = sanitize_for_expression_filename(expression_text)
 ```
 
 ### 파일 재사용 및 충돌

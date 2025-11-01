@@ -268,6 +268,51 @@ class TestExpressionBatchProcessor:
         assert progress_calls[0] == (1, 3)
         assert progress_calls[1] == (2, 3)
         assert progress_calls[2] == (3, 3)
+    
+    @patch('langflix.core.expression_analyzer.analyze_chunk')
+    def test_analyze_expression_chunks_with_save_output(self, mock_analyze_chunk):
+        """Test expression chunk analysis with save_output parameter"""
+        mock_analyze_chunk.return_value = [
+            {"expression": "test_expression", "translation": "테스트 표현"}
+        ]
+        
+        chunks = [
+            [{"text": "Hello world", "start": 0, "end": 1}],
+            [{"text": "Good morning", "start": 1, "end": 2}]
+        ]
+        
+        results = self.processor.analyze_expression_chunks(
+            chunks,
+            language_level="intermediate",
+            language_code="ko",
+            save_output=True,
+            output_dir="/tmp/test_output"
+        )
+        
+        assert len(results) == 2
+        assert mock_analyze_chunk.call_count == 2
+        
+        # Verify save_output and output_dir were passed correctly
+        for call in mock_analyze_chunk.call_args_list:
+            assert call.kwargs.get('save_output') is True
+            assert call.kwargs.get('output_dir') == "/tmp/test_output"
+    
+    @patch('langflix.core.expression_analyzer.analyze_chunk')
+    def test_analyze_expression_chunks_without_save_output(self, mock_analyze_chunk):
+        """Test expression chunk analysis without save_output (default)"""
+        mock_analyze_chunk.return_value = []
+        
+        chunks = [[{"text": "Test"}]]
+        
+        results = self.processor.analyze_expression_chunks(chunks)
+        
+        assert len(results) == 1
+        mock_analyze_chunk.assert_called_once()
+        
+        # Verify save_output defaults to False
+        call_kwargs = mock_analyze_chunk.call_args.kwargs
+        assert call_kwargs.get('save_output') is False
+        assert call_kwargs.get('output_dir') is None
 
 class TestVideoBatchProcessor:
     """Test VideoBatchProcessor functionality"""
@@ -356,7 +401,28 @@ class TestGlobalFunctions:
         
         assert results == [["result1"], ["result2"]]
         mock_processor.analyze_expression_chunks.assert_called_once_with(
-            chunks, "intermediate", "ko", None
+            chunks, "intermediate", "ko", False, None, None
+        )
+    
+    @patch('langflix.core.parallel_processor.get_expression_processor')
+    def test_process_expressions_parallel_with_save_output(self, mock_get_processor):
+        """Test process_expressions_parallel with save_output parameter"""
+        mock_processor = Mock()
+        mock_processor.analyze_expression_chunks.return_value = [["result1"]]
+        mock_get_processor.return_value = mock_processor
+        
+        chunks = [["chunk1"]]
+        results = process_expressions_parallel(
+            chunks, 
+            language_level="intermediate", 
+            language_code="ko",
+            save_output=True,
+            output_dir="/tmp/output"
+        )
+        
+        assert results == [["result1"]]
+        mock_processor.analyze_expression_chunks.assert_called_once_with(
+            chunks, "intermediate", "ko", True, "/tmp/output", None
         )
 
 class TestIntegration:

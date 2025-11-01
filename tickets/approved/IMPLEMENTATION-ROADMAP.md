@@ -5,14 +5,14 @@
 ## Executive Summary
 - Total tickets approved: 3
 - Estimated timeline: 4-6 weeks (2-3 sprints)
-- Critical path: TICKET-001 → TICKET-002 → TICKET-003
+- Critical path: TICKET-007 → TICKET-008 → TICKET-009
 - Key milestones: Parallel processing (Week 2), Multi-expression support (Week 4), Production deployment (Week 6)
 
 ## Strategic Context
 This implementation plan addresses:
-1. **Performance Optimization** - TICKET-001 (1 ticket)
-2. **Feature Enhancement** - TICKET-002 (1 ticket)
-3. **Production Readiness** - TICKET-003 (1 ticket)
+1. **Performance Optimization** - TICKET-007 (1 ticket)
+2. **Feature Enhancement** - TICKET-008 (1 ticket)
+3. **Production Readiness** - TICKET-009 (1 ticket)
 
 ### Architectural Vision
 Where we're headed:
@@ -34,10 +34,10 @@ After completing this roadmap:
 **Duration:** 2 weeks
 **Dependencies:** None
 
-### TICKET-001: Implement Parallel LLM Request Processing
+### TICKET-007: Implement Parallel LLM Request Processing
 - **Priority:** High
 - **Effort:** 2-3 days
-- **Why first:** Performance foundation, unblocks larger expression sets for TICKET-002
+- **Why first:** Performance foundation, unblocks larger expression sets for TICKET-008
 - **Owner:** Senior engineer
 
 **Key Deliverables:**
@@ -67,7 +67,7 @@ After completing this roadmap:
 **Duration:** 2 weeks
 **Dependencies:** Phase 1 complete (helps with larger expression sets)
 
-### TICKET-002: Support Multiple Expressions Per Context
+### TICKET-008: Support Multiple Expressions Per Context
 - **Priority:** High
 - **Effort:** 4-5 days (Phase 1: separate mode) + 3-4 days (Phase 2: combined mode) = 7-9 days total
 - **Why now:** Builds on parallel processing, enables richer content
@@ -100,7 +100,7 @@ After completing this roadmap:
 **Duration:** 2+ weeks
 **Dependencies:** Core features stable (Phase 1-2)
 
-### TICKET-003: Production Dockerization & TrueNAS Deployment
+### TICKET-009: Production Dockerization & TrueNAS Deployment
 - **Priority:** High
 - **Effort:** 4-5 days (simplified without Celery)
 - **Why now:** Production readiness after core features stable
@@ -132,28 +132,28 @@ After completing this roadmap:
 
 ## Dependency Graph
 ```
-TICKET-001 (Phase 1)
-  └─> TICKET-002 (Phase 2) - parallel processing helps with larger expression sets
+TICKET-007 (Phase 1)
+  └─> TICKET-008 (Phase 2) - parallel processing helps with larger expression sets
   
-TICKET-003 (Phase 3)
+TICKET-009 (Phase 3)
   └─> Independent (can proceed after core features stable)
 ```
 
 ## Critical Path
 The longest dependency chain:
-1. TICKET-001 → TICKET-002
+1. TICKET-007 → TICKET-008
    Total: ~4 weeks
 
 **Timeline Impact:**
-Cannot start TICKET-002 before TICKET-001 complete (helps with performance).
+Cannot start TICKET-008 before TICKET-007 complete (helps with performance).
 
 ---
 
 ## Resource Requirements
 **Skills needed:**
-- Senior engineer: 2 weeks (TICKET-001, TICKET-002)
-- DevOps engineer: 1 week (TICKET-003)
-- Or: Senior backend engineer: 1 week (TICKET-003)
+- Senior engineer: 2 weeks (TICKET-007, TICKET-008)
+- DevOps engineer: 1 week (TICKET-009)
+- Or: Senior backend engineer: 1 week (TICKET-009)
 
 **Infrastructure needs:**
 - None for Phase 1-2
@@ -164,15 +164,15 @@ Cannot start TICKET-002 before TICKET-001 complete (helps with performance).
 ## Risk Management
 
 ### High-Risk Items
-1. **TICKET-001:** Implementation bug (sequential loop defeats parallelization)
+1. **TICKET-007:** Implementation bug (sequential loop defeats parallelization)
    - Impact: No performance improvement
    - Mitigation: Code review, integration tests, performance benchmarks
    
-2. **TICKET-002:** Breaking backward compatibility
+2. **TICKET-008:** Breaking backward compatibility
    - Impact: Existing workflows fail
    - Mitigation: Default to separate mode, single expressions = groups of 1
 
-3. **TICKET-003:** Over-engineering with unused services
+3. **TICKET-009:** Over-engineering with unused services
    - Impact: Complex deployment, maintenance burden
    - Mitigation: Simplified stack (API + Redis only, optional DB)
 
@@ -213,34 +213,34 @@ Cannot start TICKET-002 before TICKET-001 complete (helps with performance).
 
 ### Critical Implementation Notes
 
-**TICKET-001 - CRITICAL FIX:**
+**TICKET-007 - CRITICAL FIX:**
 The proposed Step 2 implementation has a **bug** - it still uses a sequential loop! Must use `ExpressionBatchProcessor.analyze_expression_chunks()` directly. See ticket for corrected code.
 
-**TICKET-002 - Phased Approach:**
+**TICKET-008 - Phased Approach:**
 - Phase 1: ExpressionGroup + separate mode (backward compatible)
 - Phase 2: Combined mode (optional, can defer)
 
-**TICKET-003 - Simplified Stack:**
+**TICKET-009 - Simplified Stack:**
 - Remove Celery from initial implementation (use FastAPI background tasks)
 - Essential: API + Redis
 - Optional: PostgreSQL (if DB enabled)
 - Add Celery later if distributed workers needed
 
 ### Coordination Points
-- TICKET-001 & TICKET-002: Parallel processing helps with larger expression sets
+- TICKET-007 & TICKET-008: Parallel processing helps with larger expression sets
 - All tickets: Maintain backward compatibility where possible
 
 ### Testing Strategy
-- **TICKET-001:** Performance benchmarks required
-- **TICKET-002:** Backward compatibility tests critical
-- **TICKET-003:** Integration tests with Docker Compose
+- **TICKET-007:** Performance benchmarks required
+- **TICKET-008:** Backward compatibility tests critical
+- **TICKET-009:** Integration tests with Docker Compose
 
 ---
 
 ## Next Steps
-1. **Week 1-2:** Execute TICKET-001 (parallel processing)
-2. **Week 3-4:** Execute TICKET-002 (multi-expression support)
-3. **Week 5-6+:** Execute TICKET-003 (production deployment)
+1. **Week 1-2:** Execute TICKET-007 (parallel processing)
+2. **Week 3-4:** Execute TICKET-008 (multi-expression support)
+3. **Week 5-6+:** Execute TICKET-009 (production deployment)
 4. **Ongoing:** Monitor performance, adjust as needed
 
 ---

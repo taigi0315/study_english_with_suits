@@ -1,4 +1,4 @@
-# [TICKET-003] Production Dockerization & TrueNAS Deployment Pipeline
+# [TICKET-009] Production Dockerization & TrueNAS Deployment Pipeline
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)
@@ -1119,7 +1119,7 @@ docker-clean:
 - However: Large scope - consider phased approach
 
 **Implementation Phase:** Phase 3 - Sprint 3+ (Weeks 5-6+)
-**Sequence Order:** #3 in implementation queue (after core features stable)
+**Sequence Order:** #9 in implementation queue (after core features stable)
 
 **Architectural Guidance:**
 
@@ -1180,7 +1180,7 @@ docker-clean:
    - Secrets: Never in config files or images
 
 **Dependencies:**
-- **Must complete first:** Core features stable (TICKET-001, TICKET-002)
+- **Must complete first:** Core features stable (TICKET-001, TICKET-007, TICKET-008)
 - **Should complete first:** None (can proceed independently)
 - **Blocks:** None
 - **Related work:** None

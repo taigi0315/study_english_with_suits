@@ -1,4 +1,4 @@
-# [TICKET-003] Fix Undefined Variable Bug in get_job_expressions Endpoint
+# [TICKET-004] Fix Undefined Variable Bug in get_job_expressions Endpoint
 
 ## Priority
 - [x] Critical (System stability, security, data loss risk)

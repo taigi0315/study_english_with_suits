@@ -1,4 +1,4 @@
-# [TICKET-004] Consolidate Filename Sanitization Logic
+# [TICKET-005] Consolidate Filename Sanitization Logic
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)

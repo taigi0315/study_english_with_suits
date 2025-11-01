@@ -1,4 +1,4 @@
-# [TICKET-002] Support Multiple Expressions Per Context (Within Same Time Range)
+# [TICKET-008] Support Multiple Expressions Per Context (Within Same Time Range)
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)
@@ -130,7 +130,7 @@ Proposed
 - 테스트 시나리오 증가
 
 ## References
-- TICKET-002
+- TICKET-008
 ```
 
 #### Step 2: ExpressionGroup 모델 추가
@@ -473,7 +473,7 @@ Both can be extracted if both are valuable for learning.
 - `tests/performance/test_multi_vs_single.py` - 성능 테스트
 
 ## Dependencies
-- Depends on: TICKET-001 (병렬 LLM 처리, 다중 expression 생성 속도 개선)
+- Depends on: TICKET-007 (병렬 LLM 처리, 다중 expression 생성 속도 개선)
 - Blocks: None
 - Related to: ADR-016
 
@@ -504,7 +504,7 @@ Both can be extracted if both are valuable for learning.
 - However: High complexity - requires data model changes, video processing refactoring
 
 **Implementation Phase:** Phase 2 - Sprint 2 (Weeks 3-4)
-**Sequence Order:** #2 in implementation queue (after TICKET-001 for performance foundation)
+**Sequence Order:** #8 in implementation queue (after TICKET-007 for performance foundation)
 
 **Architectural Guidance:**
 
@@ -551,7 +551,7 @@ Both can be extracted if both are valuable for learning.
    - Don't treat as errors
 
 **Dependencies:**
-- **Must complete first:** TICKET-001 (parallel processing helps with larger expression sets)
+- **Must complete first:** TICKET-007 (parallel processing helps with larger expression sets)
 - **Should complete first:** None
 - **Blocks:** None (backward compatible)
 - **Related work:** ADR-016 (if creating new ADR for this feature)
@@ -590,7 +590,7 @@ Beyond original ticket criteria:
 **Implementation Notes:**
 - Start by: Creating ExpressionGroup model and grouping logic
 - Watch out for: Timing precision issues (floating point comparison)
-- Coordinate with: TICKET-001 team (parallel processing helps with larger expression sets)
+- Coordinate with: TICKET-007 team (parallel processing helps with larger expression sets)
 - Reference: `langflix/core/models.py` for ExpressionAnalysis structure, `langflix/core/video_editor.py` for video creation logic
 
 **Phased Implementation Recommendation:**

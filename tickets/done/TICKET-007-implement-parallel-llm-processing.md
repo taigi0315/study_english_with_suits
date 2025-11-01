@@ -1,4 +1,4 @@
-# [TICKET-001] Implement Parallel LLM Request Processing for Faster Expression Analysis
+# [TICKET-007] Implement Parallel LLM Request Processing for Faster Expression Analysis
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)

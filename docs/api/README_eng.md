@@ -90,6 +90,44 @@ The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.p
 - Progress milestones: 10% (init), 20% (saving files), 30% (parsing), 50% (processing), 70% (educational videos), 80% (short videos), 100% (complete)
 
 ## Error Handling and Logging
+
+### Error Handler Integration (TICKET-005)
+
+The API now uses the centralized error handler (`langflix/core/error_handler.py`) for structured error reporting:
+
+**Key Features:**
+- **Structured Error Reports**: All errors are captured with context (operation, component, metadata)
+- **Error Categories**: Errors are automatically categorized (NETWORK, PROCESSING, VALIDATION, RESOURCE, SYSTEM)
+- **Error Severity**: Errors are classified by severity (LOW, MEDIUM, HIGH, CRITICAL)
+- **Error Tracking**: Error reports are stored and can be queried for statistics
+
+**Integration Points:**
+- `process_video_task()` in `routes/jobs.py` reports errors with job context
+- Error context includes: `job_id`, `video_filename`, `subtitle_filename`
+- Errors are logged via the error handler before updating Redis job status
+
+**Usage Example:**
+```python
+from langflix.core.error_handler import handle_error, ErrorContext
+
+try:
+    # Processing logic
+    pass
+except Exception as e:
+    error_context = ErrorContext(
+        operation="process_video_task",
+        component="api.routes.jobs",
+        additional_data={"job_id": job_id}
+    )
+    handle_error(e, error_context, retry=False, fallback=False)
+    # Continue with error handling...
+```
+
+**Benefits:**
+- Consistent error reporting across all modules
+- Better debugging with structured error information
+- Foundation for error monitoring and alerting (future enhancement)
+
 - Centralized exception handler returns consistent JSON payloads.
 - Extensive `logger.info/warning/error` statements track pipeline steps and failures.
 

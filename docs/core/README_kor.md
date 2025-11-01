@@ -5,7 +5,7 @@
 `langflix/core/` 모듈은 LangFlix의 핵심 비디오 편집 기능을 포함합니다. 이 모듈은 long-form (side-by-side) 및 short-form (vertical) 비디오 레이아웃을 포함한 교육용 비디오 시퀀스 생성을 조율합니다.
 
 **최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001
+**관련 티켓:** TICKET-001, TICKET-005
 
 ## 목적
 
@@ -23,6 +23,13 @@
 비디오 생성을 조율하는 주요 클래스입니다.
 
 **위치:** `langflix/core/video_editor.py`
+
+**에러 핸들러 통합 (TICKET-005):**
+- `create_educational_sequence()`는 구조화된 에러 리포팅을 위해 `@handle_error_decorator`로 래핑됨
+- `create_short_format_video()`는 구조화된 에러 리포팅을 위해 `@handle_error_decorator`로 래핑됨
+- `_create_timeline_from_tts()`는 일시적 실패 시 자동 재시도를 위해 `@retry_on_error` 데코레이터 사용 (최대 2회, 1초 지연)
+- 모든 에러는 에러 핸들러를 통해 컨텍스트(operation, component)와 함께 자동 로깅됨
+- 에러 리포트에는 디버깅을 위한 작업 컨텍스트가 포함됨
 
 **임시 파일 관리 (TICKET-002):**
 - 모든 임시 파일 작업에 `TempFileManager` 사용
@@ -159,6 +166,25 @@ Vertical 레이아웃으로 short-form 교육용 비디오 시퀀스를 생성�
 - 각 단계 테스트 용이
 - 더 명확한 오류 처리
 - 더 나은 유지보수성
+
+### ExpressionAnalyzer 클래스
+
+Gemini API를 사용하여 자막 청크를 분석하는 클래스입니다.
+
+**위치:** `langflix/core/expression_analyzer.py`
+
+**에러 핸들러 통합 (TICKET-005):**
+- `analyze_chunk()`는 구조화된 에러 리포팅을 위해 `@handle_error_decorator`로 래핑됨
+- `_generate_content_with_retry()`는 이제 각 재시도 시도마다 에러 핸들러에 에러를 리포팅
+- 에러 컨텍스트에 포함: `operation`, `component`, `max_retries`, `attempt`, `prompt_length`
+- 에러는 자동으로 분류됨 (타임아웃/연결 에러의 경우 NETWORK, 파싱 에러의 경우 PROCESSING)
+- 에러 리포트에는 API 실패 디버깅을 위한 재시도 시도 정보가 포함됨
+
+**주요 기능:**
+- API 실패 시 지수 백오프를 사용한 자동 재시도
+- 모든 API 에러에 대한 구조화된 에러 리포팅
+- 더 나은 모니터링을 위한 에러 카테고리화
+- 디버깅을 위한 상세한 에러 컨텍스트
 
 ## 종속성
 

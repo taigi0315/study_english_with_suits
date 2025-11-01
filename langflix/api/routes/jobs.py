@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Redis-based job storage for Phase 7 architecture
 from langflix.core.redis_client import get_redis_job_manager
 from langflix.utils.temp_file_manager import get_temp_manager
+from langflix.core.error_handler import handle_error, ErrorContext
 
 async def process_video_task(
     job_id: str,
@@ -119,6 +120,18 @@ async def process_video_task(
         
     except Exception as e:
         logger.error(f"Error processing job {job_id}: {e}", exc_info=True)
+        
+        # Report error to error handler for structured logging
+        error_context = ErrorContext(
+            operation="process_video_task",
+            component="api.routes.jobs",
+            additional_data={
+                "job_id": job_id,
+                "video_filename": video_filename,
+                "subtitle_filename": subtitle_filename
+            }
+        )
+        handle_error(e, error_context, retry=False, fallback=False)
         
         # Update job with error
         redis_manager = get_redis_job_manager()

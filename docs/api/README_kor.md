@@ -34,6 +34,44 @@
 - `get_storage()`는 현재 `None` 반환(TODO).
 
 ## 예외 처리
+
+### 에러 핸들러 통합 (TICKET-005)
+
+API는 이제 구조화된 에러 리포팅을 위해 중앙화된 에러 핸들러(`langflix/core/error_handler.py`)를 사용합니다:
+
+**주요 기능:**
+- **구조화된 에러 리포트**: 모든 에러는 컨텍스트(operation, component, metadata)와 함께 캡처됨
+- **에러 카테고리**: 에러는 자동으로 분류됨 (NETWORK, PROCESSING, VALIDATION, RESOURCE, SYSTEM)
+- **에러 심각도**: 에러는 심각도에 따라 분류됨 (LOW, MEDIUM, HIGH, CRITICAL)
+- **에러 추적**: 에러 리포트가 저장되며 통계 조회 가능
+
+**통합 포인트:**
+- `routes/jobs.py`의 `process_video_task()`는 작업 컨텍스트와 함께 에러를 리포팅
+- 에러 컨텍스트에 포함: `job_id`, `video_filename`, `subtitle_filename`
+- 에러는 Redis 작업 상태 업데이트 전에 에러 핸들러를 통해 로깅됨
+
+**사용 예시:**
+```python
+from langflix.core.error_handler import handle_error, ErrorContext
+
+try:
+    # 처리 로직
+    pass
+except Exception as e:
+    error_context = ErrorContext(
+        operation="process_video_task",
+        component="api.routes.jobs",
+        additional_data={"job_id": job_id}
+    )
+    handle_error(e, error_context, retry=False, fallback=False)
+    # 에러 처리 계속...
+```
+
+**장점:**
+- 모든 모듈에서 일관된 에러 리포팅
+- 구조화된 에러 정보로 더 나은 디버깅
+- 에러 모니터링 및 알림을 위한 기반 (향후 개선)
+
 - 기본 예외 `APIException` 및 특수화: `ValidationError`, `NotFoundError`, `ProcessingError`, `StorageError`.
 - `api_exception_handler`는 `APIException`, `HTTPException` 모두를 구조화된 JSON 에러로 변환(`models.common.ErrorResponse` 참고).
 

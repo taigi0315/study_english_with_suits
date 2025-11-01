@@ -16,6 +16,7 @@ from langflix.settings import get_expression_subtitle_styling
 from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain
 from langflix.subtitles import overlay as subs_overlay
 from langflix.utils.filename_utils import sanitize_for_expression_filename
+from .error_handler import handle_error_decorator, ErrorContext, retry_on_error
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,14 @@ class VideoEditor:
         
         return expression
         
+    @handle_error_decorator(
+        ErrorContext(
+            operation="create_educational_sequence",
+            component="core.video_editor"
+        ),
+        retry=False,  # Video processing shouldn't auto-retry
+        fallback=False
+    )
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
                                   expression_video_path: str, 
@@ -377,6 +386,7 @@ class VideoEditor:
         self._tts_cache[legacy_cache_key] = (tts_path, duration)
         logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{legacy_cache_key}'")
     
+    @retry_on_error(max_attempts=2, delay=1.0)
     def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:
         """Create timeline from existing TTS audio file"""
         try:
@@ -2263,6 +2273,14 @@ class VideoEditor:
         logger.warning(f"Could not find original video, using context path: {context_video_path}")
         return context_video_path
 
+    @handle_error_decorator(
+        ErrorContext(
+            operation="create_short_format_video",
+            component="core.video_editor"
+        ),
+        retry=False,  # Video processing shouldn't auto-retry
+        fallback=False
+    )
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
         """

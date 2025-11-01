@@ -106,18 +106,21 @@ class VideoEditor:
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
                                   expression_video_path: str, 
-                                  expression_index: int = 0) -> str:
+                                  expression_index: int = 0,
+                                  skip_context: bool = False) -> str:
         """
         Create educational video sequence with long-form layout:
-        - Left half: context video → expression repeat (with subtitles)
+        - If skip_context=False: Left half: context video → expression repeat (with subtitles)
+        - If skip_context=True: Left half: expression repeat only (with subtitles, no context)
         - Right half: educational slide (background + text + audio 3x)
         - Slide visible throughout entire duration
         
         Args:
             expression: ExpressionAnalysis object
-            context_video_path: Path to context video
-            expression_video_path: Path to expression video
+            context_video_path: Path to context video (used for extracting expression clip)
+            expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
+            skip_context: If True, skip context video and only show expression repeat (for multi-expression groups)
             
         Returns:
             Path to created educational video
@@ -128,14 +131,9 @@ class VideoEditor:
             output_filename = f"educational_{safe_expression}.mkv"
             output_path = self.context_slide_combined_dir / output_filename
             
-            logger.info(f"Creating educational sequence for: {expression.expression}")
+            logger.info(f"Creating educational sequence for: {expression.expression} (skip_context={skip_context})")
             
-            # Step 1: Create context video with dual-language subtitles
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression
-            )
-            
-            # Step 2: Extract expression video clip from context and repeat it
+            # Step 1: Extract expression video clip from context and repeat it
             # Calculate relative timestamps within context video
             context_start_seconds = self._time_to_seconds(expression.context_start_time)
             expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
@@ -147,7 +145,12 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Extract expression video clip with audio
+            # Get context video with subtitles (needed for extracting expression clip with subtitles)
+            context_with_subtitles = self._add_subtitles_to_context(
+                context_video_path, expression
+            )
+            
+            # Extract expression video clip with audio and subtitles from context
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
@@ -164,29 +167,38 @@ class VideoEditor:
             logger.info(f"Repeating expression clip {repeat_count} times")
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 3: Concatenate context + repeated expression for left side
-            left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
-            self._register_temp_file(left_side_path)
-            concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+            # Step 2: Create left side based on skip_context flag
+            if skip_context:
+                # Multi-expression group: Only expression repeat (no context)
+                logger.info("Skipping context video - using expression repeat only (multi-expression group)")
+                left_side_path = repeated_expression_path
+                left_duration = get_duration_seconds(str(left_side_path))
+                logger.info(f"Left side duration (expression repeat only): {left_duration:.2f}s")
+            else:
+                # Single-expression group: Context + expression repeat
+                logger.info("Including context video before expression repeat (single-expression group)")
+                left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
+                self._register_temp_file(left_side_path)
+                concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+                
+                # Get total left side duration for matching
+                left_duration = get_duration_seconds(str(left_side_path))
+                logger.info(f"Left side duration (context + expression repeat): {left_duration:.2f}s")
             
-            # Get total left side duration for matching
-            left_duration = get_duration_seconds(str(left_side_path))
-            logger.info(f"Left side duration: {left_duration:.2f}s")
-            
-            # Step 4: Create educational slide with background and TTS audio
+            # Step 3: Create educational slide with background and TTS audio
             # Pass left_duration so slide can be extended to match
             educational_slide = self._create_educational_slide(
                 expression_video_path, expression, expression_index, target_duration=left_duration
             )
             
-            # Step 5: Use hstack to create side-by-side layout (long-form)
+            # Step 4: Use hstack to create side-by-side layout (long-form)
             # Left: context → expression repeat, Right: educational slide
             logger.info("Creating long-form side-by-side layout with hstack")
             hstack_temp_path = self.output_dir / f"temp_hstack_long_{safe_expression}.mkv"
             self._register_temp_file(hstack_temp_path)
             hstack_keep_height(str(left_side_path), str(educational_slide), str(hstack_temp_path))
             
-            # Step 6: Apply final audio gain (+25%) as separate pass
+            # Step 5: Apply final audio gain (+25%) as separate pass
             logger.info("Applying final audio gain (+25%) to long-form output")
             apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.25)
             

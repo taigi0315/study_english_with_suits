@@ -40,13 +40,22 @@ open http://localhost:8000/docs
 
 ## API Endpoints
 
-## Media Pipeline Notes (Unreleased)
-- Video: keep original codec/resolution when possible; re-encode only when filters are applied
-- Audio: normalized to stereo (ac=2), 48kHz (ar=48000) at concat/stack boundaries
-- Explicit stream mapping is used to prevent audio loss
-- Related modules: `langflix/media/ffmpeg_utils.py`, `langflix/audio/timeline.py`, `langflix/subtitles/overlay.py`, `langflix/slides/generator.py`
+### Media Pipeline Architecture
+- **Video Processing**: Uses demuxer-first approach for AV repetition to prevent audio drops
+- **Video Layouts**: 
+  - Long-form videos: Horizontal stack (hstack) keeping height
+  - Short-form videos: Vertical stack (vstack) keeping width
+- **Audio Processing**: Normalized to stereo (ac=2), 48kHz (ar=48000) at concat/stack boundaries
+- **Final Audio Gain**: Applied as separate pass after video composition
+- **Explicit Stream Mapping**: Used throughout to prevent audio loss
+- **Related Modules**: `langflix/media/ffmpeg_utils.py`, `langflix/audio/timeline.py`, `langflix/subtitles/overlay.py`, `langflix/slides/generator.py`
+- **Pipeline Service**: Unified `VideoPipelineService` for both API and CLI (`langflix/services/video_pipeline_service.py`)
+- **Error Handling**: Integrated `ErrorHandler` with structured error reporting and retry mechanisms
+- **Temp File Management**: Centralized `TempFileManager` with automatic cleanup
 
 ### Health Check
+
+#### Basic Health Check
 
 ```bash
 GET /health
@@ -57,7 +66,61 @@ GET /health
 {
   "status": "healthy",
   "timestamp": "2024-01-01T12:00:00Z",
-  "version": "1.0.0"
+  "service": "LangFlix API"
+}
+```
+
+#### Detailed Health Check
+
+```bash
+GET /health/detailed
+```
+
+**Response**:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "service": "LangFlix API",
+  "version": "1.0.0",
+  "components": {
+    "database": "connected",
+    "storage": "available",
+    "tts": "ready"
+  }
+}
+```
+
+#### Redis Health Check
+
+```bash
+GET /health/redis
+```
+
+**Response**:
+```json
+{
+  "status": "healthy",
+  "active_jobs": 5,
+  "redis_connected": true,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Redis Cleanup
+
+```bash
+POST /health/redis/cleanup
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "expired_jobs_cleaned": 3,
+  "stale_jobs_cleaned": 2,
+  "total_cleaned": 5,
+  "timestamp": "2024-01-01T12:00:00Z"
 }
 ```
 
@@ -107,7 +170,7 @@ GET /api/v1/jobs/{job_id}
 }
 ```
 
-### Get Job Results
+### Get Job Expressions
 
 ```bash
 GET /api/v1/jobs/{job_id}/expressions
@@ -119,10 +182,15 @@ GET /api/v1/jobs/{job_id}/expressions
   "job_id": "uuid",
   "expressions": [
     {
-      "id": "expr_1",
       "expression": "How are you doing?",
       "translation": "어떻게 지내고 있어요?",
       "context": "Full dialogue context...",
+      "context_translation": "전체 대화 번역...",
+      "similar_expressions": ["How's it going?", "What's up?"],
+      "start_time": "00:01:23,456",
+      "end_time": "00:01:25,789",
+      "expression_start_time": "00:01:23,500",
+      "expression_end_time": "00:01:24,000",
       "difficulty": 3,
       "category": "greeting"
     }
@@ -131,17 +199,96 @@ GET /api/v1/jobs/{job_id}/expressions
 }
 ```
 
-### Download Generated Files
+**Note**: This endpoint uses Redis to fetch job expressions. The job must be in `COMPLETED` status.
+
+### List All Files
 
 ```bash
-GET /api/v1/jobs/{job_id}/files/{file_type}
+GET /api/v1/files
 ```
 
-**File Types**:
-- `context_videos`: Individual expression clips
-- `educational_videos`: Combined educational videos
-- `short_videos`: Short format videos
-- `metadata`: JSON metadata files
+**Response**:
+```json
+{
+  "files": [
+    {
+      "name": "educational_video.mkv",
+      "path": "Suits/S01E01/shared/context_slide_combined/educational_video.mkv",
+      "size": 10485760,
+      "modified": 1640995200.0
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get File Details
+
+```bash
+GET /api/v1/files/{file_id}
+```
+
+**Response**:
+```json
+{
+  "file_id": "file_id",
+  "name": "example.mp4",
+  "path": "output/example.mp4",
+  "size": 1024000,
+  "type": "video/mp4"
+}
+```
+
+### Delete File
+
+```bash
+DELETE /api/v1/files/{file_id}
+```
+
+**Response**:
+```json
+{
+  "message": "File file_id deleted successfully"
+}
+```
+
+---
+
+## Processing Architecture
+
+### Background Processing
+
+All video processing jobs run asynchronously using FastAPI's `BackgroundTasks`. The processing flow:
+
+1. **Job Creation**: Client uploads video and subtitle files, receives `job_id`
+2. **Background Processing**: Server processes video in background using `VideoPipelineService`
+3. **Progress Updates**: Job status and progress tracked in Redis
+4. **Completion**: Job status updated to `COMPLETED` with results
+
+### VideoPipelineService
+
+The API uses `VideoPipelineService` (`langflix/services/video_pipeline_service.py`) which:
+- Wraps `LangFlixPipeline` for unified interface
+- Supports progress callbacks for real-time updates
+- Handles temporary file management automatically
+- Provides standardized result format
+- Integrates error handling with structured reporting
+
+### Temporary File Management
+
+All temporary files are automatically managed using `TempFileManager`:
+- Files created during processing are registered
+- Automatic cleanup on job completion or failure
+- Context managers ensure proper resource cleanup
+- Prevents disk space leaks
+
+### Error Handling
+
+The API integrates `ErrorHandler` for structured error reporting:
+- Automatic error context capture
+- Retry mechanisms for transient failures
+- Structured error logs with component tracking
+- Error statistics and monitoring
 
 ---
 
@@ -221,77 +368,6 @@ GET /api/upload/{upload_id}/status
 
 ---
 
-## Media Management API
-
-### Scan Media Files
-
-```bash
-POST /api/media/scan
-```
-
-**Request**:
-```json
-{
-  "directory": "/path/to/media",
-  "recursive": true,
-  "file_types": ["mp4", "mkv", "avi"]
-}
-```
-
-**Response**:
-```json
-{
-  "scan_id": "scan_uuid",
-  "status": "COMPLETED",
-  "files_found": 25,
-  "processed": 25,
-  "errors": 0
-}
-```
-
-### Get Media Library
-
-```bash
-GET /api/media/library
-```
-
-**Response**:
-```json
-{
-  "media_files": [
-    {
-      "id": "media_1",
-      "filename": "Suits.S01E01.mkv",
-      "path": "/path/to/Suits.S01E01.mkv",
-      "size": 1024000000,
-      "duration": 2700,
-      "created_at": "2024-01-01T12:00:00Z"
-    }
-  ],
-  "total_count": 25
-}
-```
-
-### Get Available Subtitles
-
-```bash
-GET /api/media/{media_id}/subtitles
-```
-
-**Response**:
-```json
-{
-  "subtitles": [
-    {
-      "id": "sub_1",
-      "filename": "Suits.S01E01.srt",
-      "path": "/path/to/Suits.S01E01.srt",
-      "language": "en",
-      "encoding": "utf-8"
-    }
-  ]
-}
-```
 
 ---
 
@@ -303,11 +379,6 @@ GET /api/media/{media_id}/subtitles
 GET /api/v1/jobs
 ```
 
-**Query Parameters**:
-- `status`: Filter by status (PENDING, PROCESSING, COMPLETED, FAILED)
-- `limit`: Number of jobs to return (default: 50)
-- `offset`: Number of jobs to skip (default: 0)
-
 **Response**:
 ```json
 {
@@ -315,46 +386,20 @@ GET /api/v1/jobs
     {
       "job_id": "uuid",
       "status": "COMPLETED",
+      "progress": 100,
       "created_at": "2024-01-01T12:00:00Z",
-      "completed_at": "2024-01-01T12:15:00Z"
+      "completed_at": "2024-01-01T12:15:00Z",
+      "video_file": "video.mp4",
+      "subtitle_file": "subtitle.srt",
+      "show_name": "Suits",
+      "episode_name": "S01E01"
     }
   ],
-  "total_count": 100,
-  "limit": 50,
-  "offset": 0
+  "total": 1
 }
 ```
 
-### Cancel Job
-
-```bash
-DELETE /api/v1/jobs/{job_id}
-```
-
-**Response**:
-```json
-{
-  "job_id": "uuid",
-  "status": "CANCELLED",
-  "cancelled_at": "2024-01-01T12:10:00Z"
-}
-```
-
-### Retry Failed Job
-
-```bash
-POST /api/v1/jobs/{job_id}/retry
-```
-
-**Response**:
-```json
-{
-  "job_id": "uuid",
-  "status": "PENDING",
-  "retry_count": 2,
-  "scheduled_at": "2024-01-01T12:10:00Z"
-}
-```
+**Note**: All job data is stored in Redis. The jobs endpoint returns all active jobs with their current status and progress.
 
 ---
 

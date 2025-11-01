@@ -108,6 +108,32 @@ def get_expression_llm() -> Dict[str, Any]:
     return _config_loader.get('expression', 'llm', default={})
 
 
+def get_parallel_llm_processing_enabled() -> bool:
+    """Check if parallel LLM processing is enabled"""
+    expression_llm = get_expression_llm()
+    parallel_config = expression_llm.get('parallel_processing', {})
+    return parallel_config.get('enabled', True)
+
+
+def get_parallel_llm_max_workers() -> Optional[int]:
+    """Get max workers for parallel LLM processing"""
+    expression_llm = get_expression_llm()
+    parallel_config = expression_llm.get('parallel_processing', {})
+    max_workers = parallel_config.get('max_workers')
+    if max_workers is None:
+        # Auto-detect based on CPU count, capped at 5 for Gemini API
+        import multiprocessing
+        return min(multiprocessing.cpu_count(), 5)
+    return max_workers
+
+
+def get_parallel_llm_timeout() -> float:
+    """Get timeout per chunk for parallel processing"""
+    expression_llm = get_expression_llm()
+    parallel_config = expression_llm.get('parallel_processing', {})
+    return parallel_config.get('timeout_per_chunk', 300)
+
+
 # ============================================================================
 # App Settings
 # ============================================================================

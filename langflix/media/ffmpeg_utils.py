@@ -406,13 +406,14 @@ def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) ->
     stacked_v = ffmpeg.filter([left_v, right_scaled], "hstack", inputs=2)
 
     # Use left audio if available (right video may be silent slide)
+    # Must re-encode audio when using filters (asetpts) - cannot use streamcopy
     if has_audio and left_a is not None:
         output_with_explicit_streams(
             stacked_v,
             left_a,
             out_path,
             **make_video_encode_args_from_source(left_path),
-            **make_audio_encode_args_copy(),
+            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
         )
     else:
         # No audio - output video only

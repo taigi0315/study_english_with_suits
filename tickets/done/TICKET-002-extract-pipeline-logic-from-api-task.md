@@ -1,4 +1,4 @@
-# [TICKET-001] Extract Video Processing Pipeline Logic from API Task Function
+# [TICKET-002] Extract Video Processing Pipeline Logic from API Task Function
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)

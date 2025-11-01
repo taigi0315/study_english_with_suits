@@ -1,4 +1,4 @@
-# [TICKET-005] Integrate Error Handler Module into Actual Codebase
+# [TICKET-006] Integrate Error Handler Module into Actual Codebase
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)

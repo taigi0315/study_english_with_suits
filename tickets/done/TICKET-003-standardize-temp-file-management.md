@@ -1,4 +1,4 @@
-# [TICKET-002] Standardize Temporary File Management Across Codebase
+# [TICKET-003] Standardize Temporary File Management Across Codebase
 
 ## Priority
 - [ ] Critical (System stability, security, data loss risk)

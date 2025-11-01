@@ -104,6 +104,71 @@ result = pipeline.run(
 # "Parallel analysis complete in 45.2s"
 ```
 
+**Multiple Expressions Per Context (TICKET-008):**
+- Expressions sharing the same `context_start_time` and `context_end_time` are automatically grouped
+- Groups share a single context video clip (efficiency gain)
+- Each expression still gets its own educational video (separate mode, backward compatible)
+- Configurable via `expression.llm.allow_multiple_expressions` and `expression.llm.max_expressions_per_context`
+
+**How It Works:**
+1. After expression analysis, `group_expressions_by_context()` groups expressions by shared context times
+2. `_process_expressions()` extracts ONE context clip per group (shared by all expressions in group)
+3. Separate subtitle files are created for each expression
+4. `_create_educational_videos()` creates individual educational videos for each expression (separate mode)
+5. Context clips are cached to avoid duplicate extractions
+
+**Configuration:**
+```yaml
+expression:
+  llm:
+    allow_multiple_expressions: true  # Enable/disable feature
+    max_expressions_per_context: 3    # Maximum expressions per context
+  educational_video_mode: "separate"  # "separate" or "combined" (Phase 2)
+```
+
+**ExpressionGroup Model:**
+- `ExpressionGroup` contains multiple `ExpressionAnalysis` objects sharing same context
+- Validates that all expressions in group have matching `context_start_time` and `context_end_time`
+- Supports iteration, indexing, and length queries for easy access
+
+**Benefits:**
+- More educational value from same content (multiple expressions from one context)
+- Processing efficiency: shared context clips reduce duplicate video extractions
+- Resource optimization: lower storage usage and faster processing
+- Backward compatible: single expressions automatically become groups of 1
+
+**Example:**
+```python
+# Grouping is automatic when enabled (default)
+pipeline = LangFlixPipeline(
+    subtitle_file="path/to/subtitle.srt",
+    video_dir="assets/media",
+    output_dir="output",
+    enable_expression_grouping=True  # Default: True
+)
+
+# After run(), access groups:
+groups = pipeline.expression_groups
+for group in groups:
+    print(f"Group has {len(group)} expression(s)")
+    for expr in group:
+        print(f"  - {expr.expression}")
+```
+
+**When Grouping is Used:**
+- ✅ `enable_expression_grouping=True` (default)
+- ✅ Multiple expressions share same context times
+- ✅ Feature enabled in config (`expression.llm.allow_multiple_expressions: true`)
+
+**When Single-Expression Groups are Created:**
+- ❌ Grouping disabled (`enable_expression_grouping=False`)
+- ❌ All expressions have different contexts (no grouping needed)
+- ❌ Feature disabled in config
+
+**Efficiency Gain:**
+- If 3 expressions share the same context, only 1 context clip is extracted (instead of 3)
+- Example: 10 expressions with 3 groups → 3 context clips instead of 10 (70% reduction)
+
 ### VideoEditor Class
 
 The main class that orchestrates video creation.

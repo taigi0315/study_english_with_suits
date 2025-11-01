@@ -134,6 +134,24 @@ def get_parallel_llm_timeout() -> float:
     return parallel_config.get('timeout_per_chunk', 300)
 
 
+def get_max_expressions_per_context() -> int:
+    """Get maximum expressions allowed per context time range"""
+    expression_llm = get_expression_llm()
+    return expression_llm.get('max_expressions_per_context', 3)
+
+
+def get_allow_multiple_expressions() -> bool:
+    """Check if multiple expressions per context is enabled"""
+    expression_llm = get_expression_llm()
+    return expression_llm.get('allow_multiple_expressions', True)
+
+
+def get_educational_video_mode() -> str:
+    """Get educational video generation mode (separate or combined)"""
+    expression_config = get_expression_config()
+    return expression_config.get('educational_video_mode', 'separate')
+
+
 # ============================================================================
 # App Settings
 # ============================================================================

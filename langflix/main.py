@@ -822,12 +822,14 @@ class LangFlixPipeline:
                         )
                         
                         # Create educational sequence with global expression index for voice alternation
-                        # This creates: left (context + expression repeat) | right (expression's own slide)
+                        # Multi-expression groups: left (expression repeat only) | right (expression's own slide)
+                        # Single-expression groups: left (context + expression repeat) | right (expression's own slide)
                         educational_video = self.video_editor.create_educational_sequence(
                             expression,
                             str(context_video),  # Shared context clip for the group
                             expression_source_video,  # Original video for expression audio
-                            expression_index=global_expression_index  # Global index for voice alternation
+                            expression_index=global_expression_index,  # Global index for voice alternation
+                            skip_context=is_multi_expression  # Skip context for multi-expression groups
                         )
                         
                         educational_videos.append(educational_video)

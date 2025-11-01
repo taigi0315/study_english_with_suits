@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
 from langflix import settings
 from langflix.utils.prompts import get_prompt_for_chunk
-from .models import ExpressionAnalysisResponse, ExpressionAnalysis
+from .models import ExpressionAnalysisResponse, ExpressionAnalysis, ExpressionGroup
 from .cache_manager import get_cache_manager
 from .error_handler import (
     retry_on_error,
@@ -744,6 +744,73 @@ def calculate_expression_score(
     )
     
     return round(score, 2)
+
+
+def group_expressions_by_context(expressions: List[ExpressionAnalysis]) -> List[ExpressionGroup]:
+    """
+    Group expressions that share the same context time range.
+    
+    Expressions with matching context_start_time and context_end_time are grouped together.
+    This enables efficient video processing by sharing a single context clip across
+    multiple expressions from the same dialogue segment.
+    
+    Args:
+        expressions: List of ExpressionAnalysis objects to group
+        
+    Returns:
+        List of ExpressionGroup objects, each containing expressions that share
+        the same context time range. Single expressions automatically become groups of 1.
+        
+    Example:
+        >>> expr1 = ExpressionAnalysis(..., context_start_time="00:01:00", context_end_time="00:01:30", ...)
+        >>> expr2 = ExpressionAnalysis(..., context_start_time="00:01:00", context_end_time="00:01:30", ...)
+        >>> expr3 = ExpressionAnalysis(..., context_start_time="00:02:00", context_end_time="00:02:30", ...)
+        >>> groups = group_expressions_by_context([expr1, expr2, expr3])
+        >>> len(groups)  # 2 groups: [expr1, expr2] and [expr3]
+        2
+        >>> len(groups[0].expressions)  # First group has 2 expressions
+        2
+        >>> len(groups[1].expressions)  # Second group has 1 expression
+        1
+    """
+    if not expressions:
+        return []
+    
+    # Dictionary to store groups by context key
+    groups_dict: Dict[str, List[ExpressionAnalysis]] = {}
+    
+    for expr in expressions:
+        # Create unique key from context times
+        context_key = f"{expr.context_start_time}_{expr.context_end_time}"
+        
+        if context_key in groups_dict:
+            groups_dict[context_key].append(expr)
+        else:
+            groups_dict[context_key] = [expr]
+    
+    # Convert to ExpressionGroup objects
+    expression_groups = []
+    for context_key, expr_list in groups_dict.items():
+        # Extract context times from first expression (all have same context)
+        first_expr = expr_list[0]
+        group = ExpressionGroup(
+            context_start_time=first_expr.context_start_time,
+            context_end_time=first_expr.context_end_time,
+            expressions=expr_list
+        )
+        expression_groups.append(group)
+    
+    # Log grouping statistics
+    single_expr_groups = sum(1 for g in expression_groups if len(g.expressions) == 1)
+    multi_expr_groups = sum(1 for g in expression_groups if len(g.expressions) > 1)
+    
+    if multi_expr_groups > 0:
+        logger.info(
+            f"Grouped {len(expressions)} expressions into {len(expression_groups)} groups: "
+            f"{single_expr_groups} single-expression groups, {multi_expr_groups} multi-expression groups"
+        )
+    
+    return expression_groups
 
 
 def rank_expressions(

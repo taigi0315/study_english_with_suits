@@ -245,10 +245,18 @@ expression:
       timeout_per_chunk: 300  # seconds (5 minutes per chunk)
       batch_size: null  # null = process all chunks at once
     
+    # Multiple expressions per context configuration
+    max_expressions_per_context: 3  # Maximum expressions allowed per context time range
+    allow_multiple_expressions: true  # Enable/disable multiple expressions per context feature
+    
     # Chunking configuration
     min_expressions_per_chunk: 1
     max_expressions_per_chunk: 3
     max_llm_input_length: 5000
+  
+  # Educational video generation mode
+  # Options: "separate" (one video per expression) or "combined" (one video per group - Phase 2)
+  educational_video_mode: "separate"  # Default: separate mode (backward compatible)
   
   # Subtitle styling configuration
   subtitle_styling:

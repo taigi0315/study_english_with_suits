@@ -694,6 +694,9 @@ Your review is complete when:
 
 ---
 
+once review is done, "move" ticket to approved
+prevent to have duplicate tickets under 'review-required' and 'approved'
+
 **Remember: You're not just approving tickets, you're shaping the future of the system. Every decision should move us toward a better architecture while delivering business value.**
 
 **Your goal: Turn a pile of tickets into a coherent, executable strategy.**

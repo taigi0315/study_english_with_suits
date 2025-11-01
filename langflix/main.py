@@ -1015,21 +1015,33 @@ class LangFlixPipeline:
             raise
     
     def _create_final_video_from_temp_files(self):
-        """Create final video from existing temp files"""
+        """Create final video from existing temp files (fallback when educational_videos list is empty)"""
         try:
             logger.info("Attempting to create final video from temp files...")
             
-            final_videos_dir = self.paths['language']['final_videos']
+            # Look in context_slide_combined directory for educational and context_multi_slide videos
+            context_slide_dir = self.paths['language'].get('context_slide_combined')
+            if not context_slide_dir:
+                # Fallback to final_videos directory
+                context_slide_dir = self.paths['language']['final_videos']
             
-            # Find temp files
-            context_videos = sorted(list(final_videos_dir.glob("temp_context_with_subs_*.mkv")))
-            slide_videos = sorted(list(final_videos_dir.glob("temp_slide_*.mkv")))
+            context_slide_path = Path(context_slide_dir) if isinstance(context_slide_dir, str) else context_slide_dir
             
-            logger.info(f"Found {len(context_videos)} context videos and {len(slide_videos)} slide videos")
+            # Find educational videos and context multi-slide videos
+            educational_videos = sorted(list(context_slide_path.glob("educational_*.mkv")))
+            context_multi_slide_videos = sorted(list(context_slide_path.glob("context_multi_slide_*.mkv")))
             
-            if not context_videos or not slide_videos:
+            all_videos = context_multi_slide_videos + educational_videos
+            all_videos.sort()  # Sort by filename to maintain order
+            
+            logger.info(f"Found {len(context_multi_slide_videos)} context_multi_slide videos and {len(educational_videos)} educational videos")
+            
+            if not all_videos:
                 logger.warning("No temp files found for final video creation")
                 return
+            
+            # Use all found videos in order
+            video_sequence = [str(video.absolute()) for video in all_videos]
             
             # Create sequence: context1, slide1, context2, slide2, ...
             video_sequence = []

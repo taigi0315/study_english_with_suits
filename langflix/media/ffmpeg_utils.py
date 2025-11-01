@@ -365,6 +365,7 @@ def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) ->
     """Stack two videos horizontally keeping source heights; widths scale proportionally.
     
     Resets timestamps to prevent delay at video start.
+    Right video may not have audio (e.g., silent slides), so only use left audio.
     """
     left_vp = get_video_params(left_path)
     left_in = ffmpeg.input(left_path)
@@ -372,7 +373,24 @@ def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) ->
 
     # Reset timestamps to prevent delay
     left_v = ffmpeg.filter(left_in["v"], "setpts", "PTS-STARTPTS")
-    left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
+    
+    # Check if left has audio stream before processing
+    # Use try/except to handle cases where audio stream doesn't exist
+    try:
+        left_ap = get_audio_params(left_path)
+        has_audio = left_ap.codec is not None
+    except Exception:
+        has_audio = False
+    
+    if has_audio:
+        try:
+            left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
+        except Exception:
+            # If audio stream exists in file but can't be accessed, skip it
+            has_audio = False
+            left_a = None
+    else:
+        left_a = None
     
     # Scale right to match left height, preserve aspect ratio
     right_scaled = ffmpeg.filter(right_in["v"], "scale", -2, left_vp.height or -1)
@@ -381,14 +399,25 @@ def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) ->
     
     stacked_v = ffmpeg.filter([left_v, right_scaled], "hstack", inputs=2)
 
-    # Use left audio (with reset timestamps) as-is
-    output_with_explicit_streams(
-        stacked_v,
-        left_a,
-        out_path,
-        **make_video_encode_args_from_source(left_path),
-        **make_audio_encode_args_copy(),
-    )
+    # Use left audio if available (right video may be silent slide)
+    if has_audio and left_a is not None:
+        output_with_explicit_streams(
+            stacked_v,
+            left_a,
+            out_path,
+            **make_video_encode_args_from_source(left_path),
+            **make_audio_encode_args_copy(),
+        )
+    else:
+        # No audio - output video only
+        (
+            ffmpeg
+            .output(stacked_v, str(out_path),
+                   **make_video_encode_args_from_source(left_path))
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        ensure_dir(Path(out_path))
 
 
 # --------------------------- Misc helpers ---------------------------

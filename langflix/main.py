@@ -781,7 +781,39 @@ class LangFlixPipeline:
                     f"using shared context clip: {context_video.name}"
                 )
                 
-                # Create educational video for EACH expression in the group (separate mode)
+                # Check if this is a multi-expression group
+                is_multi_expression = len(expression_group.expressions) > 1
+                
+                if is_multi_expression:
+                    # Multi-expression group: Create context video with multi-expression slide FIRST
+                    try:
+                        logger.info(
+                            f"Creating context video with multi-expression slide for group {group_idx+1} "
+                            f"({len(expression_group.expressions)} expressions)"
+                        )
+                        
+                        # Add subtitles to context video first
+                        context_with_subtitles = self.video_editor._add_subtitles_to_context(
+                            str(context_video), expression_group.expressions[0]  # Use first expression for subtitle context
+                        )
+                        
+                        # Create context video with multi-expression slide
+                        context_video_with_slide = self.video_editor.create_context_video_with_multi_slide(
+                            context_with_subtitles,  # Context video with subtitles
+                            expression_group
+                        )
+                        
+                        educational_videos.append(context_video_with_slide)
+                        logger.info(f"✅ Context video with multi-expression slide created: {context_video_with_slide}")
+                        
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating context video with multi-slide for group {group_idx+1}: {e}"
+                        )
+                        # Continue to create expression videos even if context video failed
+                
+                # Create educational video for EACH expression in the group
+                # Each expression gets its own video with its own slide
                 for expr_idx, expression in enumerate(expression_group.expressions):
                     try:
                         logger.info(
@@ -790,6 +822,7 @@ class LangFlixPipeline:
                         )
                         
                         # Create educational sequence with global expression index for voice alternation
+                        # This creates: left (context + expression repeat) | right (expression's own slide)
                         educational_video = self.video_editor.create_educational_sequence(
                             expression,
                             str(context_video),  # Shared context clip for the group
@@ -798,7 +831,7 @@ class LangFlixPipeline:
                         )
                         
                         educational_videos.append(educational_video)
-                        logger.info(f"✅ Educational video created: {educational_video}")
+                        logger.info(f"✅ Educational video created for expression: {educational_video}")
                         global_expression_index += 1
                         
                     except Exception as e:

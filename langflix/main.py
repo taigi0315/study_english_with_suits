@@ -632,62 +632,98 @@ class LangFlixPipeline:
             # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):
-        """Process each expression (video + subtitles)"""
-        for i, expression in enumerate(self.expressions):
+        """Process each expression group (shared context clip + individual subtitles)"""
+        from langflix.utils.temp_file_manager import get_temp_manager
+        temp_manager = get_temp_manager()
+        
+        # Find video file (shared for all groups)
+        video_file = self.video_processor.find_video_file(str(self.subtitle_file))
+        if not video_file:
+            logger.warning("No video file found, skipping expression processing")
+            return
+        
+        # Cache for context clips to avoid duplicate extractions
+        context_clip_cache: Dict[str, Path] = {}
+        
+        for group_idx, expression_group in enumerate(self.expression_groups):
             try:
-                logger.info(f"Processing expression {i+1}/{len(self.expressions)}: {expression.expression}")
-                
-                # Find video file
-                video_file = self.video_processor.find_video_file(str(self.subtitle_file))
-                if not video_file:
-                    logger.warning(f"No video file found for expression {i+1}")
-                    continue
-                
-                # Create output filenames using organized structure
-                # Use proper filename sanitization for file system safety
-                safe_filename = sanitize_for_expression_filename(expression.expression)
-                
-                # Don't save raw clips - use temp directory
-                from langflix.utils.temp_file_manager import get_temp_manager
-                temp_manager = get_temp_manager()
-                # Create temp file using manager (will be cleaned up later)
-                # Use delete=False so file persists for later use in _create_educational_videos
-                with temp_manager.create_temp_file(suffix='.mkv', prefix=f'temp_expression_{i+1:02d}_{safe_filename[:30]}_', delete=False) as temp_file_path:
-                    video_output = temp_file_path
-                    # Register file for cleanup after processing
-                    temp_manager.register_file(video_output)
-                subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_filename[:30]}.srt"
-                
-                # Ensure the subtitle directory exists
-                subtitle_output.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Extract video clip to temp location
-                success = self.video_processor.extract_clip(
-                    video_file,
-                    expression.context_start_time,
-                    expression.context_end_time,
-                    video_output
+                logger.info(
+                    f"Processing expression group {group_idx+1}/{len(self.expression_groups)}: "
+                    f"{len(expression_group.expressions)} expression(s)"
                 )
                 
-                if success:
-                    logger.info(f"✅ Video clip created: {video_output}")
+                # Create context key for caching
+                context_key = f"{expression_group.context_start_time}_{expression_group.context_end_time}"
+                
+                # Extract ONE context clip for the entire group (shared by all expressions)
+                if context_key in context_clip_cache:
+                    logger.info(f"Reusing cached context clip for group {group_idx+1}")
+                    video_output = context_clip_cache[context_key]
+                else:
+                    # Create temp file for context clip
+                    safe_group_name = f"group_{group_idx+1:02d}"
+                    if len(expression_group.expressions) == 1:
+                        safe_filename = sanitize_for_expression_filename(expression_group.expressions[0].expression)
+                    else:
+                        # For multi-expression groups, use a generic name
+                        safe_filename = f"multi_expr_{len(expression_group.expressions)}"
                     
-                    # Create subtitle file
-                    subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
-                        expression,
-                        str(subtitle_output)
+                    with temp_manager.create_temp_file(
+                        suffix='.mkv',
+                        prefix=f'temp_group_{group_idx+1:02d}_{safe_filename[:30]}_',
+                        delete=False
+                    ) as temp_file_path:
+                        video_output = temp_file_path
+                        temp_manager.register_file(video_output)
+                    
+                    # Extract context clip (shared by all expressions in group)
+                    success = self.video_processor.extract_clip(
+                        video_file,
+                        expression_group.context_start_time,
+                        expression_group.context_end_time,
+                        video_output
                     )
                     
-                    if subtitle_success:
-                        logger.info(f"✅ Subtitle file created: {subtitle_output}")
-                        self.processed_expressions += 1
+                    if success:
+                        logger.info(f"✅ Shared context clip created for group {group_idx+1}: {video_output}")
+                        context_clip_cache[context_key] = video_output
                     else:
-                        logger.warning(f"❌ Failed to create subtitle file: {subtitle_output}")
-                else:
-                    logger.warning(f"❌ Failed to create video clip: {video_output}")
-                    
+                        logger.warning(f"❌ Failed to create context clip for group {group_idx+1}")
+                        continue
+                
+                # Create subtitle files for EACH expression in the group
+                for expr_idx, expression in enumerate(expression_group.expressions):
+                    try:
+                        safe_filename = sanitize_for_expression_filename(expression.expression)
+                        
+                        # Create subtitle file with group and expression index
+                        if len(expression_group.expressions) > 1:
+                            subtitle_filename = f"group_{group_idx+1:02d}_expr_{expr_idx+1:02d}_{safe_filename[:30]}.srt"
+                        else:
+                            # Single expression: use simple naming (backward compatible)
+                            subtitle_filename = f"expression_{group_idx+1:02d}_{safe_filename[:30]}.srt"
+                        
+                        subtitle_output = self.paths['language']['subtitles'] / subtitle_filename
+                        subtitle_output.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Create subtitle file
+                        subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
+                            expression,
+                            str(subtitle_output)
+                        )
+                        
+                        if subtitle_success:
+                            logger.info(f"✅ Subtitle file created: {subtitle_output}")
+                            self.processed_expressions += 1
+                        else:
+                            logger.warning(f"❌ Failed to create subtitle file: {subtitle_output}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing expression {expr_idx+1} in group {group_idx+1}: {e}")
+                        continue
+                        
             except Exception as e:
-                logger.error(f"Error processing expression {i+1}: {e}")
+                logger.error(f"Error processing expression group {group_idx+1}: {e}")
                 continue
     
     def _create_educational_videos(self):

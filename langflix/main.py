@@ -852,10 +852,23 @@ class LangFlixPipeline:
         
         # Create final concatenated video
         if educational_videos:
+            logger.info(f"Creating final long-form video from {len(educational_videos)} educational videos...")
             self._create_final_video(educational_videos)
         else:
-            # Fallback: Try to create final video from temp files if available
-            self._create_final_video_from_temp_files()
+            logger.error(
+                f"❌ Cannot create final long-form video: No educational videos were created\n"
+                f"   Reasons this might happen:\n"
+                f"   1. No expressions were found/parsed from LLM response\n"
+                f"   2. All expressions failed validation (check log for 'Dropping expression' messages)\n"
+                f"   3. All video creation steps failed (check log for 'Error creating' messages)\n"
+                f"   Expression count: {len(self.expressions)}\n"
+                f"   Expression groups: {len(self.expression_groups)}"
+            )
+            # Don't try fallback - let it fail clearly
+            raise RuntimeError(
+                f"Cannot create final video: {len(educational_videos)} educational videos created "
+                f"(expected at least 1). Check logs above for expression parsing/validation errors."
+            )
         
         # Clean up temp video clips after processing using temp manager
         logger.info("Cleaning up temporary video clips...")

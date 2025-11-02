@@ -276,29 +276,32 @@ def concat_filter_with_explicit_map(
     concat_node = ffmpeg.concat(left_v, left_a, right_v, right_a, v=1, a=1, n=2).node
     
     try:
+        # Must re-encode audio when using filters (setpts, asetpts) - cannot use streamcopy
+        # Filtering and streamcopy cannot be used together
         output_with_explicit_streams(
             concat_node[0],
             concat_node[1],
             out_path,
             **make_video_encode_args_from_source(left_path),
-            **make_audio_encode_args_copy(),
+            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
         )
     except ffmpeg.Error as e:
-        logger.warning(f"Filter concat failed, falling back to demuxer concat: {e}")
-        # Fallback to demuxer concat
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write(f"file '{Path(left_path).absolute()}'\n")
-            f.write(f"file '{Path(right_path).absolute()}'\n")
-            concat_file = f.name
-        
-        try:
-            concat_demuxer_if_uniform(concat_file, out_path)
-        finally:
-            import os
-            if os.path.exists(concat_file):
-                os.unlink(concat_file)
-        ensure_dir(Path(out_path))
+        # Read stderr for detailed error information
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ concat_filter_with_explicit_map FAILED: Cannot concatenate videos\n"
+            f"   Left: {left_path}\n"
+            f"   Right: {right_path}\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr}\n"
+            f"   This usually means:\n"
+            f"   1. Video codecs/resolutions are incompatible\n"
+            f"   2. One or both videos have no audio stream\n"
+            f"   3. Frame rate mismatch causing filter issues\n"
+            f"   4. File corruption or incomplete files\n"
+            f"   Fix: Check files with 'ffprobe {left_path}' and 'ffprobe {right_path}'"
+        )
+        raise RuntimeError(f"concat_filter_with_explicit_map failed: {stderr}") from e
 
 
 def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> None:
@@ -362,25 +365,66 @@ def vstack_keep_width(top_path: str, bottom_path: str, out_path: Path | str) -> 
 
 
 def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) -> None:
-    """Stack two videos horizontally keeping source heights; widths scale proportionally."""
+    """Stack two videos horizontally keeping source heights; widths scale proportionally.
+    
+    Resets timestamps to prevent delay at video start.
+    Right video may not have audio (e.g., silent slides), so only use left audio.
+    """
     left_vp = get_video_params(left_path)
     left_in = ffmpeg.input(left_path)
     right_in = ffmpeg.input(right_path)
 
+    # Reset timestamps to prevent delay
+    left_v = ffmpeg.filter(left_in["v"], "setpts", "PTS-STARTPTS")
+    
+    # Check if left has audio stream before processing
+    # Use try/except to handle cases where audio stream doesn't exist
+    has_audio = False
+    left_a = None
+    
+    try:
+        left_ap = get_audio_params(left_path)
+        if left_ap.codec:
+            # Try to access audio stream
+            try:
+                left_a = ffmpeg.filter(left_in["a"], "asetpts", "PTS-STARTPTS")
+                has_audio = True
+            except (KeyError, AttributeError, Exception) as e:
+                logger.warning(f"Left video has audio codec but stream access failed: {e}, proceeding without audio")
+                has_audio = False
+                left_a = None
+    except Exception as e:
+        logger.debug(f"Left video has no audio stream: {e}")
+        has_audio = False
+        left_a = None
+    
     # Scale right to match left height, preserve aspect ratio
     right_scaled = ffmpeg.filter(right_in["v"], "scale", -2, left_vp.height or -1)
-    left_v = left_in["v"]
+    # Reset right video timestamps as well
+    right_scaled = ffmpeg.filter(right_scaled, "setpts", "PTS-STARTPTS")
+    
     stacked_v = ffmpeg.filter([left_v, right_scaled], "hstack", inputs=2)
 
-    # Prefer audio from left input as-is
-    left_a = left_in["a"]
-    output_with_explicit_streams(
-        stacked_v,
-        left_a,
-        out_path,
-        **make_video_encode_args_from_source(left_path),
-        **make_audio_encode_args_copy(),
-    )
+    # Use left audio if available (right video may be silent slide)
+    # Must re-encode audio when using filters (asetpts) - cannot use streamcopy
+    if has_audio and left_a is not None:
+        output_with_explicit_streams(
+            stacked_v,
+            left_a,
+            out_path,
+            **make_video_encode_args_from_source(left_path),
+            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
+        )
+    else:
+        # No audio - output video only
+        (
+            ffmpeg
+            .output(stacked_v, str(out_path),
+                   **make_video_encode_args_from_source(left_path))
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        ensure_dir(Path(out_path))
 
 
 # --------------------------- Misc helpers ---------------------------
@@ -453,43 +497,49 @@ def repeat_av_demuxer(input_path: str, repeat_count: int, out_path: Path | str) 
     # Write concat file
     concat_content = '\n'.join(concat_list)
     
-    # Use concat demuxer
+    # Use concat demuxer - try file-based method first (more reliable than pipe)
+    # Write concat file to disk for better error messages
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        f.write(concat_content)
+        concat_file = f.name
+    
     try:
         (
             ffmpeg
-            .input('pipe:', format='concat', safe=0)
+            .input(concat_file, format='concat', safe=0)
             .output(
                 str(out_path),
                 **make_video_encode_args_from_source(input_path),
                 **make_audio_encode_args_copy()
             )
             .overwrite_output()
-            .run(input=concat_content.encode('utf-8'), quiet=True)
+            .run(capture_stdout=True, capture_stderr=True)
         )
     except ffmpeg.Error as e:
-        logger.error(f"concat demuxer failed, falling back to file-based method: {e}")
-        # Fallback: write concat file to disk
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write(concat_content)
-            concat_file = f.name
-        
-        try:
-            (
-                ffmpeg
-                .input(concat_file, format='concat', safe=0)
-                .output(
-                    str(out_path),
-                    **make_video_encode_args_from_source(input_path),
-                    **make_audio_encode_args_copy()
-                )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        finally:
-            import os
-            if os.path.exists(concat_file):
-                os.unlink(concat_file)
-        ensure_dir(Path(out_path))
+        # Read stderr for detailed error information
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ repeat_av_demuxer FAILED: Cannot repeat video segment\n"
+            f"   Input: {input_path}\n"
+            f"   Repeat count: {repeat_count}\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr}\n"
+            f"   This usually means:\n"
+            f"   1. Input file has no audio stream (concat demuxer requires audio)\n"
+            f"   2. Input file is corrupted or incomplete\n"
+            f"   3. File permissions issue\n"
+            f"   Fix: Check input file with 'ffprobe {input_path}'"
+        )
+        # Clean up temp file before raising
+        if os.path.exists(concat_file):
+            os.unlink(concat_file)
+        raise RuntimeError(f"repeat_av_demuxer failed: {stderr}") from e
+    finally:
+        if os.path.exists(concat_file):
+            os.unlink(concat_file)
+    ensure_dir(Path(out_path))
 
 
 # --------------------------- Final audio gain helpers ---------------------------

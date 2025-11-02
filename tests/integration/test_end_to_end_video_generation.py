@@ -109,15 +109,17 @@ class TestEndToEndVideoGeneration:
         assert isinstance(result["expressions"], list), "Expressions should be a list"
         
         # If expressions were found, verify they have required fields
+        # Note: VideoPipelineService returns expressions as dictionaries, not ExpressionAnalysis objects
         if len(result["expressions"]) > 0:
             first_expr = result["expressions"][0]
-            assert hasattr(first_expr, "expression"), "Expression should have 'expression' field"
-            assert hasattr(first_expr, "expression_translation"), "Expression should have 'expression_translation' field"
-            assert hasattr(first_expr, "dialogues"), "Expression should have 'dialogues' field"
+            assert isinstance(first_expr, dict), "Expression should be a dictionary"
+            assert "expression" in first_expr, "Expression dict should have 'expression' key"
+            assert "translation" in first_expr, "Expression dict should have 'translation' key"
+            assert "context" in first_expr, "Expression dict should have 'context' key"
             
             print(f"\n✅ Found {len(result['expressions'])} expressions in test mode")
             for i, expr in enumerate(result["expressions"], 1):
-                print(f"  {i}. {expr.expression} -> {expr.expression_translation}")
+                print(f"  {i}. {expr['expression']} -> {expr['translation']}")
         
         # Verify output structure was created
         episode_dir = temp_output_dir / "Suits" / "S01E01_Pilot"

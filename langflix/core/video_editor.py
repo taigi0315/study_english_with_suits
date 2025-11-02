@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
-from .models import ExpressionAnalysis
+from .models import ExpressionAnalysis, ExpressionGroup
 from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
@@ -106,18 +106,21 @@ class VideoEditor:
     def create_educational_sequence(self, expression: ExpressionAnalysis, 
                                   context_video_path: str, 
                                   expression_video_path: str, 
-                                  expression_index: int = 0) -> str:
+                                  expression_index: int = 0,
+                                  skip_context: bool = False) -> str:
         """
         Create educational video sequence with long-form layout:
-        - Left half: context video → expression repeat (with subtitles)
+        - If skip_context=False: Left half: context video → expression repeat (with subtitles)
+        - If skip_context=True: Left half: expression repeat only (with subtitles, no context)
         - Right half: educational slide (background + text + audio 3x)
         - Slide visible throughout entire duration
         
         Args:
             expression: ExpressionAnalysis object
-            context_video_path: Path to context video
-            expression_video_path: Path to expression video
+            context_video_path: Path to context video (used for extracting expression clip)
+            expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
+            skip_context: If True, skip context video and only show expression repeat (for multi-expression groups)
             
         Returns:
             Path to created educational video
@@ -128,14 +131,9 @@ class VideoEditor:
             output_filename = f"educational_{safe_expression}.mkv"
             output_path = self.context_slide_combined_dir / output_filename
             
-            logger.info(f"Creating educational sequence for: {expression.expression}")
+            logger.info(f"Creating educational sequence for: {expression.expression} (skip_context={skip_context})")
             
-            # Step 1: Create context video with dual-language subtitles
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression
-            )
-            
-            # Step 2: Extract expression video clip from context and repeat it
+            # Step 1: Extract expression video clip from context and repeat it
             # Calculate relative timestamps within context video
             context_start_seconds = self._time_to_seconds(expression.context_start_time)
             expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
@@ -147,13 +145,37 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Extract expression video clip with audio
+            # Get context video with subtitles (needed for extracting expression clip with subtitles)
+            context_with_subtitles = self._add_subtitles_to_context(
+                context_video_path, expression
+            )
+            
+            # Extract expression video clip with audio and subtitles from context
+            # Reset timestamps to start from 0 to prevent delay in repeated clips
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
-            (ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
-             .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
-             .overwrite_output().run(quiet=True))
+            
+            # Use filter to reset timestamps and prevent delay in repeated clips
+            input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+            video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
+            audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
+            
+            (
+                ffmpeg.output(
+                    video_stream,
+                    audio_stream,
+                    str(expression_video_clip_path),
+                    vcodec='libx264',
+                    acodec='aac',
+                    ac=2,
+                    ar=48000,
+                    preset='fast',
+                    crf=23
+                )
+                .overwrite_output()
+                .run(quiet=True)
+            )
             
             # Repeat expression clip
             from langflix import settings
@@ -164,29 +186,38 @@ class VideoEditor:
             logger.info(f"Repeating expression clip {repeat_count} times")
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 3: Concatenate context + repeated expression for left side
-            left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
-            self._register_temp_file(left_side_path)
-            concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+            # Step 2: Create left side based on skip_context flag
+            if skip_context:
+                # Multi-expression group: Only expression repeat (no context)
+                logger.info("Skipping context video - using expression repeat only (multi-expression group)")
+                left_side_path = repeated_expression_path
+                left_duration = get_duration_seconds(str(left_side_path))
+                logger.info(f"Left side duration (expression repeat only): {left_duration:.2f}s")
+            else:
+                # Single-expression group: Context + expression repeat
+                logger.info("Including context video before expression repeat (single-expression group)")
+                left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
+                self._register_temp_file(left_side_path)
+                concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+                
+                # Get total left side duration for matching
+                left_duration = get_duration_seconds(str(left_side_path))
+                logger.info(f"Left side duration (context + expression repeat): {left_duration:.2f}s")
             
-            # Get total left side duration for matching
-            left_duration = get_duration_seconds(str(left_side_path))
-            logger.info(f"Left side duration: {left_duration:.2f}s")
-            
-            # Step 4: Create educational slide with background and TTS audio
+            # Step 3: Create educational slide with background and TTS audio
             # Pass left_duration so slide can be extended to match
             educational_slide = self._create_educational_slide(
                 expression_video_path, expression, expression_index, target_duration=left_duration
             )
             
-            # Step 5: Use hstack to create side-by-side layout (long-form)
+            # Step 4: Use hstack to create side-by-side layout (long-form)
             # Left: context → expression repeat, Right: educational slide
             logger.info("Creating long-form side-by-side layout with hstack")
             hstack_temp_path = self.output_dir / f"temp_hstack_long_{safe_expression}.mkv"
             self._register_temp_file(hstack_temp_path)
             hstack_keep_height(str(left_side_path), str(educational_slide), str(hstack_temp_path))
             
-            # Step 6: Apply final audio gain (+25%) as separate pass
+            # Step 5: Apply final audio gain (+25%) as separate pass
             logger.info("Applying final audio gain (+25%) to long-form output")
             apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.25)
             
@@ -1384,6 +1415,244 @@ class VideoEditor:
             
         except Exception as e:
             logger.error(f"Error creating silent educational slide: {e}")
+            raise
+    
+    def _create_multi_expression_slide(self, expression_group: ExpressionGroup, duration: float) -> str:
+        """
+        Create educational slide with multiple expressions for context video.
+        
+        This slide displays all expressions from a group that share the same context.
+        It shows each expression with its translation and similar expressions in a
+        compact, organized layout.
+        
+        Args:
+            expression_group: ExpressionGroup containing expressions that share the same context
+            duration: Duration for the slide video
+            
+        Returns:
+            Path to the created slide video file
+        """
+        try:
+            output_path = self.output_dir / f"temp_multi_slide_group_{len(expression_group.expressions)}_exprs.mkv"
+            self._register_temp_file(output_path)
+            
+            # Get background configuration
+            background_input, input_type = self._get_background_config()
+            
+            logger.info(f"Creating multi-expression slide for group with {len(expression_group.expressions)} expressions")
+            logger.info(f"Context: {expression_group.context_start_time} - {expression_group.context_end_time}")
+            
+            # Clean text helper functions (reused from _create_educational_slide)
+            def clean_text_for_slide(text):
+                """Clean text for slide display, removing special characters"""
+                if not isinstance(text, str):
+                    text = str(text)
+                
+                cleaned = text.replace("'", "").replace('"', "").replace(":", "").replace(",", "")
+                cleaned = cleaned.replace("\\", "").replace("[", "").replace("]", "")
+                cleaned = cleaned.replace("{", "").replace("}", "").replace("(", "").replace(")", "")
+                cleaned = cleaned.replace("\n", " ").replace("\t", " ")
+                cleaned = "".join(c for c in cleaned if c.isprintable() and c not in "@#$%^&*+=|<>")
+                cleaned = " ".join(cleaned.split())
+                return cleaned[:80] if cleaned else "Expression"  # Shorter limit for multi-expression layout
+            
+            def escape_drawtext_string(text):
+                """Escape text for FFmpeg drawtext filter"""
+                return text.replace(":", "\\:").replace("'", "\\'")
+            
+            # Get font sizes
+            try:
+                expr_font_size = settings.get_font_size('expression')
+                if not isinstance(expr_font_size, (int, float)):
+                    expr_font_size = 42  # Smaller for multi-expression layout
+            except:
+                expr_font_size = 42
+                
+            try:
+                trans_font_size = settings.get_font_size('expression_trans')
+                if not isinstance(trans_font_size, (int, float)):
+                    trans_font_size = 36  # Smaller for multi-expression layout
+            except:
+                trans_font_size = 36
+            
+            try:
+                similar_font_size = settings.get_font_size('similar')
+                if not isinstance(similar_font_size, (int, float)):
+                    similar_font_size = 24  # Smaller for multi-expression layout
+            except:
+                similar_font_size = 24
+            
+            # Get font file option
+            font_file_option = ""
+            try:
+                font_file = settings.get_font_file()
+                if font_file and Path(font_file).exists():
+                    font_file_option = f"fontfile={font_file}:"
+            except:
+                pass
+            
+            drawtext_filters = []
+            
+            # Layout: Display expressions vertically, one below another
+            # Each expression gets: Expression (yellow) | Translation (yellow) | Similar expressions (white)
+            base_y = 180  # Start from top
+            expression_spacing = 220  # Space between each expression block
+            
+            for expr_idx, expression in enumerate(expression_group.expressions):
+                # Ensure backward compatibility
+                expression = self._ensure_expression_dialogue(expression)
+                
+                # Clean and escape text
+                expr_text_raw = clean_text_for_slide(expression.expression)
+                trans_text_raw = clean_text_for_slide(expression.expression_translation)
+                
+                expr_text = escape_drawtext_string(expr_text_raw)
+                trans_text = escape_drawtext_string(trans_text_raw)
+                
+                # Calculate Y position for this expression block
+                y_pos_expr = base_y + (expr_idx * expression_spacing)
+                y_pos_trans = y_pos_expr + 50
+                y_pos_similar = y_pos_trans + 40
+                
+                # 1. Expression text (yellow, highlighted)
+                if expr_text:
+                    drawtext_filters.append(
+                        f"drawtext=text='{expr_idx + 1}. {expr_text}':fontsize={expr_font_size}:fontcolor=yellow:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y={y_pos_expr}:"
+                        f"borderw=3:bordercolor=black"
+                    )
+                
+                # 2. Translation (yellow, highlighted)
+                if trans_text:
+                    drawtext_filters.append(
+                        f"drawtext=text='{trans_text}':fontsize={trans_font_size}:fontcolor=yellow:"
+                        f"{font_file_option}"
+                        f"x=(w-text_w)/2:y={y_pos_trans}:"
+                        f"borderw=2:bordercolor=black"
+                    )
+                
+                # 3. Similar expressions (white, smaller, bottom of each expression block)
+                if hasattr(expression, 'similar_expressions') and expression.similar_expressions:
+                    safe_similar = []
+                    raw_similar = expression.similar_expressions
+                    if isinstance(raw_similar, list):
+                        for item in raw_similar[:1]:  # Limit to 1 per expression for compact layout
+                            if isinstance(item, str):
+                                safe_similar.append(clean_text_for_slide(item))
+                            elif isinstance(item, dict):
+                                text = item.get('text') or item.get('expression') or item.get('value') or str(item)
+                                if text:
+                                    safe_similar.append(clean_text_for_slide(str(text)))
+                            else:
+                                safe_similar.append(clean_text_for_slide(str(item)))
+                    
+                    if safe_similar:
+                        similar_text_escaped = escape_drawtext_string(f"Similar: {safe_similar[0]}")
+                        drawtext_filters.append(
+                            f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
+                            f"{font_file_option}"
+                            f"x=(w-text_w)/2:y={y_pos_similar}:"
+                            f"borderw=1:bordercolor=black"
+                        )
+            
+            # Combine all text filters
+            video_filter = ",".join(drawtext_filters)
+            
+            logger.info(f"Creating multi-expression slide with {len(expression_group.expressions)} expressions...")
+            
+            # Create video input based on background type
+            if input_type == "image2":
+                video_input = ffmpeg.input(background_input, loop=1, t=duration, f=input_type)
+            else:
+                video_input = ffmpeg.input(background_input, f=input_type, t=duration)
+            
+            # Create silent slide (no audio - context video will have its own audio)
+            (
+                ffmpeg
+                .output(video_input['v'], str(output_path),
+                       vf=f"scale=1280:720,{video_filter}",
+                       vcodec='libx264',
+                       preset='fast',
+                       crf=23,
+                       t=duration)
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+            
+            logger.info(f"Successfully created multi-expression slide: {output_path}")
+            
+            # Move to slides directory
+            slides_dir = self.output_dir.parent / "slides"
+            slides_dir.mkdir(exist_ok=True)
+            final_slide_path = slides_dir / f"multi_slide_group_{len(expression_group.expressions)}_exprs.mkv"
+            
+            try:
+                import shutil
+                shutil.copy2(str(output_path), str(final_slide_path))
+                logger.info(f"Successfully copied multi-expression slide to: {final_slide_path}")
+            except Exception as copy_error:
+                logger.error(f"Error copying multi-expression slide: {copy_error}")
+                final_slide_path = output_path
+            
+            return str(final_slide_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating multi-expression slide: {e}")
+            raise
+    
+    def create_context_video_with_multi_slide(self, 
+                                             context_video_path: str,
+                                             expression_group: ExpressionGroup) -> str:
+        """
+        Create context video with multi-expression slide (left: context video, right: multi-expression slide).
+        
+        This is used for multi-expression groups where multiple expressions share the same context.
+        The context video is displayed on the left, and a slide showing all expressions
+        in the group is displayed on the right.
+        
+        Args:
+            context_video_path: Path to the context video clip
+            expression_group: ExpressionGroup containing expressions that share this context
+            
+        Returns:
+            Path to the created context video with multi-expression slide
+        """
+        try:
+            from langflix.media.ffmpeg_utils import get_duration_seconds, hstack_keep_height, apply_final_audio_gain
+            
+            # Create output filename
+            safe_name = f"group_{len(expression_group.expressions)}_exprs"
+            output_filename = f"context_multi_slide_{safe_name}.mkv"
+            output_path = self.context_slide_combined_dir / output_filename
+            
+            logger.info(f"Creating context video with multi-expression slide for {len(expression_group.expressions)} expressions")
+            logger.info(f"Context: {expression_group.context_start_time} - {expression_group.context_end_time}")
+            
+            # Get context video duration
+            context_duration = get_duration_seconds(context_video_path)
+            logger.info(f"Context video duration: {context_duration:.2f}s")
+            
+            # Create multi-expression slide with matching duration
+            multi_slide_path = self._create_multi_expression_slide(expression_group, context_duration)
+            
+            # Use hstack to create side-by-side layout
+            # Left: context video, Right: multi-expression slide
+            logger.info("Creating side-by-side layout: context video (left) + multi-expression slide (right)")
+            hstack_temp_path = self.output_dir / f"temp_context_multi_hstack_{safe_name}.mkv"
+            self._register_temp_file(hstack_temp_path)
+            
+            hstack_keep_height(context_video_path, multi_slide_path, str(hstack_temp_path))
+            
+            # Apply final audio gain (+25%)
+            logger.info("Applying final audio gain (+25%) to context video with multi-slide")
+            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.25)
+            
+            logger.info(f"Context video with multi-expression slide created: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating context video with multi-expression slide: {e}")
             raise
     
     def _time_to_seconds(self, time_str: str) -> float:

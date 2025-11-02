@@ -424,6 +424,7 @@ Before considering review complete:
 - Your future self who reviews this in 6 months
 
 ---
+check tickets in 'done' path, do not create duplicated ticket number
 
 **Remember: You're not here to criticize, but to make the codebase better. Every ticket should make someone say "Yes, we should fix that" not "Why is this even an issue?"**
 

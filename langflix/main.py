@@ -20,12 +20,12 @@ except ImportError:
 
 # Import our modules
 from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
-from langflix.core.expression_analyzer import analyze_chunk
+from langflix.core.expression_analyzer import analyze_chunk, group_expressions_by_context
 from langflix.core.video_processor import VideoProcessor
 from langflix.core.subtitle_processor import SubtitleProcessor
 from langflix.core.video_editor import VideoEditor
 from langflix.services.output_manager import OutputManager, create_output_structure
-from langflix.core.models import ExpressionAnalysis
+from langflix.core.models import ExpressionAnalysis, ExpressionGroup
 from langflix.utils.filename_utils import sanitize_for_expression_filename
 from langflix import settings
 
@@ -184,7 +184,8 @@ class LangFlixPipeline:
                  output_dir: str = "output", language_code: str = "ko",
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
-                 video_file: str = None):
+                 video_file: str = None,
+                 enable_expression_grouping: bool = True):
         """
         Initialize the LangFlix pipeline
         
@@ -227,7 +228,9 @@ class LangFlixPipeline:
         self.subtitles = []
         self.chunks = []
         self.expressions = []
+        self.expression_groups = []  # Grouped expressions by context
         self.processed_expressions = 0
+        self.enable_expression_grouping = enable_expression_grouping
         
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False) -> Dict[str, Any]:
         """
@@ -317,8 +320,37 @@ class LangFlixPipeline:
                 if test_mode:
                     logger.warning("⚠️ TEST MODE: Continuing with empty expressions for debugging")
                     self.expressions = []
+                    self.expression_groups = []
                 else:
                     raise ValueError("No expressions found")
+            
+            # Group expressions by context (if enabled and we have expressions)
+            if self.enable_expression_grouping and len(self.expressions) > 0:
+                logger.info("Grouping expressions by shared context...")
+                self.expression_groups = group_expressions_by_context(self.expressions)
+                
+                # Log grouping statistics
+                single_expr_groups = sum(1 for g in self.expression_groups if len(g.expressions) == 1)
+                multi_expr_groups = sum(1 for g in self.expression_groups if len(g.expressions) > 1)
+                
+                logger.info(
+                    f"Created {len(self.expression_groups)} expression groups: "
+                    f"{single_expr_groups} single-expression groups, {multi_expr_groups} multi-expression groups"
+                )
+                
+                if multi_expr_groups > 0:
+                    logger.info(f"Efficiency gain: {len(self.expressions) - len(self.expression_groups)} duplicate context clips avoided")
+            else:
+                # Create single-expression groups for backward compatibility
+                logger.info("Creating single-expression groups (grouping disabled or single expression)")
+                self.expression_groups = [
+                    ExpressionGroup(
+                        context_start_time=expr.context_start_time,
+                        context_end_time=expr.context_end_time,
+                        expressions=[expr]
+                    )
+                    for expr in self.expressions
+                ]
             
             # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:
@@ -600,127 +632,247 @@ class LangFlixPipeline:
             # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):
-        """Process each expression (video + subtitles)"""
-        for i, expression in enumerate(self.expressions):
+        """Process each expression group (shared context clip + individual subtitles)"""
+        from langflix.utils.temp_file_manager import get_temp_manager
+        temp_manager = get_temp_manager()
+        
+        # Find video file (shared for all groups)
+        video_file = self.video_processor.find_video_file(str(self.subtitle_file))
+        if not video_file:
+            logger.warning("No video file found, skipping expression processing")
+            return
+        
+        # Cache for context clips to avoid duplicate extractions
+        context_clip_cache: Dict[str, Path] = {}
+        
+        for group_idx, expression_group in enumerate(self.expression_groups):
             try:
-                logger.info(f"Processing expression {i+1}/{len(self.expressions)}: {expression.expression}")
-                
-                # Find video file
-                video_file = self.video_processor.find_video_file(str(self.subtitle_file))
-                if not video_file:
-                    logger.warning(f"No video file found for expression {i+1}")
-                    continue
-                
-                # Create output filenames using organized structure
-                # Use proper filename sanitization for file system safety
-                safe_filename = sanitize_for_expression_filename(expression.expression)
-                
-                # Don't save raw clips - use temp directory
-                from langflix.utils.temp_file_manager import get_temp_manager
-                temp_manager = get_temp_manager()
-                # Create temp file using manager (will be cleaned up later)
-                # Use delete=False so file persists for later use in _create_educational_videos
-                with temp_manager.create_temp_file(suffix='.mkv', prefix=f'temp_expression_{i+1:02d}_{safe_filename[:30]}_', delete=False) as temp_file_path:
-                    video_output = temp_file_path
-                    # Register file for cleanup after processing
-                    temp_manager.register_file(video_output)
-                subtitle_output = self.paths['language']['subtitles'] / f"expression_{i+1:02d}_{safe_filename[:30]}.srt"
-                
-                # Ensure the subtitle directory exists
-                subtitle_output.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Extract video clip to temp location
-                success = self.video_processor.extract_clip(
-                    video_file,
-                    expression.context_start_time,
-                    expression.context_end_time,
-                    video_output
+                logger.info(
+                    f"Processing expression group {group_idx+1}/{len(self.expression_groups)}: "
+                    f"{len(expression_group.expressions)} expression(s)"
                 )
                 
-                if success:
-                    logger.info(f"✅ Video clip created: {video_output}")
+                # Create context key for caching
+                context_key = f"{expression_group.context_start_time}_{expression_group.context_end_time}"
+                
+                # Extract ONE context clip for the entire group (shared by all expressions)
+                if context_key in context_clip_cache:
+                    logger.info(f"Reusing cached context clip for group {group_idx+1}")
+                    video_output = context_clip_cache[context_key]
+                else:
+                    # Create temp file for context clip
+                    safe_group_name = f"group_{group_idx+1:02d}"
+                    if len(expression_group.expressions) == 1:
+                        safe_filename = sanitize_for_expression_filename(expression_group.expressions[0].expression)
+                    else:
+                        # For multi-expression groups, use a generic name
+                        safe_filename = f"multi_expr_{len(expression_group.expressions)}"
                     
-                    # Create subtitle file
-                    subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
-                        expression,
-                        str(subtitle_output)
+                    with temp_manager.create_temp_file(
+                        suffix='.mkv',
+                        prefix=f'temp_group_{group_idx+1:02d}_{safe_filename[:30]}_',
+                        delete=False
+                    ) as temp_file_path:
+                        video_output = temp_file_path
+                        temp_manager.register_file(video_output)
+                    
+                    # Extract context clip (shared by all expressions in group)
+                    success = self.video_processor.extract_clip(
+                        video_file,
+                        expression_group.context_start_time,
+                        expression_group.context_end_time,
+                        video_output
                     )
                     
-                    if subtitle_success:
-                        logger.info(f"✅ Subtitle file created: {subtitle_output}")
-                        self.processed_expressions += 1
+                    if success:
+                        logger.info(f"✅ Shared context clip created for group {group_idx+1}: {video_output}")
+                        context_clip_cache[context_key] = video_output
                     else:
-                        logger.warning(f"❌ Failed to create subtitle file: {subtitle_output}")
-                else:
-                    logger.warning(f"❌ Failed to create video clip: {video_output}")
-                    
+                        logger.warning(f"❌ Failed to create context clip for group {group_idx+1}")
+                        continue
+                
+                # Create subtitle files for EACH expression in the group
+                for expr_idx, expression in enumerate(expression_group.expressions):
+                    try:
+                        safe_filename = sanitize_for_expression_filename(expression.expression)
+                        
+                        # Create subtitle file with group and expression index
+                        if len(expression_group.expressions) > 1:
+                            subtitle_filename = f"group_{group_idx+1:02d}_expr_{expr_idx+1:02d}_{safe_filename[:30]}.srt"
+                        else:
+                            # Single expression: use simple naming (backward compatible)
+                            subtitle_filename = f"expression_{group_idx+1:02d}_{safe_filename[:30]}.srt"
+                        
+                        subtitle_output = self.paths['language']['subtitles'] / subtitle_filename
+                        subtitle_output.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Create subtitle file
+                        subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
+                            expression,
+                            str(subtitle_output)
+                        )
+                        
+                        if subtitle_success:
+                            logger.info(f"✅ Subtitle file created: {subtitle_output}")
+                            self.processed_expressions += 1
+                        else:
+                            logger.warning(f"❌ Failed to create subtitle file: {subtitle_output}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing expression {expr_idx+1} in group {group_idx+1}: {e}")
+                        continue
+                        
             except Exception as e:
-                logger.error(f"Error processing expression {i+1}: {e}")
+                logger.error(f"Error processing expression group {group_idx+1}: {e}")
                 continue
     
     def _create_educational_videos(self):
-        """Create educational video sequences for each expression"""
-        logger.info(f"Creating educational videos for {len(self.expressions)} expressions...")
+        """Create educational video sequences for each expression (using groups)"""
+        logger.info(f"Creating educational videos for {len(self.expressions)} expressions in {len(self.expression_groups)} groups...")
         
-        # First, find all actual video files that were created from temp directory
+        # Find all group context video files from temp directory
         from langflix.utils.temp_file_manager import get_temp_manager
         temp_manager = get_temp_manager()
-        # Get temp directory from manager
         temp_dir = temp_manager.base_dir
-        video_files = list(temp_dir.glob("temp_expression_*.mkv"))
-        video_files.sort()
+        
+        # Find temp_group_*.mkv files (shared context clips)
+        group_video_files = list(temp_dir.glob("temp_group_*.mkv"))
+        group_video_files.sort()
+        
+        # Create mapping from group index to video file
+        # Pattern: temp_group_{group_idx:02d}_*.mkv
+        group_video_map: Dict[int, Path] = {}
+        for video_file in group_video_files:
+            # Extract group index from filename
+            filename = video_file.stem
+            parts = filename.split('_')
+            if len(parts) >= 3 and parts[0] == 'temp' and parts[1] == 'group':
+                try:
+                    group_idx = int(parts[2]) - 1  # Convert to 0-based index
+                    group_video_map[group_idx] = video_file
+                except ValueError:
+                    logger.warning(f"Could not parse group index from filename: {filename}")
         
         # Get original video file for expression audio extraction
         original_video = self.video_processor.find_video_file(str(self.subtitle_file))
         
-        logger.info(f"Found {len(video_files)} video files to process")
+        logger.info(f"Found {len(group_video_map)} group context video files")
         logger.info(f"Original video file: {original_video}")
         
         educational_videos = []
+        global_expression_index = 0  # Global index across all expressions for voice alternation
         
-        for i, expression in enumerate(self.expressions):
+        # Iterate over expression groups
+        for group_idx, expression_group in enumerate(self.expression_groups):
             try:
-                logger.info(f"Creating educational video {i+1}/{len(self.expressions)}: {expression.expression}")
-                
-                # Find the corresponding video file - match by index
-                if i < len(video_files):
-                    context_video = video_files[i]
-                    # Use original video for expression audio extraction
-                    expression_source_video = str(original_video) if original_video else str(context_video)
-                    
-                    logger.info(f"Using context video: {context_video}")
-                    logger.info(f"Using original video for expression audio: {expression_source_video}")
-                    
-                    # Create educational sequence with expression index for voice alternation
-                    educational_video = self.video_editor.create_educational_sequence(
-                        expression, 
-                        str(context_video), 
-                        expression_source_video,  # Pass original video for expression audio
-                        expression_index=i  # Pass index for voice alternation
-                    )
-                    
-                    educational_videos.append(educational_video)
-                    logger.info(f"✅ Educational video created: {educational_video}")
-                else:
-                    logger.warning(f"No video file found for expression {i+1}")
+                # Get shared context video for this group
+                if group_idx not in group_video_map:
+                    logger.warning(f"No context video found for group {group_idx+1}, skipping")
+                    # Increment global index for skipped expressions
+                    global_expression_index += len(expression_group.expressions)
                     continue
                 
+                context_video = group_video_map[group_idx]
+                expression_source_video = str(original_video) if original_video else str(context_video)
+                
+                logger.info(
+                    f"Processing group {group_idx+1}/{len(self.expression_groups)}: "
+                    f"{len(expression_group.expressions)} expression(s), "
+                    f"using shared context clip: {context_video.name}"
+                )
+                
+                # Check if this is a multi-expression group
+                is_multi_expression = len(expression_group.expressions) > 1
+                
+                if is_multi_expression:
+                    # Multi-expression group: Create context video with multi-expression slide FIRST
+                    try:
+                        logger.info(
+                            f"Creating context video with multi-expression slide for group {group_idx+1} "
+                            f"({len(expression_group.expressions)} expressions)"
+                        )
+                        
+                        # Add subtitles to context video first
+                        context_with_subtitles = self.video_editor._add_subtitles_to_context(
+                            str(context_video), expression_group.expressions[0]  # Use first expression for subtitle context
+                        )
+                        
+                        # Create context video with multi-expression slide
+                        context_video_with_slide = self.video_editor.create_context_video_with_multi_slide(
+                            context_with_subtitles,  # Context video with subtitles
+                            expression_group
+                        )
+                        
+                        educational_videos.append(context_video_with_slide)
+                        logger.info(f"✅ Context video with multi-expression slide created: {context_video_with_slide}")
+                        
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating context video with multi-slide for group {group_idx+1}: {e}"
+                        )
+                        # Continue to create expression videos even if context video failed
+                
+                # Create educational video for EACH expression in the group
+                # Each expression gets its own video with its own slide
+                for expr_idx, expression in enumerate(expression_group.expressions):
+                    try:
+                        logger.info(
+                            f"Creating educational video for expression {global_expression_index+1}/{len(self.expressions)}: "
+                            f"'{expression.expression}' (group {group_idx+1}, expr {expr_idx+1})"
+                        )
+                        
+                        # Create educational sequence with global expression index for voice alternation
+                        # Multi-expression groups: left (expression repeat only) | right (expression's own slide)
+                        # Single-expression groups: left (context + expression repeat) | right (expression's own slide)
+                        educational_video = self.video_editor.create_educational_sequence(
+                            expression,
+                            str(context_video),  # Shared context clip for the group
+                            expression_source_video,  # Original video for expression audio
+                            expression_index=global_expression_index,  # Global index for voice alternation
+                            skip_context=is_multi_expression  # Skip context for multi-expression groups
+                        )
+                        
+                        educational_videos.append(educational_video)
+                        logger.info(f"✅ Educational video created for expression: {educational_video}")
+                        global_expression_index += 1
+                        
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating educational video for expression {expr_idx+1} "
+                            f"in group {group_idx+1}: {e}"
+                        )
+                        global_expression_index += 1
+                        continue
+                        
             except Exception as e:
-                logger.error(f"Error creating educational video {i+1}: {e}")
+                logger.error(f"Error processing expression group {group_idx+1}: {e}")
+                # Increment global index for all expressions in failed group
+                global_expression_index += len(expression_group.expressions)
                 continue
         
         # Create final concatenated video
         if educational_videos:
+            logger.info(f"Creating final long-form video from {len(educational_videos)} educational videos...")
             self._create_final_video(educational_videos)
         else:
-            # Fallback: Try to create final video from temp files if available
-            self._create_final_video_from_temp_files()
+            logger.error(
+                f"❌ Cannot create final long-form video: No educational videos were created\n"
+                f"   Reasons this might happen:\n"
+                f"   1. No expressions were found/parsed from LLM response\n"
+                f"   2. All expressions failed validation (check log for 'Dropping expression' messages)\n"
+                f"   3. All video creation steps failed (check log for 'Error creating' messages)\n"
+                f"   Expression count: {len(self.expressions)}\n"
+                f"   Expression groups: {len(self.expression_groups)}"
+            )
+            # Don't try fallback - let it fail clearly
+            raise RuntimeError(
+                f"Cannot create final video: {len(educational_videos)} educational videos created "
+                f"(expected at least 1). Check logs above for expression parsing/validation errors."
+            )
         
         # Clean up temp video clips after processing using temp manager
         logger.info("Cleaning up temporary video clips...")
-        from langflix.utils.temp_file_manager import get_temp_manager
-        temp_manager = get_temp_manager()
-        for video_file in video_files:
+        for video_file in group_video_files:
             try:
                 if video_file.exists():
                     # Remove from manager's tracking if registered
@@ -819,8 +971,11 @@ class LangFlixPipeline:
             valid_videos = []
             for video_path in educational_videos:
                 video_name = Path(video_path).name
-                # Only include individual educational videos, not slides or context videos
-                if video_name.startswith('educational_') and Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
+                # Include educational videos and context multi-slide videos
+                is_educational = video_name.startswith('educational_')
+                is_context_multi_slide = video_name.startswith('context_multi_slide_')
+                
+                if (is_educational or is_context_multi_slide) and Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
                     valid_videos.append(video_path)
                     logger.info(f"Valid video: {video_name}")
                 else:
@@ -873,27 +1028,33 @@ class LangFlixPipeline:
             raise
     
     def _create_final_video_from_temp_files(self):
-        """Create final video from existing temp files"""
+        """Create final video from existing temp files (fallback when educational_videos list is empty)"""
         try:
             logger.info("Attempting to create final video from temp files...")
             
-            final_videos_dir = self.paths['language']['final_videos']
+            # Look in context_slide_combined directory for educational and context_multi_slide videos
+            context_slide_dir = self.paths['language'].get('context_slide_combined')
+            if not context_slide_dir:
+                # Fallback to final_videos directory
+                context_slide_dir = self.paths['language']['final_videos']
             
-            # Find temp files
-            context_videos = sorted(list(final_videos_dir.glob("temp_context_with_subs_*.mkv")))
-            slide_videos = sorted(list(final_videos_dir.glob("temp_slide_*.mkv")))
+            context_slide_path = Path(context_slide_dir) if isinstance(context_slide_dir, str) else context_slide_dir
             
-            logger.info(f"Found {len(context_videos)} context videos and {len(slide_videos)} slide videos")
+            # Find educational videos and context multi-slide videos
+            educational_videos = sorted(list(context_slide_path.glob("educational_*.mkv")))
+            context_multi_slide_videos = sorted(list(context_slide_path.glob("context_multi_slide_*.mkv")))
             
-            if not context_videos or not slide_videos:
+            all_videos = context_multi_slide_videos + educational_videos
+            all_videos.sort()  # Sort by filename to maintain order
+            
+            logger.info(f"Found {len(context_multi_slide_videos)} context_multi_slide videos and {len(educational_videos)} educational videos")
+            
+            if not all_videos:
                 logger.warning("No temp files found for final video creation")
                 return
             
-            # Create sequence: context1, slide1, context2, slide2, ...
-            video_sequence = []
-            for i in range(min(len(context_videos), len(slide_videos))):
-                video_sequence.append(str(context_videos[i].absolute()))
-                video_sequence.append(str(slide_videos[i].absolute()))
+            # Use all found videos in order
+            video_sequence = [str(video.absolute()) for video in all_videos]
             
             logger.info(f"Creating final video from {len(video_sequence)} components")
             
@@ -901,6 +1062,7 @@ class LangFlixPipeline:
             episode_name = self.paths.get('episode_name', 'Unknown_Episode')
             original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
             final_video_filename = f"long-form_{episode_name}_{original_filename}.mkv"
+            final_videos_dir = self.paths['language']['final_videos']
             final_video_path = final_videos_dir / final_video_filename
             
             # Create concat file

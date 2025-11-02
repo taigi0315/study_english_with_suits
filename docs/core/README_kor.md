@@ -104,6 +104,82 @@ result = pipeline.run(
 # "Parallel analysis complete in 45.2s"
 ```
 
+**컨텍스트당 다중 표현식 지원 (TICKET-008):**
+- 동일한 `context_start_time`과 `context_end_time`을 공유하는 표현식이 자동으로 그룹화됩니다
+- 그룹은 단일 컨텍스트 비디오 클립을 공유합니다 (효율성 향상)
+- 각 표현식은 여전히 자체 교육용 비디오를 받습니다 (분리 모드, 하위 호환성)
+- `expression.llm.allow_multiple_expressions` 및 `expression.llm.max_expressions_per_context`를 통해 설정 가능
+
+**작동 방식:**
+1. 표현 분석 후, `group_expressions_by_context()`가 공유 컨텍스트 시간으로 표현식을 그룹화합니다
+2. `_process_expressions()`는 그룹당 하나의 컨텍스트 클립을 추출합니다 (그룹의 모든 표현식이 공유)
+3. 각 표현식에 대해 별도의 자막 파일이 생성됩니다
+4. `_create_educational_videos()`는 다음 순서로 비디오를 생성합니다:
+   - **다중 표현식 그룹**: 먼저 다중 표현식 슬라이드가 있는 컨텍스트 비디오 생성 (왼쪽: 컨텍스트 비디오, 오른쪽: 모든 표현식을 보여주는 슬라이드)
+   - **각 표현식**: 개별 교육용 비디오 생성 (왼쪽: 다중 표현식 그룹의 경우 표현 반복만, 단일 표현식 그룹의 경우 컨텍스트 + 표현 반복; 오른쪽: 표현식의 자체 슬라이드)
+5. 컨텍스트 클립은 중복 추출을 방지하기 위해 캐시됩니다
+
+**비디오 출력 구조:**
+- **다중 표현식 그룹** (2개 이상의 표현식):
+  1. 컨텍스트 비디오: 왼쪽 (컨텍스트 비디오) | 오른쪽 (모든 표현식을 포함한 다중 표현식 슬라이드)
+  2. 표현식 1 비디오: 왼쪽 (표현 반복만) | 오른쪽 (표현식 1의 슬라이드)
+  3. 표현식 2 비디오: 왼쪽 (표현 반복만) | 오른쪽 (표현식 2의 슬라이드)
+  
+- **단일 표현식 그룹** (하위 호환성):
+  1. 표현식 비디오: 왼쪽 (컨텍스트 + 표현 반복) | 오른쪽 (표현식의 슬라이드)
+
+**설정:**
+```yaml
+expression:
+  llm:
+    allow_multiple_expressions: true  # 기능 활성화/비활성화
+    max_expressions_per_context: 3    # 컨텍스트당 최대 표현식 수
+  educational_video_mode: "separate"  # "separate" 또는 "combined" (Phase 2)
+```
+
+**ExpressionGroup 모델:**
+- `ExpressionGroup`은 동일한 컨텍스트를 공유하는 여러 `ExpressionAnalysis` 객체를 포함합니다
+- 그룹의 모든 표현식이 일치하는 `context_start_time`과 `context_end_time`을 가지고 있는지 검증합니다
+- 쉽게 접근할 수 있도록 반복, 인덱싱, 길이 쿼리를 지원합니다
+
+**이점:**
+- 동일한 콘텐츠에서 더 많은 교육적 가치 (하나의 컨텍스트에서 여러 표현식)
+- 처리 효율성: 공유 컨텍스트 클립이 중복 비디오 추출을 줄입니다
+- 리소스 최적화: 낮은 스토리지 사용량 및 더 빠른 처리
+- 하위 호환성: 단일 표현식이 자동으로 그룹 1개가 됩니다
+
+**예시:**
+```python
+# 그룹화는 활성화된 경우 자동으로 수행됩니다 (기본값)
+pipeline = LangFlixPipeline(
+    subtitle_file="path/to/subtitle.srt",
+    video_dir="assets/media",
+    output_dir="output",
+    enable_expression_grouping=True  # 기본값: True
+)
+
+# run() 후, 그룹에 접근:
+groups = pipeline.expression_groups
+for group in groups:
+    print(f"그룹에 {len(group)}개의 표현식이 있습니다")
+    for expr in group:
+        print(f"  - {expr.expression}")
+```
+
+**그룹화가 사용되는 경우:**
+- ✅ `enable_expression_grouping=True` (기본값)
+- ✅ 여러 표현식이 동일한 컨텍스트 시간을 공유
+- ✅ 설정에서 기능 활성화 (`expression.llm.allow_multiple_expressions: true`)
+
+**단일 표현식 그룹이 생성되는 경우:**
+- ❌ 그룹화 비활성화 (`enable_expression_grouping=False`)
+- ❌ 모든 표현식이 다른 컨텍스트를 가짐 (그룹화 불필요)
+- ❌ 설정에서 기능 비활성화
+
+**효율성 향상:**
+- 3개의 표현식이 동일한 컨텍스트를 공유하는 경우, 3개 대신 1개의 컨텍스트 클립만 추출됩니다
+- 예시: 3개 그룹의 10개 표현식 → 10개 대신 3개의 컨텍스트 클립 (70% 감소)
+
 ### VideoEditor 클래스
 
 비디오 생성을 조율하는 주요 클래스입니다.

@@ -349,3 +349,4 @@ apply_final_audio_gain("final_video.mkv", "output.mkv", gain_factor=1.25)
 - [Core 모듈 문서](../core/README_kor.md)
 - [문제 해결 가이드](../TROUBLESHOOTING_GUIDE.md#videoaudio-sync-problems-a-v-sync)
 
+

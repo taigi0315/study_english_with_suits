@@ -2,14 +2,11 @@
 Health check endpoints for LangFlix API
 """
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from fastapi import APIRouter
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-from langflix.api.dependencies import get_db, get_storage
-from langflix.storage.base import StorageBackend
+from langflix.monitoring.health_checker import SystemHealthChecker
 
 router = APIRouter()
 
@@ -23,60 +20,50 @@ async def health_check() -> Dict[str, Any]:
     }
 
 @router.get("/health/detailed")
-async def detailed_health_check(
-    db: Optional[Session] = Depends(get_db),
-    storage: StorageBackend = Depends(get_storage)
-) -> Dict[str, Any]:
+async def detailed_health_check() -> Dict[str, Any]:
     """
-    Detailed health check endpoint.
+    Detailed health check endpoint with actual component checks.
     
-    Checks the health of all system components including database and storage.
+    Checks the health of all system components including database, storage, TTS, and Redis.
     """
-    components = {}
-    
-    # Check database
-    if db is not None:
-        try:
-            # Simple query to check database connectivity
-            db.execute(text("SELECT 1"))
-            components["database"] = "connected"
-        except Exception as e:
-            components["database"] = f"error: {str(e)}"
-    else:
-        components["database"] = "disabled"
-    
-    # Check storage
-    try:
-        # Simple check - try to list root path
-        storage.list_files("/", limit=1)
-        components["storage"] = "available"
-    except Exception as e:
-        components["storage"] = f"error: {str(e)}"
+    checker = SystemHealthChecker()
+    health = checker.get_overall_health()
     
     return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": health["status"],
+        "timestamp": health["timestamp"],
         "service": "LangFlix API",
         "version": "1.0.0",
-        "components": components,
-        "tts": "ready"
+        "components": health["components"]
     }
+
+@router.get("/health/database")
+async def database_health_check() -> Dict[str, Any]:
+    """Database health check endpoint."""
+    checker = SystemHealthChecker()
+    return checker.check_database()
+
+@router.get("/health/storage")
+async def storage_health_check() -> Dict[str, Any]:
+    """Storage health check endpoint."""
+    checker = SystemHealthChecker()
+    return checker.check_storage()
+
+@router.get("/health/tts")
+async def tts_health_check() -> Dict[str, Any]:
+    """TTS service health check endpoint."""
+    checker = SystemHealthChecker()
+    return checker.check_tts()
 
 @router.get("/health/redis")
 async def redis_health_check() -> Dict[str, Any]:
     """Redis health check endpoint."""
-    try:
-        from langflix.core.redis_client import get_redis_job_manager
-        redis_manager = get_redis_job_manager()
-        health_status = redis_manager.health_check()
-        health_status["timestamp"] = datetime.now(timezone.utc).isoformat()
-        return health_status
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+    checker = SystemHealthChecker()
+    result = checker.check_redis()
+    # Ensure timestamp is present for consistency
+    if "timestamp" not in result:
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return result
 
 @router.post("/health/redis/cleanup")
 async def redis_cleanup() -> Dict[str, Any]:

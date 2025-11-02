@@ -1,6 +1,6 @@
 # LangFlix API 모듈 문서 (KOR)
 
-최종 업데이트: 2025-10-30
+최종 업데이트: 2025-01-30
 
 ## 개요
 `langflix/api` 패키지는 LangFlix의 FastAPI 기반 HTTP 인터페이스를 제공합니다. 헬스 체크, 영상 처리 잡 관리, 파일 목록 제공 기능을 포함하며, 미들웨어/예외 처리/정적 경로 마운트 및 Redis 잡 저장소와의 연계를 담당합니다.
@@ -136,12 +136,22 @@ except Exception as e:
 ## 엔드포인트
 - `/` (GET): API 루트 메타.
 - `/local/status` (GET): 로컬 개발 정보.
-- `/health` (GET): 기본 헬스 체크.
-- `/health/detailed` (GET): 버전 및 실제 컴포넌트 상태 확인 포함:
-  - Database: `SELECT 1` 쿼리로 연결 확인 ("connected", "disabled", 또는 에러 메시지 반환)
-  - Storage: 파일 목록 조회 시도로 가용성 확인 ("available" 또는 에러 메시지 반환)
-  - TTS: 항상 "ready" 반환
-- `/health/redis` (GET): Redis 헬스.
+- `/health` (GET): 기본 헬스 체크 엔드포인트. 서비스 상태와 타임스탬프를 반환합니다.
+- `/health/detailed` (GET): 모든 시스템 컴포넌트의 실제 상태 확인:
+  - `langflix.monitoring.health_checker`의 `SystemHealthChecker`를 사용하여 모든 시스템 컴포넌트 상태를 확인합니다
+  - Database: `db_manager.session()` context manager를 사용하여 `SELECT 1` 쿼리로 연결 확인
+    - `{"status": "healthy", "message": "..."}` 또는 `{"status": "disabled", "message": "..."}` 또는 `{"status": "unhealthy", "message": "..."}` 반환
+  - Storage: 파일 목록 조회 시도(가벼운 작업)로 백엔드 가용성 확인
+    - `{"status": "healthy", "message": "..."}` 또는 `{"status": "unhealthy", "message": "..."}` 반환
+  - Redis: 잡 매니저를 통한 Redis 연결 확인
+    - `RedisJobManager.health_check()`의 전체 헬스 딕셔너리 반환
+  - TTS: TTS 서비스 설정 확인(Gemini 또는 LemonFox의 API 키 존재 여부)
+    - `{"status": "healthy", "message": "..."}` 또는 `{"status": "unhealthy", "message": "..."}` 또는 `{"status": "unknown", "message": "..."}` 반환
+  - 전체 상태: 컴포넌트 상태로부터 결정됨 (`healthy`, `degraded`, 또는 `unhealthy`)
+- `/health/database` (GET): 개별 데이터베이스 헬스 체크 엔드포인트.
+- `/health/storage` (GET): 개별 스토리지 헬스 체크 엔드포인트.
+- `/health/tts` (GET): 개별 TTS 서비스 헬스 체크 엔드포인트.
+- `/health/redis` (GET): 잡 매니저를 통한 Redis 헬스 체크.
 - `/health/redis/cleanup` (POST): 만료/정체 잡 정리.
 - `/api/v1/files` (GET): `output/` 재귀 파일 목록.
 - `/api/v1/files/{file_id}` (GET): 파일 상세 스텁(TODO).

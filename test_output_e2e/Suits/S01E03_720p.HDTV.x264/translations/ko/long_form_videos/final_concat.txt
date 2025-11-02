@@ -1,0 +1,2 @@
+file '/Users/changikchoi/Documents/study_english_with_sutis/test_output_e2e/Suits/S01E03_720p.HDTV.x264/translations/ko/context_slide_combined/educational_go_against_my_policy.mkv'
+file '/Users/changikchoi/Documents/study_english_with_sutis/test_output_e2e/Suits/S01E03_720p.HDTV.x264/translations/ko/context_slide_combined/educational_Knock_yourself_out.mkv'

@@ -17,7 +17,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 import subprocess
-import psutil
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional dependency
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +174,14 @@ class HealthChecker:
     def _check_system_resources(self) -> HealthCheck:
         """Check system resource usage"""
         try:
+            if psutil is None:
+                return HealthCheck(
+                    name='system_resources',
+                    status=HealthStatus.WARNING,
+                    message="psutil not available - cannot check system resources",
+                    timestamp=datetime.now()
+                )
+            
             # CPU usage
             cpu_percent = psutil.cpu_percent(interval=1)
             
@@ -211,6 +223,14 @@ class HealthChecker:
     def _check_disk_space(self) -> HealthCheck:
         """Check disk space availability"""
         try:
+            if psutil is None:
+                return HealthCheck(
+                    name='disk_space',
+                    status=HealthStatus.WARNING,
+                    message="psutil not available - cannot check disk space",
+                    timestamp=datetime.now()
+                )
+            
             disk = psutil.disk_usage('/')
             free_percent = (disk.free / disk.total) * 100
             
@@ -534,3 +554,170 @@ def get_health_summary() -> Dict[str, Any]:
     """Get health summary"""
     checker = get_health_checker()
     return checker.get_health_summary()
+
+
+class SystemHealthChecker:
+    """
+    System health checker for API health check endpoints.
+    
+    This class provides lightweight health checks for system components
+    used by the FastAPI health check endpoints.
+    """
+    
+    def check_database(self) -> Dict[str, Any]:
+        """
+        Check database connectivity.
+        
+        Returns:
+            Dict with 'status' and 'message' keys
+        """
+        try:
+            from langflix import settings
+            from langflix.db.session import db_manager
+            from sqlalchemy import text
+            
+            if not settings.get_database_enabled():
+                return {
+                    "status": "disabled",
+                    "message": "Database disabled"
+                }
+            
+            # Use context manager for automatic resource management
+            with db_manager.session() as db:
+                # Simple query to test connection
+                result = db.execute(text("SELECT 1")).scalar()
+                if result == 1:
+                    return {
+                        "status": "healthy",
+                        "message": "Database connection successful"
+                    }
+                else:
+                    return {
+                        "status": "unhealthy",
+                        "message": "Database query returned unexpected result"
+                    }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "message": f"Database connection failed: {str(e)}"
+            }
+    
+    def check_storage(self) -> Dict[str, Any]:
+        """
+        Check storage backend connectivity.
+        
+        Returns:
+            Dict with 'status' and 'message' keys
+        """
+        try:
+            from langflix.storage.factory import create_storage_backend
+            
+            storage = create_storage_backend()
+            # Try to list files (lightweight operation)
+            storage.list_files("/", limit=1)
+            return {
+                "status": "healthy",
+                "message": f"Storage backend ({type(storage).__name__}) accessible"
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "message": f"Storage backend error: {str(e)}"
+            }
+    
+    def check_redis(self) -> Dict[str, Any]:
+        """
+        Check Redis connectivity.
+        
+        Returns:
+            Dict with 'status' and 'message' keys (or full health dict from redis_manager)
+        """
+        try:
+            from langflix.core.redis_client import get_redis_job_manager
+            
+            redis_manager = get_redis_job_manager()
+            health = redis_manager.health_check()
+            return health
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "message": f"Redis connection failed: {str(e)}"
+            }
+    
+    def check_tts(self) -> Dict[str, Any]:
+        """
+        Check TTS service connectivity.
+        
+        Returns:
+            Dict with 'status' and 'message' keys
+        """
+        try:
+            import os
+            from langflix import settings
+            
+            # Check if TTS configuration is valid
+            tts_provider = settings.get_tts_provider()
+            if tts_provider == "gemini":
+                # Check if API key is configured
+                api_key = os.getenv("GEMINI_API_KEY")
+                if not api_key:
+                    return {
+                        "status": "unhealthy",
+                        "message": "Gemini API key not configured"
+                    }
+                return {
+                    "status": "healthy",
+                    "message": "TTS service (Gemini) configured"
+                }
+            elif tts_provider == "lemonfox":
+                api_key = os.getenv("LEMONFOX_API_KEY")
+                if not api_key:
+                    return {
+                        "status": "unhealthy",
+                        "message": "LemonFox API key not configured"
+                    }
+                return {
+                    "status": "healthy",
+                    "message": "TTS service (LemonFox) configured"
+                }
+            else:
+                return {
+                    "status": "unknown",
+                    "message": f"Unknown TTS provider: {tts_provider}"
+                }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "message": f"TTS service check failed: {str(e)}"
+            }
+    
+    def get_overall_health(self) -> Dict[str, Any]:
+        """
+        Get overall system health status.
+        
+        Returns:
+            Dict with 'status', 'components', and 'timestamp' keys
+        """
+        from datetime import datetime, timezone
+        
+        components = {
+            "database": self.check_database(),
+            "storage": self.check_storage(),
+            "redis": self.check_redis(),
+            "tts": self.check_tts()
+        }
+        
+        # Determine overall status
+        statuses = [comp.get("status") for comp in components.values()]
+        if "unhealthy" in statuses:
+            overall_status = "unhealthy"
+        elif "unknown" in statuses:
+            overall_status = "degraded"
+        else:
+            overall_status = "healthy"
+        
+        return {
+            "status": overall_status,
+            "components": components,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }

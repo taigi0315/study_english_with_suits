@@ -176,23 +176,37 @@ class VideoEditor:
             video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
             audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
             
-            # Use fast seek for better accuracy with timestamp reset
-            (
-                ffmpeg.output(
-                    video_stream,
-                    audio_stream,
-                    str(expression_video_clip_path),
-                    vcodec='libx264',
-                    acodec='aac',
-                    ac=2,
-                    ar=48000,
-                    preset='fast',
-                    crf=23,
-                    **{'-avoid_negative_ts': 'make_zero'}  # Ensure timestamps start from 0
+            # Extract with timestamp reset using setpts filters
+            # The setpts filters already ensure timestamps start from 0
+            try:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        audio_stream,
+                        str(expression_video_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            except ffmpeg.Error as e:
+                # Log detailed FFmpeg error for debugging
+                stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+                logger.error(
+                    f"❌ FFmpeg failed to extract expression clip:\n"
+                    f"   Input: {context_with_subtitles}\n"
+                    f"   Relative start: {relative_start:.2f}s\n"
+                    f"   Duration: {expression_duration:.2f}s\n"
+                    f"   Expression: {expression.expression}\n"
+                    f"   Output: {expression_video_clip_path}\n"
+                    f"   Error: {stderr}"
+                )
+                raise RuntimeError(f"FFmpeg failed to extract expression clip: {stderr}") from e
             
             # Repeat expression clip
             from langflix import settings

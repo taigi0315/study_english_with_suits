@@ -107,7 +107,8 @@ class VideoEditor:
                                   context_video_path: str, 
                                   expression_video_path: str, 
                                   expression_index: int = 0,
-                                  skip_context: bool = False) -> str:
+                                  skip_context: bool = False,
+                                  group_id: Optional[str] = None) -> str:
         """
         Create educational video sequence with long-form layout:
         - If skip_context=False: Left half: context video → expression repeat (with subtitles)
@@ -121,6 +122,7 @@ class VideoEditor:
             expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
             skip_context: If True, skip context video and only show expression repeat (for multi-expression groups)
+            group_id: Optional group ID for multi-expression groups (reuses group-specific subtitle file)
             
         Returns:
             Path to created educational video
@@ -139,15 +141,26 @@ class VideoEditor:
             expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
             expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
             
+            # Ensure expression times are within context range
+            if expression_start_seconds < context_start_seconds:
+                logger.warning(f"Expression start time {expression.expression_start_time} is before context start {expression.context_start_time}")
+                expression_start_seconds = context_start_seconds
+            
             relative_start = expression_start_seconds - context_start_seconds
             relative_end = expression_end_seconds - context_start_seconds
             expression_duration = relative_end - relative_start
             
+            # Ensure non-negative duration
+            if expression_duration <= 0:
+                logger.error(f"Invalid expression duration: {expression_duration:.2f}s")
+                raise ValueError(f"Expression duration must be positive, got {expression_duration:.2f}s")
+            
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
             # Get context video with subtitles (needed for extracting expression clip with subtitles)
+            # For multi-expression groups, use group_id to reuse group-specific subtitle file
             context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression
+                context_video_path, expression, group_id=group_id
             )
             
             # Extract expression video clip with audio and subtitles from context
@@ -156,26 +169,44 @@ class VideoEditor:
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
             
-            # Use filter to reset timestamps and prevent delay in repeated clips
+            # Extract with -ss for seeking, then reset timestamps
+            # Use both -ss and setpts to ensure timestamps are reset correctly
             input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+            # Reset PTS to start from 0 for both video and audio
             video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
             audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
             
-            (
-                ffmpeg.output(
-                    video_stream,
-                    audio_stream,
-                    str(expression_video_clip_path),
-                    vcodec='libx264',
-                    acodec='aac',
-                    ac=2,
-                    ar=48000,
-                    preset='fast',
-                    crf=23
+            # Extract with timestamp reset using setpts filters
+            # The setpts filters already ensure timestamps start from 0
+            try:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        audio_stream,
+                        str(expression_video_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            except ffmpeg.Error as e:
+                # Log detailed FFmpeg error for debugging
+                stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+                logger.error(
+                    f"❌ FFmpeg failed to extract expression clip:\n"
+                    f"   Input: {context_with_subtitles}\n"
+                    f"   Relative start: {relative_start:.2f}s\n"
+                    f"   Duration: {expression_duration:.2f}s\n"
+                    f"   Expression: {expression.expression}\n"
+                    f"   Output: {expression_video_clip_path}\n"
+                    f"   Error: {stderr}"
+                )
+                raise RuntimeError(f"FFmpeg failed to extract expression clip: {stderr}") from e
             
             # Repeat expression clip
             from langflix import settings
@@ -472,14 +503,29 @@ class VideoEditor:
             raise
     
     def _cleanup_temp_files(self) -> None:
-        """Clean up all registered temporary files"""
-        # Note: This method is kept for backward compatibility
-        # Actual cleanup is handled by TempFileManager's cleanup_all()
-        # which is called on exit. Individual file cleanup happens
-        # automatically when using context managers.
-        # Files registered via _register_temp_file will be cleaned up
-        # by the global temp manager's cleanup_all() on exit.
-        pass
+        """Clean up all temporary files created by this VideoEditor instance."""
+        try:
+            # Clean up files registered via _register_temp_file
+            if hasattr(self, 'temp_manager'):
+                self.temp_manager.cleanup_all()
+            
+            # Also clean up any temp_* files in output_dir (long_form_videos)
+            if hasattr(self, 'output_dir') and self.output_dir.exists():
+                temp_files = list(self.output_dir.glob("temp_*.mkv"))
+                temp_files.extend(list(self.output_dir.glob("temp_*.txt")))
+                temp_files.extend(list(self.output_dir.glob("temp_*.wav")))
+                
+                for temp_file in temp_files:
+                    try:
+                        if temp_file.exists():
+                            temp_file.unlink()
+                            logger.debug(f"Cleaned up temp file: {temp_file.name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
+                
+                logger.info(f"✅ Cleaned up {len(temp_files)} temporary files from {self.output_dir}")
+        except Exception as e:
+            logger.warning(f"Error during temp file cleanup: {e}")
     
     def __del__(self):
         """Ensure temporary files are cleaned up when object is destroyed"""
@@ -487,14 +533,28 @@ class VideoEditor:
         # Individual files are tracked globally, so no action needed here
         pass
     
-    def _add_subtitles_to_context(self, video_path: str, expression: ExpressionAnalysis) -> str:
-        """Add target language subtitles to context video (translation only) using overlay helpers."""
+    def _add_subtitles_to_context(self, video_path: str, expression: ExpressionAnalysis, group_id: Optional[str] = None) -> str:
+        """Add target language subtitles to context video (translation only) using overlay helpers.
+        
+        Args:
+            video_path: Path to context video
+            expression: ExpressionAnalysis object
+            group_id: Optional group ID for multi-expression groups (creates unique filename per group)
+        
+        Returns:
+            Path to context video with subtitles
+        """
         try:
             context_videos_dir = self.output_dir.parent / "context_videos"
             context_videos_dir.mkdir(exist_ok=True)
 
             safe_name = sanitize_for_expression_filename(expression.expression)
-            output_path = context_videos_dir / f"context_{safe_name}.mkv"
+            # Use group_id for multi-expression groups to create unique filename per group
+            # Single-expression groups use expression name (backward compatible)
+            if group_id:
+                output_path = context_videos_dir / f"context_{group_id}.mkv"
+            else:
+                output_path = context_videos_dir / f"context_{safe_name}.mkv"
             
             # Check if file already exists (created by long-form)
             if output_path.exists():
@@ -507,7 +567,8 @@ class VideoEditor:
             if sub_path and Path(sub_path).exists():
                 import tempfile
                 temp_dir = Path(tempfile.gettempdir())
-                temp_sub = temp_dir / f"temp_dual_lang_{safe_name}.srt"
+                temp_sub_name = f"temp_dual_lang_{group_id or safe_name}.srt"
+                temp_sub = temp_dir / temp_sub_name
                 self._register_temp_file(temp_sub)
                 subs_overlay.create_dual_language_copy(Path(sub_path), temp_sub)
                 subs_overlay.apply_subtitles_with_file(Path(video_path), temp_sub, output_path, is_expression=False)

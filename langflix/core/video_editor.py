@@ -107,7 +107,8 @@ class VideoEditor:
                                   context_video_path: str, 
                                   expression_video_path: str, 
                                   expression_index: int = 0,
-                                  skip_context: bool = False) -> str:
+                                  skip_context: bool = False,
+                                  group_id: Optional[str] = None) -> str:
         """
         Create educational video sequence with long-form layout:
         - If skip_context=False: Left half: context video → expression repeat (with subtitles)
@@ -156,8 +157,9 @@ class VideoEditor:
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
             # Get context video with subtitles (needed for extracting expression clip with subtitles)
+            # For multi-expression groups, use group_id to reuse group-specific subtitle file
             context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression
+                context_video_path, expression, group_id=group_id
             )
             
             # Extract expression video clip with audio and subtitles from context

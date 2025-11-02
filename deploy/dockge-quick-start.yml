@@ -1,0 +1,48 @@
+# Dockge Quick Start - Copy and paste this into Dockge YAML editor
+# IMPORTANT: Update the paths below to match your TrueNAS setup!
+
+services:
+  langflix:
+    # Option 1: Use pre-built image
+    image: langflix:latest
+    
+    # Option 2: Build from source (uncomment if needed)
+    # build:
+    #   context: /mnt/pool/apps/langflix  # Change this!
+    #   dockerfile: Dockerfile.dev
+    
+    container_name: langflix-app
+    restart: unless-stopped
+    
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LANGFLIX_LOG_LEVEL=INFO
+      - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
+    
+    volumes:
+      # CHANGE THIS: Your TrueNAS media path
+      # If 192.168.86.43/media/shows is at /mnt/pool/media/shows on TrueNAS:
+      - /mnt/pool/media/shows:/media/shows:ro
+      
+      # CHANGE THIS: Path to your config.yaml file
+      - /mnt/pool/apps/langflix/config.yaml:/app/config.yaml:ro
+      
+      # CHANGE THIS: Where to save output videos
+      - /mnt/pool/apps/langflix/output:/data/output
+    
+    ports:
+      - "8000:8000"
+      - "5000:5000"
+    
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import langflix; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+

@@ -258,9 +258,7 @@ class LangFlixPipeline:
             if DB_AVAILABLE and settings.get_database_enabled():
                 logger.info("📊 Database integration enabled")
                 try:
-                    db_manager.initialize()
-                    db = db_manager.get_session()
-                    try:
+                    with db_manager.session() as db:
                         # Create media record
                         media = MediaCRUD.create(
                             db=db,
@@ -272,17 +270,9 @@ class LangFlixPipeline:
                         )
                         media_id = str(media.id)
                         logger.info(f"Created media record: {media_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to create media record: {e}")
-                        logger.warning("⚠️ Continuing pipeline without database integration")
-                        db.rollback()
-                        media_id = None  # Disable database operations for this run
-                    finally:
-                        db.close()
                 except Exception as e:
-                    logger.error(f"Failed to initialize database connection: {e}")
-                    logger.warning("⚠️ Database connection failed. Continuing pipeline in file-only mode.")
-                    logger.warning("⚠️ To disable database integration, set 'database.enabled: false' in config.yaml")
+                    logger.error(f"Failed to create media record: {e}")
+                    logger.warning("⚠️ Continuing pipeline without database integration")
                     media_id = None  # Disable database operations for this run
             else:
                 logger.info("📁 File-only mode (database disabled)")
@@ -602,8 +592,7 @@ class LangFlixPipeline:
             return
         
         try:
-            db = db_manager.get_session()
-            try:
+            with db_manager.session() as db:
                 for expression in self.expressions:
                     try:
                         ExpressionCRUD.create_from_analysis(
@@ -614,21 +603,12 @@ class LangFlixPipeline:
                         logger.debug(f"Saved expression to database: {expression.expression}")
                     except Exception as e:
                         logger.error(f"Failed to save expression '{expression.expression}': {e}")
-                        continue
+                        # Continue with next expression - transaction will rollback if needed
                 
-                db.commit()
                 logger.info(f"Saved {len(self.expressions)} expressions to database")
-                
-            except Exception as e:
-                logger.error(f"Database error during expression save: {e}")
-                db.rollback()
-                logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
-                # Don't raise - allow pipeline to continue
-            finally:
-                db.close()
         except Exception as e:
-            logger.error(f"Database connection error: {e}")
-            logger.warning("⚠️ Failed to connect to database. Pipeline will continue in file-only mode.")
+            logger.error(f"Database error during expression save: {e}")
+            logger.warning("⚠️ Failed to save expressions to database. Pipeline will continue.")
             # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):

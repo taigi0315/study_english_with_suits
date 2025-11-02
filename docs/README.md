@@ -14,13 +14,35 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 - **[API Reference](API_REFERENCE.md)** - Web API usage and integration
 
 ### Module Documentation
+
+#### Core Modules
 - **[Core Module](core/README_eng.md)** - Video editing and pipeline logic (`video_editor.py`, `expression_analyzer.py`)
 - **[Media Module](media/README_eng.md)** - FFmpeg utilities and media processing (`ffmpeg_utils.py`)
 - **[Services Module](services/README_eng.md)** - Service layer classes (`VideoPipelineService`)
 - **[API Module](api/README_eng.md)** - FastAPI routes and endpoints
+
+#### Storage & Configuration
+- **[Storage Module](storage/README_eng.md)** - Storage abstraction layer (Local, GCS)
+- **[Config Module](config/README_eng.md)** - Configuration management and font utilities
+- **[Database Module](db/README_eng.md)** - Database models and CRUD operations
+
+#### Media Processing
+- **[Audio Module](audio/README_eng.md)** - Audio optimization and extraction
+- **[TTS Module](tts/)** - Text-to-speech integration (Gemini, LemonFox)
+- **[Video Module](video/)** - Video enhancement utilities
+- **[Subtitles Module](subtitles/)** - Subtitle overlay and processing
+
+#### Services & Utilities
+- **[Monitoring Module](monitoring/README_eng.md)** - Health checks and performance monitoring
+- **[Tasks Module](tasks/)** - Background task processing (Celery)
+- **[Slides Module](slides/)** - Educational slide generation
+- **[YouTube Module](youtube/)** - YouTube upload and scheduling
 - **[Utils Module](utils/)** - Utility functions
   - [TempFileManager](utils/temp_file_manager_eng.md) - Temporary file management
   - [Filename Utils](utils/filename_utils_eng.md) - Filename sanitization
+
+#### Deployment
+- **[CI/CD SSH Setup](CI_CD_SSH_SETUP.md)** - TrueNAS deployment configuration
 
 ### Troubleshooting
 - **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Common issues and solutions
@@ -288,6 +310,6 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 
 ---
 
-**Last Updated**: January 2024  
+**Last Updated**: 2025-01-30  
 **Version**: 1.0.0  
 **Maintainer**: LangFlix Development Team

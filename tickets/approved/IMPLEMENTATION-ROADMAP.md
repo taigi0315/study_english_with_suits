@@ -3,16 +3,18 @@
 **Architect:** Architect Agent
 
 ## Executive Summary
-- Total tickets approved: 3
-- Estimated timeline: 4-6 weeks (2-3 sprints)
-- Critical path: TICKET-007 → TICKET-008 → TICKET-009
+- Total tickets approved: 7
+- Estimated timeline: 4-6 weeks (2-3 sprints) + Phase 0 (1-2 days)
+- Critical path: TICKET-007 → TICKET-008 → TICKET-013
 - Key milestones: Parallel processing (Week 2), Multi-expression support (Week 4), Production deployment (Week 6)
 
 ## Strategic Context
 This implementation plan addresses:
-1. **Performance Optimization** - TICKET-007 (1 ticket)
-2. **Feature Enhancement** - TICKET-008 (1 ticket)
-3. **Production Readiness** - TICKET-009 (1 ticket)
+1. **API Infrastructure** - TICKET-010, TICKET-011 (2 tickets)
+2. **Performance Optimization** - TICKET-007 (1 ticket)
+3. **Feature Enhancement** - TICKET-008 (1 ticket)
+4. **Bug Fixes** - TICKET-013 (1 ticket)
+5. **Operations** - TICKET-009, TICKET-012 (2 tickets)
 
 ### Architectural Vision
 Where we're headed:
@@ -248,3 +250,133 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 **Roadmap Status:** ✅ Ready for implementation
 **Review Date:** 2025-01-30
 **Next Review:** After Phase 1 completion
+
+---
+
+## Phase 0: Immediate (API Infrastructure) - 2025-01-30 New
+**Focus:** API infrastructure foundation
+**Duration:** 1-2 days
+**Dependencies:** None
+
+### TICKET-011: Add Database Session Context Manager
+- **Priority:** High
+- **Effort:** < 1 day
+- **Why first:** Context manager 패턴 제공, TICKET-010에 활용
+- **Owner:** 중급+ engineer
+
+**Key Deliverables:**
+- `DatabaseManager.session()` context manager 추가
+- `langflix/main.py` 수동 세션 관리 → context manager 리팩토링
+- 기존 `get_session()` 유지 (하위 호환)
+- 문서 업데이트 (context manager 권장)
+
+**Success Criteria:**
+- [ ] Context manager 자동 commit/rollback/close 동작
+- [ ] 기존 코드 리팩토링 완료
+- [ ] 모든 테스트 통과
+- [ ] 문서 업데이트
+- [ ] 리소스 누수 없음
+
+### TICKET-010: Implement API Dependencies for DB & Storage
+- **Priority:** High
+- **Effort:** 1-2 days
+- **Why now:** FastAPI 의존성 주입 완성, DB/Storage 사용 API 활성화
+- **Owner:** 중급+ engineer
+
+**Key Deliverables:**
+- `get_db()` FastAPI dependency 구현 (TICKET-011의 context manager 활용)
+- `get_storage()` FastAPI dependency 구현
+- `lifespan()` DB connection pool 관리
+- Health check endpoint 업데이트
+
+**Success Criteria:**
+- [ ] FastAPI `Depends(get_db)` 동작
+- [ ] FastAPI `Depends(get_storage)` 동작
+- [ ] Health check 실제 상태 확인
+- [ ] 모든 테스트 통과
+- [ ] API 문서 업데이트
+
+**Phase 0 Risks:**
+- Risk: DB connection pool 관리 충돌
+  - Mitigation: 단일 DatabaseManager 인스턴스
+- Risk: 스토리지 초기화 성능
+  - Mitigation: 가벼운 백엔드, 영향 미미
+
+---
+
+## Phase 1: Sprint 1 Additions (Operations)
+**Focus:** 프로덕션 모니터링
+**Duration:** < 1 day
+**Dependencies:** Phase 0 완료
+
+### TICKET-012: Comprehensive Health Checks
+- **Priority:** Medium
+- **Effort:** < 1 day
+- **Why now:** Phase 0 완료 후 DB health check 가능
+- **Owner:** 중급+ engineer
+
+**Key Deliverables:**
+- `SystemHealthChecker` 구현/확장
+- DB, Storage, Redis, TTS health check
+- 개별 health check 엔드포인트
+
+**Success Criteria:**
+- [ ] 모든 컴포넌트 health check 동작
+- [ ] 프로덕션 모니터링 통합 가능
+- [ ] 부하 영향 없음
+- [ ] 모든 테스트 통과
+
+**Phase 1 Risks:**
+- Risk: Health check 부하 증가
+  - Mitigation: 가벼운 쿼리, 간단한 체크만
+
+### TICKET-013: Fix Multiple Expression Video Bugs
+- **Priority:** High
+- **Effort:** 2-3 days
+- **Why now:** TICKET-008 완료 후 안정화
+- **Owner:** 중급+ backend engineer(FFmpeg 경험)
+
+**Key Deliverables:**
+- Bug 1: 타임스탬프 수정(`avoid_negative_ts` 추가)
+- Bug 2: 자막 그룹 파일 사용(`group_id` 활용)
+- Bug 3: `temp_*` 패턴 매칭 정리
+
+**Success Criteria:**
+- [ ] 두 번째 이상 표현식 비디오 정상 재생
+- [ ] 각 표현식에 올바른 자막 표시
+- [ ] 임시 파일 자동 정리
+- [ ] 단일 표현식 영향 없음
+
+**Phase 1 Risks:**
+- Risk: FFmpeg 복잡도
+  - Mitigation: 기존 패턴 유지, 검증 강화
+
+---
+
+## Updated Implementation Sequence
+
+**Phase 0 (즉시):**
+1. TICKET-011 (context manager)
+2. TICKET-010 (API dependencies)
+
+**Phase 1 (Sprint 1):**
+1. TICKET-012 (health checks)
+2. TICKET-007 (parallel processing)
+3. TICKET-008 (multi-expression)
+4. TICKET-013 (multi-expression bug fixes)
+
+**Phase 2-3:** 기존 계획대로
+
+---
+
+## Overall Progress
+- **Completed Phases:** None
+- **Current Phase:** Phase 0 (Immediate)
+- **Total Tickets Approved:** 7 (TICKET-007, 008, 009, 010, 011, 012, 013)
+- **Estimated Timeline:** Phase 0 (1-2 days) → Phase 1 (2 weeks) → Phase 2-3 (계속)
+
+---
+
+**Roadmap Status:** ✅ Updated with new tickets
+**Last Updated:** 2025-01-30
+**Next Steps:** Start Phase 0 immediately

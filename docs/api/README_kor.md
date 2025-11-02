@@ -27,11 +27,56 @@
   - 로컬 `output/` 존재 시 `/output` 정적 마운트.
   - 라우터: `health`, `jobs`(프리픽스 `/api/v1`), `files`(프리픽스 `/api/v1`).
   - 예외 핸들러 등록: `APIException`, `HTTPException`.
-- Lifespan 시작 시 Redis 잡 저장소 정리 및 상태 확인(`langflix.core.redis_client.get_redis_job_manager()`).
+- Lifespan 시작:
+  - 데이터베이스가 활성화된 경우 연결 풀 초기화(`settings.get_database_enabled()`)
+  - Redis 잡 저장소 정리 및 상태 확인(`langflix.core.redis_client.get_redis_job_manager()`)
+- Lifespan 종료:
+  - 데이터베이스가 활성화된 경우 연결 정리
 
-## 의존성 주입(플레이스홀더)
-- `get_db()`는 `Session`을 yield하지만 현재는 `None` 반환(TODO).
-- `get_storage()`는 현재 `None` 반환(TODO).
+## 의존성 주입
+
+### 데이터베이스 의존성 (`get_db()`)
+- FastAPI 의존성 주입을 통해 SQLAlchemy 데이터베이스 세션 제공
+- `langflix.db.session`의 `DatabaseManager`를 사용하여 연결 풀 관리
+- 자동 세션 생명주기 처리:
+  - 엔드포인트 핸들러에 데이터베이스 세션 yield
+  - 성공 시 자동 commit
+  - 예외 발생 시 rollback
+  - `finally` 블록에서 세션 종료
+- 데이터베이스가 비활성화된 경우(file-only 모드) `None` 반환 - `settings.get_database_enabled()`로 확인
+- 데이터베이스 초기화는 애플리케이션 lifespan에서 수행됨 (아래 참조)
+
+**사용 예:**
+```python
+from fastapi import Depends
+from langflix.api.dependencies import get_db
+from sqlalchemy.orm import Session
+
+@router.get("/endpoint")
+async def my_endpoint(db: Session = Depends(get_db)):
+    if db is None:
+        # 데이터베이스 비활성화, 적절히 처리
+        return {"message": "Database not available"}
+    # db 세션 사용...
+```
+
+### 스토리지 의존성 (`get_storage()`)
+- FastAPI 의존성 주입을 통해 스토리지 백엔드 인스턴스 제공
+- `langflix.storage.factory`의 `create_storage_backend()` 팩토리 사용
+- 설정에 따라 구성된 스토리지 백엔드(Local 또는 GCS) 반환
+- 요청마다 새로운 인스턴스 생성(경량 작업)
+
+**사용 예:**
+```python
+from fastapi import Depends
+from langflix.api.dependencies import get_storage
+from langflix.storage.base import StorageBackend
+
+@router.get("/endpoint")
+async def my_endpoint(storage: StorageBackend = Depends(get_storage)):
+    files = storage.list_files("/path")
+    # 스토리지 백엔드 사용...
+```
 
 ## 예외 처리
 
@@ -92,7 +137,10 @@ except Exception as e:
 - `/` (GET): API 루트 메타.
 - `/local/status` (GET): 로컬 개발 정보.
 - `/health` (GET): 기본 헬스 체크.
-- `/health/detailed` (GET): 버전/컴포넌트 포함 상세 헬스.
+- `/health/detailed` (GET): 버전 및 실제 컴포넌트 상태 확인 포함:
+  - Database: `SELECT 1` 쿼리로 연결 확인 ("connected", "disabled", 또는 에러 메시지 반환)
+  - Storage: 파일 목록 조회 시도로 가용성 확인 ("available" 또는 에러 메시지 반환)
+  - TTS: 항상 "ready" 반환
 - `/health/redis` (GET): Redis 헬스.
 - `/health/redis/cleanup` (POST): 만료/정체 잡 정리.
 - `/api/v1/files` (GET): `output/` 재귀 파일 목록.
@@ -145,7 +193,7 @@ API는 API와 CLI 처리 모두에 대한 통합 인터페이스를 제공하는
 - Redis 비가용 시 앱은 기동되나 경고만 로그 → 장애 전파/격하 모드 정책 검토 권장.
 
 ## 확장 포인트
-- `dependencies.get_db/get_storage` 구현으로 DB/스토리지 연계.
+- ✅ `dependencies.get_db/get_storage` 구현 완료 - 데이터베이스 및 스토리지 통합 완료 (TICKET-010)
 - 파일 상세/삭제 스텁을 실제 스토리지 연동으로 대체.
 - ✅ `/jobs/{id}/expressions`를 Redis 기반 단일 소스 진실로 통합 완료 - `jobs_db` 의존 제거됨 (TICKET-003).
 

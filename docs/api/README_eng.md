@@ -27,11 +27,56 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
   - Static mount `/output` when local `output/` exists.
   - Routers: `health`, `jobs` (prefixed `/api/v1`), `files` (prefixed `/api/v1`).
   - Exception handlers for `APIException` and `HTTPException`.
-- Lifespan startup performs Redis job store cleanup and health check via `langflix.core.redis_client.get_redis_job_manager()`.
+- Lifespan startup:
+  - Initializes database connection pool if enabled (`settings.get_database_enabled()`)
+  - Performs Redis job store cleanup and health check via `langflix.core.redis_client.get_redis_job_manager()`
+- Lifespan shutdown:
+  - Closes database connections gracefully if database was enabled
 
-## Dependency Injection (Placeholders)
-- `get_db()` yields a `Session` but currently returns `None` (TODO).
-- `get_storage()` returns `None` (TODO).
+## Dependency Injection
+
+### Database Dependency (`get_db()`)
+- Provides SQLAlchemy database sessions via FastAPI dependency injection
+- Uses `DatabaseManager` from `langflix.db.session` for connection pooling
+- Automatically handles session lifecycle:
+  - Yields database session to endpoint handler
+  - Commits on successful completion
+  - Rolls back on exceptions
+  - Closes session in `finally` block
+- Returns `None` if database is disabled (file-only mode) - checked via `settings.get_database_enabled()`
+- Database initialization happens in application lifespan (see below)
+
+**Usage:**
+```python
+from fastapi import Depends
+from langflix.api.dependencies import get_db
+from sqlalchemy.orm import Session
+
+@router.get("/endpoint")
+async def my_endpoint(db: Session = Depends(get_db)):
+    if db is None:
+        # Database disabled, handle accordingly
+        return {"message": "Database not available"}
+    # Use db session...
+```
+
+### Storage Dependency (`get_storage()`)
+- Provides storage backend instances via FastAPI dependency injection
+- Uses `create_storage_backend()` factory from `langflix.storage.factory`
+- Returns configured storage backend (Local or GCS) based on settings
+- Creates a new instance per request (lightweight operation)
+
+**Usage:**
+```python
+from fastapi import Depends
+from langflix.api.dependencies import get_storage
+from langflix.storage.base import StorageBackend
+
+@router.get("/endpoint")
+async def my_endpoint(storage: StorageBackend = Depends(get_storage)):
+    files = storage.list_files("/path")
+    # Use storage backend...
+```
 
 ## Exceptions
 - `APIException` base and specializations: `ValidationError`, `NotFoundError`, `ProcessingError`, `StorageError`.
@@ -54,7 +99,10 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - `/` (GET): API root meta.
 - `/local/status` (GET): Local dev info.
 - `/health` (GET): Basic health.
-- `/health/detailed` (GET): Includes version and component placeholders.
+- `/health/detailed` (GET): Includes version and actual component health checks:
+  - Database: Checks connectivity with `SELECT 1` query (returns "connected", "disabled", or error message)
+  - Storage: Checks availability by attempting to list files (returns "available" or error message)
+  - TTS: Always returns "ready"
 - `/health/redis` (GET): Redis health via job manager.
 - `/health/redis/cleanup` (POST): Cleanup expired/stale jobs.
 - `/api/v1/files` (GET): List files under `output/` recursively.
@@ -145,7 +193,7 @@ except Exception as e:
 - Redis availability is assumed; startup logs on failure but app remains up—consider fail-fast or degraded mode indicator.
 
 ## Extensibility
-- Implement `dependencies.get_db/get_storage` to integrate DB/storage.
+- ✅ `dependencies.get_db/get_storage` implemented - Database and storage integration complete (TICKET-010)
 - Replace stubbed file detail/delete with actual storage-backed operations.
 - ✅ `/jobs/{id}/expressions` aligned with Redis (source of truth) - `jobs_db` dependency removed (TICKET-003).
 

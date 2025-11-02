@@ -199,3 +199,4 @@ result = service.process_video(...)
 - [Core 모듈 문서](../core/README_kor.md) - LangFlixPipeline 세부사항
 - [API 모듈 문서](../api/README_kor.md) - 서비스의 API 사용
 - [문제 해결 가이드](../TROUBLESHOOTING_GUIDE.md)
+

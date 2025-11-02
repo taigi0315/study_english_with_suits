@@ -7,6 +7,11 @@ Here is a segment of dialogue from the TV show "{show_name}":
 **YOUR MISSION:**
 Find 1-3 expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 
+**IMPORTANT:** You can extract MULTIPLE expressions from the SAME context if they are all valuable and teachable.
+If you find 2-3 excellent expressions in one dialogue segment, include ALL of them.
+However, only extract multiple expressions from one context if ALL expressions are valuable, reusable, and clearly teachable.
+If unsure, extract only the BEST single expression.
+
 **LANGUAGE LEVEL:** {level_description}
 
 ---
@@ -133,12 +138,19 @@ When all extracted clips are played in chronological order, learners should be a
 **ABSOLUTE RULES:**
 
 1. **ZERO OVERLAP BETWEEN CLIPS:**
-   - If you extract multiple expressions from the same dialogue segment, their time ranges must NEVER overlap
+   - If you extract multiple expressions from DIFFERENT dialogue segments, their time ranges must NEVER overlap
    - Previous clip ends at time X → Next clip must start at time X or later
    - Example: 
      * Clip 1: 00:05:30 - 00:06:10 ✓
      * Clip 2: 00:06:10 - 00:06:50 ✓ (starts exactly where Clip 1 ended)
      * Clip 2: 00:06:05 - 00:06:45 ✗ (overlaps with Clip 1 by 5 seconds - NEVER DO THIS)
+   
+   **NOTE:** Multiple expressions from the SAME context (same context_start_time/context_end_time) are allowed.
+   They will share the same context clip but have different expression_start_time/expression_end_time.
+   Example:
+     * Expression 1: context 00:05:30-00:06:10, expression 00:05:35-00:05:45
+     * Expression 2: context 00:05:30-00:06:10, expression 00:05:50-00:05:55
+     Both share context but have non-overlapping expression timings.
 
 2. **CHRONOLOGICAL STORY FLOW:**
    - Extract expressions in the order they appear in the episode
@@ -161,10 +173,13 @@ When all extracted clips are played in chronological order, learners should be a
    - Skip the other one, even if it's good
 
 4. **CONTEXT BOUNDARIES MUST NOT OVERLAP:**
-   - Before finalizing your selection, review all `context_start_time` and `context_end_time`
-   - Sort them chronologically
-   - Verify that each clip's start time is ≥ previous clip's end time
-   - If you find ANY overlap, adjust or remove clips
+   - **CRITICAL:** Different contexts (different `context_start_time`/`context_end_time`) must NEVER overlap
+   - Before finalizing your selection, review all `context_start_time` and `context_end_time` values
+   - Sort contexts chronologically by `context_start_time`
+   - Verify that each context's start time is ≥ previous context's end time
+   - **Rule:** Context A ends at X, Context B must start at X or later (X < Context B start)
+   - If you find ANY overlap between different contexts, adjust or remove one of them
+   - **Remember:** Multiple expressions can share the SAME context (same context times), but DIFFERENT contexts must not overlap
 
 **VERIFICATION CHECKLIST:**
 Before submitting your JSON output, verify:

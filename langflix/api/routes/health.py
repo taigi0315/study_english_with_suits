@@ -2,9 +2,14 @@
 Health check endpoints for LangFlix API
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
+from langflix.api.dependencies import get_db, get_storage
+from langflix.storage.base import StorageBackend
 
 router = APIRouter()
 
@@ -18,18 +23,43 @@ async def health_check() -> Dict[str, Any]:
     }
 
 @router.get("/health/detailed")
-async def detailed_health_check() -> Dict[str, Any]:
-    """Detailed health check endpoint."""
+async def detailed_health_check(
+    db: Optional[Session] = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage)
+) -> Dict[str, Any]:
+    """
+    Detailed health check endpoint.
+    
+    Checks the health of all system components including database and storage.
+    """
+    components = {}
+    
+    # Check database
+    if db is not None:
+        try:
+            # Simple query to check database connectivity
+            db.execute(text("SELECT 1"))
+            components["database"] = "connected"
+        except Exception as e:
+            components["database"] = f"error: {str(e)}"
+    else:
+        components["database"] = "disabled"
+    
+    # Check storage
+    try:
+        # Simple check - try to list root path
+        storage.list_files("/", limit=1)
+        components["storage"] = "available"
+    except Exception as e:
+        components["storage"] = f"error: {str(e)}"
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "LangFlix API",
         "version": "1.0.0",
-        "components": {
-            "database": "connected",  # TODO: Implement actual health checks
-            "storage": "available",
-            "tts": "ready"
-        }
+        "components": components,
+        "tts": "ready"
     }
 
 @router.get("/health/redis")

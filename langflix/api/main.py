@@ -19,6 +19,18 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("LangFlix API starting up...")
     
+    # Initialize database connection pool if enabled
+    try:
+        from langflix import settings
+        if settings.get_database_enabled():
+            from langflix.api.dependencies import db_manager
+            db_manager.initialize()
+            logger.info("✅ Database connection pool initialized")
+        else:
+            logger.info("ℹ️ Database disabled (file-only mode)")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+    
     # Initialize and cleanup Redis on startup
     try:
         from langflix.core.redis_client import get_redis_job_manager
@@ -40,15 +52,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Redis initialization failed: {e}")
     
-    # TODO: Initialize database connection
-    # TODO: Initialize storage backends
     logger.info("LangFlix API started successfully")
     
     yield
     
     # Shutdown
     logger.info("LangFlix API shutting down...")
-    # TODO: Cleanup resources
+    
+    # Close database connections
+    try:
+        from langflix import settings
+        if settings.get_database_enabled():
+            from langflix.api.dependencies import db_manager
+            db_manager.close()
+            logger.info("✅ Database connections closed")
+    except Exception as e:
+        logger.error(f"❌ Database cleanup failed: {e}")
+    
     logger.info("LangFlix API shutdown complete")
 
 def create_app() -> FastAPI:

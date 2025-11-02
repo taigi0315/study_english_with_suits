@@ -122,6 +122,7 @@ class VideoEditor:
             expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
             skip_context: If True, skip context video and only show expression repeat (for multi-expression groups)
+            group_id: Optional group ID for multi-expression groups (reuses group-specific subtitle file)
             
         Returns:
             Path to created educational video

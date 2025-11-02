@@ -4,6 +4,9 @@ Database session management for LangFlix.
 This module provides database connection management and session handling.
 """
 
+from contextlib import contextmanager
+from typing import Generator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from langflix import settings
@@ -32,8 +35,43 @@ class DatabaseManager:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._initialized = True
     
+    @contextmanager
+    def session(self) -> Generator[Session, None, None]:
+        """
+        Context manager for database session.
+        
+        Automatically handles commit, rollback, and close.
+        
+        Usage:
+            with db_manager.session() as db:
+                # ... database operations ...
+                # Commit happens automatically on success
+        
+        Yields:
+            Session: Database session
+        """
+        if not self._initialized:
+            self.initialize()
+        
+        db = self.SessionLocal()
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    
     def get_session(self) -> Session:
-        """Get database session."""
+        """
+        Get database session (legacy method, use session() context manager instead).
+        
+        Note: When using get_session(), you must manually call:
+        - db.commit() on success
+        - db.rollback() on exception
+        - db.close() in finally block
+        """
         if not self._initialized:
             self.initialize()
         return self.SessionLocal()

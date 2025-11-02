@@ -1,0 +1,44 @@
+FROM python:3.9-slim
+
+# Install system dependencies for EC2 deployment
+# Add cifs-utils for Windows shares, nfs-common for NFS (if needed)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    git \
+    cifs-utils \
+    nfs-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first (for better caching)
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create directories for data mount
+RUN mkdir -p /data/{assets,output,logs} && \
+    mkdir -p /media/shows && \
+    chmod 755 /data && \
+    chmod 755 /media
+
+# Create non-root user
+RUN useradd -m -s /bin/bash langflix && \
+    chown -R langflix:langflix /app && \
+    chown -R langflix:langflix /data && \
+    chown -R langflix:langflix /media
+
+USER langflix
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import langflix; print('LangFlix is healthy')" || exit 1
+
+# Default command
+CMD ["python", "-m", "langflix.main", "--help"]
+

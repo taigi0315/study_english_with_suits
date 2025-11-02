@@ -28,20 +28,9 @@ def get_db() -> Generator[Optional[Session], None, None]:
         yield None
         return
     
-    # Initialize database if not already initialized
-    if not db_manager._initialized:
-        db_manager.initialize()
-    
-    # Get session
-    db = db_manager.get_session()
-    try:
+    # Use context manager for automatic resource management
+    with db_manager.session() as db:
         yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def get_storage() -> StorageBackend:

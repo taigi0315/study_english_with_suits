@@ -2,210 +2,200 @@
 
 **Review Date:** 2025-01-30  
 **Reviewer:** Senior Engineer Code Review Agent  
-**Scope:** Performance Optimization, Feature Enhancement, Production Deployment
+**Scope:** API Integration, Database Management, System Health Monitoring
 
 ## Overview
 
 Total tickets created: 3
-- High Priority: 3
-- Medium Priority: 0
+- High Priority: 2
+- Medium Priority: 1
 - Low Priority: 0
 
 ## Key Findings
 
 ### Major Improvement Opportunities
 
-1. **TICKET-001: Parallel LLM Request Processing** - High
-   - 현재 순차 처리로 응답 지연
-   - 병렬 처리 구현으로 3-5배 단축
-   - 기존 ParallelProcessor 활용
+1. **TICKET-010: Implement API Dependencies for Database and Storage** - High
+   - 현재 API 의존성 주입 함수들이 플레이스홀더로만 구현됨
+   - FastAPI의 표준 의존성 주입 패턴 미완성
+   - 데이터베이스와 스토리지 백엔드 사용 불가
+   - Health check endpoint에서 실제 상태 확인 불가
 
-2. **TICKET-002: Multiple Expressions Per Context** - High
-   - 현재 단일 expression 제약
-   - 컨텍스트당 다중 expression 지원
-   - 공유 clip으로 효율성 향상
+2. **TICKET-011: Add Database Session Context Manager** - High
+   - 수동 세션 관리로 인한 리소스 누수 가능성
+   - try-except-finally 패턴 반복 코드
+   - 예외 발생 시 세션 정리 누락 위험
+   - 코드 일관성 부족
 
-3. **TICKET-003: Production Dockerization & TrueNAS Deployment** - High
-   - 프로덕션 배포 환경 미흡
-   - 멀티 스테이지 Docker 이미지 구축
-   - TrueNAS 배포 가이드와 CI/CD
+3. **TICKET-012: Implement Comprehensive Health Checks** - Medium
+   - Health check endpoint가 플레이스홀더 구현
+   - 실제 시스템 컴포넌트 상태 확인 불가
+   - 프로덕션 모니터링 시스템 통합 불가
+   - 조기 장애 발견 어려움
 
-## Architecture Documents Created
+## Code Quality Analysis
 
-### ADR-016: Parallel LLM Processing
-- 병렬 처리 전략
-- ThreadPoolExecutor 사용
-- 성능 향상 목표
+### Architecture & Design
+- **Service Layer Pattern**: VideoPipelineService를 통한 통합 파이프라인 서비스 구현됨 ✅
+- **의존성 주입**: FastAPI 의존성 주입 패턴이 부분적으로만 구현됨 (TICKET-010)
+- **리소스 관리**: 데이터베이스 세션 관리가 일관되지 않음 (TICKET-011)
 
-### ADR-017: Production Dockerization & Deployment
-- 멀티 스테이지 Docker 전략
-- TrueNAS 배포 아키텍처
-- CI/CD 파이프라인 설계
+### Code Quality
+- **중복 코드**: 주요 중복은 이전 티켓으로 해결됨 ✅
+- **에러 처리**: 통합 에러 핸들러 구현됨 ✅
+- **임시 파일 관리**: 표준화된 temp file manager 구현됨 ✅
+
+### Scalability & Performance
+- **병렬 처리**: LLM 요청 병렬 처리 구현됨 ✅
+- **데이터베이스 연결 풀**: 연결 풀 설정됨, 세션 관리 개선 필요 (TICKET-011)
+- **캐싱**: Redis 기반 캐싱 구현됨 ✅
+
+### Testing Coverage
+- **Unit Tests**: 24개 파일
+- **Integration Tests**: 9개 파일
+- **Functional Tests**: 10개 파일
+- **테스트 커버리지**: 측정 도구 존재 (`run_tests.py --coverage`)
+
+### Security & Reliability
+- **에러 핸들러**: 구조화된 에러 핸들링 구현됨 ✅
+- **Health Checks**: 기본 구현만 존재, 개선 필요 (TICKET-012)
+- **리소스 관리**: 세션 관리 개선 필요 (TICKET-011)
+
+### Maintainability
+- **문서화**: 포괄적인 문서 존재 ✅
+- **코드 일관성**: 세션 관리 패턴 불일치 (TICKET-011)
+- **모니터링**: Health check 개선 필요 (TICKET-012)
+
+## Patterns Observed
+
+### Positive Patterns
+1. **Service Layer Pattern**: 비즈니스 로직과 API/CLI 분리 ✅
+2. **에러 핸들링**: 중앙화된 에러 핸들러 사용 ✅
+3. **임시 파일 관리**: 표준화된 temp file manager ✅
+4. **병렬 처리**: ExpressionBatchProcessor를 통한 병렬 LLM 처리 ✅
+
+### Areas for Improvement
+1. **의존성 주입**: FastAPI 의존성 주입 패턴 완성 필요 (TICKET-010)
+2. **리소스 관리**: 데이터베이스 세션 관리 일관성 필요 (TICKET-011)
+3. **모니터링**: Health check 구현 완성 필요 (TICKET-012)
 
 ## Test Coverage Analysis
 
 **Existing Tests:**
-- Unit: 17
-- Integration: 4
+- Unit: 24
+- Integration: 9
 - Functional: 10
-- API: 5
-- Step-by-step: 12
+- Total: 43+ test files
 
-**새로 필요한 테스트:**
-- 병렬 LLM 처리 성능 테스트
-- 다중 expression 그룹화 테스트
-- Docker 이미지 빌드/배포 테스트
-- TrueNAS 배포 통합 테스트
+**Coverage Measurement:**
+- Coverage measurement tool available (`run_tests.py --coverage`)
+- Actual coverage percentage needs verification
 
-## Estimated Impact
+**Test Gaps:**
+- API dependencies 테스트 필요 (TICKET-010)
+- Database session context manager 테스트 필요 (TICKET-011)
+- Comprehensive health check 테스트 필요 (TICKET-012)
 
-### Performance Improvements
-- **병렬 LLM**: 3-5배 처리 시간 단축
-- **다중 expression**: 비디오 처리 효율 개선
-- **Docker 최적화**: 이미지 크기 감소
+## Code Duplication Report
 
-### Resource Optimization
-- 컨텍스트 clip 재사용으로 스토리지 절감
-- 스테이징 이미지 제거로 빌드 시간 단축
-- 리소스 한도 설정으로 안정성 향상
+**Major Duplication:**
+- 이전 티켓들(TICKET-001~TICKET-009)로 주요 중복 해결됨 ✅
+- 새로운 중복 발견 없음
 
-## Recommended Implementation Order
+**Minor Duplication:**
+- 데이터베이스 세션 관리 패턴 (TICKET-011에서 해결 예정)
 
-### Phase 1: Parallel Processing (Week 1-2)
-**Priority:** High  
-**Complexity:** Medium  
-**Dependencies:** None
+## Recommended Prioritization
 
-**Tickets:**
-- TICKET-001: 병렬 LLM 요청 구현
+### Immediate Action Needed
+1. **TICKET-010** - API 의존성 구현
+   - 이유: 다른 API 기능 개발의 기반
+   - 블로커: 향후 데이터베이스/스토리지 사용하는 엔드포인트 개발
 
-**Expected Outcome:**
-- 처리 시간 단축
-- 사용자 대기 시간 감소
+2. **TICKET-011** - 데이터베이스 세션 컨텍스트 매니저
+   - 이유: 리소스 누수 방지, 코드 품질 향상
+   - 의존성: TICKET-010과 독립적이지만 함께 구현 권장
 
-### Phase 2: Multi-Expression Support (Week 2-4)
-**Priority:** High  
-**Complexity:** Large  
-**Dependencies:** TICKET-001 (병렬 처리)
-
-**Tickets:**
-- TICKET-002: 컨텍스트당 여러 expression 지원
-
-**Expected Outcome:**
-- 유연한 추출
-- 비디오 처리 효율 향상
-
-### Phase 3: Production Deployment (Week 3-5)
-**Priority:** High  
-**Complexity:** Large  
-**Dependencies:** None
-
-**Tickets:**
-- TICKET-003: 프로덕션 Docker화 및 TrueNAS 배포
-
-**Expected Outcome:**
-- 일관된 배포
-- 자동화된 CI/CD
-- TrueNAS 배포 준비
+### Short-term (Next Sprint)
+3. **TICKET-012** - 종합 Health Check 구현
+   - 이유: 프로덕션 모니터링 필수
+   - 의존성: TICKET-010 완료 후 구현 가능
 
 ## Architectural Observations
 
 ### Strengths in Current Architecture
-- 모듈 분리
-- 파이프라인 구조 명확
-- Redis 기반 작업 관리
-- 자동 임시 파일 정리
-- 에러 핸들링 및 재시도
+- 명확한 서비스 레이어 분리
+- 통합 에러 핸들링 시스템
+- 표준화된 임시 파일 관리
+- 병렬 처리 지원
 
-### Areas for Improvement
+### Areas Needing Architectural Attention
+- FastAPI 의존성 주입 패턴 완성
+- 리소스 관리 일관성
+- 모니터링 인프라
 
-**Performance Bottlenecks:**
-- 순차 LLM 처리
-- 중복 context clip
-- 이미지 빌드 비효율
-
-**Deployment Gaps:**
-- 프로덕션 Docker 부족
-- CI/CD 미구성
-- TrueNAS 매뉴얼 부재
-
-**Feature Limitations:**
-- 단일 expression/컨텍스트 제약
-
-## Technical Debt Assessment
-
-### Current Debt
-- **Medium**: 기존 기능 안정
-- **Low**: 코드 중복 미미
-
-### After Implementation
-- 병렬 처리로 지연 해소
-- 다중 expression 지원
-- 프로덕션 배포 준비
+### Suggested Architectural Improvements
+1. **의존성 주입 완성**: TICKET-010
+2. **리소스 관리 표준화**: TICKET-011
+3. **모니터링 강화**: TICKET-012
 
 ## Notes for Architect
 
-### Priorities
-1. 빠른 병렬 처리 구현
-2. 프로덕션 배포 준비
-3. 다중 expression 기능 추가
+### Areas Requiring Architectural Decision
+1. **의존성 주입 전략**: FastAPI 표준 패턴 vs 커스텀 구현
+   - 권장: FastAPI 표준 패턴 (TICKET-010)
 
-### Dependencies
-- TICKET-001, TICKET-003 병행 가능
-- TICKET-002는 TICKET-001 의존
+2. **리소스 관리**: Context manager vs 수동 관리
+   - 권장: Context manager (TICKET-011)
 
-### Risks and Mitigations
-- API Rate Limits: 병렬 요청에 대한 제한 관리
-- 메모리 사용: 다중 expression 처리 시 리소스 제한
-- Docker 학습: 팀 교육과 가이드 필요
+3. **Health Check 전략**: 가벼운 연결 테스트 vs 포괄적인 검증
+   - 권장: 가벼운 연결 테스트 위주 (TICKET-012)
 
-## Success Metrics
+### Trade-offs to Consider
+- **Health Check 성능**: 실제 서비스 부하에 영향을 주지 않도록 가벼운 테스트만 수행
+- **의존성 주입 복잡도**: 표준 패턴 사용으로 복잡도 최소화
+- **리소스 관리**: Context manager 도입으로 코드 복잡도 감소
 
-### After TICKET-001
-- 처리 시간 50초 → 15초 이하
+### Questions That Came Up During Review
+1. Health check 엔드포인트에 대한 인증/접근 제어가 필요한가?
+2. LLM API health check를 포함해야 하는가? (비용 이슈)
+3. Health check 결과를 캐싱해야 하는가?
 
-### After TICKET-002
-- 컨텍스트당 1-3 expression 추출
-- 중복 clip 50% 이상 감소
+## Previous Review Summary
 
-### After TICKET-003
-- 멀티 스테이지 이미지 적용
-- TrueNAS 일회 배포
-- CI/CD 통과율 100%
-- 보안 스캔 통과
+**Completed Tickets (TICKET-001 ~ TICKET-009):**
+- TICKET-001: Audio repeat drop and output layout standardization ✅
+- TICKET-002: Extract pipeline logic from API task ✅
+- TICKET-003: Standardize temp file management ✅
+- TICKET-004: Fix get job expressions bug ✅
+- TICKET-005: Consolidate filename sanitization ✅
+- TICKET-006: Integrate error handler ✅
+- TICKET-007: Implement parallel LLM processing ✅
+- TICKET-008: Support multiple expressions per context (Approved)
+- TICKET-009: Production dockerization and deployment (Approved)
 
-## Next Steps
+**Previous Review Focus:**
+- Performance optimization
+- Feature enhancement
+- Production deployment
 
-1. 디렉터 승인
-2. TICKET-001 구현 시작
-3. TICKET-003 병행 (배포 인프라)
-4. TICKET-002 구현 (TICKET-001 후)
+**Current Review Focus:**
+- API integration completeness
+- Resource management consistency
+- System monitoring capabilities
 
-## Additional Resources
+## Summary
 
-**Created Documentation:**
-- `docs/adr/ADR-016-parallel-llm-processing.md`
-- `docs/adr/ADR-017-production-dockerization-deployment.md`
-- `tickets/REVIEW-SUMMARY.md`
-- `docs/DEPLOYMENT_TRUENAS.md` (TICKET-003)
+이번 리뷰에서는 주로 API 통합 완성도와 시스템 안정성 개선에 초점을 맞췄습니다. 
 
-**Code References:**
-- `langflix/core/parallel_processor.py:168-229`
-- `langflix/main.py:391-457`
-- `langflix/core/models.py:8-100`
-- `deploy/docker-compose.ec2.yml`
+**주요 발견:**
+- FastAPI 의존성 주입 패턴이 부분적으로만 구현되어 있음
+- 데이터베이스 세션 관리가 일관되지 않아 리소스 누수 가능성
+- Health check가 플레이스홀더로만 구현되어 실제 모니터링 불가
 
----
+**제안된 개선:**
+- API 의존성 주입 완성 (High)
+- 데이터베이스 세션 컨텍스트 매니저 추가 (High)
+- 종합 Health Check 구현 (Medium)
 
-**Conclusion:** 현재 코드베이스는 기본 안정적이며, 3개 개선으로 성능과 유연성이 크게 향상될 전망입니다. 병렬 처리와 프로덕션 배포가 핵심입니다.
-
-**Recommended Timeline:** 5주  
-- Weeks 1-2: 병렬 처리 구현 및 테스트
-- Weeks 2-3: 프로덕션 Docker 시작
-- Weeks 3-4: 다중 expression 구현
-- Weeks 4-5: TrueNAS 배포 테스트
-
----
-
-**Last Updated:** 2025-01-30  
-**Next Review:** 구현 완료 시
+이 티켓들은 모두 프로덕션 안정성과 운영 편의성 향상에 기여하며, 상대적으로 작은 변경으로 큰 효과를 얻을 수 있습니다.

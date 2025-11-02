@@ -85,3 +85,58 @@
 2. Phase 2: TICKET-002 (multi-expression) - Week 3-4
 3. Phase 3: TICKET-003 (deployment) - Week 5-6+
 
+---
+
+### New Ticket Review Session - 2025-01-30 (Second)
+
+**Tickets Reviewed:**
+5. TICKET-010: API Dependencies for Database and Storage - ✅ APPROVED
+6. TICKET-011: Database Session Context Manager - ✅ APPROVED
+7. TICKET-012: Comprehensive Health Checks - ✅ APPROVED (Deferred to Phase 1)
+
+**Key Findings:**
+- TICKET-010: 필수 기술 부채 해소, FastAPI 의존성 주입 완성
+- TICKET-011: 자동 리소스 관리 개선, 하위 호환성 유지
+- TICKET-012: 모니터링 기반 구축, TICKET-010/011 종속성
+- 모든 티켓 표준 패턴 적용, 구현 간단함
+
+**Implementation Order:**
+1. Phase 0: TICKET-011 (context manager) → TICKET-010 (API dependencies) - 즉시
+2. Phase 1: TICKET-012 (health checks) - Sprint 1
+
+**Dependencies:**
+- TICKET-010: TICKET-011의 `session()` context manager 활용
+- TICKET-012: TICKET-010 완료 후 DB health check 가능, TICKET-011의 `session()` 활용
+
+**Technical Decisions:**
+- Storage 백엔드는 가볍게 매 요청 생성
+- Health check는 가벼운 쿼리만 사용
+- TTS health check는 설정만 확인, 실제 호출 안 함
+- LLM API health check는 비용 문제로 제외
+
+---
+
+### New Ticket Review Session - 2025-01-30 (Third)
+
+**Tickets Reviewed:**
+8. TICKET-013: Fix Multiple Expression Video Processing Bugs - ✅ APPROVED
+
+**Key Findings:**
+- TICKET-008 이후 버그 3건: 타임스탬프 프리즈, 자막 오류, 임시 파일 누적
+- 모두 TICKET-008 피쳐 완성에 필수
+- 구현 간단, 영향 큼
+- 타임스탬프: `avoid_negative_ts` 추가
+- 자막: 그룹 단일 파일 사용(컨텍스트 공유)
+- 임시 파일: 패턴 매칭 + `atexit` 정리
+
+**Implementation Order:**
+1. Phase 1: TICKET-013 (TICKET-008 직후)
+
+**Dependencies:**
+- TICKET-013: TICKET-008 완료 후 즉시
+
+**Technical Decisions:**
+- 그룹 ID로 자막 파일 고유성 보장
+- 각 그룹 완료 후 임시 파일 즉시 정리(디버깅 유리)
+- FFmpeg 옵션: `avoid_negative_ts`, 타임스탬프 검증
+

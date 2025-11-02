@@ -792,9 +792,12 @@ class LangFlixPipeline:
                             f"({len(expression_group.expressions)} expressions)"
                         )
                         
-                        # Add subtitles to context video first
+                        # For multi-expression groups, use a group-specific context subtitle file
+                        # Create context video with subtitles for the group (use first expression's subtitle as base)
                         context_with_subtitles = self.video_editor._add_subtitles_to_context(
-                            str(context_video), expression_group.expressions[0]  # Use first expression for subtitle context
+                            str(context_video), 
+                            expression_group.expressions[0],  # Use first expression for subtitle context
+                            group_id=f"group_{group_idx+1:02d}"  # Pass group ID for unique filename
                         )
                         
                         # Create context video with multi-expression slide
@@ -882,6 +885,31 @@ class LangFlixPipeline:
                     logger.debug(f"Deleted temp file: {video_file}")
             except Exception as e:
                 logger.warning(f"Could not delete temp file {video_file}: {e}")
+        
+        # Clean up all temporary files created by VideoEditor
+        logger.info("Cleaning up VideoEditor temporary files...")
+        if hasattr(self, 'video_editor'):
+            try:
+                # Clean up registered temp files
+                self.video_editor._cleanup_temp_files()
+                
+                # Also clean up any remaining temp_* files in long_form_videos directory
+                final_videos_dir = self.paths['language']['final_videos']
+                temp_files_pattern = list(final_videos_dir.glob("temp_*.mkv"))
+                temp_files_pattern.extend(list(final_videos_dir.glob("temp_*.txt")))
+                temp_files_pattern.extend(list(final_videos_dir.glob("temp_*.wav")))
+                
+                for temp_file in temp_files_pattern:
+                    try:
+                        if temp_file.exists():
+                            temp_file.unlink()
+                            logger.debug(f"Deleted leftover temp file: {temp_file.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete temp file {temp_file}: {e}")
+                
+                logger.info(f"✅ Cleaned up {len(temp_files_pattern)} temporary files from long_form_videos directory")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup VideoEditor temporary files: {e}")
     
     def _create_short_videos(self):
         """Create short-format videos for social media."""

@@ -1,6 +1,6 @@
 # LangFlix API Module Documentation (ENG)
 
-Last updated: 2025-10-30
+Last updated: 2025-01-30
 
 ## Overview
 The `langflix/api` package provides the FastAPI-based HTTP interface for LangFlix. It exposes health endpoints, job management for video processing, and file listing utilities. It wires middleware, exception handling, and static mounts, and integrates with Redis-backed job storage.
@@ -98,11 +98,21 @@ async def my_endpoint(storage: StorageBackend = Depends(get_storage)):
 ## Endpoints
 - `/` (GET): API root meta.
 - `/local/status` (GET): Local dev info.
-- `/health` (GET): Basic health.
-- `/health/detailed` (GET): Includes version and actual component health checks:
-  - Database: Checks connectivity with `SELECT 1` query (returns "connected", "disabled", or error message)
-  - Storage: Checks availability by attempting to list files (returns "available" or error message)
-  - TTS: Always returns "ready"
+- `/health` (GET): Basic health check endpoint. Returns service status and timestamp.
+- `/health/detailed` (GET): Comprehensive health check with actual component status verification:
+  - Uses `SystemHealthChecker` from `langflix.monitoring.health_checker` to check all system components
+  - Database: Checks connectivity with `SELECT 1` query using `db_manager.session()` context manager
+    - Returns `{"status": "healthy", "message": "..."}` or `{"status": "disabled", "message": "..."}` or `{"status": "unhealthy", "message": "..."}`
+  - Storage: Checks backend availability by attempting to list files (lightweight operation)
+    - Returns `{"status": "healthy", "message": "..."}` or `{"status": "unhealthy", "message": "..."}`
+  - Redis: Checks Redis connectivity via job manager
+    - Returns full health dict from `RedisJobManager.health_check()`
+  - TTS: Checks TTS service configuration (API key presence for Gemini or LemonFox)
+    - Returns `{"status": "healthy", "message": "..."}` or `{"status": "unhealthy", "message": "..."}` or `{"status": "unknown", "message": "..."}`
+  - Overall status: Determined from component statuses (`healthy`, `degraded`, or `unhealthy`)
+- `/health/database` (GET): Individual database health check endpoint.
+- `/health/storage` (GET): Individual storage health check endpoint.
+- `/health/tts` (GET): Individual TTS service health check endpoint.
 - `/health/redis` (GET): Redis health via job manager.
 - `/health/redis/cleanup` (POST): Cleanup expired/stale jobs.
 - `/api/v1/files` (GET): List files under `output/` recursively.

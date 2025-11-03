@@ -56,12 +56,32 @@ study_english_with_sutis/
 ls -la youtube_credentials.json
 ```
 
-### 5단계: 인증 테스트
+### 5단계: Redirect URI 설정 (Web OAuth Flow용)
 
+이메일 기반 로그인을 사용하려면 Redirect URI를 추가해야 합니다:
+
+1. Google Cloud Console로 돌아가기 → "API 및 서비스" → "사용자 인증 정보"
+2. OAuth 2.0 클라이언트 ID 클릭
+3. "승인된 리디렉션 URI"에서 "URI 추가" 클릭
+4. 추가: `http://localhost:5000/api/youtube/auth/callback`
+5. "저장" 클릭
+
+**중요:** "데스크톱 앱" 자격 증명을 다운로드했더라도, Web Flow 지원을 위해 이 Redirect URI를 추가할 수 있습니다.
+
+### 6단계: 인증 테스트
+
+**옵션 1: 이메일 기반 로그인 (권장)**
 1. 애플리케이션 시작
-2. UI의 YouTube 섹션에서 "Login" 클릭
-3. 브라우저 창이 열리고 Google 계정으로 로그인 요청
-4. 승인 후 리디렉션되어 인증 완료
+2. 입력 필드에 Google 이메일 주소 입력 (선택사항이지만 권장)
+3. "Login to YouTube" 클릭
+4. 팝업 창이 열리고 Google 계정으로 로그인 요청
+5. 승인 후 팝업이 닫히고 인증 완료
+
+**옵션 2: 기본 브라우저 로그인**
+1. 애플리케이션 시작
+2. 이메일 필드를 비워둠
+3. "Login to YouTube" 클릭
+4. 기본 브라우저가 자동으로 열려 인증 진행
 
 ## 파일 구조
 

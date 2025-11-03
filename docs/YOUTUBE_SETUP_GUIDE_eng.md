@@ -56,12 +56,32 @@ You can verify it exists:
 ls -la youtube_credentials.json
 ```
 
-### Step 5: Test Authentication
+### Step 5: Configure Redirect URI (For Web OAuth Flow)
 
+If you want to use email-based login (Web OAuth flow), you need to add a redirect URI:
+
+1. Go back to Google Cloud Console → "APIs & Services" → "Credentials"
+2. Click on your OAuth 2.0 Client ID
+3. Under "Authorized redirect URIs", click "ADD URI"
+4. Add: `http://localhost:5000/api/youtube/auth/callback`
+5. Click "Save"
+
+**Important:** Even if you downloaded "Desktop app" credentials, you can still add this redirect URI for web flow support.
+
+### Step 6: Test Authentication
+
+**Option 1: Email-Based Login (Recommended)**
 1. Start the application
-2. Click "Login" in the YouTube section of the UI
-3. A browser window should open asking you to sign in with your Google account
-4. After authorization, you'll be redirected and authenticated
+2. Enter your Google email address in the input field (optional but recommended)
+3. Click "Login to YouTube"
+4. A popup window will open asking you to sign in with your Google account
+5. After authorization, the popup will close and you'll be authenticated
+
+**Option 2: Default Browser Login**
+1. Start the application
+2. Leave the email field empty
+3. Click "Login to YouTube"
+4. Your default browser will open automatically for authentication
 
 ## File Structure
 

@@ -1,6 +1,6 @@
 # LangFlix API 모듈 문서 (KOR)
 
-최종 업데이트: 2025-01-30
+최종 업데이트: 2025-11-02
 
 ## 개요
 `langflix/api` 패키지는 LangFlix의 FastAPI 기반 HTTP 인터페이스를 제공합니다. 헬스 체크, 영상 처리 잡 관리, 파일 목록 제공 기능을 포함하며, 미들웨어/예외 처리/정적 경로 마운트 및 Redis 잡 저장소와의 연계를 담당합니다.
@@ -18,6 +18,7 @@
   - `health.py`: 서비스/Redis 헬스 엔드포인트 및 정리.
   - `files.py`: `output/` 파일 목록 및 상세/삭제 스텁.
   - `jobs.py`: 잡 생성, 상태/표현식 조회, 잡 목록 API.
+  - `batch.py`: 배치 비디오 처리 엔드포인트 (배치 생성, 배치 상태 조회).
 - `tasks/processing.py`: (존재하나 여기서는 직접 사용되지 않음; 실제 처리는 `routes/jobs.py` 내 백그라운드 태스크에서 수행).
 
 ## 애플리케이션 라이프사이클 및 설정
@@ -161,6 +162,15 @@ except Exception as e:
 - `/api/v1/jobs/{job_id}/expressions` (GET): Redis에서 표현식 반환(작업 상태와 동일한 소스).
   - **TICKET-003 수정:** 정의되지 않은 `jobs_db` 변수 수정 - 이제 `get_redis_job_manager()`를 통해 Redis를 올바르게 사용함
 - `/api/v1/jobs` (GET): 모든 잡 나열(출처: Redis).
+- `/api/v1/batch` (POST): 배치 비디오 처리 작업 생성 (TICKET-014).
+  - 요청 본문: `{"videos": [...], "language_code": "ko", "language_level": "intermediate", ...}`
+  - 반환: `{"batch_id": "uuid", "total_jobs": N, "jobs": [...], "status": "PENDING"}`
+  - 작업은 `QueueProcessor`에 의해 순차 처리를 위해 큐에 추가됨
+  - 최대 배치 크기: 50개 비디오 (강제 적용)
+- `/api/v1/batch/{batch_id}` (GET): 개별 작업 진행 상황과 함께 배치 상태 조회 (TICKET-014).
+  - 반환: 전체 상태, 개별 작업 상태, 진행 메트릭이 포함된 배치 정보
+  - 상태 값: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `PARTIALLY_FAILED`
+  - 작업 상태를 기반으로 배치 상태를 자동으로 재계산하고 업데이트
 
 ## 잡 처리(백그라운드 태스크)
 

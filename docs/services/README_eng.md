@@ -4,8 +4,8 @@
 
 The `langflix/services/` module contains service-layer classes that provide unified interfaces for business logic, consolidating code that was previously duplicated between API and CLI implementations.
 
-**Last Updated:** 2025-01-30  
-**Related Tickets:** TICKET-001-extract-pipeline-logic
+**Last Updated:** 2025-11-02  
+**Related Tickets:** TICKET-001-extract-pipeline-logic, TICKET-014-batch-video-processing-queue
 
 ## Purpose
 
@@ -107,6 +107,160 @@ result = service.process_video(...)
 # Or continue using LangFlixPipeline directly (both work)
 ```
 
+### BatchQueueService
+
+Manages batch video processing with a Redis-based FIFO queue system for sequential job execution.
+
+**Location:** `langflix/services/batch_queue_service.py`
+
+**Purpose:**
+- Create batches of video processing jobs
+- Queue jobs for sequential processing
+- Track batch and individual job status
+- Calculate batch status from job statuses
+
+#### Key Features
+
+**1. Batch Creation**
+```python
+from langflix.services.batch_queue_service import BatchQueueService
+
+service = BatchQueueService()
+result = service.create_batch(
+    videos=[
+        {
+            'video_path': '/path/to/video1.mp4',
+            'subtitle_path': '/path/to/subtitle1.srt',
+            'episode_name': 'Episode 1',
+            'show_name': 'Suits'
+        },
+        # ... more videos
+    ],
+    config={
+        'language_code': 'ko',
+        'language_level': 'intermediate',
+        'max_expressions': 50,
+        'test_mode': False,
+        'no_shorts': False,
+        'output_dir': 'output'
+    }
+)
+# Returns: {'batch_id': 'uuid', 'total_jobs': 2, 'jobs': [...], 'status': 'PENDING'}
+```
+
+**2. Batch Status Tracking**
+```python
+batch_status = service.get_batch_status(batch_id)
+# Returns batch info with:
+# - Overall status (PENDING, PROCESSING, COMPLETED, FAILED, PARTIALLY_FAILED)
+# - Individual job statuses
+# - Progress metrics (completed_jobs, failed_jobs, total_jobs)
+```
+
+**3. Status Calculation**
+- `PENDING`: All jobs are QUEUED (not yet started)
+- `PROCESSING`: At least one job is QUEUED or PROCESSING
+- `COMPLETED`: All jobs completed successfully
+- `FAILED`: All jobs failed
+- `PARTIALLY_FAILED`: Mix of completed and failed jobs
+
+**4. Batch Size Limits**
+- Maximum batch size: 50 videos per batch (configurable via `MAX_BATCH_SIZE`)
+- Validation ensures batch size doesn't exceed limit
+
+#### Usage in API
+
+```python
+# In langflix/api/routes/batch.py
+from langflix.services.batch_queue_service import BatchQueueService
+
+@router.post("/batch")
+async def create_batch(request: BatchCreateRequest):
+    service = BatchQueueService()
+    
+    # Validate batch size
+    if len(request.videos) > service.MAX_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail="Batch size exceeded")
+    
+    result = service.create_batch(
+        videos=[video.dict() for video in request.videos],
+        config=request.dict(exclude={'videos'})
+    )
+    return result
+```
+
+### QueueProcessor
+
+Sequentially processes jobs from the Redis queue using a background worker pattern integrated with FastAPI lifespan.
+
+**Location:** `langflix/services/queue_processor.py`
+
+**Purpose:**
+- Process queued jobs sequentially (FIFO)
+- Ensure only one processor instance runs (Redis lock)
+- Handle stuck jobs on startup
+- Graceful shutdown with job requeuing
+
+#### Key Features
+
+**1. Background Processing**
+- Runs as async background task in FastAPI lifespan
+- Automatically starts on API startup
+- Stops gracefully on API shutdown
+
+**2. Processor Lock**
+- Uses Redis lock (`jobs:processor_lock`) to ensure single instance
+- Lock renewal every 30 minutes
+- Prevents duplicate processing
+
+**3. Stuck Job Recovery**
+- On startup, identifies jobs stuck in PROCESSING state (>1 hour)
+- Marks stuck jobs as FAILED automatically
+- Clears stale processing markers
+
+**4. Async Processing**
+- Uses `run_in_executor()` to run blocking `process_video()` calls
+- Prevents event loop blocking
+- Allows concurrent API requests during processing
+
+**5. Progress Updates**
+- Updates job progress in Redis during processing
+- Includes `updated_at` timestamp for tracking
+- Continues processing even if progress updates fail
+
+**6. Error Handling**
+- Marks jobs as FAILED on processing errors
+- Updates batch status if job is part of a batch
+- Removes processing marker on completion/failure
+
+#### Integration
+
+```python
+# In langflix/api/main.py
+from langflix.services.queue_processor import QueueProcessor
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    queue_processor = QueueProcessor()
+    queue_processor_task = asyncio.create_task(queue_processor.start())
+    
+    yield
+    
+    # Shutdown
+    await queue_processor.stop()
+    queue_processor_task.cancel()
+```
+
+#### Processing Flow
+
+1. **Job Queued**: Job added to Redis list `jobs:queue`
+2. **Job Claimed**: Processor atomically marks job as PROCESSING
+3. **Job Processed**: Video processing runs in thread executor
+4. **Progress Updated**: Progress callbacks update Redis job status
+5. **Job Completed**: Job marked COMPLETED/FAILED, batch status updated
+6. **Next Job**: Processor picks next job from queue
+
 ### PipelineRunner (Legacy)
 
 **Location:** `langflix/services/pipeline_runner.py`
@@ -147,6 +301,8 @@ This module implements the Service Layer Pattern:
 - `langflix/main.py` - `LangFlixPipeline` (core pipeline logic)
 - `langflix/utils/temp_file_manager.py` - TempFileManager for file cleanup (used internally by pipeline)
 - `langflix/utils/filename_utils.py` - Filename sanitization (used internally)
+- `langflix/core/redis_client.py` - `RedisJobManager` for batch and queue operations
+- `langflix/services/video_pipeline_service.py` - Used by QueueProcessor for actual processing
 
 ### External Dependencies
 - Standard library: `logging`, `pathlib`, `typing`, `datetime`
@@ -187,6 +343,18 @@ This module implements the Service Layer Pattern:
   - Progress callbacks
   - Error handling
   - Result extraction
+- `tests/unit/test_batch_queue_service.py` - BatchQueueService unit tests
+  - Batch creation with various configurations
+  - Batch status calculation (all status scenarios)
+  - Edge cases (missing episode_name, empty paths, batch size limits)
+  - Batch status updates
+- `tests/unit/test_queue_processor.py` - QueueProcessor unit tests
+  - Lock acquisition/release
+  - Stuck job recovery
+  - Executor-based processing (prevents event loop blocking)
+  - Progress callback failure handling
+  - File read failures
+  - Graceful shutdown
 
 ### Integration Tests
 - `tests/integration/test_pipeline_service.py` - End-to-end service tests

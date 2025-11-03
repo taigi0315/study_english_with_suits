@@ -26,12 +26,14 @@
   - CORS 전체 허용(운영 환경에서 제한 필요).
   - `LoggingMiddleware` 적용 및 `X-Process-Time` 헤더 추가.
   - 로컬 `output/` 존재 시 `/output` 정적 마운트.
-  - 라우터: `health`, `jobs`(프리픽스 `/api/v1`), `files`(프리픽스 `/api/v1`).
+  - 라우터: `health`, `jobs`(프리픽스 `/api/v1`), `files`(프리픽스 `/api/v1`), `batch`(프리픽스 `/api/v1`).
   - 예외 핸들러 등록: `APIException`, `HTTPException`.
 - Lifespan 시작:
   - 데이터베이스가 활성화된 경우 연결 풀 초기화(`settings.get_database_enabled()`)
   - Redis 잡 저장소 정리 및 상태 확인(`langflix.core.redis_client.get_redis_job_manager()`)
+  - 순차 배치 작업 처리를 위한 `QueueProcessor` 백그라운드 작업 시작
 - Lifespan 종료:
+  - `QueueProcessor` 우아하게 중지 (처리 중인 작업이 있으면 재큐잉)
   - 데이터베이스가 활성화된 경우 연결 정리
 
 ## 의존성 주입

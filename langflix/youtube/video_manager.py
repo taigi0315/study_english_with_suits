@@ -344,8 +344,9 @@ class VideoFileManager:
                 if v.ready_for_upload:
                     uploadable_videos.append(v)
             # Include context_slide_combined videos (vertical format, ready for YouTube Shorts)
-            elif "context_slide_combined" in parent_dir and v.video_type == "context":
+            elif "context_slide_combined" in parent_dir and v.video_type in ["context", "short"]:
                 # Context+slide combined videos are vertical format and ready for upload
+                # Note: These files may have video_type="short" (from filename parsing) but are in context_slide_combined dir
                 if v.ready_for_upload:
                     uploadable_videos.append(v)
             # Include legacy final/short videos but exclude intermediate files

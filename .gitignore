@@ -66,6 +66,7 @@ youtube_credentials.json
 youtube_token.json
 examples/*credentials*.json
 examples/client_secret_*.json
+examples/youtube_token.json
 
 # macOS system files
 .DS_Store

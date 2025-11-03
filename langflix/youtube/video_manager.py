@@ -307,9 +307,10 @@ class VideoFileManager:
         if video_type == "educational":
             return 10 <= duration <= 300  # 10 seconds to 5 minutes
         
-        # Long-form videos can be longer
+        # Long-form videos can be any length (YouTube allows up to 12 hours)
+        # Minimum 10 seconds, no maximum limit
         if video_type in ["final", "long-form"]:
-            return 10 <= duration <= 600  # 10 seconds to 10 minutes
+            return duration >= 10  # 10 seconds minimum, no maximum
         
         return False
     

@@ -140,3 +140,33 @@
 - 각 그룹 완료 후 임시 파일 즉시 정리(디버깅 유리)
 - FFmpeg 옵션: `avoid_negative_ts`, 타임스탬프 검증
 
+---
+
+### New Ticket Review Session - 2025-01-30 (Fourth)
+
+**Tickets Reviewed:**
+9. TICKET-014: Implement Batch Video Processing Queue System - ✅ APPROVED
+
+**Key Findings:**
+- 배치 비디오 처리 큐 시스템 구현
+- 사용자 경험 개선: 반복 작업 자동화
+- Redis 기반 FIFO 큐, 순차 처리
+- FastAPI lifespan background task
+- 하위 호환성 유지 (단일 작업 처리 계속 작동)
+
+**Implementation Order:**
+1. Phase 2 (Sprint 2): TICKET-014 (TICKET-007, TICKET-008 완료 후)
+
+**Dependencies:**
+- TICKET-014: TICKET-007, TICKET-008 완료 후 구현
+  - 병렬 처리 성능 혜택
+  - 다중 표현식 기능 안정화 필요
+
+**Technical Decisions:**
+- 큐 프로세서: FastAPI lifespan background task (별도 데몬 불필요)
+- 순차 처리: v1은 순차 (안전), 향후 병렬 처리 추가 가능
+- 배치 크기 제한: 최대 50개 비디오
+- 에러 처리: 실패한 작업은 FAILED로 표시하고 계속 진행
+- 서버 재시작: QUEUED 작업 자동 재개, PROCESSING 작업 타임아웃
+- Redis lock: 중복 프로세서 방지 (`SETNX jobs:processor_lock`)
+

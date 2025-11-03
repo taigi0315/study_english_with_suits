@@ -546,6 +546,7 @@
             
             // Restore active job progress bar if exists
             restoreActiveJobs();
+            restoreActiveBatches();
         });
 
         async function loadVideos() {
@@ -1185,7 +1186,7 @@
                         
                         mediaListHTML += `
                             <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #ecf0f1; margin-bottom: 8px; border-radius: 8px; cursor: ${hasSubtitle ? 'pointer' : 'not-allowed'}; ${!hasSubtitle ? 'opacity: 0.5;' : ''}">
-                                <input type="radio" name="mediaFile" value="${media.id}" data-video="${media.video_path}" data-subtitle="${media.subtitle_path || ''}" ${disabled} style="margin-right: 10px;">
+                                <input type="checkbox" class="media-checkbox" data-media-id="${media.id}" data-video="${media.video_path}" data-subtitle="${media.subtitle_path || ''}" data-episode="${media.episode}" data-show="${media.show_name}" ${disabled} style="margin-right: 10px;">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 600; color: #2c3e50;">${warningIcon} ${media.show_name} - ${media.episode}</div>
                                     <div style="font-size: 0.85em; color: #7f8c8d;">${media.resolution} • ${Math.round(media.duration / 60)}min • ${media.size_mb} MB • ${statusText}</div>
@@ -1200,7 +1201,7 @@
                     <h2 style="margin-bottom: 20px; color: #2c3e50;">➕ Create Content</h2>
                     
                     <div style="margin-bottom: 20px;">
-                        <h3 style="color: #34495e; margin-bottom: 10px;">Select Media File</h3>
+                        <h3 style="color: #34495e; margin-bottom: 10px;">Select Media File(s) - You can select multiple</h3>
                         ${mediaListHTML}
                     </div>
                     
@@ -1260,9 +1261,11 @@
         }
 
         async function startContentCreation() {
-            const selectedMedia = document.querySelector('input[name="mediaFile"]:checked');
-            if (!selectedMedia) {
-                alert('Please select a media file');
+            // Get all selected checkboxes
+            const selectedMedia = document.querySelectorAll('.media-checkbox:checked');
+            
+            if (selectedMedia.length === 0) {
+                alert('Please select at least one media file');
                 return;
             }
             
@@ -1270,25 +1273,85 @@
             const languageLevel = document.getElementById('levelSelect').value;
             const testMode = document.getElementById('testModeCheckbox').checked;
             
-            const mediaId = selectedMedia.value;
-            const videoPath = selectedMedia.dataset.video;
-            const subtitlePath = selectedMedia.dataset.subtitle;
-            
             // Disable create button
             const createButton = document.getElementById('createButton');
             createButton.disabled = true;
             createButton.textContent = 'Creating...';
             
+            // Check if multiple videos selected (batch mode)
+            if (selectedMedia.length > 1) {
+                // Batch processing
+                await startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, createButton);
+            } else {
+                // Single video processing (backward compatible)
+                const media = selectedMedia[0];
+                const mediaId = media.dataset.mediaId;
+                const videoPath = media.dataset.video;
+                const subtitlePath = media.dataset.subtitle;
+                
+                try {
+                    const response = await fetch('/api/content/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            media_id: mediaId,
+                            video_path: videoPath,
+                            subtitle_path: subtitlePath,
+                            language_code: languageCode,
+                            language_level: languageLevel,
+                            test_mode: testMode
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        // Close modal
+                        document.querySelector('div[style*="position: fixed"]').remove();
+                        
+                        // Show progress modal
+                        showJobProgressModal(result.job_id);
+                    } else {
+                        alert(`Error: ${result.error}`);
+                        createButton.disabled = false;
+                        createButton.textContent = 'Create Content';
+                    }
+                } catch (error) {
+                    alert(`Error: ${error.message}`);
+                    createButton.disabled = false;
+                    createButton.textContent = 'Create Content';
+                }
+            }
+        }
+
+        async function startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, createButton) {
             try {
-                const response = await fetch('/api/content/create', {
+                // Collect all selected videos
+                const videos = Array.from(selectedMedia).map(checkbox => ({
+                    video_path: checkbox.dataset.video,
+                    subtitle_path: checkbox.dataset.subtitle || '',
+                    episode_name: checkbox.dataset.episode,
+                    show_name: checkbox.dataset.show || 'Suits'
+                }));
+                
+                // Validate batch size
+                if (videos.length > 50) {
+                    alert('Maximum 50 videos allowed per batch');
+                    createButton.disabled = false;
+                    createButton.textContent = 'Create Content';
+                    return;
+                }
+                
+                // Call batch creation API
+                const response = await fetch('/api/content/batch', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        media_id: mediaId,
-                        video_path: videoPath,
-                        subtitle_path: subtitlePath,
+                        videos: videos,
                         language_code: languageCode,
                         language_level: languageLevel,
                         test_mode: testMode
@@ -1301,8 +1364,8 @@
                     // Close modal
                     document.querySelector('div[style*="position: fixed"]').remove();
                     
-                    // Show progress modal
-                    showJobProgressModal(result.job_id);
+                    // Show batch progress modal
+                    showBatchProgressModal(result.batch_id);
                 } else {
                     alert(`Error: ${result.error}`);
                     createButton.disabled = false;
@@ -1312,6 +1375,179 @@
                 alert(`Error: ${error.message}`);
                 createButton.disabled = false;
                 createButton.textContent = 'Create Content';
+            }
+        }
+
+        async function showBatchProgressModal(batchId) {
+            // Save batch ID to localStorage for persistence
+            localStorage.setItem('langflix_active_batch', batchId);
+            
+            // Remove any existing batch progress panel
+            const existingPanel = document.getElementById('batchProgressPanel');
+            if (existingPanel) {
+                existingPanel.remove();
+            }
+            
+            // Create bottom progress panel
+            const progressPanel = document.createElement('div');
+            progressPanel.id = 'batchProgressPanel';
+            progressPanel.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                right: 20px;
+                max-height: 400px;
+                overflow-y: auto;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 1000;
+                padding: 20px;
+            `;
+            
+            progressPanel.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #2c3e50; font-size: 1.2em;">📦 Batch Processing</h3>
+                    <button onclick="closeBatchProgress()" style="padding: 8px 16px; border: none; border-radius: 6px; background: #ecf0f1; cursor: pointer;">
+                        Close
+                    </button>
+                </div>
+                <div id="batchProgressContent">
+                    <p>Loading batch status...</p>
+                </div>
+            `;
+            
+            document.body.appendChild(progressPanel);
+            
+            // Poll for batch status
+            const updateInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/content/batch/${batchId}`);
+                    if (response.ok) {
+                        const batch = await response.json();
+                        updateBatchProgressUI(batch);
+                        
+                        // Stop polling if batch completed or failed
+                        if (batch.status === 'COMPLETED' || batch.status === 'FAILED' || batch.status === 'PARTIALLY_FAILED') {
+                            clearInterval(updateInterval);
+                            localStorage.removeItem('langflix_active_batch');
+                        }
+                    } else {
+                        console.error('Failed to get batch status:', response.status);
+                    }
+                } catch (error) {
+                    console.error('Error polling batch status:', error);
+                }
+            }, 2000);  // Poll every 2 seconds
+            
+            // Store interval ID for cleanup
+            progressPanel.dataset.intervalId = updateInterval;
+            
+            // Initial update
+            try {
+                const response = await fetch(`/api/content/batch/${batchId}`);
+                if (response.ok) {
+                    const batch = await response.json();
+                    updateBatchProgressUI(batch);
+                }
+            } catch (error) {
+                console.error('Error getting initial batch status:', error);
+            }
+        }
+
+        function updateBatchProgressUI(batch) {
+            const contentDiv = document.getElementById('batchProgressContent');
+            if (!contentDiv) return;
+            
+            const jobs = batch.job_details || [];
+            const totalJobs = batch.total_jobs || 0;
+            const completedJobs = batch.completed_jobs || 0;
+            const failedJobs = batch.failed_jobs || 0;
+            
+            // Batch summary
+            let summaryHTML = `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span><strong>Status:</strong> <span id="batchStatus">${batch.status}</span></span>
+                        <span><strong>Total:</strong> ${totalJobs} | <strong>Completed:</strong> ${completedJobs} | <strong>Failed:</strong> ${failedJobs}</span>
+                    </div>
+                    <div style="background: #ecf0f1; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #27ae60, #2ecc71); height: 100%; width: ${totalJobs > 0 ? (completedJobs / totalJobs * 100) : 0}%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+            `;
+            
+            // Individual job cards
+            let jobsHTML = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+            
+            jobs.forEach((job, index) => {
+                const status = job.status || 'UNKNOWN';
+                const progress = job.progress || 0;
+                const currentStep = job.current_step || '';
+                const episodeName = job.episode_name || `Job ${index + 1}`;
+                
+                let statusColor = '#7f8c8d';
+                if (status === 'COMPLETED') statusColor = '#27ae60';
+                else if (status === 'FAILED') statusColor = '#e74c3c';
+                else if (status === 'PROCESSING') statusColor = '#3498db';
+                else if (status === 'QUEUED') statusColor = '#f39c12';
+                
+                jobsHTML += `
+                    <div style="padding: 15px; border: 1px solid #ecf0f1; border-radius: 8px; background: white;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600; color: #2c3e50;">${episodeName}</span>
+                            <span style="padding: 4px 12px; border-radius: 4px; background: ${statusColor}20; color: ${statusColor}; font-size: 0.85em; font-weight: 500;">${status}</span>
+                        </div>
+                        <div style="background: #ecf0f1; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                            <div style="background: ${statusColor}; height: 100%; width: ${progress}%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div style="font-size: 0.85em; color: #7f8c8d;">${currentStep || 'Waiting...'}</div>
+                        ${job.error ? `<div style="font-size: 0.85em; color: #e74c3c; margin-top: 5px;">Error: ${job.error}</div>` : ''}
+                    </div>
+                `;
+            });
+            
+            jobsHTML += '</div>';
+            
+            contentDiv.innerHTML = summaryHTML + jobsHTML;
+        }
+
+        function closeBatchProgress() {
+            const panel = document.getElementById('batchProgressPanel');
+            if (panel) {
+                const intervalId = panel.dataset.intervalId;
+                if (intervalId) {
+                    clearInterval(parseInt(intervalId));
+                }
+                panel.remove();
+                localStorage.removeItem('langflix_active_batch');
+            }
+        }
+
+        async function restoreActiveBatches() {
+            // Check localStorage for active batches
+            const activeBatchId = localStorage.getItem('langflix_active_batch');
+            if (activeBatchId) {
+                try {
+                    const response = await fetch(`/api/content/batch/${activeBatchId}`);
+                    if (response.ok) {
+                        const batch = await response.json();
+                        // Only restore if batch is still processing
+                        if (batch.status === 'PROCESSING' || batch.status === 'PENDING') {
+                            console.log('Restoring active batch:', activeBatchId);
+                            showBatchProgressModal(activeBatchId);
+                        } else {
+                            // Batch completed/failed, clear localStorage
+                            localStorage.removeItem('langflix_active_batch');
+                        }
+                    } else {
+                        // Batch not found, clear localStorage
+                        localStorage.removeItem('langflix_active_batch');
+                    }
+                } catch (error) {
+                    console.error('Error restoring active batch:', error);
+                    localStorage.removeItem('langflix_active_batch');
+                }
             }
         }
 

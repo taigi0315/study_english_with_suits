@@ -893,6 +893,53 @@ class VideoManagementUI:
                 logger.error(f"Error getting job status: {e}")
                 return jsonify({"error": str(e)}), 500
         
+        @self.app.route('/api/content/batch', methods=['POST'])
+        def create_batch():
+            """Create batch of video processing jobs via FastAPI backend"""
+            try:
+                data = request.json
+                
+                # Validate required fields
+                if 'videos' not in data or not isinstance(data['videos'], list):
+                    return jsonify({"error": "videos array is required"}), 400
+                
+                if not data['videos']:
+                    return jsonify({"error": "At least one video is required"}), 400
+                
+                # Call FastAPI backend batch endpoint
+                import requests
+                fastapi_url = "http://localhost:8000/api/v1/batch"
+                
+                response = requests.post(fastapi_url, json=data)
+                
+                if response.status_code == 200:
+                    return jsonify(response.json())
+                else:
+                    error_detail = response.json().get('detail', response.text) if response.content else response.text
+                    return jsonify({"error": f"FastAPI error: {error_detail}"}), response.status_code
+                    
+            except Exception as e:
+                logger.error(f"Error creating batch: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/content/batch/<batch_id>')
+        def get_batch_status(batch_id):
+            """Get batch status from FastAPI backend"""
+            try:
+                import requests
+                fastapi_url = f"http://localhost:8000/api/v1/batch/{batch_id}"
+                response = requests.get(fastapi_url)
+                
+                if response.status_code == 200:
+                    return jsonify(response.json())
+                else:
+                    error_detail = response.json().get('detail', response.text) if response.content else response.text
+                    return jsonify({"error": error_detail}), response.status_code
+                    
+            except Exception as e:
+                logger.error(f"Error getting batch status: {e}")
+                return jsonify({"error": str(e)}), 500
+        
         @self.app.route('/api/content/jobs')
         def get_all_jobs():
             """Get all jobs from Redis (Phase 7 architecture)"""

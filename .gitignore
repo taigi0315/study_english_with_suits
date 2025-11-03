@@ -64,6 +64,8 @@ Thumbs.db
 client_secret_*.json
 youtube_credentials.json
 youtube_token.json
+examples/*credentials*.json
+examples/client_secret_*.json
 
 # macOS system files
 .DS_Store

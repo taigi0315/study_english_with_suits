@@ -743,10 +743,13 @@ class VideoManagementUI:
                         )
                         
                         # Upload immediately
+                        logger.info(f"Starting immediate upload: {video_path}")
                         result = uploader.upload_video(
                             video_path=video_path,
                             metadata=metadata
                         )
+                        
+                        logger.info(f"Upload result: success={result.success}, error={result.error_message}")
                         
                         if result.success:
                             # Update video metadata in database
@@ -764,14 +767,20 @@ class VideoManagementUI:
                                 "video_url": f"https://www.youtube.com/watch?v={result.video_id}"
                             })
                         else:
+                            error_msg = result.error_message or 'Upload failed'
+                            logger.error(f"Upload failed: {error_msg}")
                             return jsonify({
                                 "success": False,
-                                "error": result.error_message or 'Upload failed'
+                                "error": error_msg
                             }), 500
                             
                     except Exception as e:
-                        logger.error(f"Immediate upload failed: {e}")
-                        return jsonify({"error": f"Immediate upload failed: {str(e)}"}), 500
+                        error_msg = f"Immediate upload exception: {type(e).__name__}: {str(e)}"
+                        logger.error(error_msg, exc_info=True)
+                        return jsonify({
+                            "error": error_msg,
+                            "details": str(e)
+                        }), 500
                 
                 if not self.schedule_manager:
                     return jsonify({

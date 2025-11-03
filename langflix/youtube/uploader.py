@@ -458,38 +458,73 @@ class YouTubeUploader:
         error = None
         retry = 0
         max_retries = 3
+        max_iterations = 1000  # Prevent infinite loop
+        iteration = 0
+        start_time = time.time()
+        timeout_seconds = 3600  # 1 hour timeout
         
-        while response is None:
+        logger.info("Starting resumable upload...")
+        
+        while response is None and iteration < max_iterations:
+            iteration += 1
+            
+            # Check timeout
+            elapsed = time.time() - start_time
+            if elapsed > timeout_seconds:
+                logger.error(f"Upload timeout after {elapsed:.1f} seconds")
+                return None
+            
             try:
                 status, response = insert_request.next_chunk()
                 if response is not None:
                     if 'id' in response:
-                        logger.info(f"Upload completed successfully")
+                        logger.info(f"Upload completed successfully: video_id={response['id']}")
+                        return response
                     else:
-                        logger.error(f"Upload failed: {response}")
+                        error_msg = f"Upload response missing video ID: {response}"
+                        logger.error(error_msg)
                         return None
                 else:
-                    if progress_callback and status:
-                        progress_callback(status.progress() * 100)
-                    logger.info(f"Upload progress: {status.progress() * 100:.1f}%")
+                    # Still uploading, update progress
+                    if status:
+                        progress = status.progress() * 100
+                        if progress_callback:
+                            progress_callback(progress)
+                        if iteration % 10 == 0:  # Log every 10 iterations to avoid spam
+                            logger.info(f"Upload progress: {progress:.1f}% (iteration {iteration})")
                     
             except HttpError as e:
-                if e.resp.status in [500, 502, 503, 504]:
+                error_msg = str(e)
+                status_code = e.resp.status if hasattr(e, 'resp') and e.resp else None
+                
+                if status_code in [500, 502, 503, 504]:
                     # Retriable error
-                    error = f"Retriable error: {e}"
                     retry += 1
                     if retry > max_retries:
-                        logger.error(f"Max retries exceeded: {error}")
+                        logger.error(f"Max retries exceeded for retriable error: {error_msg} (status: {status_code})")
                         return None
-                    logger.warning(f"Retrying upload (attempt {retry}/{max_retries}): {error}")
+                    logger.warning(f"Retriable error (status {status_code}), retrying upload (attempt {retry}/{max_retries}): {error_msg}")
                     time.sleep(2 ** retry)  # Exponential backoff
+                    # Reset iteration counter on retry
+                    iteration = 0
                 else:
                     # Non-retriable error
-                    logger.error(f"Non-retriable error: {e}")
+                    logger.error(f"Non-retriable HTTP error (status {status_code}): {error_msg}")
+                    if hasattr(e, 'content'):
+                        try:
+                            error_details = json.loads(e.content.decode('utf-8'))
+                            logger.error(f"Error details: {error_details}")
+                        except:
+                            logger.error(f"Raw error content: {e.content}")
                     return None
             except Exception as e:
-                logger.error(f"Unexpected error during upload: {e}")
+                error_msg = f"Unexpected error during upload: {type(e).__name__}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
                 return None
+        
+        if iteration >= max_iterations:
+            logger.error(f"Upload exceeded maximum iterations ({max_iterations}) without completing")
+            return None
         
         return response
     

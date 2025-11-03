@@ -13,7 +13,7 @@ from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouT
 from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
 from langflix.youtube.schedule_manager import YouTubeScheduleManager, ScheduleConfig
 from langflix.db.models import YouTubeAccount, YouTubeQuotaUsage
-from langflix.db.session import get_db_session
+from langflix.db.session import db_manager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -363,9 +363,26 @@ class VideoManagementUI:
                     })
                 else:
                     return jsonify({"error": "Authentication failed"}), 401
+            except FileNotFoundError as e:
+                logger.error(f"YouTube credentials file not found: {e}")
+                return jsonify({
+                    "error": "YouTube credentials file not found",
+                    "details": str(e),
+                    "hint": "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+                }), 400
+            except OSError as e:
+                logger.error(f"YouTube OAuth port conflict: {e}")
+                return jsonify({
+                    "error": "Port 8080 is already in use",
+                    "details": str(e),
+                    "hint": "Please close other applications using port 8080"
+                }), 500
             except Exception as e:
-                logger.error(f"Error authenticating with YouTube: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error authenticating with YouTube: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Authentication failed",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/youtube/logout', methods=['POST'])
         def youtube_logout():
@@ -395,23 +412,43 @@ class VideoManagementUI:
                     return jsonify({"error": "Invalid video_type. Must be 'final' or 'short'"}), 400
                 
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 next_slot = self.schedule_manager.get_next_available_slot(video_type)
                 return jsonify({
                     "next_available_time": next_slot.isoformat(),
                     "video_type": video_type
                 })
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting next available time: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting next available time: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get next available time",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/schedule/calendar')
         def get_schedule_calendar():
             """Get scheduled uploads calendar view"""
             try:
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 start_date_str = request.args.get('start_date')
                 days = int(request.args.get('days', 7))
@@ -425,9 +462,23 @@ class VideoManagementUI:
                 
                 calendar = self.schedule_manager.get_schedule_calendar(start_date, days)
                 return jsonify(calendar)
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting schedule calendar: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting schedule calendar: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get schedule calendar",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/upload/schedule', methods=['POST'])
         def schedule_upload():
@@ -501,7 +552,10 @@ class VideoManagementUI:
                         return jsonify({"error": f"Immediate upload failed: {str(e)}"}), 500
                 
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 # Parse publish time if provided
                 publish_time = None
@@ -530,11 +584,33 @@ class VideoManagementUI:
                         "video_type": video_type
                     })
                 else:
+                    # Check if it's a database connection error
+                    error_msg = message
+                    if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                        return jsonify({
+                            "error": "Database connection failed",
+                            "details": error_msg,
+                            "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                        }), 503
                     return jsonify({"error": message}), 400
                     
+            except ValueError as e:
+                # Database connection errors from schedule_manager
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error scheduling upload: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error scheduling upload: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error scheduling upload: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to schedule upload",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/quota/status')
         def get_quota_status():
@@ -568,9 +644,23 @@ class VideoManagementUI:
                     },
                     "warnings": warnings
                 })
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting quota status: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting quota status: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get quota status",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/video/status/<path:video_path>')
         def get_video_status(video_path):
@@ -579,15 +669,14 @@ class VideoManagementUI:
                 if not self.schedule_manager:
                     return jsonify({"error": "Schedule manager not available"}), 503
                 
-                from langflix.db.session import get_db_session
                 from langflix.db.models import YouTubeSchedule
                 
                 # Ensure the path starts with / (Flask strips it sometimes)
                 if not video_path.startswith('/'):
                     video_path = '/' + video_path
                 
-                with get_db_session() as session:
-                    schedule = session.query(YouTubeSchedule).filter_by(
+                with db_manager.session() as db:
+                    schedule = db.query(YouTubeSchedule).filter_by(
                         video_path=video_path
                     ).first()
                     
@@ -602,9 +691,23 @@ class VideoManagementUI:
                     else:
                         return jsonify({"error": "Video not found in schedule"}), 404
                         
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting video status: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting video status: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get video status",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/video/<path:video_path>')
         def serve_video(video_path):
@@ -718,61 +821,61 @@ class VideoManagementUI:
             if not self.schedule_manager:
                 return
                 
-            from langflix.db.session import get_db_session
             from langflix.db.models import YouTubeSchedule
             
-            with get_db_session() as session:
+            with db_manager.session() as db:
                 # Find the schedule entry for this video
-                schedule = session.query(YouTubeSchedule).filter_by(
+                schedule = db.query(YouTubeSchedule).filter_by(
                     video_path=video_path
                 ).first()
                 
                 if schedule:
                     schedule.youtube_video_id = youtube_video_id
                     schedule.upload_status = status
-                    session.commit()
+                    # Commit happens automatically via context manager
                     logger.info(f"Updated video status: {video_path} -> {status}")
                 else:
                     logger.warning(f"No schedule found for video: {video_path}")
                     
         except Exception as e:
-            logger.error(f"Error updating video status: {e}")
+            logger.error(f"Error updating video status: {e}", exc_info=True)
+            # Don't raise - status update failure shouldn't block upload process
     
     def _save_youtube_account(self, channel_info: Dict[str, Any]):
         """Save YouTube account info to database"""
         try:
-            db_session = get_db_session()
+            from langflix.db.session import db_manager
             
-            # Check if account already exists
-            existing_account = db_session.query(YouTubeAccount).filter(
-                YouTubeAccount.channel_id == channel_info['channel_id']
-            ).first()
-            
-            if existing_account:
-                # Update existing account
-                existing_account.channel_title = channel_info['title']
-                existing_account.channel_thumbnail = channel_info['thumbnail_url']
-                existing_account.last_authenticated = datetime.now()
-                existing_account.is_active = True
-            else:
-                # Create new account
-                new_account = YouTubeAccount(
-                    channel_id=channel_info['channel_id'],
-                    channel_title=channel_info['title'],
-                    channel_thumbnail=channel_info['thumbnail_url'],
-                    email=channel_info.get('email', ''),
-                    last_authenticated=datetime.now(),
-                    is_active=True
-                )
-                db_session.add(new_account)
-            
-            db_session.commit()
-            logger.info(f"Saved YouTube account: {channel_info['title']}")
-            
+            with db_manager.session() as db:
+                # Check if account already exists
+                existing_account = db.query(YouTubeAccount).filter(
+                    YouTubeAccount.channel_id == channel_info['channel_id']
+                ).first()
+                
+                if existing_account:
+                    # Update existing account
+                    existing_account.channel_title = channel_info['title']
+                    existing_account.channel_thumbnail = channel_info['thumbnail_url']
+                    existing_account.last_authenticated = datetime.now()
+                    existing_account.is_active = True
+                else:
+                    # Create new account
+                    new_account = YouTubeAccount(
+                        channel_id=channel_info['channel_id'],
+                        channel_title=channel_info['title'],
+                        channel_thumbnail=channel_info['thumbnail_url'],
+                        email=channel_info.get('email', ''),
+                        last_authenticated=datetime.now(),
+                        is_active=True
+                    )
+                    db.add(new_account)
+                
+                # Commit happens automatically via context manager
+                logger.info(f"Saved YouTube account: {channel_info['title']}")
+                
         except Exception as e:
-            logger.error(f"Failed to save YouTube account: {e}")
-            if 'db_session' in locals():
-                db_session.rollback()
+            logger.error(f"Failed to save YouTube account: {e}", exc_info=True)
+            # Don't raise - account save failure shouldn't block authentication
     
     def _setup_content_creation_routes(self):
         """Setup content creation API routes"""

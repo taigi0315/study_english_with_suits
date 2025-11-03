@@ -66,6 +66,15 @@ class YouTubeUploader:
     def authenticate(self) -> bool:
         """Authenticate with YouTube API"""
         try:
+            # Validate credentials file exists
+            if not os.path.exists(self.credentials_file):
+                error_msg = (
+                    f"YouTube credentials file not found: {self.credentials_file}\n"
+                    "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+                )
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
+            
             creds = None
             
             # Load existing token
@@ -75,20 +84,31 @@ class YouTubeUploader:
             # If no valid credentials, get new ones
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
+                    try:
+                        creds.refresh(Request())
+                        logger.info("Successfully refreshed YouTube OAuth token")
+                    except Exception as e:
+                        logger.warning(f"Token refresh failed: {e}, starting new OAuth flow")
+                        creds = None
                 else:
-                    if not os.path.exists(self.credentials_file):
-                        logger.error(f"Credentials file not found: {self.credentials_file}")
-                        logger.info("Please download your OAuth2 credentials from Google Cloud Console")
-                        return False
-                    
                     flow = InstalledAppFlow.from_client_secrets_file(self.credentials_file, SCOPES)
                     # Use fixed port 8080 for consistency
-                    creds = flow.run_local_server(port=8080, open_browser=True)
+                    try:
+                        creds = flow.run_local_server(port=8080, open_browser=True)
+                    except OSError as e:
+                        if "Address already in use" in str(e) or "address already in use" in str(e).lower():
+                            error_msg = (
+                                f"Port 8080 is already in use. Please close other applications using this port.\n"
+                                f"Error: {str(e)}"
+                            )
+                            logger.error(error_msg)
+                            raise OSError(error_msg)
+                        raise
                 
                 # Save credentials for next run
-                with open(self.token_file, 'w') as token:
-                    token.write(creds.to_json())
+                if creds:
+                    with open(self.token_file, 'w') as token:
+                        token.write(creds.to_json())
             
             # Build YouTube service
             self.service = build('youtube', 'v3', credentials=creds)
@@ -97,9 +117,15 @@ class YouTubeUploader:
             logger.info("Successfully authenticated with YouTube API")
             return True
             
-        except Exception as e:
+        except FileNotFoundError as e:
             logger.error(f"YouTube authentication failed: {e}")
-            return False
+            raise
+        except OSError as e:
+            logger.error(f"YouTube OAuth port conflict: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"YouTube authentication error: {e}", exc_info=True)
+            raise
     
     def upload_video(
         self, 

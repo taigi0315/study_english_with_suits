@@ -78,7 +78,49 @@ class VideoManagementUI:
         import os
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         self.app = Flask(__name__, template_folder=template_dir)
+        
+        # Register error handlers to ensure JSON responses for API errors
+        self._setup_error_handlers()
+        
         self._setup_routes()
+    
+    def _setup_error_handlers(self):
+        """Setup error handlers to return JSON for API routes"""
+        
+        @self.app.errorhandler(404)
+        def not_found(error):
+            """Return JSON for 404 errors on API routes"""
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    "error": "Endpoint not found",
+                    "path": request.path
+                }), 404
+            return error
+        
+        @self.app.errorhandler(500)
+        def internal_error(error):
+            """Return JSON for 500 errors on API routes"""
+            if request.path.startswith('/api/'):
+                logger.error(f"Internal server error on {request.path}: {error}", exc_info=True)
+                return jsonify({
+                    "error": "Internal server error",
+                    "path": request.path,
+                    "details": str(error) if logger.level <= logging.DEBUG else None
+                }), 500
+            return error
+        
+        @self.app.errorhandler(Exception)
+        def handle_exception(e):
+            """Handle all unhandled exceptions"""
+            if request.path.startswith('/api/'):
+                logger.error(f"Unhandled exception on {request.path}: {e}", exc_info=True)
+                return jsonify({
+                    "error": "An error occurred",
+                    "details": str(e),
+                    "type": type(e).__name__
+                }), 500
+            # Re-raise for non-API routes to use Flask's default handling
+            raise e
         
     def _setup_routes(self):
         """Setup Flask routes"""
@@ -396,11 +438,29 @@ class VideoManagementUI:
                         ),
                         "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
                     }), 400
+                except ImportError as e:
+                    logger.error(f"Missing OAuth library: {e}")
+                    return jsonify({
+                        "error": "OAuth library not available",
+                        "details": str(e),
+                        "hint": "Please install: pip install google-auth-oauthlib"
+                    }), 500
+                except ValueError as e:
+                    logger.error(f"Invalid OAuth configuration: {e}")
+                    return jsonify({
+                        "error": "Invalid OAuth configuration",
+                        "details": str(e),
+                        "hint": "Please check your youtube_credentials.json file format"
+                    }), 400
                 except Exception as e:
                     logger.error(f"Error generating OAuth URL: {e}", exc_info=True)
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.error(f"Full traceback: {error_trace}")
                     return jsonify({
                         "error": "Failed to generate OAuth URL",
-                        "details": str(e)
+                        "details": str(e),
+                        "type": type(e).__name__
                     }), 500
             else:
                 # Use existing Desktop flow

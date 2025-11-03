@@ -158,23 +158,38 @@ class YouTubeUploader:
         # Convert 'installed' type to 'web' type for web flow
         # If credentials are for 'installed' app, we need to adapt them
         if 'installed' in client_config:
+            installed_config = client_config['installed']
+            if not all(k in installed_config for k in ['client_id', 'client_secret', 'auth_uri', 'token_uri']):
+                raise ValueError(
+                    "Invalid credentials file format. Missing required fields: "
+                    "client_id, client_secret, auth_uri, or token_uri"
+                )
             web_config = {
                 'web': {
-                    'client_id': client_config['installed']['client_id'],
-                    'client_secret': client_config['installed']['client_secret'],
-                    'auth_uri': client_config['installed']['auth_uri'],
-                    'token_uri': client_config['installed']['token_uri'],
+                    'client_id': installed_config['client_id'],
+                    'client_secret': installed_config['client_secret'],
+                    'auth_uri': installed_config['auth_uri'],
+                    'token_uri': installed_config['token_uri'],
                     'redirect_uris': [redirect_uri]
                 }
             }
             client_config = web_config
+        elif 'web' not in client_config:
+            raise ValueError(
+                "Invalid credentials file format. Expected 'installed' or 'web' client configuration. "
+                f"Found: {list(client_config.keys())}"
+            )
         
         # Create Flow for web application
-        flow = Flow.from_client_config(
-            client_config,
-            SCOPES,
-            redirect_uri=redirect_uri
-        )
+        try:
+            flow = Flow.from_client_config(
+                client_config,
+                SCOPES,
+                redirect_uri=redirect_uri
+            )
+        except Exception as e:
+            logger.error(f"Failed to create OAuth Flow: {e}")
+            raise ValueError(f"Failed to initialize OAuth flow: {str(e)}") from e
         
         # Add login hint if email provided
         auth_url_kwargs = {}

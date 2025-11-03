@@ -363,9 +363,18 @@ class YouTubeUploader:
         self, 
         video_path: str, 
         metadata: YouTubeVideoMetadata,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        publish_at: Optional[datetime] = None
     ) -> YouTubeUploadResult:
-        """Upload video to YouTube"""
+        """Upload video to YouTube
+        
+        Args:
+            video_path: Path to video file
+            metadata: YouTube video metadata
+            progress_callback: Optional callback for upload progress
+            publish_at: Optional datetime for scheduled publishing (YouTube API publishAt)
+                       If provided, video will be uploaded as private and scheduled to publish at this time
+        """
         
         if not self.authenticated:
             if not self.authenticate():
@@ -396,6 +405,17 @@ class YouTubeUploader:
                     'privacyStatus': metadata.privacy_status
                 }
             }
+            
+            # Add publishAt if scheduled publishing is requested
+            if publish_at:
+                # Convert to UTC with 'Z' suffix (YouTube API requirement)
+                from datetime import timezone
+                utc_time = publish_at.astimezone(timezone.utc)
+                publish_at_iso = utc_time.isoformat().replace('+00:00', 'Z')
+                body['status']['publishAt'] = publish_at_iso
+                # YouTube requires privacyStatus to be 'private' when using publishAt
+                body['status']['privacyStatus'] = 'private'
+                logger.info(f"Scheduling video for publish at {publish_at} (UTC: {publish_at_iso})")
             
             # Create media upload
             media = MediaFileUpload(

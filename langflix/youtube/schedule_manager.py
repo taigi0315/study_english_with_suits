@@ -104,7 +104,14 @@ class YouTubeScheduleManager:
             # Database connection error - return empty list to allow fallback time
             logger.warning(f"Database connection error getting schedules: {e}")
             existing_schedules = []
-        occupied_times = {schedule.scheduled_publish_time.time() for schedule in existing_schedules}
+        
+        # Extract times from schedules while still in session context (to avoid DetachedInstanceError)
+        # Read all needed attributes before session closes
+        occupied_times = set()
+        for schedule in existing_schedules:
+            # Access scheduled_publish_time while schedule is still attached to session
+            if schedule.scheduled_publish_time:
+                occupied_times.add(schedule.scheduled_publish_time.time())
         
         # Find available preferred times
         for preferred_time in preferred_times:
@@ -129,10 +136,12 @@ class YouTubeScheduleManager:
             end_datetime = datetime.combine(target_date, time.max)
             
             with db_manager.session() as db:
+                # Include all schedules with scheduled_publish_time, regardless of status
+                # 'completed' schedules also occupy time slots
                 return db.query(YouTubeSchedule).filter(
                     YouTubeSchedule.scheduled_publish_time >= start_datetime,
                     YouTubeSchedule.scheduled_publish_time <= end_datetime,
-                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading'])
+                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
                 ).all()
         except OperationalError as e:
             # Database connection error - return empty list
@@ -244,7 +253,12 @@ class YouTubeScheduleManager:
         
         # Check if time slot is available
         existing_schedules = self._get_schedules_for_date(target_date)
-        occupied_times = {schedule.scheduled_publish_time for schedule in existing_schedules}
+        # Extract scheduled_publish_time while schedules are still attached to session
+        occupied_times = set()
+        for schedule in existing_schedules:
+            # Access scheduled_publish_time while schedule is still attached to session
+            if schedule.scheduled_publish_time:
+                occupied_times.add(schedule.scheduled_publish_time)
         
         if target_datetime in occupied_times:
             # Find next available time
@@ -367,6 +381,24 @@ class YouTubeScheduleManager:
             warnings.append(f"Only {quota_status.short_remaining} short video slot(s) remaining today")
         
         return warnings
+    
+    def update_schedule_with_video_id(self, video_path: str, youtube_video_id: str, status: str = 'completed'):
+        """Update schedule record with YouTube video ID after successful upload"""
+        try:
+            with db_manager.session() as db:
+                schedule = db.query(YouTubeSchedule).filter_by(video_path=video_path).first()
+                if schedule:
+                    schedule.youtube_video_id = youtube_video_id
+                    schedule.upload_status = status
+                    # Commit happens automatically via context manager
+                    logger.info(f"Updated schedule for {video_path} with video_id: {youtube_video_id}, status: {status}")
+                    return True
+                else:
+                    logger.warning(f"No schedule found for video_path: {video_path}")
+                    return False
+        except Exception as e:
+            logger.error(f"Failed to update schedule with video_id: {e}", exc_info=True)
+            return False
     
     def cancel_schedule(self, schedule_id: str) -> bool:
         """Cancel a scheduled upload"""

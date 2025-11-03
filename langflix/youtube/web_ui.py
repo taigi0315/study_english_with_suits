@@ -789,41 +789,164 @@ class VideoManagementUI:
                     }), 503
                 
                 # Parse publish time if provided
+                from datetime import datetime, timezone
                 publish_time = None
                 if publish_time_str:
-                    from datetime import datetime
                     publish_time = datetime.fromisoformat(publish_time_str.replace('Z', '+00:00'))
+                    # Ensure timezone-aware
+                    if publish_time.tzinfo is None:
+                        publish_time = publish_time.replace(tzinfo=timezone.utc)
+                else:
+                    # Get next available slot if not provided
+                    # For context videos (context_slide_combined), treat as 'short' type
+                    # For long-form videos, treat as 'final' type
+                    if video_type == 'context':
+                        schedule_video_type = 'short'
+                    elif video_type == 'long-form':
+                        schedule_video_type = 'final'
+                    else:
+                        schedule_video_type = video_type
+                    
+                    publish_time = self.schedule_manager.get_next_available_slot(schedule_video_type)
+                    logger.info(f"Auto-calculated next available slot for {video_type} (mapped to {schedule_video_type}): {publish_time}")
                 
-                # Schedule the video
-                success, message, scheduled_time = self.schedule_manager.schedule_video(
-                    video_path, video_type, publish_time
+                # Validate quota before attempting upload
+                from datetime import date
+                quota_status = self.schedule_manager.check_daily_quota(publish_time.date())
+                
+                # Validate quota limits
+                if video_type == 'final' and quota_status.final_remaining <= 0:
+                    return jsonify({
+                        "error": f"No remaining quota for final videos on {publish_time.date()}. Used: {quota_status.final_used}/{self.schedule_manager.config.daily_limits['final']}"
+                    }), 400
+                
+                if video_type == 'short' and quota_status.short_remaining <= 0:
+                    return jsonify({
+                        "error": f"No remaining quota for short videos on {publish_time.date()}. Used: {quota_status.short_used}/{self.schedule_manager.config.daily_limits['short']}"
+                    }), 400
+                
+                # Check quota usage
+                if quota_status.quota_remaining < 1600:  # Upload costs 1600 quota units
+                    return jsonify({
+                        "error": f"Insufficient API quota. Remaining: {quota_status.quota_remaining}/1600 required"
+                    }), 400
+                
+                # Generate metadata before upload
+                from langflix.youtube.video_manager import VideoFileManager
+                from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                
+                video_manager = VideoFileManager()
+                all_videos = video_manager.scan_all_videos()
+                
+                # Try to find video by path (handle both absolute and relative paths)
+                video_metadata = None
+                for v in all_videos:
+                    # Try exact match first
+                    if v.path == video_path:
+                        video_metadata = v
+                        break
+                    # Try with absolute path
+                    import os
+                    abs_video_path = os.path.abspath(video_path)
+                    abs_v_path = os.path.abspath(v.path)
+                    if abs_v_path == abs_video_path:
+                        video_metadata = v
+                        break
+                
+                if not video_metadata:
+                    logger.error(f"Video metadata not found for path: {video_path}")
+                    logger.debug(f"Available video paths ({len(all_videos)} total):")
+                    for v in all_videos[:5]:  # Log first 5 for debugging
+                        logger.debug(f"  - {v.path}")
+                    return jsonify({
+                        "error": "Video not found",
+                        "details": f"Could not find metadata for video path: {video_path}",
+                        "hint": "Make sure the video file exists and has been processed"
+                    }), 404
+                
+                # Log video metadata for debugging
+                logger.info(f"Generating YouTube metadata for video: {video_path}")
+                logger.info(f"  Video metadata: type={video_metadata.video_type}, expression='{video_metadata.expression}', episode='{video_metadata.episode}', language={video_metadata.language}")
+                
+                # Generate metadata (will use fallbacks if expression/episode are missing)
+                metadata_generator = YouTubeMetadataGenerator()
+                youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                
+                # Validate generated metadata (this is the critical check)
+                if not youtube_metadata.title or youtube_metadata.title.strip() == "":
+                    logger.error(f"❌ Generated metadata has empty title!")
+                    logger.error(f"  Video path: {video_path}")
+                    logger.error(f"  Video metadata - expression: '{video_metadata.expression}', episode: '{video_metadata.episode}', type: {video_metadata.video_type}")
+                    logger.error(f"  Generated title: '{youtube_metadata.title}'")
+                    return jsonify({
+                        "success": False,
+                        "error": "Failed to generate video title",
+                        "details": f"Video metadata could not be used to generate a valid title. Expression: '{video_metadata.expression}', Episode: '{video_metadata.episode}'"
+                    }), 400
+                
+                logger.info(f"✅ Generated metadata successfully: title='{youtube_metadata.title[:60]}...', description length={len(youtube_metadata.description)}, tags={len(youtube_metadata.tags)}")
+                
+                # Upload immediately with publishAt parameter
+                from langflix.youtube.uploader import YouTubeUploader
+                uploader = YouTubeUploader()
+                
+                logger.info(f"Starting scheduled upload for {video_path} with publishAt: {publish_time}")
+                result = uploader.upload_video(
+                    video_path=video_path,
+                    metadata=youtube_metadata,
+                    publish_at=publish_time  # Pass publishAt to schedule publishing on YouTube
                 )
                 
-                if success:
-                    # Update video status to scheduled
-                    self._update_video_upload_status(
-                        video_path, 
-                        None,  # No video ID yet
-                        None,   # No URL yet
-                        'scheduled'
+                if result.success:
+                    # Store schedule in DB for tracking (after successful upload)
+                    # Map video_type for schedule_manager (context->short, long-form->final)
+                    schedule_video_type = 'short' if video_type == 'context' else ('final' if video_type == 'long-form' else video_type)
+                    success, message, scheduled_time = self.schedule_manager.schedule_video(
+                        video_path, schedule_video_type, publish_time
                     )
                     
+                    # Update schedule with video_id
+                    if success:
+                        self.schedule_manager.update_schedule_with_video_id(
+                            video_path, result.video_id, 'completed'  # Uploaded, scheduled for publishing
+                        )
+                        # Use mapped schedule_video_type for quota update
+                        self.schedule_manager.update_quota_usage(schedule_video_type)
+                    
+                    # Also update video status
+                    self._update_video_upload_status(
+                        video_path,
+                        result.video_id,
+                        result.video_url,
+                        'uploaded'
+                    )
+                    
+                    # Clear video cache to force refresh on next scan
+                    try:
+                        from langflix.core.redis_client import get_redis_job_manager
+                        redis_manager = get_redis_job_manager()
+                        redis_manager.invalidate_video_cache()
+                        logger.info("✅ Cleared video cache after upload")
+                    except Exception as e:
+                        logger.warning(f"Failed to clear video cache: {e}")
+                    
                     return jsonify({
-                        "message": message,
-                        "scheduled_time": scheduled_time.isoformat() if scheduled_time else None,
+                        "success": True,
+                        "message": f"Video uploaded and scheduled for publishing at {publish_time}",
+                        "video_id": result.video_id,
+                        "video_url": result.video_url,
+                        "scheduled_publish_time": publish_time.isoformat(),
                         "video_path": video_path,
                         "video_type": video_type
                     })
                 else:
-                    # Check if it's a database connection error
-                    error_msg = message
-                    if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
-                        return jsonify({
-                            "error": "Database connection failed",
-                            "details": error_msg,
-                            "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
-                        }), 503
-                    return jsonify({"error": message}), 400
+                    # Upload failed - don't store schedule
+                    error_msg = result.error_message or 'Upload failed'
+                    logger.error(f"Scheduled upload failed: {error_msg}")
+                    return jsonify({
+                        "success": False,
+                        "error": error_msg
+                    }), 500
                     
             except ValueError as e:
                 # Database connection errors from schedule_manager

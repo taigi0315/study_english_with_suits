@@ -140,16 +140,110 @@ class YouTubeMetadataGenerator:
     def _generate_title(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_title: Optional[str]) -> str:
         """Generate video title"""
         if custom_title:
-            return custom_title
+            logger.debug(f"Using custom title: {custom_title}")
+            return custom_title.strip()
+        
+        logger.debug(f"Generating title for video_type={video_metadata.video_type}, template='{template.title_template}'")
+        logger.debug(f"  Input metadata: expression='{video_metadata.expression}', episode='{video_metadata.episode}', language='{video_metadata.language}'")
         
         # Extract episode number for better formatting
-        episode_display = self._format_episode_display(video_metadata.episode)
+        episode_display = self._format_episode_display(video_metadata.episode) if video_metadata.episode else None
         
-        return template.title_template.format(
-            expression=video_metadata.expression,
-            episode=episode_display,
-            language=video_metadata.language.upper()
-        )
+        # Validate required fields with better fallbacks
+        expression = (video_metadata.expression or "").strip()
+        if not expression:
+            # Try to extract from filename if expression is empty
+            logger.debug(f"Expression is empty, trying to extract from filename: {video_metadata.path}")
+            expression = self._extract_expression_from_filename(video_metadata.path) or "English Expressions"
+            logger.debug(f"Extracted expression: {expression}")
+        
+        episode = (episode_display or video_metadata.episode or "").strip()
+        if not episode:
+            # Try to extract from filename if episode is empty
+            logger.debug(f"Episode is empty, trying to extract from filename: {video_metadata.path}")
+            episode = self._extract_episode_from_filename(video_metadata.path) or "Episode"
+            logger.debug(f"Extracted episode: {episode}")
+        
+        language = (video_metadata.language or "en").upper()
+        
+        logger.debug(f"Final values: expression='{expression}', episode='{episode}', language='{language}'")
+        
+        try:
+            # Prepare format arguments based on template requirements
+            format_args = {}
+            
+            # Check which placeholders are in the template
+            if "{expression}" in template.title_template:
+                format_args["expression"] = expression
+            if "{episode}" in template.title_template:
+                format_args["episode"] = episode
+            if "{language}" in template.title_template:
+                format_args["language"] = language
+            
+            logger.debug(f"Format args: {format_args}, template: {template.title_template}")
+            
+            # Format with only the required arguments
+            title = template.title_template.format(**format_args)
+            logger.debug(f"Formatted title: '{title}'")
+            
+            # Ensure title is not empty and strip whitespace
+            title = title.strip()
+            if not title or title == "":
+                # Fallback title based on video type
+                if video_metadata.video_type == "short":
+                    title = f"English Expression: {expression} | #Shorts"
+                else:
+                    title = f"Learn English: {expression} from {episode}"
+                logger.warning(f"Generated empty title, using fallback: {title}")
+            
+            # Final validation - ensure title is not empty
+            if not title or title.strip() == "":
+                title = "Learn English Video"
+                logger.error(f"All title generation methods failed for {video_metadata.path}, using minimal fallback")
+            
+            logger.info(f"✅ Final generated title: '{title}'")
+            return title
+        except (KeyError, AttributeError, ValueError) as e:
+            logger.error(f"❌ Error generating title from template: {e}")
+            logger.error(f"  Template: {template.title_template}")
+            logger.error(f"  Expression: {expression}, Episode: {episode}, Language: {language}")
+            logger.error(f"  Video path: {video_metadata.path}")
+            # Fallback title based on video type
+            if video_metadata.video_type == "short":
+                fallback = f"English Expression: {expression} | #Shorts" if expression else "English Learning Shorts"
+            else:
+                fallback = f"Learn English: {expression} from {episode}"
+            final_fallback = fallback if fallback.strip() else "Learn English Video"
+            logger.warning(f"Using error fallback: '{final_fallback}'")
+            return final_fallback
+    
+    def _extract_expression_from_filename(self, filepath: str) -> Optional[str]:
+        """Try to extract expression from filename as fallback"""
+        try:
+            from pathlib import Path
+            filename = Path(filepath).stem
+            # Try to extract expression from filename patterns
+            # This is a simple fallback - can be improved based on actual naming patterns
+            parts = filename.split('_')
+            if len(parts) > 1:
+                return parts[-1]  # Usually expression is at the end
+            return None
+        except Exception:
+            return None
+    
+    def _extract_episode_from_filename(self, filepath: str) -> Optional[str]:
+        """Try to extract episode from filename as fallback"""
+        try:
+            from pathlib import Path
+            filename = Path(filepath).stem
+            # Try to extract episode patterns like S01E01, S1E1, etc.
+            import re
+            episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', filename)
+            if episode_match:
+                return f"S{episode_match.group(1)}E{episode_match.group(2)}"
+            return None
+        except Exception:
+            return None
     
     def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str]) -> str:
         """Generate video description"""

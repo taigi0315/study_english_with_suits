@@ -135,6 +135,26 @@ class VideoFileManager:
             # Determine video type and extract episode/expression info
             video_type, episode, expression, language = self._parse_video_path(video_path)
             
+            # Check database for upload status
+            uploaded_to_youtube = False
+            youtube_video_id = None
+            try:
+                from langflix.db.session import db_manager
+                from langflix.db.models import YouTubeSchedule
+                
+                with db_manager.session() as db:
+                    schedule = db.query(YouTubeSchedule).filter_by(
+                        video_path=str(video_path)
+                    ).first()
+                    
+                    if schedule and schedule.youtube_video_id:
+                        uploaded_to_youtube = True
+                        youtube_video_id = schedule.youtube_video_id
+                        logger.debug(f"Found upload status for {video_path}: uploaded={uploaded_to_youtube}, video_id={youtube_video_id}")
+            except Exception as e:
+                # Database might not be available - log but don't fail
+                logger.debug(f"Could not check upload status from database: {e}")
+            
             return VideoMetadata(
                 path=str(video_path),
                 filename=video_path.name,
@@ -147,7 +167,9 @@ class VideoFileManager:
                 expression=expression,
                 video_type=video_type,
                 language=language,
-                ready_for_upload=self._is_ready_for_upload(video_type, duration)
+                ready_for_upload=self._is_ready_for_upload(video_type, duration),
+                uploaded_to_youtube=uploaded_to_youtube,
+                youtube_video_id=youtube_video_id
             )
             
         except subprocess.CalledProcessError as e:
@@ -235,11 +257,19 @@ class VideoFileManager:
                 else:
                     expression = "Long Form Video"
             elif filename.startswith("short-form_"):
-                video_type = "short-form"  # Updated to use short-form as video type
+                video_type = "short"  # Use "short" to match template
                 # Extract episode and sequence from short-form filename
+                # Format: short-form_Suits.S01E01.720p.HDTV.x264_008
                 parts = filename.split("_")
                 if len(parts) >= 3:
-                    expression = f"{parts[1]} - Short #{parts[2]}"  # e.g., "S01E01 - Short #001"
+                    # Extract episode from parts[1] (e.g., "Suits.S01E01.720p.HDTV.x264")
+                    episode_part = parts[1]
+                    if "S01E" in episode_part:
+                        episode = episode_part.split("S01E")[1].split(".")[0]
+                        episode = f"S01E{episode}"
+                    # Expression can be the sequence number or a default
+                    sequence = parts[2] if len(parts) > 2 else "001"
+                    expression = f"Episode {episode} - Short #{sequence}"
                 else:
                     expression = "Short Form Video"
             # Legacy naming convention (for backward compatibility)
@@ -297,24 +327,37 @@ class VideoFileManager:
     
     def get_uploadable_videos(self, videos: List[VideoMetadata]) -> List[VideoMetadata]:
         """
-        Filter videos that are uploadable (only long-form and short-form videos)
-        Excludes intermediate files like educational, slide, context videos
+        Filter videos that are uploadable:
+        - long-form and short-form videos (new naming convention)
+        - context_slide_combined videos (vertical format, ready for upload)
+        - Legacy final/short videos (excluding intermediate files)
         """
         uploadable_videos = []
         for v in videos:
             # Only include videos with new naming convention or legacy final videos
             filename = Path(v.path).stem.lower()
+            parent_dir = Path(v.path).parent.name.lower()
             
             # Include long-form and short-form videos (new naming convention)
             if (filename.startswith("long-form_") or filename.startswith("short-form_")):
-                if v.ready_for_upload and not v.uploaded_to_youtube:
+                # Include regardless of uploaded status - we want to show all uploadable videos
+                if v.ready_for_upload:
+                    uploadable_videos.append(v)
+            # Include context_slide_combined videos (vertical format, ready for YouTube Shorts)
+            elif "context_slide_combined" in parent_dir and v.video_type == "context":
+                # Context+slide combined videos are vertical format and ready for upload
+                if v.ready_for_upload:
                     uploadable_videos.append(v)
             # Include legacy final/short videos but exclude intermediate files
             elif (v.video_type in ['final', 'short', 'long-form', 'short-form'] and 
-                  not any(x in filename for x in ['educational', 'slide', 'context', 'temp_'])):
-                if v.ready_for_upload and not v.uploaded_to_youtube:
+                  not any(x in filename for x in ['educational', 'temp_']) and
+                  'context_slide_combined' not in parent_dir):  # Individual context files excluded, only combined
+                # Include regardless of uploaded status - we want to show all uploadable videos
+                if v.ready_for_upload:
                     uploadable_videos.append(v)
         
+        logger.debug(f"Found {len(uploadable_videos)} uploadable videos (including {sum(1 for v in uploadable_videos if v.uploaded_to_youtube)} already uploaded)")
+        logger.debug(f"Uploadable video types: {set(v.video_type for v in uploadable_videos)}")
         return uploadable_videos
     
     def generate_thumbnail(self, video_path: str, output_path: str, timestamp: float = 5.0) -> bool:

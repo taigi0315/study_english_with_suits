@@ -4,8 +4,8 @@
 
 `langflix/services/` 모듈은 API와 CLI 구현 간에 이전에 중복되었던 코드를 통합하여 비즈니스 로직에 대한 통합 인터페이스를 제공하는 서비스 레이어 클래스를 포함합니다.
 
-**최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001-extract-pipeline-logic
+**최종 업데이트:** 2025-11-02  
+**관련 티켓:** TICKET-001-extract-pipeline-logic, TICKET-014-batch-video-processing-queue
 
 ## 목적
 
@@ -107,6 +107,160 @@ result = service.process_video(...)
 # 또는 LangFlixPipeline을 직접 계속 사용 (둘 다 작동)
 ```
 
+### BatchQueueService
+
+Redis 기반 FIFO 큐 시스템을 사용하여 순차 작업 실행을 관리하는 배치 비디오 처리 서비스입니다.
+
+**위치:** `langflix/services/batch_queue_service.py`
+
+**목적:**
+- 여러 비디오 처리 작업을 배치로 생성
+- 순차 처리를 위해 작업을 큐에 추가
+- 배치 및 개별 작업 상태 추적
+- 작업 상태에서 배치 상태 계산
+
+#### 주요 기능
+
+**1. 배치 생성**
+```python
+from langflix.services.batch_queue_service import BatchQueueService
+
+service = BatchQueueService()
+result = service.create_batch(
+    videos=[
+        {
+            'video_path': '/path/to/video1.mp4',
+            'subtitle_path': '/path/to/subtitle1.srt',
+            'episode_name': 'Episode 1',
+            'show_name': 'Suits'
+        },
+        # ... 더 많은 비디오
+    ],
+    config={
+        'language_code': 'ko',
+        'language_level': 'intermediate',
+        'max_expressions': 50,
+        'test_mode': False,
+        'no_shorts': False,
+        'output_dir': 'output'
+    }
+)
+# 반환: {'batch_id': 'uuid', 'total_jobs': 2, 'jobs': [...], 'status': 'PENDING'}
+```
+
+**2. 배치 상태 추적**
+```python
+batch_status = service.get_batch_status(batch_id)
+# 다음 정보를 포함한 배치 정보 반환:
+# - 전체 상태 (PENDING, PROCESSING, COMPLETED, FAILED, PARTIALLY_FAILED)
+# - 개별 작업 상태
+# - 진행 메트릭 (completed_jobs, failed_jobs, total_jobs)
+```
+
+**3. 상태 계산**
+- `PENDING`: 모든 작업이 QUEUED 상태 (아직 시작되지 않음)
+- `PROCESSING`: 최소 하나의 작업이 QUEUED 또는 PROCESSING 상태
+- `COMPLETED`: 모든 작업이 성공적으로 완료됨
+- `FAILED`: 모든 작업이 실패함
+- `PARTIALLY_FAILED`: 완료된 작업과 실패한 작업이 혼합됨
+
+**4. 배치 크기 제한**
+- 최대 배치 크기: 배치당 50개 비디오 (`MAX_BATCH_SIZE`로 설정 가능)
+- 검증을 통해 배치 크기가 제한을 초과하지 않도록 함
+
+#### API에서 사용
+
+```python
+# langflix/api/routes/batch.py에서
+from langflix.services.batch_queue_service import BatchQueueService
+
+@router.post("/batch")
+async def create_batch(request: BatchCreateRequest):
+    service = BatchQueueService()
+    
+    # 배치 크기 검증
+    if len(request.videos) > service.MAX_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail="배치 크기 초과")
+    
+    result = service.create_batch(
+        videos=[video.dict() for video in request.videos],
+        config=request.dict(exclude={'videos'})
+    )
+    return result
+```
+
+### QueueProcessor
+
+FastAPI lifespan과 통합된 백그라운드 워커 패턴을 사용하여 Redis 큐에서 작업을 순차적으로 처리합니다.
+
+**위치:** `langflix/services/queue_processor.py`
+
+**목적:**
+- 큐의 작업을 순차적으로 처리 (FIFO)
+- 하나의 프로세서 인스턴스만 실행되도록 보장 (Redis lock)
+- 시작 시 멈춘 작업 처리
+- 작업 재큐잉을 통한 우아한 종료
+
+#### 주요 기능
+
+**1. 백그라운드 처리**
+- FastAPI lifespan에서 비동기 백그라운드 작업으로 실행
+- API 시작 시 자동 시작
+- API 종료 시 우아하게 중지
+
+**2. 프로세서 Lock**
+- 단일 인스턴스 보장을 위해 Redis lock (`jobs:processor_lock`) 사용
+- 30분마다 lock 갱신
+- 중복 처리 방지
+
+**3. 멈춘 작업 복구**
+- 시작 시 PROCESSING 상태에서 1시간 이상 멈춘 작업 식별
+- 멈춘 작업을 자동으로 FAILED로 표시
+- 오래된 processing 마커 정리
+
+**4. 비동기 처리**
+- blocking `process_video()` 호출을 `run_in_executor()`로 실행
+- 이벤트 루프 블로킹 방지
+- 처리 중에도 동시 API 요청 허용
+
+**5. 진행 상황 업데이트**
+- 처리 중 Redis 작업 상태 업데이트
+- 추적을 위해 `updated_at` 타임스탬프 포함
+- 진행 상황 업데이트 실패해도 처리 계속 진행
+
+**6. 에러 처리**
+- 처리 에러 시 작업을 FAILED로 표시
+- 작업이 배치의 일부인 경우 배치 상태 업데이트
+- 완료/실패 시 processing 마커 제거
+
+#### 통합
+
+```python
+# langflix/api/main.py에서
+from langflix.services.queue_processor import QueueProcessor
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작
+    queue_processor = QueueProcessor()
+    queue_processor_task = asyncio.create_task(queue_processor.start())
+    
+    yield
+    
+    # 종료
+    await queue_processor.stop()
+    queue_processor_task.cancel()
+```
+
+#### 처리 흐름
+
+1. **작업 큐잉**: 작업이 Redis 리스트 `jobs:queue`에 추가됨
+2. **작업 클레임**: 프로세서가 원자적으로 작업을 PROCESSING으로 표시
+3. **작업 처리**: 비디오 처리가 thread executor에서 실행됨
+4. **진행 상황 업데이트**: 진행 상황 콜백이 Redis 작업 상태 업데이트
+5. **작업 완료**: 작업이 COMPLETED/FAILED로 표시됨, 배치 상태 업데이트
+6. **다음 작업**: 프로세서가 큐에서 다음 작업 선택
+
 ### PipelineRunner (레거시)
 
 **위치:** `langflix/services/pipeline_runner.py`
@@ -147,6 +301,8 @@ result = service.process_video(...)
 - `langflix/main.py` - `LangFlixPipeline` (핵심 파이프라인 로직)
 - `langflix/utils/temp_file_manager.py` - 파일 정리를 위한 TempFileManager (파이프라인에서 내부적으로 사용)
 - `langflix/utils/filename_utils.py` - 파일명 정리 (내부적으로 사용)
+- `langflix/core/redis_client.py` - 배치 및 큐 작업을 위한 `RedisJobManager`
+- `langflix/services/video_pipeline_service.py` - QueueProcessor에서 실제 처리를 위해 사용
 
 ### 외부 종속성
 - 표준 라이브러리: `logging`, `pathlib`, `typing`, `datetime`
@@ -187,6 +343,18 @@ result = service.process_video(...)
   - 진행 상황 콜백
   - 에러 처리
   - 결과 추출
+- `tests/unit/test_batch_queue_service.py` - BatchQueueService 단위 테스트
+  - 다양한 구성으로 배치 생성
+  - 배치 상태 계산 (모든 상태 시나리오)
+  - 에지 케이스 (episode_name 누락, 빈 경로, 배치 크기 제한)
+  - 배치 상태 업데이트
+- `tests/unit/test_queue_processor.py` - QueueProcessor 단위 테스트
+  - Lock 획득/해제
+  - 멈춘 작업 복구
+  - Executor 기반 처리 (이벤트 루프 블로킹 방지)
+  - 진행 상황 콜백 실패 처리
+  - 파일 읽기 실패
+  - 우아한 종료
 
 ### 통합 테스트
 - `tests/integration/test_pipeline_service.py` - 종단 간 서비스 테스트

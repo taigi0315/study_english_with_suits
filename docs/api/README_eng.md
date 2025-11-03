@@ -1,6 +1,6 @@
 # LangFlix API Module Documentation (ENG)
 
-Last updated: 2025-01-30
+Last updated: 2025-11-02
 
 ## Overview
 The `langflix/api` package provides the FastAPI-based HTTP interface for LangFlix. It exposes health endpoints, job management for video processing, and file listing utilities. It wires middleware, exception handling, and static mounts, and integrates with Redis-backed job storage.
@@ -18,19 +18,22 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
   - `health.py`: Service/Redis health endpoints and cleanup.
   - `files.py`: Output file listing and stubs for detail/delete.
   - `jobs.py`: Endpoints to create jobs, query job status/expressions, list jobs.
-- `tasks/processing.py`: (present but not used directly here; job processing is defined in `routes/jobs.py`).
+  - `batch.py`: Endpoints for batch video processing (create batch, get batch status).
+  - `tasks/processing.py`: (present but not used directly here; job processing is defined in `routes/jobs.py`).
 
 ## Application Lifecycle and Configuration
 - `create_app()` in `main.py` initializes FastAPI with:
   - CORS allowing all origins (adjust for production).
   - `LoggingMiddleware` for request/response logs and `X-Process-Time` header.
   - Static mount `/output` when local `output/` exists.
-  - Routers: `health`, `jobs` (prefixed `/api/v1`), `files` (prefixed `/api/v1`).
+  - Routers: `health`, `jobs` (prefixed `/api/v1`), `files` (prefixed `/api/v1`), `batch` (prefixed `/api/v1`).
   - Exception handlers for `APIException` and `HTTPException`.
 - Lifespan startup:
   - Initializes database connection pool if enabled (`settings.get_database_enabled()`)
   - Performs Redis job store cleanup and health check via `langflix.core.redis_client.get_redis_job_manager()`
+  - Starts `QueueProcessor` background task for sequential batch job processing
 - Lifespan shutdown:
+  - Stops `QueueProcessor` gracefully (requeues current job if processing)
   - Closes database connections gracefully if database was enabled
 
 ## Dependency Injection
@@ -123,6 +126,15 @@ async def my_endpoint(storage: StorageBackend = Depends(get_storage)):
 - `/api/v1/jobs/{job_id}/expressions` (GET): Returns expressions from Redis (same source as job status).
   - **TICKET-003 Fix:** Fixed undefined `jobs_db` variable - now correctly uses Redis via `get_redis_job_manager()`
 - `/api/v1/jobs` (GET): List all jobs from Redis.
+- `/api/v1/batch` (POST): Create a batch of video processing jobs (TICKET-014).
+  - Request body: `{"videos": [...], "language_code": "ko", "language_level": "intermediate", ...}`
+  - Returns: `{"batch_id": "uuid", "total_jobs": N, "jobs": [...], "status": "PENDING"}`
+  - Jobs are queued for sequential processing by `QueueProcessor`
+  - Maximum batch size: 50 videos (enforced)
+- `/api/v1/batch/{batch_id}` (GET): Get batch status with individual job progress (TICKET-014).
+  - Returns: Batch info with overall status, individual job statuses, progress metrics
+  - Status values: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `PARTIALLY_FAILED`
+  - Automatically recalculates and updates batch status based on job statuses
 
 ## Job Processing (Background Task)
 

@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta, time
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from langflix.db.models import YouTubeSchedule, YouTubeQuotaUsage
 from langflix.db.session import db_manager
 
@@ -97,7 +98,12 @@ class YouTubeScheduleManager:
                 continue
         
         # Get existing schedules for this date
-        existing_schedules = self._get_schedules_for_date(target_date)
+        try:
+            existing_schedules = self._get_schedules_for_date(target_date)
+        except (OperationalError, SQLAlchemyError) as e:
+            # Database connection error - return empty list to allow fallback time
+            logger.warning(f"Database connection error getting schedules: {e}")
+            existing_schedules = []
         occupied_times = {schedule.scheduled_publish_time.time() for schedule in existing_schedules}
         
         # Find available preferred times
@@ -128,14 +134,21 @@ class YouTubeScheduleManager:
                     YouTubeSchedule.scheduled_publish_time <= end_datetime,
                     YouTubeSchedule.upload_status.in_(['scheduled', 'uploading'])
                 ).all()
+        except OperationalError as e:
+            # Database connection error - return empty list
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.warning(f"Database connection error getting schedules (returning empty): {error_msg}")
+            return []
         except Exception as e:
             logger.error(f"Database error getting schedules for date {target_date}: {e}")
             raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
     def check_daily_quota(self, target_date: date) -> DailyQuotaStatus:
         """
-        Check daily quota status for a specific date
-        Returns: DailyQuotaStatus with used/remaining counts
+        Check daily quota status for a specific date.
+        
+        Returns DailyQuotaStatus with quota information.
+        If database is unavailable, returns default quota (assumes no usage).
         """
         try:
             with db_manager.session() as db:
@@ -173,6 +186,20 @@ class YouTubeScheduleManager:
                     quota_remaining=quota_remaining,
                     quota_percentage=quota_percentage
                 )
+        except OperationalError as e:
+            # Database connection error - return default status (assume no usage)
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.warning(f"Database connection error checking quota (assuming no usage): {error_msg}")
+            return DailyQuotaStatus(
+                date=target_date,
+                final_used=0,
+                final_remaining=self.config.daily_limits.get('final', 2),
+                short_used=0,
+                short_remaining=self.config.daily_limits.get('short', 5),
+                quota_used=0,
+                quota_remaining=self.config.quota_limit,
+                quota_percentage=0.0
+            )
         except Exception as e:
             logger.error(f"Database error checking daily quota for {target_date}: {e}")
             raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
@@ -240,10 +267,16 @@ class YouTubeScheduleManager:
                 logger.info(f"Scheduled {video_type} video for {target_datetime}: {video_path}")
                 return True, f"Video scheduled for {target_datetime}", target_datetime
                 
-        except ValueError as e:
-            # Database connection errors
-            logger.error(f"Database error scheduling video: {e}")
+        except OperationalError as e:
+            # Database connection errors (PostgreSQL not running, wrong credentials, etc.)
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"Database connection error scheduling video: {error_msg}")
             return False, f"Database connection failed. Please ensure PostgreSQL is running.", None
+        except (ValueError, SQLAlchemyError) as e:
+            # Other database errors
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"Database error scheduling video: {error_msg}")
+            return False, f"Database error: {error_msg}", None
         except Exception as e:
             logger.error(f"Failed to schedule video: {e}", exc_info=True)
             return False, f"Failed to schedule video: {str(e)}", None

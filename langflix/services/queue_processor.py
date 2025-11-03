@@ -72,21 +72,25 @@ class QueueProcessor:
                     # Try to claim the job (atomic lock)
                     if self.redis_manager.mark_job_processing(next_job_id):
                         # Successfully claimed, process it
-                        logger.info(f"📦 Processing job {next_job_id} from queue")
+                        logger.info(f"📦 Processing job {next_job_id} from queue (queue length: {self.redis_manager.get_queue_length()})")
                         try:
                             await self._process_job(next_job_id)
+                            logger.info(f"✅ Job {next_job_id} completed successfully")
                         except Exception as e:
                             logger.error(f"❌ Error processing job {next_job_id}: {e}", exc_info=True)
                             # Mark job as failed
-                            self.redis_manager.update_job(next_job_id, {
-                                "status": "FAILED",
-                                "error": f"Processing error: {str(e)}",
-                                "failed_at": datetime.now(timezone.utc).isoformat()
-                            })
-                            self.redis_manager.remove_from_processing()
+                            try:
+                                self.redis_manager.update_job(next_job_id, {
+                                    "status": "FAILED",
+                                    "error": f"Processing error: {str(e)}",
+                                    "failed_at": datetime.now(timezone.utc).isoformat()
+                                })
+                                self.redis_manager.remove_from_processing()
+                            except Exception as cleanup_error:
+                                logger.error(f"Failed to cleanup after job {next_job_id} error: {cleanup_error}")
                     else:
                         # Failed to claim (another processor got it first)
-                        logger.debug(f"Failed to claim job {next_job_id}, may be claimed by another processor")
+                        logger.debug(f"⚠️ Failed to claim job {next_job_id}, may be claimed by another processor")
                 else:
                     # No jobs in queue, wait
                     await asyncio.sleep(self.POLL_INTERVAL)
@@ -219,37 +223,60 @@ class QueueProcessor:
             if not subtitle_path or not os.path.exists(subtitle_path):
                 raise ValueError(f"Subtitle file not found: {subtitle_path}")
             
+            logger.info(f"📥 Loading video and subtitle files for job {job_id}")
+            
             # Get temp file manager
             temp_manager = get_temp_manager()
             
-            # Read file contents (will be written to temp files for processing)
-            with open(video_path, 'rb') as vf:
-                video_content = vf.read()
+            # Read file contents (blocking I/O - but files are small, so acceptable)
+            # For large files, consider async file I/O
+            def read_files():
+                """Read video and subtitle files"""
+                with open(video_path, 'rb') as vf:
+                    video_content = vf.read()
+                
+                subtitle_content = b''
+                if subtitle_path:
+                    with open(subtitle_path, 'rb') as sf:
+                        subtitle_content = sf.read()
+                
+                return video_content, subtitle_content
             
-            subtitle_content = b''
-            if subtitle_path:
-                with open(subtitle_path, 'rb') as sf:
-                    subtitle_content = sf.read()
+            # Read files (small delay acceptable for small files)
+            loop = asyncio.get_event_loop()
+            video_content, subtitle_content = await loop.run_in_executor(None, read_files)
+            
+            logger.info(f"📁 Files loaded: video={len(video_content)} bytes, subtitle={len(subtitle_content)} bytes")
             
             # Save to temp files for processing
             with temp_manager.create_temp_file(suffix='.mkv', prefix=f'{job_id}_video_') as temp_video_path:
                 with temp_manager.create_temp_file(suffix='.srt', prefix=f'{job_id}_subtitle_') as temp_subtitle_path:
-                    # Write file contents
-                    temp_video_path.write_bytes(video_content)
-                    temp_subtitle_path.write_bytes(subtitle_content)
+                    # Write file contents (blocking, but small files)
+                    def write_temp_files():
+                        temp_video_path.write_bytes(video_content)
+                        temp_subtitle_path.write_bytes(subtitle_content)
                     
-                    logger.info(f"Processing video: {video_path}")
-                    logger.info(f"Processing subtitle: {subtitle_path}")
+                    await loop.run_in_executor(None, write_temp_files)
+                    
+                    logger.info(f"🎬 Starting video processing for job {job_id}")
+                    logger.info(f"   Video: {video_path}")
+                    logger.info(f"   Subtitle: {subtitle_path}")
                     
                     # Progress callback wrapper for Redis updates
                     def update_progress(progress: int, message: str):
                         """Update job progress in Redis"""
-                        self.redis_manager.update_job(job_id, {
-                            "progress": progress,
-                            "current_step": message
-                        })
+                        try:
+                            self.redis_manager.update_job(job_id, {
+                                "progress": progress,
+                                "current_step": message,
+                                "updated_at": datetime.now(timezone.utc).isoformat()
+                            })
+                        except Exception as e:
+                            logger.warning(f"Failed to update progress for job {job_id}: {e}")
                     
                     # Use unified pipeline service
+                    # IMPORTANT: process_video is a synchronous blocking function
+                    # We must run it in a thread executor to avoid blocking the event loop
                     from langflix.services.video_pipeline_service import VideoPipelineService
                     
                     service = VideoPipelineService(
@@ -257,18 +284,25 @@ class QueueProcessor:
                         output_dir=output_dir
                     )
                     
-                    # Process video using unified service
-                    result = service.process_video(
-                        video_path=str(temp_video_path),
-                        subtitle_path=str(temp_subtitle_path),
-                        show_name=show_name,
-                        episode_name=episode_name,
-                        max_expressions=max_expressions,
-                        language_level=language_level,
-                        test_mode=test_mode,
-                        no_shorts=no_shorts,
-                        progress_callback=update_progress
+                    # Process video using unified service in thread executor
+                    # This prevents blocking the async event loop
+                    logger.info(f"🚀 Running video pipeline in background thread for job {job_id}")
+                    result = await loop.run_in_executor(
+                        None,  # Use default ThreadPoolExecutor
+                        lambda: service.process_video(
+                            video_path=str(temp_video_path),
+                            subtitle_path=str(temp_subtitle_path),
+                            show_name=show_name,
+                            episode_name=episode_name,
+                            max_expressions=max_expressions,
+                            language_level=language_level,
+                            test_mode=test_mode,
+                            no_shorts=no_shorts,
+                            progress_callback=update_progress
+                        )
                     )
+                    
+                    logger.info(f"✅ Video processing completed for job {job_id}")
                     
                     # Update job with results
                     self.redis_manager.update_job(job_id, {

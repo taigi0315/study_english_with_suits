@@ -246,4 +246,264 @@ class TestQueueProcessor:
             # Verify batch status was updated
             assert mock_batch_service.get_batch_status.called
             assert mock_batch_service.get_batch_status.call_args[0][0] == batch_id
+    
+    @pytest.mark.asyncio
+    async def test_process_job_handles_progress_callback_failure(self, queue_processor, mock_redis_manager):
+        """Test that job processing continues even if progress callback fails"""
+        job_id = "progress-fail-job-1"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '/path/to/subtitle.srt',
+            'language_code': 'ko',
+            'show_name': 'Suits',
+            'episode_name': 'Episode 1',
+            'max_expressions': 50,
+            'language_level': 'intermediate',
+            'test_mode': False,
+            'no_shorts': False,
+            'output_dir': 'output',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        # Make update_job fail sometimes (simulating Redis connection issues)
+        call_count = 0
+        def failing_update_job(job_id, updates):
+            nonlocal call_count
+            call_count += 1
+            # Fail on 2nd call (simulating intermittent failure)
+            if call_count == 2:
+                raise Exception("Redis connection lost")
+            return True
+        
+        mock_redis_manager.update_job.side_effect = failing_update_job
+        
+        mock_service = Mock()
+        mock_service.process_video = Mock(return_value={
+            'expressions': [],
+            'educational_videos': [],
+            'short_videos': [],
+            'final_video': '/path/to/final.mkv'
+        })
+        
+        mock_temp_manager = MagicMock()
+        mock_temp_file = MagicMock()
+        mock_temp_file.__enter__ = Mock(return_value=mock_temp_file)
+        mock_temp_file.__exit__ = Mock(return_value=False)
+        mock_temp_file.write_bytes = Mock()
+        mock_temp_manager.create_temp_file = Mock(return_value=mock_temp_file)
+        
+        with patch('langflix.services.queue_processor.get_temp_manager', return_value=mock_temp_manager), \
+             patch('langflix.services.video_pipeline_service.VideoPipelineService', return_value=mock_service), \
+             patch('builtins.open', create=True), \
+             patch('os.path.exists', return_value=True), \
+             patch('asyncio.get_event_loop') as mock_get_loop:
+            
+            mock_loop = Mock()
+            async def mock_run_in_executor(executor, func):
+                # Call the function which will trigger progress callbacks
+                if callable(func):
+                    # Simulate progress callback being called during processing
+                    result = func()
+                    return result
+                return {'expressions': [], 'educational_videos': [], 'short_videos': [], 'final_video': '/path/to/final.mkv'}
+            
+            mock_loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+            mock_get_loop.return_value = mock_loop
+            
+            # Should not raise exception even if progress updates fail
+            await queue_processor._process_job(job_id)
+            
+            # Job should still complete successfully despite progress callback failures
+            # Final update should succeed
+            assert mock_redis_manager.update_job.called
+            # Should have multiple calls (initial, progress updates, final)
+            assert len(mock_redis_manager.update_job.call_args_list) > 1
+    
+    @pytest.mark.asyncio
+    async def test_process_job_handles_executor_failure(self, queue_processor, mock_redis_manager):
+        """Test that job processing handles executor failures gracefully"""
+        job_id = "executor-fail-job-1"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '/path/to/subtitle.srt',
+            'language_code': 'ko',
+            'show_name': 'Suits',
+            'episode_name': 'Episode 1',
+            'max_expressions': 50,
+            'language_level': 'intermediate',
+            'test_mode': False,
+            'no_shorts': False,
+            'output_dir': 'output',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        mock_temp_manager = MagicMock()
+        mock_temp_file = MagicMock()
+        mock_temp_file.__enter__ = Mock(return_value=mock_temp_file)
+        mock_temp_file.__exit__ = Mock(return_value=False)
+        mock_temp_file.write_bytes = Mock()
+        mock_temp_manager.create_temp_file = Mock(return_value=mock_temp_file)
+        
+        with patch('langflix.services.queue_processor.get_temp_manager', return_value=mock_temp_manager), \
+             patch('builtins.open', create=True), \
+             patch('os.path.exists', return_value=True), \
+             patch('asyncio.get_event_loop') as mock_get_loop:
+            
+            mock_loop = Mock()
+            # Simulate executor failure
+            async def failing_executor(executor, func):
+                raise RuntimeError("Thread pool executor failed")
+            
+            mock_loop.run_in_executor = AsyncMock(side_effect=failing_executor)
+            mock_get_loop.return_value = mock_loop
+            
+            # Should handle executor failure gracefully
+            await queue_processor._process_job(job_id)
+            
+            # Job should be marked as failed
+            assert mock_redis_manager.update_job.called
+            # Check that job was marked as FAILED
+            final_call = mock_redis_manager.update_job.call_args_list[-1]
+            assert final_call[0][0] == job_id
+            assert final_call[0][1]['status'] == 'FAILED'
+    
+    @pytest.mark.asyncio
+    async def test_process_job_handles_file_read_failure(self, queue_processor, mock_redis_manager):
+        """Test that job processing handles file read failures"""
+        job_id = "file-read-fail-job-1"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '/path/to/subtitle.srt',
+            'language_code': 'ko',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        with patch('os.path.exists', return_value=True), \
+             patch('builtins.open', side_effect=IOError("Cannot read file")):
+            
+            await queue_processor._process_job(job_id)
+            
+            # Job should be marked as failed
+            assert mock_redis_manager.update_job.called
+            final_call = mock_redis_manager.update_job.call_args_list[-1]
+            assert final_call[0][0] == job_id
+            assert final_call[0][1]['status'] == 'FAILED'
+            assert 'error' in final_call[0][1]
+    
+    @pytest.mark.asyncio
+    async def test_process_job_handles_empty_subtitle_path(self, queue_processor, mock_redis_manager):
+        """Test that job processing handles empty subtitle path gracefully"""
+        job_id = "empty-subtitle-job-1"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '',  # Empty subtitle path
+            'language_code': 'ko',
+            'show_name': 'Suits',
+            'episode_name': 'Episode 1',
+            'max_expressions': 50,
+            'language_level': 'intermediate',
+            'test_mode': False,
+            'no_shorts': False,
+            'output_dir': 'output',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        # Empty subtitle path should raise ValueError
+        with patch('os.path.exists', side_effect=lambda p: p == '/path/to/video.mp4'):
+            await queue_processor._process_job(job_id)
+            
+            # Job should be marked as failed
+            assert mock_redis_manager.update_job.called
+            final_call = mock_redis_manager.update_job.call_args_list[-1]
+            assert final_call[0][0] == job_id
+            assert final_call[0][1]['status'] == 'FAILED'
+    
+    @pytest.mark.asyncio
+    async def test_process_job_updates_progress_with_timestamp(self, queue_processor, mock_redis_manager):
+        """Test that progress updates include updated_at timestamp"""
+        job_id = "timestamp-job-1"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '/path/to/subtitle.srt',
+            'language_code': 'ko',
+            'show_name': 'Suits',
+            'episode_name': 'Episode 1',
+            'max_expressions': 50,
+            'language_level': 'intermediate',
+            'test_mode': False,
+            'no_shorts': False,
+            'output_dir': 'output',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        mock_service = Mock()
+        mock_service.process_video = Mock(return_value={
+            'expressions': [],
+            'educational_videos': [],
+            'short_videos': [],
+            'final_video': '/path/to/final.mkv'
+        })
+        
+        def progress_callback(progress, message):
+            # This callback should include updated_at in the update
+            pass
+        
+        mock_service.process_video = Mock(side_effect=lambda **kwargs: (
+            kwargs.get('progress_callback', lambda p, m: None)(50, "Processing..."),
+            {'expressions': [], 'educational_videos': [], 'short_videos': [], 'final_video': ''}
+        )[1])
+        
+        mock_temp_manager = MagicMock()
+        mock_temp_file = MagicMock()
+        mock_temp_file.__enter__ = Mock(return_value=mock_temp_file)
+        mock_temp_file.__exit__ = Mock(return_value=False)
+        mock_temp_file.write_bytes = Mock()
+        mock_temp_manager.create_temp_file = Mock(return_value=mock_temp_file)
+        
+        with patch('langflix.services.queue_processor.get_temp_manager', return_value=mock_temp_manager), \
+             patch('langflix.services.video_pipeline_service.VideoPipelineService', return_value=mock_service), \
+             patch('builtins.open', create=True), \
+             patch('os.path.exists', return_value=True), \
+             patch('asyncio.get_event_loop') as mock_get_loop:
+            
+            mock_loop = Mock()
+            async def mock_run_in_executor(executor, func):
+                if callable(func):
+                    # Execute the function which may call progress callback
+                    return func()
+                return {'expressions': [], 'educational_videos': [], 'short_videos': [], 'final_video': ''}
+            
+            mock_loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+            mock_get_loop.return_value = mock_loop
+            
+            await queue_processor._process_job(job_id)
+            
+            # Check that progress updates include updated_at
+            progress_calls = [
+                call for call in mock_redis_manager.update_job.call_args_list
+                if 'updated_at' in call[0][1]
+            ]
+            # Should have at least one progress update with timestamp
+            # (The initial update and potentially callback updates)
+            assert len(progress_calls) > 0
 

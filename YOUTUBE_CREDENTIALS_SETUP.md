@@ -37,11 +37,18 @@ YouTube 로그인 기능을 사용하려면 **OAuth 2.0 Client ID와 Client Secr
 2. 다운로드된 파일 이름은 `client_secret_XXXXX.json` 형태
 3. 이 파일을 프로젝트 루트로 복사하고 이름을 `youtube_credentials.json`으로 변경
 
-### Step 5: Redirect URI 추가 (이메일 로그인용)
+### Step 5: Redirect URI 추가 (이메일 로그인용) ⚠️ 필수!
+
+**중요:** 이 단계를 건너뛰면 "Error 400: redirect_uri_mismatch" 에러가 발생합니다!
+
 1. OAuth 클라이언트 ID 편집 화면으로 이동
 2. "Authorized redirect URIs" 섹션에서 "ADD URI" 클릭
-3. 다음 URI 추가: `http://localhost:5000/api/youtube/auth/callback`
-4. "SAVE" 클릭
+3. 다음 URI들을 추가:
+   - `http://localhost:5000/api/youtube/auth/callback` (필수)
+   - `http://127.0.0.1:5000/api/youtube/auth/callback` (옵션, 권장)
+4. "SAVE" 클릭하여 저장
+
+**주의:** Google Cloud Console에 URI를 추가한 후 몇 분 정도 시간이 걸릴 수 있습니다.
 
 ## 📁 파일 구조 예시
 

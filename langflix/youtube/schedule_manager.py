@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from langflix.db.models import YouTubeSchedule, YouTubeQuotaUsage
-from langflix.db.session import get_db_session
+from langflix.db.session import db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,8 @@ class YouTubeScheduleManager:
     
     def __init__(self, config: Optional[ScheduleConfig] = None):
         self.config = config or ScheduleConfig()
-        self.db_session = get_db_session()
+        # Removed: self.db_session = get_db_session()
+        # Database sessions now use db_manager.session() context manager on-demand
     
     def get_next_available_slot(
         self, 
@@ -117,54 +118,64 @@ class YouTubeScheduleManager:
     
     def _get_schedules_for_date(self, target_date: date) -> List[YouTubeSchedule]:
         """Get all schedules for a specific date"""
-        start_datetime = datetime.combine(target_date, time.min)
-        end_datetime = datetime.combine(target_date, time.max)
-        
-        return self.db_session.query(YouTubeSchedule).filter(
-            YouTubeSchedule.scheduled_publish_time >= start_datetime,
-            YouTubeSchedule.scheduled_publish_time <= end_datetime,
-            YouTubeSchedule.upload_status.in_(['scheduled', 'uploading'])
-        ).all()
+        try:
+            start_datetime = datetime.combine(target_date, time.min)
+            end_datetime = datetime.combine(target_date, time.max)
+            
+            with db_manager.session() as db:
+                return db.query(YouTubeSchedule).filter(
+                    YouTubeSchedule.scheduled_publish_time >= start_datetime,
+                    YouTubeSchedule.scheduled_publish_time <= end_datetime,
+                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading'])
+                ).all()
+        except Exception as e:
+            logger.error(f"Database error getting schedules for date {target_date}: {e}")
+            raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
     def check_daily_quota(self, target_date: date) -> DailyQuotaStatus:
         """
         Check daily quota status for a specific date
         Returns: DailyQuotaStatus with used/remaining counts
         """
-        # Get or create quota record for this date
-        quota_record = self.db_session.query(YouTubeQuotaUsage).filter(
-            YouTubeQuotaUsage.date == target_date
-        ).first()
-        
-        if not quota_record:
-            # Create new quota record
-            quota_record = YouTubeQuotaUsage(
-                date=target_date,
-                quota_used=0,
-                quota_limit=self.config.quota_limit,
-                upload_count=0,
-                final_videos_uploaded=0,
-                short_videos_uploaded=0
-            )
-            self.db_session.add(quota_record)
-            self.db_session.commit()
-        
-        # Calculate remaining quotas
-        final_remaining = max(0, self.config.daily_limits['final'] - quota_record.final_videos_uploaded)
-        short_remaining = max(0, self.config.daily_limits['short'] - quota_record.short_videos_uploaded)
-        quota_remaining = max(0, quota_record.quota_limit - quota_record.quota_used)
-        quota_percentage = (quota_record.quota_used / quota_record.quota_limit) * 100 if quota_record.quota_limit > 0 else 0
-        
-        return DailyQuotaStatus(
-            date=target_date,
-            final_used=quota_record.final_videos_uploaded,
-            final_remaining=final_remaining,
-            short_used=quota_record.short_videos_uploaded,
-            short_remaining=short_remaining,
-            quota_used=quota_record.quota_used,
-            quota_remaining=quota_remaining,
-            quota_percentage=quota_percentage
-        )
+        try:
+            with db_manager.session() as db:
+                # Get or create quota record for this date
+                quota_record = db.query(YouTubeQuotaUsage).filter(
+                    YouTubeQuotaUsage.date == target_date
+                ).first()
+                
+                if not quota_record:
+                    # Create new quota record
+                    quota_record = YouTubeQuotaUsage(
+                        date=target_date,
+                        quota_used=0,
+                        quota_limit=self.config.quota_limit,
+                        upload_count=0,
+                        final_videos_uploaded=0,
+                        short_videos_uploaded=0
+                    )
+                    db.add(quota_record)
+                    # Commit happens automatically via context manager
+                
+                # Calculate remaining quotas
+                final_remaining = max(0, self.config.daily_limits['final'] - quota_record.final_videos_uploaded)
+                short_remaining = max(0, self.config.daily_limits['short'] - quota_record.short_videos_uploaded)
+                quota_remaining = max(0, quota_record.quota_limit - quota_record.quota_used)
+                quota_percentage = (quota_record.quota_used / quota_record.quota_limit) * 100 if quota_record.quota_limit > 0 else 0
+                
+                return DailyQuotaStatus(
+                    date=target_date,
+                    final_used=quota_record.final_videos_uploaded,
+                    final_remaining=final_remaining,
+                    short_used=quota_record.short_videos_uploaded,
+                    short_remaining=short_remaining,
+                    quota_used=quota_record.quota_used,
+                    quota_remaining=quota_remaining,
+                    quota_percentage=quota_percentage
+                )
+        except Exception as e:
+            logger.error(f"Database error checking daily quota for {target_date}: {e}")
+            raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
     def schedule_video(
         self,
@@ -216,80 +227,94 @@ class YouTubeScheduleManager:
         
         # Create schedule record
         try:
-            schedule = YouTubeSchedule(
-                video_path=video_path,
-                video_type=video_type,
-                scheduled_publish_time=target_datetime,
-                upload_status='scheduled'
-            )
-            self.db_session.add(schedule)
-            self.db_session.commit()
-            
-            logger.info(f"Scheduled {video_type} video for {target_datetime}: {video_path}")
-            return True, f"Video scheduled for {target_datetime}", target_datetime
-            
+            with db_manager.session() as db:
+                schedule = YouTubeSchedule(
+                    video_path=video_path,
+                    video_type=video_type,
+                    scheduled_publish_time=target_datetime,
+                    upload_status='scheduled'
+                )
+                db.add(schedule)
+                # Commit happens automatically via context manager
+                
+                logger.info(f"Scheduled {video_type} video for {target_datetime}: {video_path}")
+                return True, f"Video scheduled for {target_datetime}", target_datetime
+                
+        except ValueError as e:
+            # Database connection errors
+            logger.error(f"Database error scheduling video: {e}")
+            return False, f"Database connection failed. Please ensure PostgreSQL is running.", None
         except Exception as e:
-            self.db_session.rollback()
-            logger.error(f"Failed to schedule video: {e}")
+            logger.error(f"Failed to schedule video: {e}", exc_info=True)
             return False, f"Failed to schedule video: {str(e)}", None
     
     def get_schedule_calendar(self, start_date: date, days: int = 7) -> Dict[str, List[Dict]]:
         """Get scheduled uploads calendar view for a date range"""
-        end_date = start_date + timedelta(days=days)
-        
-        schedules = self.db_session.query(YouTubeSchedule).filter(
-            YouTubeSchedule.scheduled_publish_time >= datetime.combine(start_date, time.min),
-            YouTubeSchedule.scheduled_publish_time <= datetime.combine(end_date, time.max)
-        ).order_by(YouTubeSchedule.scheduled_publish_time).all()
-        
-        # Group by date
-        calendar = {}
-        for schedule in schedules:
-            date_key = schedule.scheduled_publish_time.date().isoformat()
-            if date_key not in calendar:
-                calendar[date_key] = []
+        try:
+            end_date = start_date + timedelta(days=days)
             
-            calendar[date_key].append({
-                'id': str(schedule.id),
-                'video_path': schedule.video_path,
-                'video_type': schedule.video_type,
-                'scheduled_time': schedule.scheduled_publish_time.isoformat(),
-                'status': schedule.upload_status,
-                'youtube_video_id': schedule.youtube_video_id
-            })
-        
-        return calendar
+            with db_manager.session() as db:
+                schedules = db.query(YouTubeSchedule).filter(
+                    YouTubeSchedule.scheduled_publish_time >= datetime.combine(start_date, time.min),
+                    YouTubeSchedule.scheduled_publish_time <= datetime.combine(end_date, time.max)
+                ).order_by(YouTubeSchedule.scheduled_publish_time).all()
+                
+                # Group by date
+                calendar = {}
+                for schedule in schedules:
+                    date_key = schedule.scheduled_publish_time.date().isoformat()
+                    if date_key not in calendar:
+                        calendar[date_key] = []
+                    
+                    calendar[date_key].append({
+                        'id': str(schedule.id),
+                        'video_path': schedule.video_path,
+                        'video_type': schedule.video_type,
+                        'scheduled_time': schedule.scheduled_publish_time.isoformat(),
+                        'status': schedule.upload_status,
+                        'youtube_video_id': schedule.youtube_video_id
+                    })
+                
+                return calendar
+        except Exception as e:
+            logger.error(f"Database error getting schedule calendar: {e}")
+            raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
     def update_quota_usage(self, video_type: str, quota_used: int = 1600):
         """Update quota usage after successful upload"""
-        today = date.today()
-        
-        quota_record = self.db_session.query(YouTubeQuotaUsage).filter(
-            YouTubeQuotaUsage.date == today
-        ).first()
-        
-        if not quota_record:
-            quota_record = YouTubeQuotaUsage(
-                date=today,
-                quota_used=0,
-                quota_limit=self.config.quota_limit,
-                upload_count=0,
-                final_videos_uploaded=0,
-                short_videos_uploaded=0
-            )
-            self.db_session.add(quota_record)
-        
-        # Update quota usage
-        quota_record.quota_used += quota_used
-        quota_record.upload_count += 1
-        
-        if video_type == 'final':
-            quota_record.final_videos_uploaded += 1
-        elif video_type == 'short':
-            quota_record.short_videos_uploaded += 1
-        
-        self.db_session.commit()
-        logger.info(f"Updated quota usage: {quota_used} units for {video_type} video")
+        try:
+            today = date.today()
+            
+            with db_manager.session() as db:
+                quota_record = db.query(YouTubeQuotaUsage).filter(
+                    YouTubeQuotaUsage.date == today
+                ).first()
+                
+                if not quota_record:
+                    quota_record = YouTubeQuotaUsage(
+                        date=today,
+                        quota_used=0,
+                        quota_limit=self.config.quota_limit,
+                        upload_count=0,
+                        final_videos_uploaded=0,
+                        short_videos_uploaded=0
+                    )
+                    db.add(quota_record)
+                
+                # Update quota usage
+                quota_record.quota_used += quota_used
+                quota_record.upload_count += 1
+                
+                if video_type == 'final':
+                    quota_record.final_videos_uploaded += 1
+                elif video_type == 'short':
+                    quota_record.short_videos_uploaded += 1
+                
+                # Commit happens automatically via context manager
+                logger.info(f"Updated quota usage: {quota_used} units for {video_type} video")
+        except Exception as e:
+            logger.error(f"Database error updating quota usage: {e}")
+            raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
     def get_quota_warnings(self) -> List[str]:
         """Get quota usage warnings"""
@@ -313,24 +338,24 @@ class YouTubeScheduleManager:
     def cancel_schedule(self, schedule_id: str) -> bool:
         """Cancel a scheduled upload"""
         try:
-            schedule = self.db_session.query(YouTubeSchedule).filter(
-                YouTubeSchedule.id == schedule_id
-            ).first()
-            
-            if not schedule:
-                return False
-            
-            if schedule.upload_status in ['uploading', 'completed']:
-                return False  # Cannot cancel already processing/completed uploads
-            
-            schedule.upload_status = 'failed'
-            schedule.error_message = 'Cancelled by user'
-            self.db_session.commit()
-            
-            logger.info(f"Cancelled schedule: {schedule_id}")
-            return True
-            
+            with db_manager.session() as db:
+                schedule = db.query(YouTubeSchedule).filter(
+                    YouTubeSchedule.id == schedule_id
+                ).first()
+                
+                if not schedule:
+                    return False
+                
+                if schedule.upload_status in ['uploading', 'completed']:
+                    return False  # Cannot cancel already processing/completed uploads
+                
+                schedule.upload_status = 'failed'
+                schedule.error_message = 'Cancelled by user'
+                # Commit happens automatically via context manager
+                
+                logger.info(f"Cancelled schedule: {schedule_id}")
+                return True
+                
         except Exception as e:
-            self.db_session.rollback()
-            logger.error(f"Failed to cancel schedule {schedule_id}: {e}")
+            logger.error(f"Failed to cancel schedule {schedule_id}: {e}", exc_info=True)
             return False

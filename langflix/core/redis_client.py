@@ -283,6 +283,277 @@ class RedisJobManager:
         except Exception as e:
             logger.error(f"❌ Failed to invalidate video cache: {e}")
             return False
+    
+    # Batch Queue Management Methods
+    
+    def create_batch(self, batch_id: str, videos: List[Dict[str, Any]], config: Dict[str, Any]) -> bool:
+        """
+        Create a batch with multiple videos.
+        
+        Args:
+            batch_id: Unique batch identifier
+            videos: List of video dictionaries with job information
+            config: Batch configuration (language_code, language_level, etc.)
+            
+        Returns:
+            True if batch created successfully, False otherwise
+        """
+        try:
+            batch_data = {
+                "batch_id": batch_id,
+                "status": "PENDING",
+                "total_jobs": str(len(videos)),
+                "completed_jobs": "0",
+                "failed_jobs": "0",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "config": json.dumps(config, default=str)
+            }
+            
+            # Store job IDs list
+            job_ids = [video.get('job_id') for video in videos if 'job_id' in video]
+            batch_data["jobs"] = json.dumps(job_ids, default=str)
+            
+            # Store batch data as Hash
+            self.redis_client.hset(f"batch:{batch_id}", mapping=batch_data)
+            
+            # Set expiration (24 hours)
+            self.redis_client.expire(f"batch:{batch_id}", 86400)
+            
+            logger.info(f"✅ Batch {batch_id} created with {len(videos)} jobs")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to create batch {batch_id}: {e}")
+            return False
+    
+    def get_batch_status(self, batch_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get batch status with all job information.
+        
+        Args:
+            batch_id: Batch identifier
+            
+        Returns:
+            Dictionary with batch status and all job details, or None if not found
+        """
+        try:
+            batch_data = self.redis_client.hgetall(f"batch:{batch_id}")
+            if not batch_data:
+                return None
+            
+            # Deserialize job IDs list
+            if 'jobs' in batch_data:
+                try:
+                    job_ids = json.loads(batch_data['jobs'])
+                    batch_data['jobs'] = job_ids
+                except (json.JSONDecodeError, TypeError):
+                    batch_data['jobs'] = []
+            
+            # Deserialize config
+            if 'config' in batch_data:
+                try:
+                    batch_data['config'] = json.loads(batch_data['config'])
+                except (json.JSONDecodeError, TypeError):
+                    batch_data['config'] = {}
+            
+            # Convert numeric fields
+            if 'total_jobs' in batch_data:
+                batch_data['total_jobs'] = int(batch_data['total_jobs'])
+            if 'completed_jobs' in batch_data:
+                batch_data['completed_jobs'] = int(batch_data['completed_jobs'])
+            if 'failed_jobs' in batch_data:
+                batch_data['failed_jobs'] = int(batch_data['failed_jobs'])
+            
+            # Get all job details
+            jobs = []
+            if 'jobs' in batch_data and isinstance(batch_data['jobs'], list):
+                for job_id in batch_data['jobs']:
+                    job = self.get_job(job_id)
+                    if job:
+                        jobs.append(job)
+            
+            batch_data['job_details'] = jobs
+            
+            return batch_data
+        except Exception as e:
+            logger.error(f"❌ Failed to get batch status {batch_id}: {e}")
+            return None
+    
+    def update_batch_status(self, batch_id: str, updates: Dict[str, Any]) -> bool:
+        """Update batch status and metadata."""
+        try:
+            updates['updated_at'] = datetime.now(timezone.utc).isoformat()
+            
+            # Convert values to strings for Redis
+            string_updates = {}
+            for key, value in updates.items():
+                if isinstance(value, (int, float)):
+                    string_updates[key] = str(value)
+                elif isinstance(value, (list, dict)):
+                    string_updates[key] = json.dumps(value, default=str)
+                elif value is None:
+                    string_updates[key] = "None"
+                else:
+                    string_updates[key] = str(value)
+            
+            self.redis_client.hset(f"batch:{batch_id}", mapping=string_updates)
+            logger.debug(f"✅ Batch {batch_id} updated")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to update batch {batch_id}: {e}")
+            return False
+    
+    def add_job_to_queue(self, job_id: str) -> bool:
+        """
+        Add job to FIFO queue using Redis LIST.
+        Uses LPUSH to add to the left (queue tail), so RPOP gets oldest first.
+        
+        Args:
+            job_id: Job identifier to add to queue
+            
+        Returns:
+            True if added successfully, False otherwise
+        """
+        try:
+            # Add to queue list (FIFO: LPUSH adds to left, RPOP gets from right)
+            self.redis_client.lpush("jobs:queue", job_id)
+            logger.debug(f"✅ Job {job_id} added to queue")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to add job {job_id} to queue: {e}")
+            return False
+    
+    def get_next_job_from_queue(self) -> Optional[str]:
+        """
+        Get next job from queue atomically using RPOP (right pop).
+        This removes the job from the queue, ensuring only one processor gets it.
+        
+        Returns:
+            Job ID if available, None if queue is empty
+        """
+        try:
+            job_id = self.redis_client.rpop("jobs:queue")
+            if job_id:
+                logger.debug(f"✅ Retrieved job {job_id} from queue")
+            return job_id
+        except Exception as e:
+            logger.error(f"❌ Failed to get next job from queue: {e}")
+            return None
+    
+    def get_queue_length(self) -> int:
+        """Get number of jobs in queue."""
+        try:
+            return self.redis_client.llen("jobs:queue")
+        except Exception as e:
+            logger.error(f"❌ Failed to get queue length: {e}")
+            return 0
+    
+    def mark_job_processing(self, job_id: str) -> bool:
+        """
+        Mark job as currently processing using SETNX (set if not exists).
+        This prevents duplicate processing if multiple processors exist.
+        
+        Args:
+            job_id: Job identifier to mark as processing
+            
+        Returns:
+            True if successfully marked (lock acquired), False if already processing
+        """
+        try:
+            # Use SETNX to set only if not exists (atomic lock)
+            result = self.redis_client.setnx("jobs:processing", job_id)
+            if result:
+                # Set expiration (2 hours) in case processor crashes
+                self.redis_client.expire("jobs:processing", 7200)
+                logger.info(f"✅ Job {job_id} marked as processing")
+                return True
+            else:
+                logger.debug(f"⚠️ Job processing lock already held by another job")
+                return False
+        except Exception as e:
+            logger.error(f"❌ Failed to mark job {job_id} as processing: {e}")
+            return False
+    
+    def get_currently_processing_job(self) -> Optional[str]:
+        """Get currently processing job ID."""
+        try:
+            job_id = self.redis_client.get("jobs:processing")
+            return job_id if job_id else None
+        except Exception as e:
+            logger.error(f"❌ Failed to get currently processing job: {e}")
+            return None
+    
+    def remove_from_processing(self) -> bool:
+        """Remove currently processing job marker."""
+        try:
+            result = self.redis_client.delete("jobs:processing")
+            logger.debug(f"✅ Removed processing job marker")
+            return bool(result)
+        except Exception as e:
+            logger.error(f"❌ Failed to remove processing job marker: {e}")
+            return False
+    
+    def get_all_queued_jobs(self) -> List[str]:
+        """
+        Get all jobs in QUEUED state for restart recovery.
+        
+        Returns:
+            List of job IDs that are in QUEUED state
+        """
+        try:
+            queued_jobs = []
+            job_ids = self.redis_client.smembers("jobs:active")
+            
+            for job_id in job_ids:
+                job = self.get_job(job_id)
+                if job and job.get('status') == 'QUEUED':
+                    queued_jobs.append(job_id)
+            
+            return queued_jobs
+        except Exception as e:
+            logger.error(f"❌ Failed to get queued jobs: {e}")
+            return []
+    
+    def acquire_processor_lock(self) -> bool:
+        """
+        Acquire processor lock to ensure only one queue processor runs.
+        Uses SETNX with expiration for safety.
+        
+        Returns:
+            True if lock acquired, False if already held
+        """
+        try:
+            result = self.redis_client.setnx("jobs:processor_lock", "1")
+            if result:
+                # Set expiration (1 hour) - processor should renew periodically
+                self.redis_client.expire("jobs:processor_lock", 3600)
+                logger.info("✅ Processor lock acquired")
+                return True
+            else:
+                logger.debug("⚠️ Processor lock already held by another instance")
+                return False
+        except Exception as e:
+            logger.error(f"❌ Failed to acquire processor lock: {e}")
+            return False
+    
+    def release_processor_lock(self) -> bool:
+        """Release processor lock."""
+        try:
+            result = self.redis_client.delete("jobs:processor_lock")
+            logger.info("✅ Processor lock released")
+            return bool(result)
+        except Exception as e:
+            logger.error(f"❌ Failed to release processor lock: {e}")
+            return False
+    
+    def renew_processor_lock(self) -> bool:
+        """Renew processor lock expiration."""
+        try:
+            result = self.redis_client.expire("jobs:processor_lock", 3600)
+            return bool(result)
+        except Exception as e:
+            logger.error(f"❌ Failed to renew processor lock: {e}")
+            return False
 
 # Global Redis job manager instance
 _redis_job_manager: Optional[RedisJobManager] = None

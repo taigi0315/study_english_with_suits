@@ -5,8 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 import os
+import asyncio
 
-from .routes import health, jobs, files
+from .routes import health, jobs, files, batch
 from .exceptions import APIException, api_exception_handler
 from .middleware import LoggingMiddleware
 
@@ -52,12 +53,38 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Redis initialization failed: {e}")
     
+    # Start queue processor for batch job processing
+    queue_processor = None
+    queue_processor_task = None
+    try:
+        from langflix.services.queue_processor import QueueProcessor
+        
+        queue_processor = QueueProcessor()
+        queue_processor_task = asyncio.create_task(queue_processor.start())
+        logger.info("✅ Queue processor started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start queue processor: {e}")
+        # Continue startup even if queue processor fails
+    
     logger.info("LangFlix API started successfully")
     
     yield
     
     # Shutdown
     logger.info("LangFlix API shutting down...")
+    
+    # Stop queue processor gracefully
+    if queue_processor and queue_processor_task:
+        try:
+            await queue_processor.stop()
+            queue_processor_task.cancel()
+            try:
+                await queue_processor_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("✅ Queue processor stopped")
+        except Exception as e:
+            logger.error(f"❌ Failed to stop queue processor: {e}")
     
     # Close database connections
     try:
@@ -105,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, tags=["health"])
     app.include_router(jobs.router, prefix="/api/v1", tags=["jobs"])
     app.include_router(files.router, prefix="/api/v1", tags=["files"])
+    app.include_router(batch.router, prefix="/api/v1", tags=["batch"])
     
     # API-only endpoint (no UI)
     @app.get("/")

@@ -353,6 +353,73 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 
 ---
 
+## Dependency Graph (Updated)
+```
+Phase 0:
+TICKET-011 (context manager)
+  └─> TICKET-010 (API dependencies)
+       └─> TICKET-012 (health checks) [optional dependency]
+
+Phase 1:
+TICKET-007 (parallel processing)
+  └─> TICKET-008 (multi-expression)
+       └─> TICKET-013 (bug fixes)
+
+Phase 2:
+TICKET-014 (batch processing)
+  └─> Depends on: TICKET-007, TICKET-008 (stability)
+
+Phase 3:
+TICKET-009 (production deployment)
+  └─> Independent (can proceed after core features stable)
+```
+
+---
+
+## Phase 2: Sprint 2 (Weeks 3-4) - User Experience Enhancements
+**Focus:** Batch video processing and UX improvements
+**Duration:** 2 weeks
+**Dependencies:** Phase 1 complete (TICKET-007, TICKET-008 stable)
+
+### TICKET-014: Implement Batch Video Processing Queue System
+- **Priority:** High
+- **Effort:** 4 days
+- **Why now:** Builds on stable parallel processing and multi-expression features
+- **Owner:** Senior engineer (backend + frontend)
+
+**Key Deliverables:**
+- Multi-select UI (checkboxes for batch selection)
+- Batch creation endpoint (`POST /api/v1/batch`)
+- Redis-based FIFO queue system
+- Sequential queue processor (FastAPI lifespan background task)
+- Batch progress tracking UI
+- Backward compatibility maintained
+
+**Success Criteria:**
+- [ ] Users can select multiple videos and create batch
+- [ ] Jobs process sequentially from queue
+- [ ] Batch progress visible in UI
+- [ ] Failed jobs don't block queue
+- [ ] Single job processing still works
+- [ ] Queue processor handles shutdown gracefully
+- [ ] Redis lock prevents duplicate processors
+
+**Phase 2 Risks:**
+- Risk: Queue processor crash leaves jobs stuck
+  - Mitigation: Health check, auto-restart, manual resume endpoint
+- Risk: Large batches consume resources
+  - Mitigation: Batch size limit (50 videos), Redis storage (not memory)
+
+---
+
+## Overall Progress
+- **Completed Phases:** None
+- **Current Phase:** Phase 0 (Immediate)
+- **Total Tickets Approved:** 8 (TICKET-007, 008, 009, 010, 011, 012, 013, 014)
+- **Estimated Timeline:** Phase 0 (1-2 days) → Phase 1 (2 weeks) → Phase 2 (2 weeks) → Phase 3 (계속)
+
+---
+
 ## Updated Implementation Sequence
 
 **Phase 0 (즉시):**
@@ -365,18 +432,13 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 3. TICKET-008 (multi-expression)
 4. TICKET-013 (multi-expression bug fixes)
 
-**Phase 2-3:** 기존 계획대로
+**Phase 2 (Sprint 2):**
+1. TICKET-014 (batch video processing queue)
+
+**Phase 3:** 기존 계획대로 (TICKET-009: production deployment)
 
 ---
 
-## Overall Progress
-- **Completed Phases:** None
-- **Current Phase:** Phase 0 (Immediate)
-- **Total Tickets Approved:** 7 (TICKET-007, 008, 009, 010, 011, 012, 013)
-- **Estimated Timeline:** Phase 0 (1-2 days) → Phase 1 (2 weeks) → Phase 2-3 (계속)
-
----
-
-**Roadmap Status:** ✅ Updated with new tickets
+**Roadmap Status:** ✅ Updated with TICKET-014
 **Last Updated:** 2025-01-30
 **Next Steps:** Start Phase 0 immediately

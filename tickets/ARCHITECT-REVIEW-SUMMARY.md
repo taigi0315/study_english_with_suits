@@ -366,3 +366,134 @@ We'll know this is successful when:
 **All Valid Tickets:** ✅ Approved
 **Implementation Order:** TICKET-013 in Phase 1 (after TICKET-008)
 **Next Review:** Ongoing
+
+---
+
+# Architect Review Summary (Fourth Session)
+**Review Date:** 2025-01-30 (Fourth Session)
+**Reviewed by:** Architect Agent
+
+## Tickets Reviewed
+- Total tickets evaluated: 1
+- Approved: 1
+- Rejected: 0
+- Deferred: 0
+- Needs revision: 0
+
+## Decision Breakdown
+
+### ✅ Approved (1 ticket)
+**Phase 2 (Sprint 2):** 1 ticket (TICKET-014)
+
+**See full roadmap:** `tickets/approved/IMPLEMENTATION-ROADMAP.md`
+
+## Strategic Themes Addressed
+1. **User Experience Enhancement** (TICKET-014): 1 ticket, 4 days
+   - Impact: 배치 비디오 처리로 반복 작업 자동화, 사용자 생산성 향상
+   - Key ticket: TICKET-014
+
+## Architectural Direction
+
+### Medium-term Focus (Phase 2 - Weeks 3-4)
+**TICKET-014: Implement Batch Video Processing Queue System**
+- Multi-select UI (checkboxes)
+- Redis-based FIFO queue
+- Sequential queue processor (FastAPI lifespan)
+- Batch progress tracking
+- Backward compatibility maintained
+
+## Key Decisions Made
+
+### Decision 1: Queue Processing Architecture
+- **Context:** 배치 처리를 위한 큐 시스템 필요
+- **Decision:** FastAPI lifespan background task (Redis-based FIFO queue)
+- **Rationale:** 기존 아키텍처와 통합 용이, 단순하고 충분
+- **Impact:** 별도 데몬 불필요, FastAPI와 통합
+
+### Decision 2: Sequential Processing
+- **Context:** 병렬 vs 순차 처리 선택
+- **Decision:** v1은 순차 처리, 병렬 처리는 향후 개선
+- **Rationale:** 안전, 예측 가능, 리소스 과부하 방지
+- **Impact:** 안정적이지만 느림 (향후 병렬 처리 추가 가능)
+
+### Decision 3: Batch Size Limits
+- **Context:** 큰 배치의 리소스 사용
+- **Decision:** 최대 50개 비디오 제한
+- **Rationale:** 리소스 고갈 방지, 합리적인 워크플로우
+- **Impact:** 실수로 인한 큰 배치 방지
+
+### Decision 4: Error Handling Strategy
+- **Context:** 배치 내 일부 작업 실패 시 처리
+- **Decision:** 실패한 작업은 FAILED로 표시하고 계속 진행
+- **Rationale:** 한 작업 실패가 전체 배치를 중단하지 않음
+- **Impact:** 사용자 경험 향상, 부분 성공 허용
+
+### Decision 5: Server Restart Handling
+- **Context:** 서버 재시작 중 배치 처리
+- **Decision:** QUEUED 작업 자동 재개, PROCESSING 작업은 타임아웃 처리
+- **Rationale:** 사용자 작업 손실 최소화
+- **Impact:** 안정적인 배치 처리
+
+## Dependencies
+- TICKET-014는 TICKET-007, TICKET-008 완료 후 구현
+  - 이유: 병렬 처리 성능 혜택, 다중 표현식 기능 안정화 필요
+- TICKET-012 완료 권장 (모니터링)
+
+## Risks and Mitigations
+**Highest risks identified:**
+
+1. **TICKET-014: Queue processor failure**
+   - Risk: 프로세서 크래시 시 작업이 QUEUED 상태로 남음
+   - Mitigation: Health check, 자동 재시작, 수동 resume 엔드포인트
+   - Status: 완화 전략 수립 완료
+
+2. **TICKET-014: Large batch resource usage**
+   - Risk: 많은 작업이 큐에서 리소스 소비
+   - Mitigation: Redis 저장 (메모리 아님), 배치 크기 제한 (50개)
+   - Status: 설계상 안전
+
+3. **TICKET-014: Duplicate processors**
+   - Risk: 여러 FastAPI 인스턴스가 중복 프로세서 시작
+   - Mitigation: Redis lock (`SETNX jobs:processor_lock`)
+   - Status: 설계상 안전
+
+4. **TICKET-014: Job timeout/stuck**
+   - Risk: 장기 실행 작업이 전체 큐 차단
+   - Mitigation: 타임아웃 감지 (1시간), FAILED로 표시, 다음 작업 계속
+   - Status: 완화 전략 수립 완료
+
+## Resource Requirements
+- Timeline: 4일 (Phase 2, Sprint 2)
+- Skills needed: Senior engineer (backend + frontend)
+- Infrastructure: Redis (이미 사용 중)
+
+## Success Criteria
+We'll know this is successful when:
+- [ ] 사용자가 여러 비디오 선택 및 배치 생성 가능
+- [ ] 작업이 큐에서 순차 처리됨
+- [ ] 배치 진행 상황이 UI에 표시됨
+- [ ] 실패한 작업이 큐를 차단하지 않음
+- [ ] 단일 작업 처리 계속 작동
+- [ ] 큐 프로세서가 graceful shutdown 처리
+- [ ] Redis lock이 중복 프로세서 방지
+
+## Next Steps
+1. Phase 1 완료 (TICKET-007, TICKET-008)
+2. Phase 2 시작: TICKET-014 구현
+3. 성능 모니터링 및 조정
+
+## Feedback Welcome
+이번 검토는 다음과 같은 우선순위를 둡니다:
+- **사용자 경험**: 배치 처리를 통한 생산성 향상
+- **안정성**: 순차 처리로 리소스 과부하 방지
+- **확장성**: 향후 병렬 처리 추가 가능한 구조
+
+비즈니스 우선순위나 새로운 정보가 생기면 재검토하겠습니다.
+
+---
+
+**Review Status:** ✅ Complete
+**All Valid Tickets:** ✅ Approved
+**Total Approved Tickets:** 8 (TICKET-007, 008, 009, 010, 011, 012, 013, 014)
+**Implementation Order:** Phase 0 → Phase 1 → Phase 2 → Phase 3
+**Next Review:** Ongoing

@@ -7,13 +7,13 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, render_template_string
 from langflix.youtube.video_manager import VideoFileManager, VideoMetadata
 from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouTubeUploadManager
 from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
 from langflix.youtube.schedule_manager import YouTubeScheduleManager, ScheduleConfig
 from langflix.db.models import YouTubeAccount, YouTubeQuotaUsage
-from langflix.db.session import get_db_session
+from langflix.db.session import db_manager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,23 @@ class VideoManagementUI:
         import os
         abs_output_dir = os.path.abspath(output_dir)
         self.video_manager = VideoFileManager(abs_output_dir)
+        
+        # Initialize OAuth state storage (use Redis if available)
+        oauth_state_storage = None
+        try:
+            from langflix.core.redis_client import get_redis_job_manager
+            redis_manager = get_redis_job_manager()
+            oauth_state_storage = redis_manager.redis_client
+            logger.info("Using Redis for OAuth state storage")
+        except Exception as e:
+            logger.warning(f"Redis not available for OAuth state storage, using in-memory: {e}")
+            oauth_state_storage = None
+        
         self.upload_manager = YouTubeUploadManager()
+        # Pass OAuth state storage to uploader
+        if hasattr(self.upload_manager, 'uploader'):
+            self.upload_manager.uploader.oauth_state_storage = oauth_state_storage
+        
         self.metadata_generator = YouTubeMetadataGenerator()
         try:
             self.schedule_manager = YouTubeScheduleManager()
@@ -62,7 +78,49 @@ class VideoManagementUI:
         import os
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         self.app = Flask(__name__, template_folder=template_dir)
+        
+        # Register error handlers to ensure JSON responses for API errors
+        self._setup_error_handlers()
+        
         self._setup_routes()
+    
+    def _setup_error_handlers(self):
+        """Setup error handlers to return JSON for API routes"""
+        
+        @self.app.errorhandler(404)
+        def not_found(error):
+            """Return JSON for 404 errors on API routes"""
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    "error": "Endpoint not found",
+                    "path": request.path
+                }), 404
+            return error
+        
+        @self.app.errorhandler(500)
+        def internal_error(error):
+            """Return JSON for 500 errors on API routes"""
+            if request.path.startswith('/api/'):
+                logger.error(f"Internal server error on {request.path}: {error}", exc_info=True)
+                return jsonify({
+                    "error": "Internal server error",
+                    "path": request.path,
+                    "details": str(error) if logger.level <= logging.DEBUG else None
+                }), 500
+            return error
+        
+        @self.app.errorhandler(Exception)
+        def handle_exception(e):
+            """Handle all unhandled exceptions"""
+            if request.path.startswith('/api/'):
+                logger.error(f"Unhandled exception on {request.path}: {e}", exc_info=True)
+                return jsonify({
+                    "error": "An error occurred",
+                    "details": str(e),
+                    "type": type(e).__name__
+                }), 500
+            # Re-raise for non-API routes to use Flask's default handling
+            raise e
         
     def _setup_routes(self):
         """Setup Flask routes"""
@@ -348,24 +406,205 @@ class VideoManagementUI:
         
         @self.app.route('/api/youtube/login', methods=['POST'])
         def youtube_login():
-            """Authenticate with YouTube (triggers OAuth flow)"""
+            """Authenticate with YouTube (supports both Desktop and Web flow)"""
+            data = request.get_json() or {}
+            email = data.get('email')  # Optional email for web flow
+            use_web_flow = data.get('use_web_flow', False)  # Default to Desktop flow
+            
+            if use_web_flow or email:
+                # Generate auth URL for web flow
+                try:
+                    # Get redirect URI (use Flask's request host)
+                    redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
+                    
+                    auth_data = self.upload_manager.uploader.get_authorization_url(
+                        redirect_uri=redirect_uri,
+                        email=email
+                    )
+                    return jsonify({
+                        "auth_url": auth_data['url'],
+                        "state": auth_data['state'],
+                        "flow": "web"
+                    })
+                except FileNotFoundError as e:
+                    logger.error(f"YouTube credentials file not found: {e}")
+                    return jsonify({
+                        "error": "YouTube credentials file not found",
+                        "details": str(e),
+                        "hint": (
+                            "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                            "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
+                            "Note: This is different from Gemini API key in .env file."
+                        ),
+                        "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
+                    }), 400
+                except ImportError as e:
+                    logger.error(f"Missing OAuth library: {e}")
+                    return jsonify({
+                        "error": "OAuth library not available",
+                        "details": str(e),
+                        "hint": "Please install: pip install google-auth-oauthlib"
+                    }), 500
+                except ValueError as e:
+                    logger.error(f"Invalid OAuth configuration: {e}")
+                    return jsonify({
+                        "error": "Invalid OAuth configuration",
+                        "details": str(e),
+                        "hint": "Please check your youtube_credentials.json file format"
+                    }), 400
+                except Exception as e:
+                    logger.error(f"Error generating OAuth URL: {e}", exc_info=True)
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.error(f"Full traceback: {error_trace}")
+                    return jsonify({
+                        "error": "Failed to generate OAuth URL",
+                        "details": str(e),
+                        "type": type(e).__name__
+                    }), 500
+            else:
+                # Use existing Desktop flow
+                try:
+                    success = self.upload_manager.uploader.authenticate()
+                    if success:
+                        # Get channel info and save to database
+                        channel_info = self.upload_manager.uploader.get_channel_info()
+                        if channel_info:
+                            self._save_youtube_account(channel_info)
+                        
+                        return jsonify({
+                            "message": "Successfully authenticated with YouTube",
+                            "channel": channel_info,
+                            "flow": "desktop"
+                        })
+                    else:
+                        return jsonify({"error": "Authentication failed"}), 401
+                except FileNotFoundError as e:
+                    logger.error(f"YouTube credentials file not found: {e}")
+                    return jsonify({
+                        "error": "YouTube credentials file not found",
+                        "details": str(e),
+                        "hint": (
+                            "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                            "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
+                            "Note: This is different from Gemini API key in .env file."
+                        ),
+                        "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
+                    }), 400
+                except OSError as e:
+                    logger.error(f"YouTube OAuth port conflict: {e}")
+                    return jsonify({
+                        "error": "Port 8080 is already in use",
+                        "details": str(e),
+                        "hint": "Please close other applications using port 8080"
+                    }), 500
+                except Exception as e:
+                    logger.error(f"Error authenticating with YouTube: {e}", exc_info=True)
+                    return jsonify({
+                        "error": "Authentication failed",
+                        "details": str(e)
+                    }), 500
+        
+        @self.app.route('/api/youtube/auth/callback')
+        def youtube_auth_callback():
+            """Handle OAuth callback from Google"""
+            authorization_code = request.args.get('code')
+            state = request.args.get('state')
+            error = request.args.get('error')
+            error_description = request.args.get('error_description', 'Unknown error')
+            
+            if error:
+                logger.error(f"OAuth error: {error} - {error_description}")
+                return render_template_string(
+                    '<html><head><title>Authentication Failed</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Failed</h1>'
+                    '<p style="color: #666;">{{ error_description }}</p>'
+                    '<p style="font-size: 0.9em; color: #999; margin-top: 30px;">This window will close automatically...</p>'
+                    '<script>'
+                    'window.opener.postMessage({type: "youtube-auth-error", error: "{{ error }}", details: "{{ error_description }}"}, "*");'
+                    'setTimeout(() => window.close(), 3000);'
+                    '</script>'
+                    '</body></html>',
+                    error=error,
+                    error_description=error_description
+                ), 400
+            
+            if not authorization_code or not state:
+                return render_template_string(
+                    '<html><head><title>Authentication Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Error</h1>'
+                    '<p style="color: #666;">Missing authorization code or state</p>'
+                    '<script>setTimeout(() => window.close(), 3000);</script>'
+                    '</body></html>'
+                ), 400
+            
             try:
-                success = self.upload_manager.uploader.authenticate()
+                redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
+                
+                success = self.upload_manager.uploader.authenticate_from_callback(
+                    authorization_code=authorization_code,
+                    state=state,
+                    redirect_uri=redirect_uri
+                )
+                
                 if success:
                     # Get channel info and save to database
                     channel_info = self.upload_manager.uploader.get_channel_info()
                     if channel_info:
                         self._save_youtube_account(channel_info)
                     
-                    return jsonify({
-                        "message": "Successfully authenticated with YouTube",
-                        "channel": channel_info
-                    })
+                    # Serialize channel_info to JSON for safe embedding
+                    channel_info_json = json.dumps(channel_info) if channel_info else 'null'
+                    
+                    return render_template_string(
+                        '<html><head><title>Authentication Successful</title></head>'
+                        '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                        '<h1 style="color: #4caf50;">✅ Authentication Successful!</h1>'
+                        '<p style="color: #666;">You can close this window now.</p>'
+                        '<script>'
+                        'window.opener.postMessage({type: "youtube-auth-success", channel: {{ channel_info_json | safe }}}, "*");'
+                        'setTimeout(() => window.close(), 2000);'
+                        '</script>'
+                        '</body></html>',
+                        channel_info_json=channel_info_json
+                    )
                 else:
-                    return jsonify({"error": "Authentication failed"}), 401
+                    return render_template_string(
+                        '<html><head><title>Authentication Failed</title></head>'
+                        '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                        '<h1 style="color: #d32f2f;">❌ Authentication Failed</h1>'
+                        '<p style="color: #666;">Could not complete authentication</p>'
+                        '<script>setTimeout(() => window.close(), 3000);</script>'
+                        '</body></html>'
+                    ), 500
+                    
+            except ValueError as e:
+                # Invalid state (CSRF protection)
+                logger.error(f"Invalid OAuth state: {e}")
+                return render_template_string(
+                    '<html><head><title>Security Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Security Error</h1>'
+                    '<p style="color: #666;">Invalid OAuth state. Please try again.</p>'
+                    '<script>setTimeout(() => window.close(), 3000);</script>'
+                    '</body></html>'
+                ), 400
             except Exception as e:
-                logger.error(f"Error authenticating with YouTube: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"OAuth callback error: {e}", exc_info=True)
+                return render_template_string(
+                    '<html><head><title>Authentication Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Error</h1>'
+                    '<p style="color: #666;">{{ error }}</p>'
+                    '<script>'
+                    'window.opener.postMessage({type: "youtube-auth-error", error: "Authentication failed", details: "{{ error }}"}, "*");'
+                    'setTimeout(() => window.close(), 3000);'
+                    '</script>'
+                    '</body></html>',
+                    error=str(e)
+                ), 500
         
         @self.app.route('/api/youtube/logout', methods=['POST'])
         def youtube_logout():
@@ -395,23 +634,43 @@ class VideoManagementUI:
                     return jsonify({"error": "Invalid video_type. Must be 'final' or 'short'"}), 400
                 
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 next_slot = self.schedule_manager.get_next_available_slot(video_type)
                 return jsonify({
                     "next_available_time": next_slot.isoformat(),
                     "video_type": video_type
                 })
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting next available time: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting next available time: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get next available time",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/schedule/calendar')
         def get_schedule_calendar():
             """Get scheduled uploads calendar view"""
             try:
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 start_date_str = request.args.get('start_date')
                 days = int(request.args.get('days', 7))
@@ -425,9 +684,23 @@ class VideoManagementUI:
                 
                 calendar = self.schedule_manager.get_schedule_calendar(start_date, days)
                 return jsonify(calendar)
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting schedule calendar: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting schedule calendar: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get schedule calendar",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/upload/schedule', methods=['POST'])
         def schedule_upload():
@@ -501,7 +774,10 @@ class VideoManagementUI:
                         return jsonify({"error": f"Immediate upload failed: {str(e)}"}), 500
                 
                 if not self.schedule_manager:
-                    return jsonify({"error": "Schedule manager not available"}), 503
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
                 
                 # Parse publish time if provided
                 publish_time = None
@@ -530,11 +806,33 @@ class VideoManagementUI:
                         "video_type": video_type
                     })
                 else:
+                    # Check if it's a database connection error
+                    error_msg = message
+                    if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                        return jsonify({
+                            "error": "Database connection failed",
+                            "details": error_msg,
+                            "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                        }), 503
                     return jsonify({"error": message}), 400
                     
+            except ValueError as e:
+                # Database connection errors from schedule_manager
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error scheduling upload: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error scheduling upload: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error scheduling upload: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to schedule upload",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/quota/status')
         def get_quota_status():
@@ -568,9 +866,23 @@ class VideoManagementUI:
                     },
                     "warnings": warnings
                 })
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting quota status: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting quota status: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get quota status",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/video/status/<path:video_path>')
         def get_video_status(video_path):
@@ -579,15 +891,14 @@ class VideoManagementUI:
                 if not self.schedule_manager:
                     return jsonify({"error": "Schedule manager not available"}), 503
                 
-                from langflix.db.session import get_db_session
                 from langflix.db.models import YouTubeSchedule
                 
                 # Ensure the path starts with / (Flask strips it sometimes)
                 if not video_path.startswith('/'):
                     video_path = '/' + video_path
                 
-                with get_db_session() as session:
-                    schedule = session.query(YouTubeSchedule).filter_by(
+                with db_manager.session() as db:
+                    schedule = db.query(YouTubeSchedule).filter_by(
                         video_path=video_path
                     ).first()
                     
@@ -602,9 +913,23 @@ class VideoManagementUI:
                     else:
                         return jsonify({"error": "Video not found in schedule"}), 404
                         
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running: docker-compose up -d postgres (or start your PostgreSQL service)"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
             except Exception as e:
-                logger.error(f"Error getting video status: {e}")
-                return jsonify({"error": str(e)}), 500
+                logger.error(f"Error getting video status: {e}", exc_info=True)
+                return jsonify({
+                    "error": "Failed to get video status",
+                    "details": str(e)
+                }), 500
         
         @self.app.route('/api/video/<path:video_path>')
         def serve_video(video_path):
@@ -718,61 +1043,61 @@ class VideoManagementUI:
             if not self.schedule_manager:
                 return
                 
-            from langflix.db.session import get_db_session
             from langflix.db.models import YouTubeSchedule
             
-            with get_db_session() as session:
+            with db_manager.session() as db:
                 # Find the schedule entry for this video
-                schedule = session.query(YouTubeSchedule).filter_by(
+                schedule = db.query(YouTubeSchedule).filter_by(
                     video_path=video_path
                 ).first()
                 
                 if schedule:
                     schedule.youtube_video_id = youtube_video_id
                     schedule.upload_status = status
-                    session.commit()
+                    # Commit happens automatically via context manager
                     logger.info(f"Updated video status: {video_path} -> {status}")
                 else:
                     logger.warning(f"No schedule found for video: {video_path}")
                     
         except Exception as e:
-            logger.error(f"Error updating video status: {e}")
+            logger.error(f"Error updating video status: {e}", exc_info=True)
+            # Don't raise - status update failure shouldn't block upload process
     
     def _save_youtube_account(self, channel_info: Dict[str, Any]):
         """Save YouTube account info to database"""
         try:
-            db_session = get_db_session()
+            from langflix.db.session import db_manager
             
-            # Check if account already exists
-            existing_account = db_session.query(YouTubeAccount).filter(
-                YouTubeAccount.channel_id == channel_info['channel_id']
-            ).first()
-            
-            if existing_account:
-                # Update existing account
-                existing_account.channel_title = channel_info['title']
-                existing_account.channel_thumbnail = channel_info['thumbnail_url']
-                existing_account.last_authenticated = datetime.now()
-                existing_account.is_active = True
-            else:
-                # Create new account
-                new_account = YouTubeAccount(
-                    channel_id=channel_info['channel_id'],
-                    channel_title=channel_info['title'],
-                    channel_thumbnail=channel_info['thumbnail_url'],
-                    email=channel_info.get('email', ''),
-                    last_authenticated=datetime.now(),
-                    is_active=True
-                )
-                db_session.add(new_account)
-            
-            db_session.commit()
-            logger.info(f"Saved YouTube account: {channel_info['title']}")
-            
+            with db_manager.session() as db:
+                # Check if account already exists
+                existing_account = db.query(YouTubeAccount).filter(
+                    YouTubeAccount.channel_id == channel_info['channel_id']
+                ).first()
+                
+                if existing_account:
+                    # Update existing account
+                    existing_account.channel_title = channel_info['title']
+                    existing_account.channel_thumbnail = channel_info['thumbnail_url']
+                    existing_account.last_authenticated = datetime.now()
+                    existing_account.is_active = True
+                else:
+                    # Create new account
+                    new_account = YouTubeAccount(
+                        channel_id=channel_info['channel_id'],
+                        channel_title=channel_info['title'],
+                        channel_thumbnail=channel_info['thumbnail_url'],
+                        email=channel_info.get('email', ''),
+                        last_authenticated=datetime.now(),
+                        is_active=True
+                    )
+                    db.add(new_account)
+                
+                # Commit happens automatically via context manager
+                logger.info(f"Saved YouTube account: {channel_info['title']}")
+                
         except Exception as e:
-            logger.error(f"Failed to save YouTube account: {e}")
-            if 'db_session' in locals():
-                db_session.rollback()
+            logger.error(f"Failed to save YouTube account: {e}", exc_info=True)
+            # Don't raise - account save failure shouldn't block authentication
     
     def _setup_content_creation_routes(self):
         """Setup content creation API routes"""

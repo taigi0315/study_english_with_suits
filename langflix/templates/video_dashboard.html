@@ -481,6 +481,17 @@
                 </div>
                 <div id="youtubeLoginPrompt" class="youtube-login-prompt">
                     <p>Connect to YouTube to schedule uploads</p>
+                    <div style="margin: 15px 0;">
+                        <input 
+                            type="email" 
+                            id="youtubeEmailInput" 
+                            placeholder="Enter your Google email (optional)"
+                            style="padding: 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; width: 300px; max-width: 100%; font-size: 14px;"
+                        />
+                        <p style="font-size: 0.85em; margin-top: 8px; opacity: 0.8; color: white;">
+                            Leave empty to use default browser login
+                        </p>
+                    </div>
                     <button id="youtubeLoginBtn" class="btn-login">Login to YouTube</button>
                 </div>
             </div>
@@ -1061,6 +1072,12 @@
         function showYouTubeLoginPrompt() {
             document.getElementById('youtubeAccountInfo').style.display = 'none';
             document.getElementById('youtubeLoginPrompt').style.display = 'block';
+            
+            // Clear email input
+            const emailInput = document.getElementById('youtubeEmailInput');
+            if (emailInput) {
+                emailInput.value = '';
+            }
         }
 
         function setupYouTubeAccountEvents() {
@@ -1069,21 +1086,79 @@
         }
 
         async function youtubeLogin() {
+            const emailInput = document.getElementById('youtubeEmailInput');
+            const email = emailInput ? emailInput.value.trim() : null;
+            const useWebFlow = email !== null && email !== '';  // Use web flow if email provided
+            
             try {
+                const requestBody = {
+                    use_web_flow: useWebFlow,
+                    email: email || null
+                };
+                
                 const response = await fetch('/api/youtube/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    body: JSON.stringify(requestBody)
                 });
                 
                 const result = await response.json();
                 
                 if (response.ok) {
-                    showYouTubeAccountInfo(result.channel);
-                    alert('Successfully connected to YouTube!');
+                    if (result.flow === 'web') {
+                        // Open OAuth URL in popup
+                        const popup = window.open(
+                            result.auth_url,
+                            'youtube-auth',
+                            'width=600,height=700,scrollbars=yes,resizable=yes'
+                        );
+                        
+                        // Listen for auth success/error messages from popup
+                        const messageHandler = (event) => {
+                            // Security: Only accept messages from same origin
+                            if (event.origin !== window.location.origin) {
+                                return;
+                            }
+                            
+                            if (event.data.type === 'youtube-auth-success') {
+                                window.removeEventListener('message', messageHandler);
+                                if (popup && !popup.closed) {
+                                    popup.close();
+                                }
+                                // Reload account info
+                                loadYouTubeAccount();
+                                alert('Successfully connected to YouTube!');
+                            } else if (event.data.type === 'youtube-auth-error') {
+                                window.removeEventListener('message', messageHandler);
+                                if (popup && !popup.closed) {
+                                    popup.close();
+                                }
+                                alert(`Login failed: ${event.data.error || 'Authentication error'}\n${event.data.details || ''}`);
+                            }
+                        };
+                        
+                        window.addEventListener('message', messageHandler);
+                        
+                        // Also handle popup close (user might close manually)
+                        const checkPopupClosed = setInterval(() => {
+                            if (popup.closed) {
+                                clearInterval(checkPopupClosed);
+                                window.removeEventListener('message', messageHandler);
+                            }
+                        }, 1000);
+                        
+                    } else {
+                        // Desktop flow (existing behavior)
+                        showYouTubeAccountInfo(result.channel);
+                        alert('Successfully connected to YouTube!');
+                    }
                 } else {
-                    alert(`Login failed: ${result.error}`);
+                    alert(`Login failed: ${result.error}\n${result.details || ''}`);
+                    if (result.hint) {
+                        console.log('Hint:', result.hint);
+                    }
                 }
             } catch (error) {
                 alert(`Login error: ${error.message}`);

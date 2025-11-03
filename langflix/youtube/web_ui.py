@@ -368,7 +368,12 @@ class VideoManagementUI:
                 return jsonify({
                     "error": "YouTube credentials file not found",
                     "details": str(e),
-                    "hint": "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+                    "hint": (
+                        "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                        "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
+                        "Note: This is different from Gemini API key in .env file."
+                    ),
+                    "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
                 }), 400
             except OSError as e:
                 logger.error(f"YouTube OAuth port conflict: {e}")

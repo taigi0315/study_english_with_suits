@@ -15,13 +15,14 @@ import time
 try:
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google_auth_oauthlib.flow import InstalledAppFlow, Flow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
     from googleapiclient.http import MediaFileUpload
     YOUTUBE_API_AVAILABLE = True
 except ImportError:
     YOUTUBE_API_AVAILABLE = False
+    Flow = None
     logger.warning("YouTube API libraries not installed. Install with: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
 
 logger = logging.getLogger(__name__)
@@ -54,11 +55,12 @@ class YouTubeVideoMetadata:
 class YouTubeUploader:
     """Handles YouTube video uploads"""
     
-    def __init__(self, credentials_file: str = "youtube_credentials.json", token_file: str = "youtube_token.json"):
+    def __init__(self, credentials_file: str = "youtube_credentials.json", token_file: str = "youtube_token.json", oauth_state_storage=None):
         self.credentials_file = credentials_file
         self.token_file = token_file
         self.service = None
         self.authenticated = False
+        self.oauth_state_storage = oauth_state_storage  # Optional: Redis or dict for state storage
         
         if not YOUTUBE_API_AVAILABLE:
             raise ImportError("YouTube API libraries not available. Install required packages.")
@@ -126,6 +128,221 @@ class YouTubeUploader:
         except Exception as e:
             logger.error(f"YouTube authentication error: {e}", exc_info=True)
             raise
+    
+    def get_authorization_url(self, redirect_uri: str, email: Optional[str] = None) -> Dict[str, str]:
+        """
+        Generate OAuth authorization URL for web flow
+        
+        Args:
+            redirect_uri: OAuth callback redirect URI
+            email: Optional email to pre-fill (login_hint)
+            
+        Returns:
+            dict with 'url' and 'state' for OAuth flow
+        """
+        if Flow is None:
+            raise ImportError("Flow class not available. Install google-auth-oauthlib.")
+        
+        if not os.path.exists(self.credentials_file):
+            error_msg = (
+                f"YouTube credentials file not found: {self.credentials_file}\n"
+                "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+            )
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+        
+        # Load client secrets
+        with open(self.credentials_file, 'r') as f:
+            client_config = json.load(f)
+        
+        # Convert 'installed' type to 'web' type for web flow
+        # If credentials are for 'installed' app, we need to adapt them
+        if 'installed' in client_config:
+            web_config = {
+                'web': {
+                    'client_id': client_config['installed']['client_id'],
+                    'client_secret': client_config['installed']['client_secret'],
+                    'auth_uri': client_config['installed']['auth_uri'],
+                    'token_uri': client_config['installed']['token_uri'],
+                    'redirect_uris': [redirect_uri]
+                }
+            }
+            client_config = web_config
+        
+        # Create Flow for web application
+        flow = Flow.from_client_config(
+            client_config,
+            SCOPES,
+            redirect_uri=redirect_uri
+        )
+        
+        # Add login hint if email provided
+        auth_url_kwargs = {}
+        if email:
+            auth_url_kwargs['login_hint'] = email
+        
+        # Generate authorization URL
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent',  # Force consent screen to get refresh token
+            **auth_url_kwargs
+        )
+        
+        # Store state for verification (expires in 10 minutes)
+        self._store_oauth_state(state, expiration_seconds=600)
+        
+        logger.info(f"Generated OAuth URL for web flow (email hint: {email is not None})")
+        
+        return {
+            'url': authorization_url,
+            'state': state
+        }
+    
+    def authenticate_from_callback(self, authorization_code: str, state: str, redirect_uri: str) -> bool:
+        """
+        Complete OAuth flow from callback code
+        
+        Args:
+            authorization_code: OAuth authorization code from callback
+            state: OAuth state for verification
+            redirect_uri: OAuth callback redirect URI (must match the one used in get_authorization_url)
+            
+        Returns:
+            True if authentication successful
+        """
+        if Flow is None:
+            raise ImportError("Flow class not available. Install google-auth-oauthlib.")
+        
+        # Verify state
+        if not self._verify_oauth_state(state):
+            logger.error("Invalid OAuth state - possible CSRF attack")
+            raise ValueError("Invalid OAuth state")
+        
+        if not os.path.exists(self.credentials_file):
+            raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
+        
+        # Load client secrets
+        with open(self.credentials_file, 'r') as f:
+            client_config = json.load(f)
+        
+        # Convert 'installed' type to 'web' type if needed
+        if 'installed' in client_config:
+            web_config = {
+                'web': {
+                    'client_id': client_config['installed']['client_id'],
+                    'client_secret': client_config['installed']['client_secret'],
+                    'auth_uri': client_config['installed']['auth_uri'],
+                    'token_uri': client_config['installed']['token_uri'],
+                    'redirect_uris': [redirect_uri]
+                }
+            }
+            client_config = web_config
+        
+        # Create Flow
+        flow = Flow.from_client_config(
+            client_config,
+            SCOPES,
+            redirect_uri=redirect_uri
+        )
+        
+        # Exchange code for credentials
+        flow.fetch_token(code=authorization_code)
+        creds = flow.credentials
+        
+        # Save credentials
+        if creds:
+            with open(self.token_file, 'w') as token:
+                token.write(creds.to_json())
+            logger.info("OAuth credentials saved to token file")
+        
+        # Build YouTube service
+        self.service = build('youtube', 'v3', credentials=creds)
+        self.authenticated = True
+        
+        # Remove verified state
+        self._remove_oauth_state(state)
+        
+        logger.info("Successfully authenticated with YouTube API via web flow")
+        return True
+    
+    def _store_oauth_state(self, state: str, expiration_seconds: int = 600):
+        """Store OAuth state temporarily with expiration"""
+        if self.oauth_state_storage is None:
+            # Fallback to in-memory dict if no storage provided
+            if not hasattr(self, '_oauth_states'):
+                self._oauth_states = {}
+            self._oauth_states[state] = time.time() + expiration_seconds
+        else:
+            # Use provided storage (e.g., Redis)
+            try:
+                if hasattr(self.oauth_state_storage, 'setex'):
+                    # Redis-like interface
+                    self.oauth_state_storage.setex(f"oauth:state:{state}", expiration_seconds, state)
+                elif hasattr(self.oauth_state_storage, 'set'):
+                    # Dict-like interface with TTL support
+                    self.oauth_state_storage[state] = {
+                        'expires_at': time.time() + expiration_seconds
+                    }
+                else:
+                    # Simple dict
+                    self.oauth_state_storage[state] = time.time() + expiration_seconds
+            except Exception as e:
+                logger.warning(f"Failed to store OAuth state in storage: {e}, using fallback")
+                if not hasattr(self, '_oauth_states'):
+                    self._oauth_states = {}
+                self._oauth_states[state] = time.time() + expiration_seconds
+    
+    def _verify_oauth_state(self, state: str) -> bool:
+        """Verify OAuth state matches stored state"""
+        if self.oauth_state_storage is None:
+            # Check in-memory dict
+            if not hasattr(self, '_oauth_states'):
+                return False
+            stored_expiry = self._oauth_states.get(state)
+            if stored_expiry is None:
+                return False
+            if time.time() > stored_expiry:
+                # Expired
+                del self._oauth_states[state]
+                return False
+            return True
+        else:
+            # Check provided storage
+            try:
+                if hasattr(self.oauth_state_storage, 'get'):
+                    # Redis-like or dict-like
+                    if hasattr(self.oauth_state_storage, 'get') and callable(self.oauth_state_storage.get):
+                        stored = self.oauth_state_storage.get(f"oauth:state:{state}")
+                        if stored:
+                            return True
+                    # Dict-like
+                    stored = self.oauth_state_storage.get(state)
+                    if stored is None:
+                        return False
+                    if isinstance(stored, dict):
+                        expires_at = stored.get('expires_at', 0)
+                        if time.time() > expires_at:
+                            return False
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to verify OAuth state from storage: {e}")
+                return False
+        return False
+    
+    def _remove_oauth_state(self, state: str):
+        """Remove OAuth state after successful verification"""
+        if self.oauth_state_storage is None:
+            if hasattr(self, '_oauth_states'):
+                self._oauth_states.pop(state, None)
+        else:
+            try:
+                if hasattr(self.oauth_state_storage, 'delete'):
+                    self.oauth_state_storage.delete(f"oauth:state:{state}")
+                elif hasattr(self.oauth_state_storage, 'pop'):
+                    self.oauth_state_storage.pop(state, None)
+            except Exception as e:
+                logger.warning(f"Failed to remove OAuth state: {e}")
     
     def upload_video(
         self, 
@@ -468,8 +685,8 @@ class YouTubeUploader:
 class YouTubeUploadManager:
     """Manages YouTube uploads with queue and status tracking"""
     
-    def __init__(self, credentials_file: str = "youtube_credentials.json"):
-        self.uploader = YouTubeUploader(credentials_file)
+    def __init__(self, credentials_file: str = "youtube_credentials.json", oauth_state_storage=None):
+        self.uploader = YouTubeUploader(credentials_file, oauth_state_storage=oauth_state_storage)
         self.upload_queue = []
         self.upload_history = []
     

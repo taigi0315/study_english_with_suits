@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, render_template_string
 from langflix.youtube.video_manager import VideoFileManager, VideoMetadata
 from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouTubeUploadManager
 from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
@@ -29,7 +29,23 @@ class VideoManagementUI:
         import os
         abs_output_dir = os.path.abspath(output_dir)
         self.video_manager = VideoFileManager(abs_output_dir)
+        
+        # Initialize OAuth state storage (use Redis if available)
+        oauth_state_storage = None
+        try:
+            from langflix.core.redis_client import get_redis_job_manager
+            redis_manager = get_redis_job_manager()
+            oauth_state_storage = redis_manager.redis_client
+            logger.info("Using Redis for OAuth state storage")
+        except Exception as e:
+            logger.warning(f"Redis not available for OAuth state storage, using in-memory: {e}")
+            oauth_state_storage = None
+        
         self.upload_manager = YouTubeUploadManager()
+        # Pass OAuth state storage to uploader
+        if hasattr(self.upload_manager, 'uploader'):
+            self.upload_manager.uploader.oauth_state_storage = oauth_state_storage
+        
         self.metadata_generator = YouTubeMetadataGenerator()
         try:
             self.schedule_manager = YouTubeScheduleManager()
@@ -348,46 +364,187 @@ class VideoManagementUI:
         
         @self.app.route('/api/youtube/login', methods=['POST'])
         def youtube_login():
-            """Authenticate with YouTube (triggers OAuth flow)"""
+            """Authenticate with YouTube (supports both Desktop and Web flow)"""
+            data = request.get_json() or {}
+            email = data.get('email')  # Optional email for web flow
+            use_web_flow = data.get('use_web_flow', False)  # Default to Desktop flow
+            
+            if use_web_flow or email:
+                # Generate auth URL for web flow
+                try:
+                    # Get redirect URI (use Flask's request host)
+                    redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
+                    
+                    auth_data = self.upload_manager.uploader.get_authorization_url(
+                        redirect_uri=redirect_uri,
+                        email=email
+                    )
+                    return jsonify({
+                        "auth_url": auth_data['url'],
+                        "state": auth_data['state'],
+                        "flow": "web"
+                    })
+                except FileNotFoundError as e:
+                    logger.error(f"YouTube credentials file not found: {e}")
+                    return jsonify({
+                        "error": "YouTube credentials file not found",
+                        "details": str(e),
+                        "hint": (
+                            "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                            "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
+                            "Note: This is different from Gemini API key in .env file."
+                        ),
+                        "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
+                    }), 400
+                except Exception as e:
+                    logger.error(f"Error generating OAuth URL: {e}", exc_info=True)
+                    return jsonify({
+                        "error": "Failed to generate OAuth URL",
+                        "details": str(e)
+                    }), 500
+            else:
+                # Use existing Desktop flow
+                try:
+                    success = self.upload_manager.uploader.authenticate()
+                    if success:
+                        # Get channel info and save to database
+                        channel_info = self.upload_manager.uploader.get_channel_info()
+                        if channel_info:
+                            self._save_youtube_account(channel_info)
+                        
+                        return jsonify({
+                            "message": "Successfully authenticated with YouTube",
+                            "channel": channel_info,
+                            "flow": "desktop"
+                        })
+                    else:
+                        return jsonify({"error": "Authentication failed"}), 401
+                except FileNotFoundError as e:
+                    logger.error(f"YouTube credentials file not found: {e}")
+                    return jsonify({
+                        "error": "YouTube credentials file not found",
+                        "details": str(e),
+                        "hint": (
+                            "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                            "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
+                            "Note: This is different from Gemini API key in .env file."
+                        ),
+                        "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
+                    }), 400
+                except OSError as e:
+                    logger.error(f"YouTube OAuth port conflict: {e}")
+                    return jsonify({
+                        "error": "Port 8080 is already in use",
+                        "details": str(e),
+                        "hint": "Please close other applications using port 8080"
+                    }), 500
+                except Exception as e:
+                    logger.error(f"Error authenticating with YouTube: {e}", exc_info=True)
+                    return jsonify({
+                        "error": "Authentication failed",
+                        "details": str(e)
+                    }), 500
+        
+        @self.app.route('/api/youtube/auth/callback')
+        def youtube_auth_callback():
+            """Handle OAuth callback from Google"""
+            authorization_code = request.args.get('code')
+            state = request.args.get('state')
+            error = request.args.get('error')
+            error_description = request.args.get('error_description', 'Unknown error')
+            
+            if error:
+                logger.error(f"OAuth error: {error} - {error_description}")
+                return render_template_string(
+                    '<html><head><title>Authentication Failed</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Failed</h1>'
+                    '<p style="color: #666;">{{ error_description }}</p>'
+                    '<p style="font-size: 0.9em; color: #999; margin-top: 30px;">This window will close automatically...</p>'
+                    '<script>'
+                    'window.opener.postMessage({type: "youtube-auth-error", error: "{{ error }}", details: "{{ error_description }}"}, "*");'
+                    'setTimeout(() => window.close(), 3000);'
+                    '</script>'
+                    '</body></html>',
+                    error=error,
+                    error_description=error_description
+                ), 400
+            
+            if not authorization_code or not state:
+                return render_template_string(
+                    '<html><head><title>Authentication Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Error</h1>'
+                    '<p style="color: #666;">Missing authorization code or state</p>'
+                    '<script>setTimeout(() => window.close(), 3000);</script>'
+                    '</body></html>'
+                ), 400
+            
             try:
-                success = self.upload_manager.uploader.authenticate()
+                redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
+                
+                success = self.upload_manager.uploader.authenticate_from_callback(
+                    authorization_code=authorization_code,
+                    state=state,
+                    redirect_uri=redirect_uri
+                )
+                
                 if success:
                     # Get channel info and save to database
                     channel_info = self.upload_manager.uploader.get_channel_info()
                     if channel_info:
                         self._save_youtube_account(channel_info)
                     
-                    return jsonify({
-                        "message": "Successfully authenticated with YouTube",
-                        "channel": channel_info
-                    })
+                    # Serialize channel_info to JSON for safe embedding
+                    channel_info_json = json.dumps(channel_info) if channel_info else 'null'
+                    
+                    return render_template_string(
+                        '<html><head><title>Authentication Successful</title></head>'
+                        '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                        '<h1 style="color: #4caf50;">✅ Authentication Successful!</h1>'
+                        '<p style="color: #666;">You can close this window now.</p>'
+                        '<script>'
+                        'window.opener.postMessage({type: "youtube-auth-success", channel: {{ channel_info_json | safe }}}, "*");'
+                        'setTimeout(() => window.close(), 2000);'
+                        '</script>'
+                        '</body></html>',
+                        channel_info_json=channel_info_json
+                    )
                 else:
-                    return jsonify({"error": "Authentication failed"}), 401
-            except FileNotFoundError as e:
-                logger.error(f"YouTube credentials file not found: {e}")
-                return jsonify({
-                    "error": "YouTube credentials file not found",
-                    "details": str(e),
-                    "hint": (
-                        "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
-                        "See docs/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions.\n"
-                        "Note: This is different from Gemini API key in .env file."
-                    ),
-                    "setup_guide": "docs/YOUTUBE_SETUP_GUIDE_eng.md"
-                }), 400
-            except OSError as e:
-                logger.error(f"YouTube OAuth port conflict: {e}")
-                return jsonify({
-                    "error": "Port 8080 is already in use",
-                    "details": str(e),
-                    "hint": "Please close other applications using port 8080"
-                }), 500
+                    return render_template_string(
+                        '<html><head><title>Authentication Failed</title></head>'
+                        '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                        '<h1 style="color: #d32f2f;">❌ Authentication Failed</h1>'
+                        '<p style="color: #666;">Could not complete authentication</p>'
+                        '<script>setTimeout(() => window.close(), 3000);</script>'
+                        '</body></html>'
+                    ), 500
+                    
+            except ValueError as e:
+                # Invalid state (CSRF protection)
+                logger.error(f"Invalid OAuth state: {e}")
+                return render_template_string(
+                    '<html><head><title>Security Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Security Error</h1>'
+                    '<p style="color: #666;">Invalid OAuth state. Please try again.</p>'
+                    '<script>setTimeout(() => window.close(), 3000);</script>'
+                    '</body></html>'
+                ), 400
             except Exception as e:
-                logger.error(f"Error authenticating with YouTube: {e}", exc_info=True)
-                return jsonify({
-                    "error": "Authentication failed",
-                    "details": str(e)
-                }), 500
+                logger.error(f"OAuth callback error: {e}", exc_info=True)
+                return render_template_string(
+                    '<html><head><title>Authentication Error</title></head>'
+                    '<body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">'
+                    '<h1 style="color: #d32f2f;">❌ Authentication Error</h1>'
+                    '<p style="color: #666;">{{ error }}</p>'
+                    '<script>'
+                    'window.opener.postMessage({type: "youtube-auth-error", error: "Authentication failed", details: "{{ error }}"}, "*");'
+                    'setTimeout(() => window.close(), 3000);'
+                    '</script>'
+                    '</body></html>',
+                    error=str(e)
+                ), 500
         
         @self.app.route('/api/youtube/logout', methods=['POST'])
         def youtube_logout():

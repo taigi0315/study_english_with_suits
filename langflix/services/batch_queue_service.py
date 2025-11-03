@@ -4,6 +4,7 @@ Manages batch video processing with queue-based sequential execution.
 """
 
 import logging
+import os
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
@@ -80,7 +81,6 @@ class BatchQueueService:
             episode_name = video.get('episode_name')
             if not episode_name:
                 # Extract from video path
-                import os
                 episode_name = os.path.splitext(os.path.basename(video.get('video_path', '')))[0]
             
             show_name = video.get('show_name', 'Suits')
@@ -221,17 +221,17 @@ class BatchQueueService:
         if all(s == 'FAILED' for s in statuses):
             return 'FAILED'
         
-        # Check if any are still processing or queued
-        if any(s in ('PROCESSING', 'QUEUED') for s in statuses):
-            return 'PROCESSING'
-        
-        # Check if partially failed (mix of completed and failed, no processing)
-        if any(s == 'FAILED' for s in statuses) and any(s == 'COMPLETED' for s in statuses):
+        # Check if partially failed (mix of completed and failed, no processing/queued)
+        if any(s == 'FAILED' for s in statuses) and any(s == 'COMPLETED' for s in statuses) and not any(s in ('PROCESSING', 'QUEUED') for s in statuses):
             return 'PARTIALLY_FAILED'
         
-        # Default to pending if all are QUEUED
+        # Check if all are QUEUED (pending - not yet started)
         if all(s == 'QUEUED' for s in statuses):
             return 'PENDING'
+        
+        # Check if any are still processing or queued (and not all QUEUED)
+        if any(s in ('PROCESSING', 'QUEUED') for s in statuses):
+            return 'PROCESSING'
         
         # Unknown state
         return 'UNKNOWN'

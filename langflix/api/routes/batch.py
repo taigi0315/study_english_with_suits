@@ -3,7 +3,8 @@ Batch processing endpoints for LangFlix API
 """
 
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, List
+from pydantic import BaseModel, Field
+from typing import Dict, Any, List, Optional
 import logging
 
 from langflix.services.batch_queue_service import BatchQueueService
@@ -12,8 +13,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+class VideoItem(BaseModel):
+    """Video item in batch request"""
+    video_path: str
+    subtitle_path: Optional[str] = ""
+    episode_name: Optional[str] = None
+    show_name: Optional[str] = "Suits"
+
+
+class BatchCreateRequest(BaseModel):
+    """Request model for batch creation"""
+    videos: List[VideoItem] = Field(..., min_items=1)
+    language_code: str
+    language_level: str = "intermediate"
+    test_mode: bool = False
+    max_expressions: int = 50
+    no_shorts: bool = False
+    output_dir: str = "output"
+
+
 @router.post("/batch")
-async def create_batch(request_data: Dict[str, Any]) -> Dict[str, Any]:
+async def create_batch(request: BatchCreateRequest) -> Dict[str, Any]:
     """
     Create a batch of video processing jobs.
     
@@ -45,24 +66,18 @@ async def create_batch(request_data: Dict[str, Any]) -> Dict[str, Any]:
     }
     """
     try:
-        # Validate request
-        videos = request_data.get('videos', [])
-        if not videos or not isinstance(videos, list):
-            raise HTTPException(status_code=400, detail="'videos' array is required and must not be empty")
+        # Convert Pydantic models to dictionaries
+        videos = [video.dict() for video in request.videos]
         
         # Extract configuration
         config = {
-            'language_code': request_data.get('language_code'),
-            'language_level': request_data.get('language_level', 'intermediate'),
-            'test_mode': request_data.get('test_mode', False),
-            'max_expressions': request_data.get('max_expressions', 50),
-            'no_shorts': request_data.get('no_shorts', False),
-            'output_dir': request_data.get('output_dir', 'output')
+            'language_code': request.language_code,
+            'language_level': request.language_level,
+            'test_mode': request.test_mode,
+            'max_expressions': request.max_expressions,
+            'no_shorts': request.no_shorts,
+            'output_dir': request.output_dir
         }
-        
-        # Validate required fields
-        if not config['language_code']:
-            raise HTTPException(status_code=400, detail="'language_code' is required")
         
         # Validate batch size
         batch_service = BatchQueueService()

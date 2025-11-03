@@ -56,32 +56,48 @@ study_english_with_sutis/
 ls -la youtube_credentials.json
 ```
 
-### 5단계: Redirect URI 설정 (Web OAuth Flow용)
+### 5단계: Redirect URI 설정 (이메일 기반 로그인용) ⚠️ 필수!
 
-이메일 기반 로그인을 사용하려면 Redirect URI를 추가해야 합니다:
+**중요:** 이메일 기반 로그인을 사용하려면 Google Cloud Console에 Redirect URI를 **반드시** 추가해야 합니다. 이 단계를 건너뛰면 "Error 400: redirect_uri_mismatch" 에러가 발생합니다.
 
 1. Google Cloud Console로 돌아가기 → "API 및 서비스" → "사용자 인증 정보"
 2. OAuth 2.0 클라이언트 ID 클릭
 3. "승인된 리디렉션 URI"에서 "URI 추가" 클릭
 4. 추가: `http://localhost:5000/api/youtube/auth/callback`
-5. "저장" 클릭
+5. (선택) 추가: `http://127.0.0.1:5000/api/youtube/auth/callback`
+6. "저장" 클릭
 
-**중요:** "데스크톱 앱" 자격 증명을 다운로드했더라도, Web Flow 지원을 위해 이 Redirect URI를 추가할 수 있습니다.
+**중요:** "데스크톱 앱" 자격 증명을 다운로드했더라도, Web Flow 지원을 위해 이 Redirect URI를 추가할 수 있습니다. 자격 증명 파일의 Redirect URI는 자동으로 업데이트되지만, **Google Cloud Console에도 수동으로 추가해야 합니다**.
+
+**참고:** Google Cloud Console에 URI를 추가한 후 변경사항이 반영되기까지 1-2분 정도 걸릴 수 있습니다.
 
 ### 6단계: 인증 테스트
 
-**옵션 1: 이메일 기반 로그인 (권장)**
-1. 애플리케이션 시작
-2. 입력 필드에 Google 이메일 주소 입력 (선택사항이지만 권장)
-3. "Login to YouTube" 클릭
-4. 팝업 창이 열리고 Google 계정으로 로그인 요청
-5. 승인 후 팝업이 닫히고 인증 완료
+LangFlix는 두 가지 인증 방법을 지원합니다:
 
-**옵션 2: 기본 브라우저 로그인**
-1. 애플리케이션 시작
-2. 이메일 필드를 비워둠
-3. "Login to YouTube" 클릭
-4. 기본 브라우저가 자동으로 열려 인증 진행
+**옵션 1: 이메일 기반 로그인 (권장)**
+- **필요 사항:** 5단계에서 Redirect URI 설정 완료
+- **단계:**
+  1. 애플리케이션 시작
+  2. 입력 필드에 Google 이메일 주소 입력 (선택사항이지만 권장)
+  3. "Login to YouTube" 클릭
+  4. 팝업 창이 열리고 Google 계정으로 로그인 요청
+  5. 승인 후 팝업이 자동으로 닫히고 인증 완료
+- **장점:**
+  - 사용할 Google 계정 선택 가능
+  - 웹 기반 사용자 경험 향상
+  - 브라우저 자동 열림 없음
+
+**옵션 2: 기본 브라우저 로그인 (Desktop Flow)**
+- **필요 사항:** `youtube_credentials.json` 파일만 필요
+- **단계:**
+  1. 애플리케이션 시작
+  2. 이메일 필드를 비워둠
+  3. "Login to YouTube" 클릭
+  4. 기본 브라우저가 자동으로 열려 인증 진행
+- **장점:**
+  - Redirect URI 설정 불필요
+  - 기본 사용을 위한 간단한 설정
 
 ## 파일 구조
 
@@ -144,12 +160,23 @@ ls -la youtube_credentials.json
 2. 외부 타입 사용 시 이메일을 "테스트 사용자"에 추가
 3. OAuth 클라이언트 ID 유형이 "데스크톱 앱"인지 확인
 
-### 오류: "Redirect URI mismatch"
+### 오류: "Redirect URI mismatch" 또는 "Error 400: redirect_uri_mismatch"
+
+이 에러는 애플리케이션이 사용하는 Redirect URI가 Google Cloud Console에 설정된 것과 일치하지 않을 때 발생합니다.
 
 **해결 방법:**
-1. Google Cloud Console에서 OAuth 2.0 클라이언트로 이동
-2. 승인된 리디렉션 URI에 `http://localhost:8080/` 추가
-3. 다른 포트 사용 시 해당 포트 추가
+1. Google Cloud Console에서 "API 및 서비스" → "사용자 인증 정보"로 이동
+2. OAuth 2.0 클라이언트 ID 클릭
+3. "승인된 리디렉션 URI"에 추가:
+   - `http://localhost:5000/api/youtube/auth/callback` (이메일 로그인 필수)
+   - `http://127.0.0.1:5000/api/youtube/auth/callback` (선택)
+4. "저장" 클릭
+5. 변경사항 반영을 위해 1-2분 대기
+6. 다시 로그인 시도
+
+**참고:** `youtube_credentials.json` 파일의 Redirect URI는 애플리케이션이 자동으로 업데이트하지만, **Google Cloud Console에도 수동으로 추가해야 합니다**.
+
+더 자세한 문제 해결 방법은 [REDIRECT_URI_FIX.md](../../REDIRECT_URI_FIX.md)를 참고하세요.
 
 ## 다음 단계
 

@@ -56,32 +56,48 @@ You can verify it exists:
 ls -la youtube_credentials.json
 ```
 
-### Step 5: Configure Redirect URI (For Web OAuth Flow)
+### Step 5: Configure Redirect URI (For Email-Based Login) ⚠️ Required!
 
-If you want to use email-based login (Web OAuth flow), you need to add a redirect URI:
+**Important:** To use email-based login (Web OAuth flow), you **must** add the redirect URI in Google Cloud Console. Without this, you'll get "Error 400: redirect_uri_mismatch".
 
 1. Go back to Google Cloud Console → "APIs & Services" → "Credentials"
 2. Click on your OAuth 2.0 Client ID
 3. Under "Authorized redirect URIs", click "ADD URI"
 4. Add: `http://localhost:5000/api/youtube/auth/callback`
-5. Click "Save"
+5. (Optional) Also add: `http://127.0.0.1:5000/api/youtube/auth/callback`
+6. Click "Save"
 
-**Important:** Even if you downloaded "Desktop app" credentials, you can still add this redirect URI for web flow support.
+**Important:** Even if you downloaded "Desktop app" credentials, you can still add this redirect URI for web flow support. The redirect URI in the credentials file will be updated automatically, but you **must also add it in Google Cloud Console**.
+
+**Note:** After adding the URI in Google Cloud Console, it may take 1-2 minutes for changes to propagate.
 
 ### Step 6: Test Authentication
 
-**Option 1: Email-Based Login (Recommended)**
-1. Start the application
-2. Enter your Google email address in the input field (optional but recommended)
-3. Click "Login to YouTube"
-4. A popup window will open asking you to sign in with your Google account
-5. After authorization, the popup will close and you'll be authenticated
+LangFlix supports two authentication methods:
 
-**Option 2: Default Browser Login**
-1. Start the application
-2. Leave the email field empty
-3. Click "Login to YouTube"
-4. Your default browser will open automatically for authentication
+**Option 1: Email-Based Login (Recommended)**
+- **Requires:** Redirect URI configured in Step 5
+- **Steps:**
+  1. Start the application
+  2. Enter your Google email address in the input field (optional but recommended)
+  3. Click "Login to YouTube"
+  4. A popup window will open asking you to sign in with your Google account
+  5. After authorization, the popup will close automatically and you'll be authenticated
+- **Benefits:**
+  - Better control over which Google account to use
+  - More user-friendly web-based experience
+  - No automatic browser opening
+
+**Option 2: Default Browser Login (Desktop Flow)**
+- **Requires:** Only `youtube_credentials.json` file
+- **Steps:**
+  1. Start the application
+  2. Leave the email field empty
+  3. Click "Login to YouTube"
+  4. Your default browser will open automatically for authentication
+- **Benefits:**
+  - No redirect URI configuration needed
+  - Simpler setup for basic usage
 
 ## File Structure
 
@@ -144,12 +160,23 @@ The credentials file (`youtube_credentials.json`) should look like this:
 2. Add your email to "Test users" if using External type
 3. Verify the OAuth client ID type is "Desktop app"
 
-### Error: "Redirect URI mismatch"
+### Error: "Redirect URI mismatch" or "Error 400: redirect_uri_mismatch"
+
+This error occurs when the redirect URI used by the application doesn't match what's configured in Google Cloud Console.
 
 **Solution:**
-1. In Google Cloud Console, go to your OAuth 2.0 Client
-2. Add `http://localhost:8080/` to authorized redirect URIs
-3. If using different port, add that port instead
+1. In Google Cloud Console, go to "APIs & Services" → "Credentials"
+2. Click on your OAuth 2.0 Client ID
+3. Under "Authorized redirect URIs", add:
+   - `http://localhost:5000/api/youtube/auth/callback` (required for email login)
+   - `http://127.0.0.1:5000/api/youtube/auth/callback` (optional)
+4. Click "Save"
+5. Wait 1-2 minutes for changes to propagate
+6. Try logging in again
+
+**Note:** The redirect URI in your `youtube_credentials.json` file will be updated automatically by the application, but you **must also add it manually in Google Cloud Console**.
+
+For more detailed troubleshooting, see [REDIRECT_URI_FIX.md](../../REDIRECT_URI_FIX.md).
 
 ## Next Steps
 

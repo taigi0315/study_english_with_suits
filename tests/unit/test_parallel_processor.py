@@ -207,6 +207,64 @@ class TestParallelProcessor:
         """Test processing empty task list"""
         results = self.processor.process_batch([])
         assert len(results) == 0
+    
+    def test_execute_task_without_timeout(self):
+        """Test _execute_task without timeout"""
+        def test_function(x, y):
+            return x + y
+        
+        result = self.processor._execute_task(
+            test_function,
+            (3, 4),
+            {},
+            None
+        )
+        assert result == 7
+    
+    def test_execute_task_with_timeout_success(self):
+        """Test _execute_task with timeout when task completes in time"""
+        def quick_function(x):
+            return x * 2
+        
+        result = self.processor._execute_task(
+            quick_function,
+            (5,),
+            {},
+            1.0  # 1 second timeout
+        )
+        assert result == 10
+    
+    def test_execute_task_with_timeout_failure(self):
+        """Test _execute_task with timeout when task exceeds timeout"""
+        import time
+        
+        def slow_function(duration):
+            time.sleep(duration)
+            return "completed"
+        
+        # Task should timeout after 0.2s
+        with pytest.raises(TimeoutError) as exc_info:
+            self.processor._execute_task(
+                slow_function,
+                (1.0,),  # Sleep 1 second
+                {},
+                0.2  # Timeout after 0.2 seconds
+            )
+        
+        assert "exceeded" in str(exc_info.value).lower() or "timeout" in str(exc_info.value).lower()
+    
+    def test_execute_task_preserves_exceptions(self):
+        """Test _execute_task preserves original exceptions (non-timeout)"""
+        def error_function():
+            raise ValueError("Custom error message")
+        
+        with pytest.raises(ValueError, match="Custom error message"):
+            self.processor._execute_task(
+                error_function,
+                (),
+                {},
+                None
+            )
 
 class TestExpressionBatchProcessor:
     """Test ExpressionBatchProcessor functionality"""

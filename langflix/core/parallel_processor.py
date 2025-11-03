@@ -9,10 +9,9 @@ This module provides:
 - Progress tracking
 """
 
-import asyncio
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from typing import List, Dict, Any, Optional, Callable, Tuple, Union
 from dataclasses import dataclass
 from pathlib import Path
@@ -147,12 +146,46 @@ class ParallelProcessor:
         kwargs: Dict[str, Any],
         timeout: Optional[float]
     ) -> Any:
-        """Execute a single task with timeout"""
+        """
+        Execute a single task with timeout.
+        
+        Uses synchronous timeout mechanism suitable for ThreadPoolExecutor context.
+        ThreadPoolExecutor worker threads do not have an event loop, so we cannot
+        use asyncio primitives. Instead, we use Future.result(timeout) which is
+        designed for synchronous threading contexts.
+        
+        Args:
+            function: The function to execute
+            args: Function arguments
+            kwargs: Function keyword arguments
+            timeout: Optional timeout in seconds
+            
+        Returns:
+            Result from function execution
+            
+        Raises:
+            TimeoutError: If task exceeds timeout (raises concurrent.futures.TimeoutError)
+        """
         if timeout:
-            return asyncio.wait_for(
-                asyncio.create_task(self._run_task(function, args, kwargs)),
-                timeout=timeout
-            )
+            # Use nested ThreadPoolExecutor for timeout support
+            # This is necessary because Future.result(timeout) requires submitting
+            # the task to an executor that supports timeout
+            with ThreadPoolExecutor(max_workers=1) as timeout_executor:
+                future = timeout_executor.submit(
+                    self._run_task,
+                    function,
+                    args,
+                    kwargs
+                )
+                try:
+                    return future.result(timeout=timeout)
+                except FuturesTimeoutError as e:
+                    # concurrent.futures.TimeoutError is raised for timeout
+                    logger.error(f"Task timed out after {timeout}s")
+                    raise TimeoutError(f"Task execution exceeded {timeout}s timeout") from e
+                except Exception as e:
+                    # For other exceptions, re-raise as-is
+                    raise
         else:
             return self._run_task(function, args, kwargs)
     

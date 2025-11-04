@@ -1048,11 +1048,31 @@ class VideoManagementUI:
                         # Generate metadata
                         from langflix.youtube.video_manager import VideoFileManager
                         from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                        from pathlib import Path
                         
                         video_manager = VideoFileManager()
                         metadata_generator = YouTubeMetadataGenerator()
                         
-                        video_metadata = video_manager._extract_video_metadata(video_path)
+                        # Convert string path to Path object
+                        video_path_obj = Path(video_path)
+                        if not video_path_obj.exists():
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Video file not found: {video_path}"
+                            })
+                            continue
+                        
+                        video_metadata = video_manager._extract_video_metadata(video_path_obj)
+                        if not video_metadata:
+                            logger.error(f"Failed to extract metadata from {video_path}")
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": "Failed to extract video metadata"
+                            })
+                            continue
+                        
                         youtube_metadata = metadata_generator.generate_metadata(video_metadata)
                         
                         # Upload immediately
@@ -1154,12 +1174,51 @@ class VideoManagementUI:
                         # Generate metadata
                         from langflix.youtube.video_manager import VideoFileManager
                         from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                        from pathlib import Path
                         
                         video_manager = VideoFileManager()
                         metadata_generator = YouTubeMetadataGenerator()
                         
-                        video_metadata = video_manager._extract_video_metadata(video_path)
-                        youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        # Convert string path to Path object
+                        video_path_obj = Path(video_path)
+                        if not video_path_obj.exists():
+                            logger.error(f"Video file not found: {video_path}")
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Video file not found: {video_path}"
+                            })
+                            continue
+                        
+                        try:
+                            video_metadata = video_manager._extract_video_metadata(video_path_obj)
+                            if not video_metadata:
+                                logger.error(f"Failed to extract metadata from {video_path}")
+                                results.append({
+                                    "video_path": video_path,
+                                    "success": False,
+                                    "error": "Failed to extract video metadata"
+                                })
+                                continue
+                        except Exception as e:
+                            logger.error(f"Error extracting metadata from {video_path}: {e}", exc_info=True)
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Error extracting metadata: {str(e)}"
+                            })
+                            continue
+                        
+                        try:
+                            youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        except Exception as e:
+                            logger.error(f"Error generating metadata for {video_path}: {e}", exc_info=True)
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Error generating metadata: {str(e)}"
+                            })
+                            continue
                         
                         # Upload with publishAt
                         from langflix.youtube.uploader import YouTubeUploader

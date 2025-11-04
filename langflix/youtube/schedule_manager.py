@@ -264,11 +264,17 @@ class YouTubeScheduleManager:
         # Convert to set for fast lookup
         occupied_times = set(scheduled_times)
         
-        if target_datetime in occupied_times:
+        # If preferred_time is provided, use it even if occupied (user explicitly chose it)
+        # Only find alternative if no preferred_time was provided
+        if target_datetime in occupied_times and not preferred_time:
             # Find next available time
             target_datetime = self.get_next_available_slot(video_type, target_date)
             if target_datetime.date() != target_date:
                 return False, f"Requested time slot is occupied. Next available: {target_datetime}", None
+        elif target_datetime in occupied_times and preferred_time:
+            # Preferred time is occupied, but user explicitly chose it - allow it anyway
+            # (This might happen if multiple users schedule at the same time)
+            logger.warning(f"Preferred time {target_datetime} is already occupied, but using it as requested")
         
         # Create schedule record
         try:

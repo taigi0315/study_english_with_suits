@@ -981,10 +981,21 @@
                     const result = await response.json();
                     
                     if (response.ok) {
-                        // Use scheduled_publish_time from backend response
+                        // Use scheduled_publish_time from backend response (this is the actual scheduled time)
                         const scheduledTime = result.scheduled_publish_time || result.scheduled_time;
                         if (scheduledTime) {
-                            alert(`Video scheduled successfully!\n\nScheduled for: ${new Date(scheduledTime).toLocaleString('ko-KR')}`);
+                            // Parse the scheduled time and format it consistently
+                            const scheduledDate = new Date(scheduledTime);
+                            const formattedScheduledTime = scheduledDate.toLocaleString('ko-KR', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: true
+                            });
+                            alert(`Video scheduled successfully!\n\nScheduled for: ${formattedScheduledTime}`);
                         } else {
                             alert(`Video scheduled successfully!`);
                         }

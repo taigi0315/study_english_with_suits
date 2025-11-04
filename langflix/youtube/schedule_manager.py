@@ -19,13 +19,16 @@ class ScheduleConfig:
     daily_limits: Dict[str, int] = None  # {'final': 2, 'short': 5}
     preferred_times: List[str] = None    # ['10:00', '14:00', '18:00']
     quota_limit: int = 10000
-    warning_threshold: float = 0.8       # 80% of quota
+    warning_threshold: float = 80.0      # Percentage (0-100), representing 80%
     
     def __post_init__(self):
         if self.daily_limits is None:
             self.daily_limits = {'final': 2, 'short': 5}
         if self.preferred_times is None:
             self.preferred_times = ['10:00', '14:00', '18:00']
+        # Validate warning_threshold is in valid range (0-100)
+        if not (0 <= self.warning_threshold <= 100):
+            raise ValueError(f"warning_threshold must be between 0 and 100, got {self.warning_threshold}")
 
 @dataclass
 class DailyQuotaStatus:
@@ -386,8 +389,8 @@ class YouTubeScheduleManager:
         today = date.today()
         quota_status = self.check_daily_quota(today)
         
-        # Check quota percentage
-        if quota_status.quota_percentage >= (self.config.warning_threshold * 100):
+        # Check quota percentage (threshold is now a percentage, not a ratio)
+        if quota_status.quota_percentage >= self.config.warning_threshold:
             warnings.append(f"API quota usage is {quota_status.quota_percentage:.1f}% ({quota_status.quota_used}/{quota_status.quota_remaining + quota_status.quota_used})")
         
         # Check daily limits

@@ -25,7 +25,7 @@ class TestScheduleConfig:
         assert config.daily_limits == {'final': 2, 'short': 5}
         assert config.preferred_times == ['10:00', '14:00', '18:00']
         assert config.quota_limit == 10000
-        assert config.warning_threshold == 0.8
+        assert config.warning_threshold == 80.0  # Now a percentage, not a ratio
     
     def test_custom_config(self):
         """Test custom configuration values"""
@@ -33,13 +33,33 @@ class TestScheduleConfig:
             daily_limits={'final': 3, 'short': 7},
             preferred_times=['09:00', '15:00'],
             quota_limit=15000,
-            warning_threshold=0.9
+            warning_threshold=90.0  # Now a percentage
         )
         
         assert config.daily_limits == {'final': 3, 'short': 7}
         assert config.preferred_times == ['09:00', '15:00']
         assert config.quota_limit == 15000
-        assert config.warning_threshold == 0.9
+        assert config.warning_threshold == 90.0
+    
+    def test_warning_threshold_validation(self):
+        """Test warning_threshold validation"""
+        # Valid threshold (0-100)
+        config1 = ScheduleConfig(warning_threshold=0.0)
+        assert config1.warning_threshold == 0.0
+        
+        config2 = ScheduleConfig(warning_threshold=100.0)
+        assert config2.warning_threshold == 100.0
+        
+        config3 = ScheduleConfig(warning_threshold=50.0)
+        assert config3.warning_threshold == 50.0
+        
+        # Invalid threshold (< 0)
+        with pytest.raises(ValueError, match="warning_threshold must be between 0 and 100"):
+            ScheduleConfig(warning_threshold=-1.0)
+        
+        # Invalid threshold (> 100)
+        with pytest.raises(ValueError, match="warning_threshold must be between 0 and 100"):
+            ScheduleConfig(warning_threshold=101.0)
 
 
 class TestDailyQuotaStatus:

@@ -918,7 +918,7 @@ class VideoManagementUI:
                         video_path,
                         result.video_id,
                         result.video_url,
-                        'uploaded'
+                        'completed'  # Use 'completed' status (matches DB constraint)
                     )
                     
                     # Clear video cache to force refresh on next scan

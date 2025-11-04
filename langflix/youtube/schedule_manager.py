@@ -138,11 +138,19 @@ class YouTubeScheduleManager:
             with db_manager.session() as db:
                 # Include all schedules with scheduled_publish_time, regardless of status
                 # 'completed' schedules also occupy time slots
-                return db.query(YouTubeSchedule).filter(
+                # Use eager loading to ensure all attributes are loaded before session closes
+                schedules = db.query(YouTubeSchedule).filter(
                     YouTubeSchedule.scheduled_publish_time >= start_datetime,
                     YouTubeSchedule.scheduled_publish_time <= end_datetime,
                     YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
                 ).all()
+                
+                # Access scheduled_publish_time while session is still open to prevent DetachedInstanceError
+                # This ensures the attribute is loaded into memory before session closes
+                for schedule in schedules:
+                    _ = schedule.scheduled_publish_time  # Force attribute load
+                
+                return schedules
         except OperationalError as e:
             # Database connection error - return empty list
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)

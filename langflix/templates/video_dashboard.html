@@ -981,7 +981,13 @@
                     const result = await response.json();
                     
                     if (response.ok) {
-                        alert(`Video scheduled successfully!\n\nScheduled for: ${new Date(result.scheduled_time).toLocaleString('ko-KR')}`);
+                        // Use scheduled_publish_time from backend response
+                        const scheduledTime = result.scheduled_publish_time || result.scheduled_time;
+                        if (scheduledTime) {
+                            alert(`Video scheduled successfully!\n\nScheduled for: ${new Date(scheduledTime).toLocaleString('ko-KR')}`);
+                        } else {
+                            alert(`Video scheduled successfully!`);
+                        }
                         document.body.removeChild(modal);
                         location.reload();
                     } else {

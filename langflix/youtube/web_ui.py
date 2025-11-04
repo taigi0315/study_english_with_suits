@@ -905,6 +905,13 @@ class VideoManagementUI:
                         video_path, schedule_video_type, publish_time
                     )
                     
+                    # Use the actual scheduled_time from schedule_video() response
+                    # This is the time that was actually stored in the database
+                    actual_scheduled_time = scheduled_time if scheduled_time else publish_time
+                    
+                    if not success:
+                        logger.warning(f"Failed to store schedule in DB: {message}, but upload was successful")
+                    
                     # Update schedule with video_id
                     if success:
                         self.schedule_manager.update_schedule_with_video_id(
@@ -930,12 +937,15 @@ class VideoManagementUI:
                     except Exception as e:
                         logger.warning(f"Failed to clear video cache: {e}")
                     
+                    # Log the actual scheduled time for debugging
+                    logger.info(f"✅ Upload successful - Scheduled time: {actual_scheduled_time} (requested: {publish_time})")
+                    
                     return jsonify({
                         "success": True,
-                        "message": f"Video uploaded and scheduled for publishing at {publish_time}",
+                        "message": f"Video uploaded and scheduled for publishing at {actual_scheduled_time}",
                         "video_id": result.video_id,
                         "video_url": result.video_url,
-                        "scheduled_publish_time": publish_time.isoformat(),
+                        "scheduled_publish_time": actual_scheduled_time.isoformat() if hasattr(actual_scheduled_time, 'isoformat') else str(actual_scheduled_time),
                         "video_path": video_path,
                         "video_type": video_type
                     })

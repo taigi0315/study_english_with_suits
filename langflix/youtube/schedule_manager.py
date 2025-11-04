@@ -97,21 +97,18 @@ class YouTubeScheduleManager:
                 logger.warning(f"Invalid time format: {time_str}")
                 continue
         
-        # Get existing schedules for this date
+        # Get existing scheduled times for this date
         try:
-            existing_schedules = self._get_schedules_for_date(target_date)
+            scheduled_times = self._get_schedules_for_date(target_date)
         except (OperationalError, SQLAlchemyError) as e:
             # Database connection error - return empty list to allow fallback time
             logger.warning(f"Database connection error getting schedules: {e}")
-            existing_schedules = []
+            scheduled_times = []
         
-        # Extract times from schedules while still in session context (to avoid DetachedInstanceError)
-        # Read all needed attributes before session closes
+        # Extract time components from scheduled datetime objects
         occupied_times = set()
-        for schedule in existing_schedules:
-            # Access scheduled_publish_time while schedule is still attached to session
-            if schedule.scheduled_publish_time:
-                occupied_times.add(schedule.scheduled_publish_time.time())
+        for scheduled_time in scheduled_times:
+            occupied_times.add(scheduled_time.time())
         
         # Find available preferred times
         for preferred_time in preferred_times:
@@ -129,28 +126,31 @@ class YouTubeScheduleManager:
         
         return available_times
     
-    def _get_schedules_for_date(self, target_date: date) -> List[YouTubeSchedule]:
-        """Get all schedules for a specific date"""
+    def _get_schedules_for_date(self, target_date: date) -> List[datetime]:
+        """
+        Get all scheduled publish times for a specific date.
+        Returns list of datetime objects to avoid DetachedInstanceError.
+        """
         try:
             start_datetime = datetime.combine(target_date, time.min)
             end_datetime = datetime.combine(target_date, time.max)
             
             with db_manager.session() as db:
-                # Include all schedules with scheduled_publish_time, regardless of status
-                # 'completed' schedules also occupy time slots
-                # Use eager loading to ensure all attributes are loaded before session closes
+                # Query and extract datetime values while session is still open
                 schedules = db.query(YouTubeSchedule).filter(
                     YouTubeSchedule.scheduled_publish_time >= start_datetime,
                     YouTubeSchedule.scheduled_publish_time <= end_datetime,
                     YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
                 ).all()
                 
-                # Access scheduled_publish_time while session is still open to prevent DetachedInstanceError
-                # This ensures the attribute is loaded into memory before session closes
+                # Extract scheduled_publish_time values while session is still open
+                # Return list of datetime objects instead of ORM objects to avoid DetachedInstanceError
+                scheduled_times = []
                 for schedule in schedules:
-                    _ = schedule.scheduled_publish_time  # Force attribute load
+                    if schedule.scheduled_publish_time:
+                        scheduled_times.append(schedule.scheduled_publish_time)
                 
-                return schedules
+                return scheduled_times
         except OperationalError as e:
             # Database connection error - return empty list
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -260,13 +260,9 @@ class YouTubeScheduleManager:
             return False, f"Insufficient API quota. Remaining: {quota_status.quota_remaining}/1600 required", None
         
         # Check if time slot is available
-        existing_schedules = self._get_schedules_for_date(target_date)
-        # Extract scheduled_publish_time while schedules are still attached to session
-        occupied_times = set()
-        for schedule in existing_schedules:
-            # Access scheduled_publish_time while schedule is still attached to session
-            if schedule.scheduled_publish_time:
-                occupied_times.add(schedule.scheduled_publish_time)
+        scheduled_times = self._get_schedules_for_date(target_date)
+        # Convert to set for fast lookup
+        occupied_times = set(scheduled_times)
         
         if target_datetime in occupied_times:
             # Find next available time
@@ -314,14 +310,10 @@ class YouTubeScheduleManager:
                     YouTubeSchedule.scheduled_publish_time <= datetime.combine(end_date, time.max)
                 ).order_by(YouTubeSchedule.scheduled_publish_time).all()
                 
-                # Group by date
-                calendar = {}
+                # Extract all attributes while session is still open
+                schedule_data = []
                 for schedule in schedules:
-                    date_key = schedule.scheduled_publish_time.date().isoformat()
-                    if date_key not in calendar:
-                        calendar[date_key] = []
-                    
-                    calendar[date_key].append({
+                    schedule_data.append({
                         'id': str(schedule.id),
                         'video_path': schedule.video_path,
                         'video_type': schedule.video_type,
@@ -329,6 +321,17 @@ class YouTubeScheduleManager:
                         'status': schedule.upload_status,
                         'youtube_video_id': schedule.youtube_video_id
                     })
+                
+                # Group by date (now using extracted data, not ORM objects)
+                calendar = {}
+                for data in schedule_data:
+                    # Parse date from ISO string
+                    scheduled_dt = datetime.fromisoformat(data['scheduled_time'].replace('Z', '+00:00'))
+                    date_key = scheduled_dt.date().isoformat()
+                    if date_key not in calendar:
+                        calendar[date_key] = []
+                    
+                    calendar[date_key].append(data)
                 
                 return calendar
         except Exception as e:

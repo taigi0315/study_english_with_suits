@@ -3,27 +3,38 @@
 **Architect:** Architect Agent
 
 ## Executive Summary
-- Total tickets approved: 7
-- Estimated timeline: 4-6 weeks (2-3 sprints) + Phase 0 (1-2 days)
-- Critical path: TICKET-007 → TICKET-008 → TICKET-013
-- Key milestones: Parallel processing (Week 2), Multi-expression support (Week 4), Production deployment (Week 6)
+- Total tickets approved: 14
+- Estimated timeline: 4-6 weeks (2-3 sprints) + Phase 0 (3-4 days)
+- Critical path: TICKET-021 (Immediate) → TICKET-007 → TICKET-008 → TICKET-013
+- Key milestones: 
+  - **Week 0**: Scheduler race condition fixes (TICKET-021) - Critical for production
+  - **Week 2**: Parallel processing (TICKET-007)
+  - **Week 4**: Multi-expression support (TICKET-008)
+  - **Week 6**: Production deployment (TICKET-009)
 
 ## Strategic Context
 This implementation plan addresses:
-1. **API Infrastructure** - TICKET-010, TICKET-011 (2 tickets)
-2. **Performance Optimization** - TICKET-007 (1 ticket)
-3. **Feature Enhancement** - TICKET-008 (1 ticket)
-4. **Bug Fixes** - TICKET-013 (1 ticket)
-5. **Operations** - TICKET-009, TICKET-012 (2 tickets)
+1. **Data Integrity & Reliability** - TICKET-021 (1 ticket) - **CRITICAL**
+2. **Code Quality** - TICKET-022, TICKET-023 (2 tickets)
+3. **API Infrastructure** - TICKET-010, TICKET-011 (2 tickets)
+4. **Performance Optimization** - TICKET-007 (1 ticket)
+5. **Feature Enhancement** - TICKET-008 (1 ticket)
+6. **Bug Fixes** - TICKET-013 (1 ticket)
+7. **Operations** - TICKET-009, TICKET-012 (2 tickets)
+8. **YouTube Features** - TICKET-017, TICKET-018, TICKET-019, TICKET-020 (4 tickets)
 
 ### Architectural Vision
 Where we're headed:
+- **Reliability**: Data integrity and race condition fixes for production readiness
 - **Performance**: 3-5x faster expression analysis through parallel processing
 - **Richness**: Multiple expressions per context for richer educational content
-- **Reliability**: Production-grade deployment with Docker, CI/CD, and monitoring
+- **Quality**: Comprehensive test coverage and code clarity improvements
+- **Deployment**: Production-grade deployment with Docker, CI/CD, and monitoring
 
 ### Expected Outcomes
 After completing this roadmap:
+- **Data Integrity**: Scheduler handles concurrent requests correctly, no quota overbooking
+- **Test Coverage**: YouTube modules reach 80%+ coverage, enabling safe refactoring
 - **Performance**: Expression analysis 3-5x faster
 - **Content Quality**: Richer educational content with multiple expressions per context
 - **Deployment**: Consistent, reproducible production environments
@@ -253,12 +264,65 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 
 ---
 
-## Phase 0: Immediate (API Infrastructure) - 2025-01-30 New
+## Phase 0: Immediate (Critical Fixes & Infrastructure) - 2025-01-30 Updated
+**Focus:** Critical scheduler fixes and API infrastructure foundation
+**Duration:** 3-4 days
+**Dependencies:** None
+
+### TICKET-021: Fix Scheduler Race Conditions and Concurrency Issues
+- **Priority:** High (Critical for Production)
+- **Effort:** 2-3 days
+- **Why first:** Critical data integrity issue. Must be fixed before multi-user production deployment.
+- **Owner:** Senior backend engineer with database experience
+
+**Key Deliverables:**
+- Database-level locking with `SELECT FOR UPDATE`
+- Atomic quota check + schedule creation
+- Quota reservation for scheduled date (not today)
+- Lock timeout configuration (5 seconds)
+- Consistent time comparison logic
+- Database indexes on `YouTubeQuotaUsage.date`
+
+**Success Criteria:**
+- [ ] Concurrent schedule requests don't exceed daily limits
+- [ ] Quota properly reserved for scheduled date
+- [ ] No race conditions in quota checking
+- [ ] Transaction duration < 100ms under normal load
+- [ ] No deadlocks in concurrent test scenarios
+- [ ] Documentation updated with locking behavior
+
+**Phase 0 Risks:**
+- Risk: Deadlocks from multiple date locks
+  - Mitigation: Lock timeout, consistent lock order, short transactions
+- Risk: Performance impact
+  - Mitigation: Lock only quota records, test under load, monitor lock wait times
+
+### TICKET-023: Fix Quota Warning Threshold Calculation Bug
+- **Priority:** Medium (Quick Win)
+- **Effort:** 0.5 day
+- **Why now:** Quick fix, can be done in parallel with TICKET-021
+- **Owner:** Any engineer (good first task)
+
+**Key Deliverables:**
+- Change `warning_threshold` from ratio (0.8) to percentage (80.0)
+- Add validation in `__post_init__`
+- Remove `* 100` from comparison
+- Update documentation
+
+**Success Criteria:**
+- [ ] Threshold calculation is clear and correct
+- [ ] Validation prevents invalid values (0-100 range)
+- [ ] Tests verify warning triggers at correct threshold
+- [ ] No breaking changes verified
+
+---
+
+## Phase 0.5: Immediate (API Infrastructure) - 2025-01-30
 **Focus:** API infrastructure foundation
 **Duration:** 1-2 days
 **Dependencies:** None
 
-### TICKET-011: Add Database Session Context Manager
+### TICKET-011: Add Database Session Context Manager (Phase 0.5)
 - **Priority:** High
 - **Effort:** < 1 day
 - **Why first:** Context manager 패턴 제공, TICKET-010에 활용
@@ -277,7 +341,7 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 - [ ] 문서 업데이트
 - [ ] 리소스 누수 없음
 
-### TICKET-010: Implement API Dependencies for DB & Storage
+### TICKET-010: Implement API Dependencies for DB & Storage (Phase 0.5)
 - **Priority:** High
 - **Effort:** 1-2 days
 - **Why now:** FastAPI 의존성 주입 완성, DB/Storage 사용 API 활성화
@@ -304,10 +368,35 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 
 ---
 
-## Phase 1: Sprint 1 Additions (Operations)
-**Focus:** 프로덕션 모니터링
-**Duration:** < 1 day
-**Dependencies:** Phase 0 완료
+## Phase 1: Sprint 1 (Operations & Test Coverage)
+**Focus:** 프로덕션 모니터링 및 테스트 커버리지 개선
+**Duration:** 1 week
+**Dependencies:** Phase 0 완료 (TICKET-021 완료 후 TICKET-022)
+
+### TICKET-022: Improve Test Coverage for Scheduler and YouTube Modules
+- **Priority:** Medium
+- **Effort:** 2-3 days
+- **Why now:** TICKET-021 완료 후 새로운 locking behavior 테스트 필요
+- **Owner:** Engineer with testing experience
+
+**Key Deliverables:**
+- Coverage analysis (pytest-cov)
+- Edge case tests for scheduler
+- Concurrency tests for TICKET-021 locking
+- Integration tests for YouTube workflows
+- CI/CD coverage reporting
+
+**Success Criteria:**
+- [ ] YouTube modules reach 80%+ coverage
+- [ ] Concurrency tests cover TICKET-021 locking behavior
+- [ ] CI/CD pipeline fails if coverage drops below 80%
+- [ ] Test execution time < 2 minutes for unit tests
+
+**Phase 1 Risks:**
+- Risk: Test maintenance burden
+  - Mitigation: Focus on stable, maintainable tests
+- Risk: Flaky tests
+  - Mitigation: Proper mocking, deterministic test data
 
 ### TICKET-012: Comprehensive Health Checks
 - **Priority:** Medium
@@ -355,7 +444,12 @@ The proposed Step 2 implementation has a **bug** - it still uses a sequential lo
 
 ## Dependency Graph (Updated)
 ```
-Phase 0:
+Phase 0 (Critical):
+TICKET-021 (scheduler race conditions)
+  └─> TICKET-022 (test coverage - includes tests for TICKET-021)
+TICKET-023 (quota threshold) - Independent
+
+Phase 0.5 (Infrastructure):
 TICKET-011 (context manager)
   └─> TICKET-010 (API dependencies)
        └─> TICKET-012 (health checks) [optional dependency]
@@ -414,8 +508,8 @@ TICKET-009 (production deployment)
 
 ## Overall Progress
 - **Completed Phases:** None
-- **Current Phase:** Phase 0 (Immediate)
-- **Total Tickets Approved:** 8 (TICKET-007, 008, 009, 010, 011, 012, 013, 014)
+- **Current Phase:** Phase 0 (Immediate) - Updated with Scheduler Fixes
+- **Total Tickets Approved:** 11 (TICKET-007, 008, 009, 010, 011, 012, 013, 014, 017, 018, 019, 020, 021, 022, 023)
 - **Estimated Timeline:** Phase 0 (1-2 days) → Phase 1 (2 weeks) → Phase 2 (2 weeks) → Phase 3 (계속)
 
 ---

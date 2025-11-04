@@ -97,14 +97,18 @@ class YouTubeScheduleManager:
                 logger.warning(f"Invalid time format: {time_str}")
                 continue
         
-        # Get existing schedules for this date
+        # Get existing scheduled times for this date
         try:
-            existing_schedules = self._get_schedules_for_date(target_date)
+            scheduled_times = self._get_schedules_for_date(target_date)
         except (OperationalError, SQLAlchemyError) as e:
             # Database connection error - return empty list to allow fallback time
             logger.warning(f"Database connection error getting schedules: {e}")
-            existing_schedules = []
-        occupied_times = {schedule.scheduled_publish_time.time() for schedule in existing_schedules}
+            scheduled_times = []
+        
+        # Extract time components from scheduled datetime objects
+        occupied_times = set()
+        for scheduled_time in scheduled_times:
+            occupied_times.add(scheduled_time.time())
         
         # Find available preferred times
         for preferred_time in preferred_times:
@@ -122,18 +126,31 @@ class YouTubeScheduleManager:
         
         return available_times
     
-    def _get_schedules_for_date(self, target_date: date) -> List[YouTubeSchedule]:
-        """Get all schedules for a specific date"""
+    def _get_schedules_for_date(self, target_date: date) -> List[datetime]:
+        """
+        Get all scheduled publish times for a specific date.
+        Returns list of datetime objects to avoid DetachedInstanceError.
+        """
         try:
             start_datetime = datetime.combine(target_date, time.min)
             end_datetime = datetime.combine(target_date, time.max)
             
             with db_manager.session() as db:
-                return db.query(YouTubeSchedule).filter(
+                # Query and extract datetime values while session is still open
+                schedules = db.query(YouTubeSchedule).filter(
                     YouTubeSchedule.scheduled_publish_time >= start_datetime,
                     YouTubeSchedule.scheduled_publish_time <= end_datetime,
-                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading'])
+                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
                 ).all()
+                
+                # Extract scheduled_publish_time values while session is still open
+                # Return list of datetime objects instead of ORM objects to avoid DetachedInstanceError
+                scheduled_times = []
+                for schedule in schedules:
+                    if schedule.scheduled_publish_time:
+                        scheduled_times.append(schedule.scheduled_publish_time)
+                
+                return scheduled_times
         except OperationalError as e:
             # Database connection error - return empty list
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -243,14 +260,21 @@ class YouTubeScheduleManager:
             return False, f"Insufficient API quota. Remaining: {quota_status.quota_remaining}/1600 required", None
         
         # Check if time slot is available
-        existing_schedules = self._get_schedules_for_date(target_date)
-        occupied_times = {schedule.scheduled_publish_time for schedule in existing_schedules}
+        scheduled_times = self._get_schedules_for_date(target_date)
+        # Convert to set for fast lookup
+        occupied_times = set(scheduled_times)
         
-        if target_datetime in occupied_times:
+        # If preferred_time is provided, use it even if occupied (user explicitly chose it)
+        # Only find alternative if no preferred_time was provided
+        if target_datetime in occupied_times and not preferred_time:
             # Find next available time
             target_datetime = self.get_next_available_slot(video_type, target_date)
             if target_datetime.date() != target_date:
                 return False, f"Requested time slot is occupied. Next available: {target_datetime}", None
+        elif target_datetime in occupied_times and preferred_time:
+            # Preferred time is occupied, but user explicitly chose it - allow it anyway
+            # (This might happen if multiple users schedule at the same time)
+            logger.warning(f"Preferred time {target_datetime} is already occupied, but using it as requested")
         
         # Create schedule record
         try:
@@ -292,14 +316,10 @@ class YouTubeScheduleManager:
                     YouTubeSchedule.scheduled_publish_time <= datetime.combine(end_date, time.max)
                 ).order_by(YouTubeSchedule.scheduled_publish_time).all()
                 
-                # Group by date
-                calendar = {}
+                # Extract all attributes while session is still open
+                schedule_data = []
                 for schedule in schedules:
-                    date_key = schedule.scheduled_publish_time.date().isoformat()
-                    if date_key not in calendar:
-                        calendar[date_key] = []
-                    
-                    calendar[date_key].append({
+                    schedule_data.append({
                         'id': str(schedule.id),
                         'video_path': schedule.video_path,
                         'video_type': schedule.video_type,
@@ -307,6 +327,17 @@ class YouTubeScheduleManager:
                         'status': schedule.upload_status,
                         'youtube_video_id': schedule.youtube_video_id
                     })
+                
+                # Group by date (now using extracted data, not ORM objects)
+                calendar = {}
+                for data in schedule_data:
+                    # Parse date from ISO string
+                    scheduled_dt = datetime.fromisoformat(data['scheduled_time'].replace('Z', '+00:00'))
+                    date_key = scheduled_dt.date().isoformat()
+                    if date_key not in calendar:
+                        calendar[date_key] = []
+                    
+                    calendar[date_key].append(data)
                 
                 return calendar
         except Exception as e:
@@ -367,6 +398,24 @@ class YouTubeScheduleManager:
             warnings.append(f"Only {quota_status.short_remaining} short video slot(s) remaining today")
         
         return warnings
+    
+    def update_schedule_with_video_id(self, video_path: str, youtube_video_id: str, status: str = 'completed'):
+        """Update schedule record with YouTube video ID after successful upload"""
+        try:
+            with db_manager.session() as db:
+                schedule = db.query(YouTubeSchedule).filter_by(video_path=video_path).first()
+                if schedule:
+                    schedule.youtube_video_id = youtube_video_id
+                    schedule.upload_status = status
+                    # Commit happens automatically via context manager
+                    logger.info(f"Updated schedule for {video_path} with video_id: {youtube_video_id}, status: {status}")
+                    return True
+                else:
+                    logger.warning(f"No schedule found for video_path: {video_path}")
+                    return False
+        except Exception as e:
+            logger.error(f"Failed to update schedule with video_id: {e}", exc_info=True)
+            return False
     
     def cancel_schedule(self, schedule_id: str) -> bool:
         """Cancel a scheduled upload"""

@@ -382,10 +382,12 @@ class TestVideoFileManager:
         
         uploadable_videos = video_manager.get_uploadable_videos(videos)
         
-        assert len(uploadable_videos) == 2
+        # Should include final, short, and uploaded videos (per TICKET-018 change)
+        # get_uploadable_videos now includes uploaded videos for display
+        assert len(uploadable_videos) == 3
         assert all(v.video_type in ['final', 'short'] for v in uploadable_videos)
         assert all(v.ready_for_upload for v in uploadable_videos)
-        assert all(not v.uploaded_to_youtube for v in uploadable_videos)
+        # Note: uploaded_to_youtube videos are now included per TICKET-018
     
     def test_organize_videos_by_episode(self, video_manager):
         """Test organizing videos by episode"""

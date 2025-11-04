@@ -815,5 +815,259 @@ class TestScheduleManagerEdgeCases:
             assert any("Only 1 short video slot" in warning for warning in warnings)
 
 
+class TestSchedulerConcurrency:
+    """Test scheduler concurrency and race condition handling"""
+    
+    @pytest.fixture
+    def schedule_manager(self):
+        """Create YouTubeScheduleManager"""
+        return YouTubeScheduleManager()
+    
+    def test_check_quota_with_lock(self, schedule_manager):
+        """Test _check_quota_with_lock uses SELECT FOR UPDATE"""
+        from unittest.mock import Mock, MagicMock
+        from langflix.db.session import db_manager
+        
+        target_date = date.today()
+        mock_db = Mock()
+        mock_query = Mock()
+        mock_filter = Mock()
+        mock_with_for_update = Mock()
+        mock_quota_record = Mock()
+        
+        # Setup mock chain
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_filter
+        mock_filter.with_for_update.return_value = mock_with_for_update
+        mock_with_for_update.first.return_value = None  # No existing record
+        
+        # Mock quota record creation
+        mock_quota_record.final_videos_uploaded = 0
+        mock_quota_record.short_videos_uploaded = 0
+        mock_quota_record.quota_used = 0
+        mock_quota_record.quota_limit = 10000
+        
+        with patch('langflix.youtube.schedule_manager.YouTubeQuotaUsage', return_value=mock_quota_record):
+            with patch.object(db_manager, 'session') as mock_session:
+                mock_session.return_value.__enter__.return_value = mock_db
+                mock_session.return_value.__exit__.return_value = None
+                
+                # Call _check_quota_with_lock
+                result = schedule_manager._check_quota_with_lock(mock_db, target_date)
+                
+                # Verify SELECT FOR UPDATE was called
+                mock_filter.with_for_update.assert_called_once_with(timeout=5.0)
+                assert result is not None
+                assert isinstance(result, DailyQuotaStatus)
+    
+    def test_reserve_quota_for_date(self, schedule_manager):
+        """Test _reserve_quota_for_date reserves quota correctly"""
+        from unittest.mock import Mock, MagicMock
+        
+        target_date = date.today()
+        video_type = 'short'
+        mock_db = Mock()
+        mock_query = Mock()
+        mock_filter = Mock()
+        mock_with_for_update = Mock()
+        mock_quota_record = Mock(spec=['final_videos_uploaded', 'short_videos_uploaded', 'quota_used', 'upload_count'])
+        
+        # Setup mock chain
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_filter
+        mock_filter.with_for_update.return_value = mock_with_for_update
+        mock_with_for_update.first.return_value = None  # No existing record
+        
+        # Mock quota record creation
+        mock_new_record = Mock()
+        mock_new_record.final_videos_uploaded = 0
+        mock_new_record.short_videos_uploaded = 0
+        mock_new_record.quota_used = 0
+        mock_new_record.upload_count = 0
+        
+        with patch('langflix.youtube.schedule_manager.YouTubeQuotaUsage', return_value=mock_new_record):
+            schedule_manager._reserve_quota_for_date(mock_db, target_date, video_type)
+            
+            # Verify quota was reserved (incremented)
+            assert mock_new_record.quota_used == 1600
+            assert mock_new_record.upload_count == 1
+            assert mock_new_record.short_videos_uploaded == 1
+            assert mock_new_record.final_videos_uploaded == 0
+    
+    def test_get_schedules_for_date_locked(self, schedule_manager):
+        """Test _get_schedules_for_date_locked uses SELECT FOR UPDATE"""
+        from unittest.mock import Mock
+        from datetime import datetime, time
+        
+        target_date = date.today()
+        mock_db = Mock()
+        mock_query = Mock()
+        mock_filter = Mock()
+        mock_with_for_update = Mock()
+        
+        # Setup mock chain
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_filter
+        mock_filter.with_for_update.return_value = mock_with_for_update
+        
+        # Mock schedule with scheduled_publish_time
+        mock_schedule = Mock()
+        mock_schedule.scheduled_publish_time = datetime.combine(target_date, time(10, 0))
+        mock_with_for_update.all.return_value = [mock_schedule]
+        
+        result = schedule_manager._get_schedules_for_date_locked(mock_db, target_date)
+        
+        # Verify SELECT FOR UPDATE was called
+        mock_filter.with_for_update.assert_called_once_with(timeout=5.0)
+        assert len(result) == 1
+        assert result[0] == mock_schedule.scheduled_publish_time
+    
+    def test_schedule_video_atomic_operation(self, schedule_manager):
+        """Test schedule_video performs atomic quota check and reservation"""
+        from unittest.mock import Mock, patch, MagicMock
+        from langflix.db.session import db_manager
+        
+        video_path = "/test/video.mp4"
+        video_type = "short"
+        target_date = date.today()
+        target_datetime = datetime.combine(target_date, time(10, 0))
+        
+        mock_db = Mock()
+        
+        # Mock quota check with lock
+        mock_quota_status = DailyQuotaStatus(
+            date=target_date,
+            final_used=0,
+            final_remaining=2,
+            short_used=0,
+            short_remaining=5,
+            quota_used=0,
+            quota_remaining=10000,
+            quota_percentage=0.0
+        )
+        
+        with patch.object(schedule_manager, '_check_quota_with_lock', return_value=mock_quota_status):
+            with patch.object(schedule_manager, '_get_schedules_for_date_locked', return_value=[]):
+                with patch.object(schedule_manager, '_reserve_quota_for_date'):
+                    with patch.object(db_manager, 'session') as mock_session:
+                        mock_session.return_value.__enter__.return_value = mock_db
+                        mock_session.return_value.__exit__.return_value = None
+                        
+                        # Mock get_next_available_slot
+                        with patch.object(schedule_manager, 'get_next_available_slot', return_value=target_datetime):
+                            success, message, scheduled_time = schedule_manager.schedule_video(
+                                video_path, video_type
+                            )
+                            
+                            # Verify atomic operation was performed
+                            schedule_manager._check_quota_with_lock.assert_called_once_with(mock_db, target_date)
+                            schedule_manager._reserve_quota_for_date.assert_called_once_with(mock_db, target_date, video_type)
+                            assert success is True
+                            assert scheduled_time == target_datetime
+    
+    def test_concurrent_schedule_requests_quota_reservation(self, schedule_manager):
+        """Test that concurrent schedule requests properly reserve quota"""
+        from unittest.mock import Mock, patch
+        from langflix.db.session import db_manager
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        
+        video_path_template = "/test/video_{}.mp4"
+        video_type = "short"
+        target_date = date.today()
+        target_datetime = datetime.combine(target_date, time(10, 0))
+        
+        # Shared state to track quota reservations
+        quota_reservations = []
+        lock = threading.Lock()
+        
+        def schedule_video_thread(video_num):
+            """Thread function to schedule a video"""
+            video_path = video_path_template.format(video_num)
+            mock_db = Mock()
+            
+            # Mock quota check - return decreasing remaining quota
+            with lock:
+                current_remaining = 5 - len(quota_reservations)
+                if current_remaining <= 0:
+                    return False, "No quota", None
+            
+            mock_quota_status = DailyQuotaStatus(
+                date=target_date,
+                final_used=0,
+                final_remaining=2,
+                short_used=len(quota_reservations),
+                short_remaining=current_remaining,
+                quota_used=len(quota_reservations) * 1600,
+                quota_remaining=10000 - (len(quota_reservations) * 1600),
+                quota_percentage=0.0
+            )
+            
+            with patch.object(schedule_manager, '_check_quota_with_lock', return_value=mock_quota_status):
+                with patch.object(schedule_manager, '_get_schedules_for_date_locked', return_value=[]):
+                    with patch.object(schedule_manager, '_reserve_quota_for_date') as mock_reserve:
+                        with patch.object(db_manager, 'session') as mock_session:
+                            mock_session.return_value.__enter__.return_value = mock_db
+                            mock_session.return_value.__exit__.return_value = None
+                            
+                            with patch.object(schedule_manager, 'get_next_available_slot', return_value=target_datetime):
+                                success, message, scheduled_time = schedule_manager.schedule_video(
+                                    video_path, video_type
+                                )
+                                
+                                if success:
+                                    with lock:
+                                        quota_reservations.append(video_num)
+                                
+                                return success, message, scheduled_time
+        
+        # Run 10 concurrent schedule requests
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(schedule_video_thread, i) for i in range(10)]
+            results = [f.result() for f in futures]
+        
+        # Verify that quota was respected (max 5 shorts per day)
+        successful = [r for r in results if r[0] is True]
+        assert len(successful) <= 5, f"Expected max 5 successful schedules, got {len(successful)}"
+    
+    def test_schedule_video_quota_reservation_for_future_date(self, schedule_manager):
+        """Test that quota is reserved for scheduled date, not today"""
+        from unittest.mock import Mock, patch
+        from langflix.db.session import db_manager
+        
+        video_path = "/test/video.mp4"
+        video_type = "short"
+        future_date = date.today() + timedelta(days=3)
+        future_datetime = datetime.combine(future_date, time(10, 0))
+        
+        mock_db = Mock()
+        mock_quota_status = DailyQuotaStatus(
+            date=future_date,
+            final_used=0,
+            final_remaining=2,
+            short_used=0,
+            short_remaining=5,
+            quota_used=0,
+            quota_remaining=10000,
+            quota_percentage=0.0
+        )
+        
+        with patch.object(schedule_manager, '_check_quota_with_lock', return_value=mock_quota_status):
+            with patch.object(schedule_manager, '_get_schedules_for_date_locked', return_value=[]):
+                with patch.object(schedule_manager, '_reserve_quota_for_date') as mock_reserve:
+                    with patch.object(db_manager, 'session') as mock_session:
+                        mock_session.return_value.__enter__.return_value = mock_db
+                        mock_session.return_value.__exit__.return_value = None
+                        
+                        success, message, scheduled_time = schedule_manager.schedule_video(
+                            video_path, video_type, preferred_time=future_datetime
+                        )
+                        
+                        # Verify quota was reserved for future date, not today
+                        schedule_manager._check_quota_with_lock.assert_called_once_with(mock_db, future_date)
+                        schedule_manager._reserve_quota_for_date.assert_called_once_with(mock_db, future_date, video_type)
+                        assert success is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

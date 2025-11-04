@@ -160,19 +160,31 @@ class YouTubeScheduleManager:
             logger.error(f"Database error getting schedules for date {target_date}: {e}")
             raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
-    def check_daily_quota(self, target_date: date) -> DailyQuotaStatus:
+    def check_daily_quota(self, target_date: date, lock: bool = False) -> DailyQuotaStatus:
         """
         Check daily quota status for a specific date.
+        
+        Args:
+            target_date: Date to check quota for
+            lock: If True, lock the quota record for update (prevents concurrent modifications)
         
         Returns DailyQuotaStatus with quota information.
         If database is unavailable, returns default quota (assumes no usage).
         """
         try:
             with db_manager.session() as db:
-                # Get or create quota record for this date
-                quota_record = db.query(YouTubeQuotaUsage).filter(
+                # Build query with optional locking
+                query = db.query(YouTubeQuotaUsage).filter(
                     YouTubeQuotaUsage.date == target_date
-                ).first()
+                )
+                
+                # Use SELECT FOR UPDATE if locking is needed
+                if lock:
+                    # Lock the record for update (prevents concurrent reads)
+                    # Timeout: 5 seconds to prevent deadlocks
+                    query = query.with_for_update(timeout=5.0)
+                
+                quota_record = query.first()
                 
                 if not quota_record:
                     # Create new quota record
@@ -221,6 +233,116 @@ class YouTubeScheduleManager:
             logger.error(f"Database error checking daily quota for {target_date}: {e}")
             raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
     
+    def _check_quota_with_lock(self, db: Session, target_date: date) -> DailyQuotaStatus:
+        """
+        Check daily quota with database lock (for use within existing transaction).
+        
+        This method is used within schedule_video() to atomically check and reserve quota.
+        
+        Args:
+            db: Database session (must be within transaction)
+            target_date: Date to check quota for
+        
+        Returns:
+            DailyQuotaStatus with quota information
+        """
+        # Lock and get quota record
+        quota_record = db.query(YouTubeQuotaUsage).filter(
+            YouTubeQuotaUsage.date == target_date
+        ).with_for_update(timeout=5.0).first()
+        
+        if not quota_record:
+            # Create new quota record
+            quota_record = YouTubeQuotaUsage(
+                date=target_date,
+                quota_used=0,
+                quota_limit=self.config.quota_limit,
+                upload_count=0,
+                final_videos_uploaded=0,
+                short_videos_uploaded=0
+            )
+            db.add(quota_record)
+        
+        # Calculate remaining quotas
+        final_remaining = max(0, self.config.daily_limits['final'] - quota_record.final_videos_uploaded)
+        short_remaining = max(0, self.config.daily_limits['short'] - quota_record.short_videos_uploaded)
+        quota_remaining = max(0, quota_record.quota_limit - quota_record.quota_used)
+        quota_percentage = (quota_record.quota_used / quota_record.quota_limit) * 100 if quota_record.quota_limit > 0 else 0
+        
+        return DailyQuotaStatus(
+            date=target_date,
+            final_used=quota_record.final_videos_uploaded,
+            final_remaining=final_remaining,
+            short_used=quota_record.short_videos_uploaded,
+            short_remaining=short_remaining,
+            quota_used=quota_record.quota_used,
+            quota_remaining=quota_remaining,
+            quota_percentage=quota_percentage
+        )
+    
+    def _reserve_quota_for_date(self, db: Session, target_date: date, video_type: str):
+        """
+        Reserve quota for scheduled date (not today).
+        
+        This method reserves quota when schedule is created, not when uploaded.
+        Prevents quota overbooking from concurrent schedule requests.
+        
+        Args:
+            db: Database session (must be within transaction)
+            target_date: Date to reserve quota for
+            video_type: 'final' or 'short'
+        """
+        # Lock quota record for update
+        quota_record = db.query(YouTubeQuotaUsage).filter(
+            YouTubeQuotaUsage.date == target_date
+        ).with_for_update(timeout=5.0).first()
+        
+        if not quota_record:
+            quota_record = YouTubeQuotaUsage(
+                date=target_date,
+                quota_used=0,
+                quota_limit=self.config.quota_limit,
+                upload_count=0,
+                final_videos_uploaded=0,
+                short_videos_uploaded=0
+            )
+            db.add(quota_record)
+        
+        # Reserve quota (increment counters)
+        quota_record.quota_used += 1600  # Reserve quota units
+        quota_record.upload_count += 1
+        
+        if video_type == 'final':
+            quota_record.final_videos_uploaded += 1
+        elif video_type == 'short':
+            quota_record.short_videos_uploaded += 1
+        
+        # Note: Don't commit here - let the transaction commit
+        logger.debug(f"Reserved quota for {target_date}: {video_type} video (+1600 quota units)")
+    
+    def _get_schedules_for_date_locked(self, db: Session, target_date: date) -> List[datetime]:
+        """
+        Get scheduled times with lock for consistency (within transaction).
+        
+        Args:
+            db: Database session (must be within transaction)
+            target_date: Date to get schedules for
+        
+        Returns:
+            List of datetime objects for scheduled times
+        """
+        start_datetime = datetime.combine(target_date, time.min)
+        end_datetime = datetime.combine(target_date, time.max)
+        
+        schedules = db.query(YouTubeSchedule).filter(
+            YouTubeSchedule.scheduled_publish_time >= start_datetime,
+            YouTubeSchedule.scheduled_publish_time <= end_datetime,
+            YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
+        ).with_for_update(timeout=5.0).all()
+        
+        # Extract datetime objects while session is open
+        return [s.scheduled_publish_time for s in schedules if s.scheduled_publish_time]
+    
     def schedule_video(
         self,
         video_path: str,
@@ -228,16 +350,18 @@ class YouTubeScheduleManager:
         preferred_time: Optional[datetime] = None
     ) -> Tuple[bool, str, Optional[datetime]]:
         """
-        Schedule video upload.
+        Schedule video upload with atomic quota check and reservation.
+        Uses database locking to prevent race conditions.
+        
         If preferred_time is None, auto-assign next available slot.
-        Validates against daily limits.
+        Validates against daily limits atomically.
         
         Returns: (success, message, scheduled_time)
         """
         if video_type not in ['final', 'short']:
             return False, f"Invalid video_type: {video_type}", None
         
-        # Determine target date and time
+        # Determine target date and time (before transaction)
         if preferred_time:
             target_date = preferred_time.date()
             target_datetime = preferred_time
@@ -245,40 +369,49 @@ class YouTubeScheduleManager:
             target_datetime = self.get_next_available_slot(video_type)
             target_date = target_datetime.date()
         
-        # Check quota for target date
-        quota_status = self.check_daily_quota(target_date)
-        
-        # Validate quota limits
-        if video_type == 'final' and quota_status.final_remaining <= 0:
-            return False, f"No remaining quota for final videos on {target_date}. Used: {quota_status.final_used}/{self.config.daily_limits['final']}", None
-        
-        if video_type == 'short' and quota_status.short_remaining <= 0:
-            return False, f"No remaining quota for short videos on {target_date}. Used: {quota_status.short_used}/{self.config.daily_limits['short']}", None
-        
-        # Check quota usage
-        if quota_status.quota_remaining < 1600:  # Upload costs 1600 quota units
-            return False, f"Insufficient API quota. Remaining: {quota_status.quota_remaining}/1600 required", None
-        
-        # Check if time slot is available
-        scheduled_times = self._get_schedules_for_date(target_date)
-        # Convert to set for fast lookup
-        occupied_times = set(scheduled_times)
-        
-        # If preferred_time is provided, use it even if occupied (user explicitly chose it)
-        # Only find alternative if no preferred_time was provided
-        if target_datetime in occupied_times and not preferred_time:
-            # Find next available time
-            target_datetime = self.get_next_available_slot(video_type, target_date)
-            if target_datetime.date() != target_date:
-                return False, f"Requested time slot is occupied. Next available: {target_datetime}", None
-        elif target_datetime in occupied_times and preferred_time:
-            # Preferred time is occupied, but user explicitly chose it - allow it anyway
-            # (This might happen if multiple users schedule at the same time)
-            logger.warning(f"Preferred time {target_datetime} is already occupied, but using it as requested")
-        
-        # Create schedule record
+        # Atomic operation: Check quota + Create schedule in single transaction
         try:
             with db_manager.session() as db:
+                # BEGIN TRANSACTION (automatic with context manager)
+                
+                # Lock and check quota atomically
+                quota_status = self._check_quota_with_lock(db, target_date)
+                
+                # Validate quota limits
+                if video_type == 'final' and quota_status.final_remaining <= 0:
+                    return False, f"No remaining quota for final videos on {target_date}. Used: {quota_status.final_used}/{self.config.daily_limits['final']}", None
+                
+                if video_type == 'short' and quota_status.short_remaining <= 0:
+                    return False, f"No remaining quota for short videos on {target_date}. Used: {quota_status.short_used}/{self.config.daily_limits['short']}", None
+                
+                # Check quota usage
+                if quota_status.quota_remaining < 1600:
+                    return False, f"Insufficient API quota. Remaining: {quota_status.quota_remaining}/1600 required", None
+                
+                # Check time slot availability (with lock)
+                scheduled_times = self._get_schedules_for_date_locked(db, target_date)
+                occupied_times = set(scheduled_times)
+                
+                # Handle time slot conflicts
+                if target_datetime in occupied_times and not preferred_time:
+                    # Find next available time (within same transaction)
+                    # Note: This is a simplified approach - could be improved with a more sophisticated algorithm
+                    # For now, try to find alternative time within the same date
+                    available_times = self._get_available_times_for_date(target_date, video_type)
+                    if available_times:
+                        target_datetime = available_times[0]
+                    else:
+                        # No available time in this date - would need to find next date
+                        # For simplicity, return error (caller can retry with different date)
+                        return False, f"Requested time slot is occupied. No available slots found for {target_date}", None
+                elif target_datetime in occupied_times and preferred_time:
+                    # Preferred time is occupied, but user explicitly chose it - allow it anyway
+                    logger.warning(f"Preferred time {target_datetime} is already occupied, but using it as requested")
+                
+                # Reserve quota for scheduled date (not today!)
+                self._reserve_quota_for_date(db, target_date, video_type)
+                
+                # Create schedule record
                 schedule = YouTubeSchedule(
                     video_path=video_path,
                     video_type=video_type,
@@ -286,7 +419,8 @@ class YouTubeScheduleManager:
                     upload_status='scheduled'
                 )
                 db.add(schedule)
-                # Commit happens automatically via context manager
+                
+                # COMMIT TRANSACTION (automatic on exit)
                 
                 logger.info(f"Scheduled {video_type} video for {target_datetime}: {video_path}")
                 return True, f"Video scheduled for {target_datetime}", target_datetime

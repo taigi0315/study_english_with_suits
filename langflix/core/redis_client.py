@@ -283,7 +283,7 @@ class RedisJobManager:
         except Exception as e:
             logger.error(f"❌ Failed to invalidate video cache: {e}")
             return False
-    
+
     # Batch Queue Management Methods
     
     def create_batch(self, batch_id: str, videos: List[Dict[str, Any]], config: Dict[str, Any]) -> bool:

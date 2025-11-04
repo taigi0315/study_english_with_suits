@@ -981,7 +981,24 @@
                     const result = await response.json();
                     
                     if (response.ok) {
-                        alert(`Video scheduled successfully!\n\nScheduled for: ${new Date(result.scheduled_time).toLocaleString('ko-KR')}`);
+                        // Use scheduled_publish_time from backend response (this is the actual scheduled time)
+                        const scheduledTime = result.scheduled_publish_time || result.scheduled_time;
+                        if (scheduledTime) {
+                            // Parse the scheduled time and format it consistently
+                            const scheduledDate = new Date(scheduledTime);
+                            const formattedScheduledTime = scheduledDate.toLocaleString('ko-KR', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: true
+                            });
+                            alert(`Video scheduled successfully!\n\nScheduled for: ${formattedScheduledTime}`);
+                        } else {
+                            alert(`Video scheduled successfully!`);
+                        }
                         document.body.removeChild(modal);
                         location.reload();
                     } else {
@@ -1151,8 +1168,8 @@
                         
                     } else {
                         // Desktop flow (existing behavior)
-                        showYouTubeAccountInfo(result.channel);
-                        alert('Successfully connected to YouTube!');
+                    showYouTubeAccountInfo(result.channel);
+                    alert('Successfully connected to YouTube!');
                     }
                 } else {
                     alert(`Login failed: ${result.error}\n${result.details || ''}`);
@@ -1363,40 +1380,40 @@
                 const mediaId = media.dataset.mediaId;
                 const videoPath = media.dataset.video;
                 const subtitlePath = media.dataset.subtitle;
+            
+            try {
+                const response = await fetch('/api/content/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        media_id: mediaId,
+                        video_path: videoPath,
+                        subtitle_path: subtitlePath,
+                        language_code: languageCode,
+                        language_level: languageLevel,
+                        test_mode: testMode
+                    })
+                });
                 
-                try {
-                    const response = await fetch('/api/content/create', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            media_id: mediaId,
-                            video_path: videoPath,
-                            subtitle_path: subtitlePath,
-                            language_code: languageCode,
-                            language_level: languageLevel,
-                            test_mode: testMode
-                        })
-                    });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Close modal
+                    document.querySelector('div[style*="position: fixed"]').remove();
                     
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        // Close modal
-                        document.querySelector('div[style*="position: fixed"]').remove();
-                        
-                        // Show progress modal
-                        showJobProgressModal(result.job_id);
-                    } else {
-                        alert(`Error: ${result.error}`);
-                        createButton.disabled = false;
-                        createButton.textContent = 'Create Content';
-                    }
-                } catch (error) {
-                    alert(`Error: ${error.message}`);
+                    // Show progress modal
+                    showJobProgressModal(result.job_id);
+                } else {
+                    alert(`Error: ${result.error}`);
                     createButton.disabled = false;
                     createButton.textContent = 'Create Content';
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                createButton.disabled = false;
+                createButton.textContent = 'Create Content';
                 }
             }
         }

@@ -1,0 +1,164 @@
+# ============================================================================
+# .dockerignore - Files and directories to exclude from Docker build context
+# ============================================================================
+# This file reduces build context size and prevents sensitive files from
+# being included in Docker images.
+# ============================================================================
+
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+*.whl
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov
+.tox
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+test-results/
+tests/
+
+# Large media files (not needed in image)
+assets/media/*
+assets/videos/*
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aac
+
+# Output files (generated at runtime)
+output/*
+cache/*
+logs/*
+*.log
+
+# Environment and configuration (mounted at runtime)
+.env
+.env.*
+config.yaml
+config.example.yaml
+env.example
+
+# Documentation (keep README.md only)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Deployment scripts
+deploy/
+*.sh
+!deploy/README.md
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Node.js (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Certificates and keys (never include in images)
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# IDE specific
+.vscode/
+.idea/
+*.iml
+
+# Coverage reports
+coverage/
+.coverage.*
+
+# Local development
+.local/
+local_settings.py
+
+# Backup files
+*.bak
+*.backup
+*~
+

@@ -106,6 +106,72 @@ docker-restart:
 	docker-compose -f docker-compose.dev.yml restart
 	@echo "✅ Services restarted successfully!"
 
+# Production Docker commands (TrueNAS deployment)
+docker-build:
+	@echo "🔨 Building LangFlix production Docker images..."
+	@echo "📋 Building multi-stage Dockerfile..."
+	docker build -t langflix:latest .
+	docker build --target api -t langflix:api .
+	@echo "✅ Docker images built successfully!"
+	@echo ""
+	@echo "💡 Images created:"
+	@echo "   - langflix:latest (API server)"
+	@echo "   - langflix:api (API server)"
+
+docker-build-truenas:
+	@echo "🔨 Building LangFlix for TrueNAS deployment..."
+	cd deploy && docker-compose -f docker-compose.truenas.yml build
+	@echo "✅ TrueNAS Docker images built successfully!"
+
+docker-up-truenas:
+	@echo "🐳 Starting LangFlix on TrueNAS..."
+	@echo "📋 Starting services:"
+	@echo "   - FastAPI Backend"
+	@echo "   - Redis Cache"
+	@echo "   - PostgreSQL (optional)"
+	@echo ""
+	cd deploy && docker-compose -f docker-compose.truenas.yml up -d
+	@echo "✅ Services started successfully!"
+	@echo ""
+	@echo "🌐 Access points:"
+	@echo "   - API: http://localhost:8000"
+	@echo "   - API Docs: http://localhost:8000/docs"
+	@echo "   - Redis: localhost:6379"
+	@echo ""
+	@echo "💡 Use 'make docker-logs-truenas' to view logs"
+	@echo "💡 Use 'make docker-down-truenas' to stop services"
+
+docker-down-truenas:
+	@echo "🛑 Stopping LangFlix TrueNAS services..."
+	cd deploy && docker-compose -f docker-compose.truenas.yml down
+	@echo "✅ Services stopped successfully!"
+
+docker-logs-truenas:
+	@echo "📋 Viewing LangFlix TrueNAS logs..."
+	cd deploy && docker-compose -f docker-compose.truenas.yml logs -f
+
+docker-restart-truenas:
+	@echo "🔄 Restarting LangFlix TrueNAS services..."
+	cd deploy && docker-compose -f docker-compose.truenas.yml restart
+	@echo "✅ Services restarted successfully!"
+
+docker-shell-api:
+	@echo "🐚 Opening shell in API container..."
+	docker exec -it langflix-api bash || \
+		docker exec -it $$(cd deploy && docker-compose -f docker-compose.truenas.yml ps -q langflix-api) bash
+
+docker-test:
+	@echo "🧪 Running tests in Docker..."
+	docker run --rm \
+		-v $$(pwd):/app \
+		langflix:api \
+		pytest tests/ -v
+
+docker-clean:
+	@echo "🧹 Cleaning up Docker resources..."
+	docker system prune -af --volumes
+	@echo "✅ Docker cleanup completed!"
+
 # Database commands
 db-migrate:
 	@echo "📊 Running database migrations..."
@@ -197,10 +263,21 @@ help:
 	@echo "  make dev-parallel   - Start all services in parallel"
 	@echo ""
 	@echo "Docker Commands:"
-	@echo "  make docker-up      - Start all services with Docker"
-	@echo "  make docker-down    - Stop all Docker services"
-	@echo "  make docker-logs    - View Docker service logs"
-	@echo "  make docker-restart - Restart all Docker services"
+	@echo "  make docker-up      - Start all services with Docker (dev)"
+	@echo "  make docker-down    - Stop all Docker services (dev)"
+	@echo "  make docker-logs    - View Docker service logs (dev)"
+	@echo "  make docker-restart - Restart all Docker services (dev)"
+	@echo ""
+	@echo "Production Docker Commands:"
+	@echo "  make docker-build         - Build production Docker images"
+	@echo "  make docker-build-truenas - Build TrueNAS deployment images"
+	@echo "  make docker-up-truenas    - Start TrueNAS services"
+	@echo "  make docker-down-truenas  - Stop TrueNAS services"
+	@echo "  make docker-logs-truenas  - View TrueNAS service logs"
+	@echo "  make docker-restart-truenas - Restart TrueNAS services"
+	@echo "  make docker-shell-api     - Open shell in API container"
+	@echo "  make docker-test          - Run tests in Docker"
+	@echo "  make docker-clean         - Clean up Docker resources"
 	@echo ""
 	@echo "Database Commands:"
 	@echo "  make db-migrate     - Run database migrations"

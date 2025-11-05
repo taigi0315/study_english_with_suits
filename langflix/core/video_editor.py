@@ -157,9 +157,15 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
+            # Get context video with subtitles (needed for concatenation with transition)
+            # For multi-expression groups, use group_id to reuse group-specific subtitle file
+            context_with_subtitles = self._add_subtitles_to_context(
+                context_video_path, expression, group_id=group_id
+            )
+            
             # Extract expression video clip from ORIGINAL context video (before subtitle overlay)
             # This ensures accurate timing since subtitle overlay can cause re-encoding timestamp drift
-            # We'll add subtitles to the expression clip separately if needed
+            # We extract from context_video_path (not context_with_subtitles) to get exact timing
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")

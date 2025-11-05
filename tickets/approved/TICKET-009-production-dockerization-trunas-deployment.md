@@ -1263,8 +1263,7 @@ services:
 - [x] Health check 엔드포인트 확인 (이미 구현됨)
 
 #### In Progress 🔄
-- [ ] Production Dockerfile 생성 (Multi-stage, Celery 제외)
-- [ ] docker-compose.truenas.yml 업데이트 (Celery 제거, PostgreSQL optional)
+- 모든 주요 작업 완료 (테스트 대기 중)
 
 #### Pending 📋
 - [ ] 로컬 Docker 빌드 테스트
@@ -1285,14 +1284,14 @@ services:
 - QueueProcessor: FastAPI lifespan에서 백그라운드 실행
 
 **Files Created:**
-- `deploy/docker-compose.truenas.yml` - TrueNAS 배포용 Compose 파일
-- `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_kor.md` - 한국어 배포 가이드
-- `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_eng.md` - 영어 배포 가이드
-
-**Files Created:**
 - ✅ `Dockerfile` - Production multi-stage Dockerfile
 - ✅ `.dockerignore` - 빌드 제외 파일 목록
+- ✅ `deploy/docker-compose.truenas.yml` - TrueNAS 배포용 Compose 파일
 - ✅ `.github/workflows/ci.yml` - CI/CD 파이프라인 (Phase 1)
+- ✅ `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_kor.md` - 한국어 배포 가이드
+- ✅ `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_eng.md` - 영어 배포 가이드
+- ✅ `docs/deployment/IMPLEMENTATION_PLAN_kor.md` - 구현 계획 문서
+- ✅ `docs/deployment/WORK_SUMMARY_kor.md` - 작업 요약 문서
 - ✅ `Makefile` - Docker 명령 추가됨
 
 ### Next Steps

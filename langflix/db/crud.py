@@ -78,8 +78,8 @@ class ExpressionCRUD:
             context_start_time=analysis_data.context_start_time,
             context_end_time=analysis_data.context_end_time,
             scene_type=analysis_data.scene_type,
-            context_video_path=analysis_data.context_video_path,
-            slide_video_path=analysis_data.slide_video_path
+            context_video_path=getattr(analysis_data, 'context_video_path', None),
+            slide_video_path=getattr(analysis_data, 'slide_video_path', None)
         )
         db.add(expression)
         db.commit()

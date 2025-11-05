@@ -55,6 +55,105 @@ def find_subtitle_file(subtitle_dir: Path, expression_text: str) -> Optional[Pat
     return None
 
 
+def _time_to_seconds(time_str: str) -> float:
+    """Convert SRT time string (HH:MM:SS,mmm) to seconds"""
+    time_str = time_str.replace(',', '.')  # Handle both comma and dot separators
+    parts = time_str.split(':')
+    if len(parts) != 3:
+        raise ValueError(f"Invalid time format: {time_str}")
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = float(parts[2])
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _seconds_to_time(seconds: float) -> str:
+    """Convert seconds to SRT time string (HH:MM:SS,mmm)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:06.3f}".replace('.', ',')
+
+
+def adjust_subtitle_timestamps(subtitle_file: Path, offset_seconds: float, output_file: Path) -> Path:
+    """
+    Adjust all subtitle timestamps by subtracting offset_seconds.
+    
+    This is used when applying subtitles to a sliced context video.
+    The subtitles have absolute timestamps from the original video,
+    but the context video starts at context_start_time, so we need
+    to subtract that offset to align subtitles with the sliced video.
+    
+    Args:
+        subtitle_file: Source SRT file with absolute timestamps
+        offset_seconds: Time offset to subtract (context_start_time in seconds)
+        output_file: Output SRT file with adjusted timestamps
+        
+    Returns:
+        Path to output file
+    """
+    if offset_seconds <= 0:
+        # No adjustment needed, just copy
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        content = subtitle_file.read_text(encoding="utf-8")
+        output_file.write_text(content, encoding="utf-8")
+        return output_file
+    
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    content = subtitle_file.read_text(encoding="utf-8")
+    lines = content.split('\n')
+    
+    adjusted_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Check if this line contains a timestamp (format: HH:MM:SS,mmm --> HH:MM:SS,mmm)
+        if '-->' in line:
+            try:
+                # Parse timestamp line
+                start_time_str, end_time_str = line.split('-->')
+                start_time_str = start_time_str.strip()
+                end_time_str = end_time_str.strip()
+                
+                # Convert to seconds, subtract offset
+                start_seconds = _time_to_seconds(start_time_str) - offset_seconds
+                end_seconds = _time_to_seconds(end_time_str) - offset_seconds
+                
+                # Only include subtitles that are still within valid range (after offset)
+                if end_seconds > 0:
+                    # Adjust to start from 0 if start is negative
+                    if start_seconds < 0:
+                        start_seconds = 0
+                    
+                    # Convert back to time string
+                    adjusted_start = _seconds_to_time(start_seconds)
+                    adjusted_end = _seconds_to_time(end_seconds)
+                    
+                    adjusted_lines.append(f"{adjusted_start} --> {adjusted_end}")
+                else:
+                    # This subtitle is before the context start, skip it
+                    # Skip the subtitle number and text lines too
+                    if i > 0 and adjusted_lines and adjusted_lines[-1].strip().isdigit():
+                        adjusted_lines.pop()  # Remove subtitle number
+                    i += 1  # Skip timestamp line (already processed)
+                    # Skip text lines until next subtitle number or empty line
+                    while i < len(lines) and lines[i].strip() and not lines[i].strip().isdigit():
+                        i += 1
+                    continue
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Error parsing timestamp line: {line}, error: {e}")
+                adjusted_lines.append(line)  # Keep original if parsing fails
+        else:
+            adjusted_lines.append(line)
+        
+        i += 1
+    
+    output_file.write_text('\n'.join(adjusted_lines), encoding="utf-8")
+    logger.info(f"Adjusted subtitle timestamps (offset: -{offset_seconds:.3f}s): {output_file}")
+    return output_file
+
+
 def create_dual_language_copy(source_subtitle_file: Path, target_subtitle_file: Path) -> Path:
     target_subtitle_file.parent.mkdir(parents=True, exist_ok=True)
     content = source_subtitle_file.read_text(encoding="utf-8")

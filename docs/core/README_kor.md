@@ -4,8 +4,8 @@
 
 `langflix/core/` 모듈은 LangFlix의 핵심 비디오 편집 기능을 포함합니다. 이 모듈은 long-form (side-by-side) 및 short-form (vertical) 비디오 레이아웃을 포함한 교육용 비디오 시퀀스 생성을 조율합니다.
 
-**최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001, TICKET-005
+**최종 업데이트:** 2025-11-05  
+**관련 티켓:** TICKET-001, TICKET-005, TICKET-024, TICKET-025
 
 ## 목적
 
@@ -254,6 +254,109 @@ Vertical 레이아웃으로 short-form 교육용 비디오 시퀀스를 생성�
 - `output_filename`: 출력 파일명
 
 **반환값:** 생성된 short-form 비디오 경로
+
+### 비디오 생성 과정
+
+비디오 생성 과정은 명확한 계층 구조를 따릅니다:
+
+#### 1. Context Video (원본 비디오 슬라이스)
+**위치:** `langflix/core/video_processor.py::extract_clip()`
+
+표현식 주변의 컨텍스트를 포함하는 원본 비디오의 슬라이스를 생성합니다.
+
+**과정:**
+- 원본 비디오 파일에서 클립 추출
+- 표현식의 `context_start_time`과 `context_end_time` 사용
+- FFmpeg 명령: `ffmpeg -ss {start_time} -i {original_video} -t {duration} -c:v libx264 -c:a aac`
+- 출력: 원시 컨텍스트 비디오 클립 (자막 없음, 원본 해상도)
+
+**예시:**
+```python
+# 원본 비디오: 00:00:00 - 00:45:00 (전체 에피소드)
+# 표현식 컨텍스트: 00:05:30 - 00:06:10
+# Context video: 00:05:30 - 00:06:10 (40초 슬라이스)
+```
+
+**핵심 사항:**
+- 원본 비디오에서 직접 슬라이스
+- 수정 없음 (원본 품질 보존)
+- 비디오 및 오디오 스트림 모두 포함
+- 모든 후속 처리의 기본으로 사용
+
+#### 2. Context Video with Subtitles (자막 오버레이)
+**위치:** `langflix/core/video_editor.py::_add_subtitles_to_context()`
+
+FFmpeg의 subtitle 필터를 사용하여 컨텍스트 비디오에 이중 언어 자막을 추가합니다.
+
+**과정:**
+1. 이중 언어 자막 파일 (`.srt` 형식) 찾기 또는 생성
+   - 자막 파일은 `SubtitleProcessor.create_dual_language_subtitle_file()`에 의해 생성됨
+   - 타임스탬프는 이미 `context_start_time` 기준으로 조정됨 (00:00:00부터 시작)
+2. FFmpeg `subtitles` 필터를 사용하여 자막 적용
+   - FFmpeg 명령: `ffmpeg -i {context_video} -vf "subtitles={subtitle_file}"`
+   - 자막이 비디오에 하드코딩됨 (burned in)
+3. 출력: 자막이 오버레이된 컨텍스트 비디오
+
+**자막 파일 생성:**
+- `SubtitleProcessor.create_dual_language_subtitle_file()`에 의해 생성됨
+- 컨텍스트 시간 범위 내의 원본 SRT 파일에서 자막 추출
+- 타임스탬프 조정: `relative_time = absolute_time - context_start_time`
+- 이중 언어 SRT 생성 (원본 + 번역)
+
+**예시:**
+```python
+# Context video: 00:05:30 - 00:06:10 (원본에서)
+# 자막 파일의 타임스탬프가 조정됨:
+#   원본: 00:05:35,000 --> 00:05:37,500 "Hello"
+#   조정: 00:00:05,000 --> 00:00:07,500 "Hello"
+# 결과: 00:00:00부터 시작하는 자막이 포함된 컨텍스트 비디오
+```
+
+**핵심 사항:**
+- 자막이 비디오에 하드코딩됨 (별도 트랙 아님)
+- 타임스탬프는 컨텍스트 비디오와 일치하도록 조정됨 (0부터 시작)
+- 이중 언어 형식: 원본 텍스트 + 번역
+- 표현식 추출에 재사용됨 (자막 동기화 보장)
+
+#### 3. Expression Video (컨텍스트 비디오 슬라이스)
+**위치:** `langflix/core/video_editor.py::create_multi_expression_sequence()` (line 500-507)
+
+자막이 포함된 컨텍스트 비디오에서 표현식 세그먼트를 추출합니다.
+
+**과정:**
+1. 소스로 `context_with_subtitles` 사용 (원본 비디오 아님)
+   - **중요:** 자막 동기화를 보장하기 위해 자막이 적용된 컨텍스트를 사용해야 함
+2. 컨텍스트 비디오 내의 상대 타임스탬프 계산:
+   - `relative_start = expression_start_time - context_start_time`
+   - `relative_end = expression_end_time - context_start_time`
+3. 상대 타임스탬프를 사용하여 FFmpeg로 클립 추출:
+   - FFmpeg 명령: `ffmpeg -ss {relative_start} -i {context_with_subtitles} -t {duration}`
+   - 타임스탬프 리셋: `setpts=PTS-STARTPTS` (00:00:00부터 시작)
+4. 다중 표현식 그룹의 경우: `pad` 필터를 사용하여 2560x720 해상도 일치
+   - 왼쪽 절반에 원본 비디오 배치 (0,0)
+   - 오른쪽 절반을 검은색으로 채움 (원본 품질 유지)
+5. 출력: 자막이 동기화된 표현식 비디오 클립
+
+**예시:**
+```python
+# Context video: 00:05:30 - 00:06:10 (40초, 자막 포함)
+# Expression: 00:05:50 - 00:05:55 (컨텍스트 내)
+# Relative: 00:00:20 - 00:00:25 (컨텍스트 비디오 내)
+# Expression clip: context_with_subtitles에서 00:00:20 - 00:00:25
+# 결과: 자막이 동기화된 5초 표현식 클립
+```
+
+**핵심 사항:**
+- **반드시** `context_with_subtitles` 사용 (원본 또는 원시 컨텍스트 아님)
+- 자막이 이미 동기화됨 (조정 불필요)
+- 연결을 위해 타임스탬프를 0으로 리셋
+- 원본 해상도 보존 (레이아웃 호환성을 위한 pad 필터)
+
+**이 순서가 중요한 이유:**
+1. Context video는 깨끗한 슬라이스 (처리 없음)
+2. 자막을 컨텍스트에 한 번만 추가 (효율적, 동기화됨)
+3. 자막이 적용된 컨텍스트에서 표현식 추출 (동기화 보장)
+4. 자막 타임스탬프 문제 없음 (모두 컨텍스트 기준 상대)
 
 ### 헬퍼 메서드
 

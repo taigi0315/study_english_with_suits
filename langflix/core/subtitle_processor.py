@@ -438,8 +438,9 @@ class SubtitleProcessor:
         """
         srt_lines = []
         
-        # Get the start time of the first subtitle to adjust all times
-        first_start_time = self._time_to_timedelta(subtitles[0]['start_time'])
+        # Get context start time to adjust all subtitle timestamps
+        # Context video starts at context_start_time, so we need to subtract that offset
+        context_start_time = self._time_to_timedelta(expression.context_start_time)
         
         # Create a mapping between dialogue text and translations
         dialogue_translation_map = {}
@@ -452,17 +453,36 @@ class SubtitleProcessor:
         # by accumulating subtitle text and matching against complete dialogues
         subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, expression.dialogues)
         
+        subtitle_entry_num = 1
         for i, subtitle in enumerate(subtitles):
-            # SRT entry number
-            srt_lines.append(str(i + 1))
-            
-            # Adjust timing to start from 00:00:00
+            # Get absolute timestamps from subtitle
             start_time = self._time_to_timedelta(subtitle['start_time'])
             end_time = self._time_to_timedelta(subtitle['end_time'])
             
-            # Calculate relative times from the first subtitle
-            relative_start = start_time - first_start_time
-            relative_end = end_time - first_start_time
+            # Calculate relative times from context_start_time (not first subtitle)
+            # This ensures subtitles align with the sliced context video
+            relative_start = start_time - context_start_time
+            relative_end = end_time - context_start_time
+            
+            # Skip subtitles that are completely before context start
+            if relative_end.total_seconds() <= 0:
+                continue
+            
+            # For subtitles that start before context_start_time but end after it:
+            # The subtitle should start at 0 in the context video (since context video starts at 0)
+            # but we need to preserve the actual duration for proper sync
+            # The end time is already calculated correctly relative to context_start_time
+            if relative_start.total_seconds() < 0:
+                # Subtitle starts before context video begins
+                # In the context video (which starts at 0), this subtitle should start at 0
+                # The duration is preserved by keeping the correctly calculated relative_end
+                relative_start = timedelta(seconds=0)
+                # Note: This ensures the subtitle appears from the start of the context video
+                # while maintaining the correct duration for synchronization
+            
+            # SRT entry number (renumber sequentially for valid entries only)
+            srt_lines.append(str(subtitle_entry_num))
+            subtitle_entry_num += 1
             
             # Format adjusted times
             start_time_str = self._timedelta_to_srt_time(relative_start)

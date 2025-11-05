@@ -229,11 +229,71 @@ class VideoEditor:
                 logger.info("Including context video before expression repeat (single-expression group)")
                 left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
                 self._register_temp_file(left_side_path)
-                concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+                
+                # Check if transition is enabled
+                from langflix import settings
+                transition_config = settings.get_transitions_config()
+                context_to_expr_transition = transition_config.get('context_to_expression_transition', {})
+                
+                if context_to_expr_transition.get('enabled', False):
+                    # Create transition video between context and expression
+                    transition_image_path = context_to_expr_transition.get('image_path_16_9', 'assets/transition_16_9.png')
+                    sound_effect_path = context_to_expr_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
+                    transition_duration = context_to_expr_transition.get('duration', 1.0)
+                    sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
+                    
+                    # Validate asset files exist
+                    transition_image_full = Path(transition_image_path)
+                    if not transition_image_full.is_absolute():
+                        transition_image_full = Path(self.output_dir.parent.parent / transition_image_path)
+                    
+                    sound_effect_full = Path(sound_effect_path)
+                    if not sound_effect_full.is_absolute():
+                        sound_effect_full = Path(self.output_dir.parent.parent / sound_effect_path)
+                    
+                    if not transition_image_full.exists() or not sound_effect_full.exists():
+                        logger.warning(
+                            f"Transition assets missing (image: {transition_image_full.exists()}, "
+                            f"sound: {sound_effect_full.exists()}), skipping transition"
+                        )
+                        # Fall back to direct concatenation
+                        concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
+                    else:
+                        # Create transition video
+                        transition_video_path = self.output_dir / f"temp_transition_long_{safe_expression}.mkv"
+                        transition_video = self._create_transition_video(
+                            duration=transition_duration,
+                            image_path=str(transition_image_full),
+                            sound_effect_path=str(sound_effect_full),
+                            output_path=transition_video_path,
+                            source_video_path=str(context_with_subtitles),
+                            fps=25,
+                            sound_effect_volume=sound_volume
+                        )
+                        
+                        # Concatenate: context → transition → expression_repeat
+                        # First: context + transition
+                        temp_context_transition = self.output_dir / f"temp_context_transition_long_{safe_expression}.mkv"
+                        self._register_temp_file(temp_context_transition)
+                        concat_filter_with_explicit_map(
+                            str(context_with_subtitles),
+                            str(transition_video),
+                            str(temp_context_transition)
+                        )
+                        
+                        # Then: (context + transition) + expression_repeat
+                        concat_filter_with_explicit_map(
+                            str(temp_context_transition),
+                            str(repeated_expression_path),
+                            str(left_side_path)
+                        )
+                else:
+                    # Original flow without transition
+                    concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
                 
                 # Get total left side duration for matching
                 left_duration = get_duration_seconds(str(left_side_path))
-                logger.info(f"Left side duration (context + expression repeat): {left_duration:.2f}s")
+                logger.info(f"Left side duration (context + transition + expression repeat): {left_duration:.2f}s")
             
             # Step 3: Create educational slide with background and TTS audio
             # Pass left_duration so slide can be extended to match
@@ -322,6 +382,99 @@ class VideoEditor:
     def _register_temp_file(self, file_path: Path) -> None:
         """Register a temporary file for cleanup later"""
         self.temp_manager.register_file(file_path)
+    
+    def _create_transition_video(
+        self,
+        duration: float,
+        image_path: str,
+        sound_effect_path: str,
+        output_path: Path,
+        source_video_path: str,
+        fps: int = 25,
+        sound_effect_volume: float = 0.5
+    ) -> str:
+        """
+        Create transition video from static image with sound effect.
+        
+        This creates a 1-second transition video that matches the source video's
+        codec, resolution, and frame rate to ensure proper concatenation.
+        
+        Args:
+            duration: Transition duration in seconds (typically 1.0)
+            image_path: Path to transition image (PNG file)
+            sound_effect_path: Path to sound effect MP3 file
+            output_path: Output video path
+            source_video_path: Source video to match codec/resolution/params
+            fps: Output frame rate (default: 25)
+            sound_effect_volume: Volume level for sound effect (0.0-1.0, default: 0.5)
+            
+        Returns:
+            Path to created transition video as string
+        """
+        try:
+            from langflix.media.ffmpeg_utils import get_video_params, get_audio_params, make_video_encode_args_from_source, make_audio_encode_args
+            
+            logger.info(f"Creating transition video: {output_path} (duration: {duration}s)")
+            
+            # Get video params from source to ensure matching
+            source_vp = get_video_params(source_video_path)
+            source_ap = get_audio_params(source_video_path)
+            
+            width = source_vp.width or 1920
+            height = source_vp.height or 1080
+            
+            logger.info(f"Transition video params: {width}x{height}, fps={fps}, codec={source_vp.codec}")
+            
+            # Create video from static image using loop filter
+            # Duration must match exactly
+            image_input = ffmpeg.input(str(image_path), loop=1, t=duration)
+            
+            # Scale image to match source resolution
+            video_stream = ffmpeg.filter(image_input['v'], 'scale', width, height)
+            video_stream = ffmpeg.filter(video_stream, 'fps', fps=fps)
+            
+            # Add sound effect, loop if needed to match duration
+            sound_input = ffmpeg.input(str(sound_effect_path), stream_loop=-1)
+            # Trim sound effect to match duration and apply volume
+            sound_stream = ffmpeg.filter(sound_input['a'], 'atrim', duration=duration)
+            sound_stream = ffmpeg.filter(sound_stream, 'volume', volume=sound_effect_volume)
+            
+            # Create silent audio if source has audio, mix sound effect
+            if source_ap.sample_rate:
+                # Generate silent audio to match source audio params
+                silent_audio = ffmpeg.input(
+                    f'anullsrc=r={source_ap.sample_rate}:cl=stereo',
+                    f='lavfi',
+                    t=duration
+                )
+                # Mix sound effect with silent audio
+                audio_stream = ffmpeg.filter([silent_audio['a'], sound_stream], 'amix', inputs=2, duration='first')
+            else:
+                # No audio in source, just use sound effect
+                audio_stream = sound_stream
+            
+            # Output with same codec params as source
+            # CRITICAL: Use same codec/resolution to allow proper concatenation
+            output_args = make_video_encode_args_from_source(source_video_path)
+            output_args.update(make_audio_encode_args(normalize=True))
+            
+            # Register temp file for cleanup
+            self._register_temp_file(output_path)
+            
+            # Create transition video
+            (
+                ffmpeg
+                .output(video_stream, audio_stream, str(output_path), **output_args)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            logger.info(f"✅ Transition video created: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating transition video: {e}", exc_info=True)
+            raise
     
     def _get_subtitle_style_config(self) -> Dict[str, Any]:
         """Get subtitle styling configuration from expression settings"""
@@ -2681,12 +2834,78 @@ class VideoEditor:
             # Step 3: Concatenate context + repeated expression (same as long-form)
             concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
             self._register_temp_file(concatenated_video_path)
-            logger.info("Concatenating context + expression repeat (same as long-form)")
-            concat_filter_with_explicit_map(
-                str(context_with_subtitles),
-                str(repeated_expression_path),
-                str(concatenated_video_path)
-            )
+            
+            # Check if transition is enabled
+            from langflix import settings
+            transition_config = settings.get_transitions_config()
+            context_to_expr_transition = transition_config.get('context_to_expression_transition', {})
+            
+            if context_to_expr_transition.get('enabled', False):
+                # Create transition video between context and expression
+                transition_image_path = context_to_expr_transition.get('image_path_9_16', 'assets/transition_9_16.png')
+                sound_effect_path = context_to_expr_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
+                transition_duration = context_to_expr_transition.get('duration', 1.0)
+                sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
+                
+                # Validate asset files exist
+                transition_image_full = Path(transition_image_path)
+                if not transition_image_full.is_absolute():
+                    transition_image_full = Path(self.output_dir.parent.parent / transition_image_path)
+                
+                sound_effect_full = Path(sound_effect_path)
+                if not sound_effect_full.is_absolute():
+                    sound_effect_full = Path(self.output_dir.parent.parent / sound_effect_path)
+                
+                if not transition_image_full.exists() or not sound_effect_full.exists():
+                    logger.warning(
+                        f"Transition assets missing (image: {transition_image_full.exists()}, "
+                        f"sound: {sound_effect_full.exists()}), skipping transition"
+                    )
+                    # Fall back to direct concatenation
+                    logger.info("Concatenating context + expression repeat (transition disabled)")
+                    concat_filter_with_explicit_map(
+                        str(context_with_subtitles),
+                        str(repeated_expression_path),
+                        str(concatenated_video_path)
+                    )
+                else:
+                    # Create transition video
+                    transition_video_path = self.output_dir / f"temp_transition_short_{safe_expression}.mkv"
+                    transition_video = self._create_transition_video(
+                        duration=transition_duration,
+                        image_path=str(transition_image_full),
+                        sound_effect_path=str(sound_effect_full),
+                        output_path=transition_video_path,
+                        source_video_path=str(context_with_subtitles),
+                        fps=25,
+                        sound_effect_volume=sound_volume
+                    )
+                    
+                    # Concatenate: context → transition → expression_repeat
+                    # First: context + transition
+                    temp_context_transition = self.output_dir / f"temp_context_transition_short_{safe_expression}.mkv"
+                    self._register_temp_file(temp_context_transition)
+                    concat_filter_with_explicit_map(
+                        str(context_with_subtitles),
+                        str(transition_video),
+                        str(temp_context_transition)
+                    )
+                    
+                    # Then: (context + transition) + expression_repeat
+                    logger.info("Concatenating context + transition + expression repeat (short-form)")
+                    concat_filter_with_explicit_map(
+                        str(temp_context_transition),
+                        str(repeated_expression_path),
+                        str(concatenated_video_path)
+                    )
+            else:
+                # Original flow without transition
+                logger.info("Concatenating context + expression repeat (transition disabled)")
+                concat_filter_with_explicit_map(
+                    str(context_with_subtitles),
+                    str(repeated_expression_path),
+                    str(concatenated_video_path)
+                )
             
             # Step 4: Get total duration from concatenated video (same approach as long-form uses left_duration)
             total_duration = get_duration_seconds(str(concatenated_video_path))

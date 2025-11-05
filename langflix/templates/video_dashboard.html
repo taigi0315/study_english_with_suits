@@ -533,6 +533,27 @@
             <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
         </div>
         
+        <!-- Batch Actions Bar -->
+        <div id="batchActionsBar" class="batch-actions" style="display: none; padding: 15px; background: #f8f9fa; margin: 20px 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span id="selectedCount" style="font-weight: bold; color: #2c3e50;">0 selected</span>
+                    <button id="deleteSelectedBtn" class="batch-action-btn" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        🗑️ Delete Selected
+                    </button>
+                    <button id="uploadImmediateBtn" class="batch-action-btn" style="background: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        📤 Upload Selected (Immediate)
+                    </button>
+                    <button id="uploadScheduleBtn" class="batch-action-btn" style="background: #27ae60; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        📅 Upload Selected (Schedule)
+                    </button>
+                </div>
+                <button id="clearSelectionBtn" style="background: transparent; border: 1px solid #bdc3c7; color: #7f8c8d; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
+                    Clear Selection
+                </button>
+            </div>
+        </div>
+        
         <div id="videosContainer">
             <div class="loading">Loading videos...</div>
         </div>
@@ -554,6 +575,7 @@
             setupFilterButtons();
             setupSearchBox();
             setupYouTubeAccountEvents();
+            setupBatchOperations();
             
             // Restore active job progress bar if exists
             restoreActiveJobs();
@@ -689,6 +711,14 @@
                 
                 return `
                 <div class="video-row ${video.ready_for_upload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}">
+                    <div style="margin-right: 10px;">
+                        <input type="checkbox" 
+                               class="video-checkbox" 
+                               data-video-path="${video.path}"
+                               data-video-type="${video.video_type}"
+                               data-ready-for-upload="${video.ready_for_upload}"
+                               style="width: 18px; height: 18px; cursor: pointer;">
+                    </div>
                     <div class="video-thumbnail-small">
                         <img src="/api/thumbnail/${encodeURIComponent(video.path)}" 
                              onerror="this.parentElement.innerHTML='🎬'" 
@@ -1777,6 +1807,244 @@
                 }
             } catch (error) {
                 alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Batch Operations
+        function setupBatchOperations() {
+            // Update batch actions bar visibility when checkboxes change
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('video-checkbox')) {
+                    updateBatchActionsBar();
+                }
+            });
+
+            // Clear selection button
+            document.getElementById('clearSelectionBtn').addEventListener('click', function() {
+                document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+                updateBatchActionsBar();
+            });
+
+            // Delete selected button
+            document.getElementById('deleteSelectedBtn').addEventListener('click', async function() {
+                await batchDeleteVideos();
+            });
+
+            // Upload immediate button
+            document.getElementById('uploadImmediateBtn').addEventListener('click', async function() {
+                await batchUploadImmediate();
+            });
+
+            // Upload schedule button
+            document.getElementById('uploadScheduleBtn').addEventListener('click', async function() {
+                await batchUploadSchedule();
+            });
+        }
+
+        function updateBatchActionsBar() {
+            const selected = document.querySelectorAll('.video-checkbox:checked');
+            const batchBar = document.getElementById('batchActionsBar');
+            const selectedCount = document.getElementById('selectedCount');
+
+            if (selected.length > 0) {
+                batchBar.style.display = 'block';
+                selectedCount.textContent = `${selected.length} selected`;
+                
+                // Enable/disable buttons based on selection
+                const hasUploadable = Array.from(selected).some(cb => cb.dataset.readyForUpload === 'true');
+                document.getElementById('uploadImmediateBtn').disabled = !hasUploadable;
+                document.getElementById('uploadScheduleBtn').disabled = !hasUploadable;
+            } else {
+                batchBar.style.display = 'none';
+            }
+        }
+
+        function getSelectedVideos() {
+            const selected = document.querySelectorAll('.video-checkbox:checked');
+            return Array.from(selected).map(cb => ({
+                path: cb.dataset.videoPath,
+                type: cb.dataset.videoType,
+                ready_for_upload: cb.dataset.readyForUpload === 'true'
+            }));
+        }
+
+        async function batchDeleteVideos() {
+            const selected = getSelectedVideos();
+            
+            if (selected.length === 0) {
+                alert('Please select at least one video to delete');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete ${selected.length} video(s)?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/videos/batch/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        video_paths: selected.map(v => v.path)
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    if (result.failed_count > 0) {
+                        alert(`Deleted ${result.deleted_count} video(s). ${result.failed_count} failed:\n${result.failed.map(f => f.path + ': ' + f.error).join('\n')}`);
+                    } else {
+                        alert(`Successfully deleted ${result.deleted_count} video(s)`);
+                    }
+                    
+                    // Clear selection and reload videos
+                    document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+                    updateBatchActionsBar();
+                    loadVideos();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function batchUploadImmediate() {
+            const selected = getSelectedVideos().filter(v => v.ready_for_upload);
+            
+            if (selected.length === 0) {
+                alert('Please select at least one uploadable video');
+                return;
+            }
+
+            if (selected.length > 50) {
+                alert('Maximum 50 videos allowed per batch');
+                return;
+            }
+
+            if (!confirm(`Upload ${selected.length} video(s) immediately to YouTube?`)) {
+                return;
+            }
+
+            try {
+                // Disable buttons during upload
+                const buttons = document.querySelectorAll('.batch-action-btn');
+                buttons.forEach(btn => btn.disabled = true);
+
+                const response = await fetch('/api/upload/batch/immediate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        videos: selected.map(v => ({
+                            video_path: v.path,
+                            video_type: v.type
+                        }))
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    const successCount = result.results.filter(r => r.success).length;
+                    const failCount = result.results.length - successCount;
+                    
+                    if (failCount > 0) {
+                        alert(`Uploaded ${successCount} video(s). ${failCount} failed.\n\nCheck console for details.`);
+                    } else {
+                        alert(`Successfully uploaded ${successCount} video(s) to YouTube!`);
+                    }
+                    
+                    // Clear selection and reload videos
+                    document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+                    updateBatchActionsBar();
+                    loadVideos();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+
+                // Re-enable buttons
+                buttons.forEach(btn => btn.disabled = false);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                document.querySelectorAll('.batch-action-btn').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        async function batchUploadSchedule() {
+            const selected = getSelectedVideos().filter(v => v.ready_for_upload);
+            
+            if (selected.length === 0) {
+                alert('Please select at least one uploadable video');
+                return;
+            }
+
+            if (selected.length > 50) {
+                alert('Maximum 50 videos allowed per batch');
+                return;
+            }
+
+            if (!confirm(`Schedule ${selected.length} video(s) for upload to YouTube?\n\nVideos will be scheduled sequentially, one by one.`)) {
+                return;
+            }
+
+            try {
+                // Disable buttons during upload
+                const buttons = document.querySelectorAll('.batch-action-btn');
+                buttons.forEach(btn => btn.disabled = true);
+
+                const response = await fetch('/api/upload/batch/schedule', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        videos: selected.map(v => ({
+                            video_path: v.path,
+                            video_type: v.type
+                        }))
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    const successCount = result.results.filter(r => r.success).length;
+                    const failCount = result.results.length - successCount;
+                    
+                    if (failCount > 0) {
+                        const scheduledTimes = result.results
+                            .filter(r => r.success && r.scheduled_time)
+                            .map(r => new Date(r.scheduled_time).toLocaleString('ko-KR'))
+                            .join('\n');
+                        
+                        alert(`Scheduled ${successCount} video(s). ${failCount} failed.\n\nScheduled times:\n${scheduledTimes}`);
+                    } else {
+                        const scheduledTimes = result.results
+                            .filter(r => r.scheduled_time)
+                            .map(r => new Date(r.scheduled_time).toLocaleString('ko-KR'))
+                            .join('\n');
+                        
+                        alert(`Successfully scheduled ${successCount} video(s)!\n\nScheduled times:\n${scheduledTimes}`);
+                    }
+                    
+                    // Clear selection and reload videos
+                    document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+                    updateBatchActionsBar();
+                    loadVideos();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+
+                // Re-enable buttons
+                buttons.forEach(btn => btn.disabled = false);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                document.querySelectorAll('.batch-action-btn').forEach(btn => btn.disabled = false);
             }
         }
     </script>

@@ -976,6 +976,334 @@ class VideoManagementUI:
                     "details": str(e)
                 }), 500
         
+        @self.app.route('/api/videos/batch/delete', methods=['POST'])
+        def batch_delete_videos():
+            """Delete multiple video files"""
+            try:
+                import os
+                data = request.get_json()
+                video_paths = data.get('video_paths', [])
+                
+                if not video_paths:
+                    return jsonify({"error": "No video paths provided"}), 400
+                
+                deleted = []
+                failed = []
+                
+                for video_path in video_paths:
+                    try:
+                        # Delete file
+                        if os.path.exists(video_path):
+                            os.remove(video_path)
+                            deleted.append(video_path)
+                            logger.info(f"Deleted video file: {video_path}")
+                        else:
+                            failed.append({"path": video_path, "error": "File not found"})
+                    except Exception as e:
+                        logger.error(f"Failed to delete {video_path}: {e}")
+                        failed.append({"path": video_path, "error": str(e)})
+                
+                return jsonify({
+                    "success": len(failed) == 0,
+                    "deleted": deleted,
+                    "failed": failed,
+                    "deleted_count": len(deleted),
+                    "failed_count": len(failed)
+                })
+            except Exception as e:
+                logger.error(f"Error in batch delete: {e}", exc_info=True)
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/upload/batch/immediate', methods=['POST'])
+        def batch_upload_immediate():
+            """Upload multiple videos immediately"""
+            try:
+                data = request.get_json()
+                videos = data.get('videos', [])
+                
+                if not videos:
+                    return jsonify({"error": "No videos provided"}), 400
+                
+                if len(videos) > 50:
+                    return jsonify({"error": "Maximum 50 videos allowed per batch"}), 400
+                
+                results = []
+                for video in videos:
+                    video_path = video.get('video_path')
+                    video_type = video.get('video_type')
+                    
+                    if not video_path or not video_type:
+                        results.append({
+                            "video_path": video_path,
+                            "success": False,
+                            "error": "video_path and video_type are required"
+                        })
+                        continue
+                    
+                    try:
+                        # Reuse existing immediate upload logic
+                        from langflix.youtube.uploader import YouTubeUploader
+                        uploader = YouTubeUploader()
+                        
+                        # Generate metadata
+                        from langflix.youtube.video_manager import VideoFileManager
+                        from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                        from pathlib import Path
+                        
+                        video_manager = VideoFileManager()
+                        metadata_generator = YouTubeMetadataGenerator()
+                        
+                        # Convert string path to Path object
+                        video_path_obj = Path(video_path)
+                        if not video_path_obj.exists():
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Video file not found: {video_path}"
+                            })
+                            continue
+                        
+                        video_metadata = video_manager._extract_video_metadata(video_path_obj)
+                        if not video_metadata:
+                            logger.error(f"Failed to extract metadata from {video_path}")
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": "Failed to extract video metadata"
+                            })
+                            continue
+                        
+                        youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        
+                        # Upload immediately
+                        logger.info(f"Starting immediate batch upload: {video_path}")
+                        result = uploader.upload_video(
+                            video_path=video_path,
+                            metadata=youtube_metadata
+                        )
+                        
+                        if result.success:
+                            # Update video status
+                            self._update_video_upload_status(
+                                video_path,
+                                result.video_id,
+                                result.video_url,
+                                'completed'
+                            )
+                            
+                            # Clear video cache
+                            try:
+                                from langflix.core.redis_client import get_redis_job_manager
+                                redis_manager = get_redis_job_manager()
+                                redis_manager.invalidate_video_cache()
+                            except Exception as e:
+                                logger.warning(f"Failed to clear video cache: {e}")
+                            
+                            results.append({
+                                "video_path": video_path,
+                                "success": True,
+                                "video_id": result.video_id,
+                                "video_url": result.video_url
+                            })
+                        else:
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": result.error_message or "Upload failed"
+                            })
+                    except Exception as e:
+                        logger.error(f"Error uploading {video_path}: {e}", exc_info=True)
+                        results.append({
+                            "video_path": video_path,
+                            "success": False,
+                            "error": str(e)
+                        })
+                
+                return jsonify({
+                    "success": all(r.get('success') for r in results),
+                    "results": results,
+                    "success_count": sum(1 for r in results if r.get('success')),
+                    "failed_count": sum(1 for r in results if not r.get('success'))
+                })
+            except Exception as e:
+                logger.error(f"Error in batch upload immediate: {e}", exc_info=True)
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/upload/batch/schedule', methods=['POST'])
+        def batch_upload_schedule():
+            """Schedule multiple videos for upload (sequential scheduling)"""
+            try:
+                data = request.get_json()
+                videos = data.get('videos', [])
+                
+                if not videos:
+                    return jsonify({"error": "No videos provided"}), 400
+                
+                if len(videos) > 50:
+                    return jsonify({"error": "Maximum 50 videos allowed per batch"}), 400
+                
+                if not self.schedule_manager:
+                    return jsonify({
+                        "error": "Schedule manager not available",
+                        "hint": "Please ensure database is configured and PostgreSQL is running"
+                    }), 503
+                
+                results = []
+                # Schedule videos sequentially, calculating next available slot for each
+                for video in videos:
+                    video_path = video.get('video_path')
+                    video_type = video.get('video_type')
+                    
+                    if not video_path or not video_type:
+                        results.append({
+                            "video_path": video_path,
+                            "success": False,
+                            "error": "video_path and video_type are required"
+                        })
+                        continue
+                    
+                    try:
+                        # Map video_type for schedule_manager
+                        schedule_video_type = 'short' if video_type == 'context' else ('final' if video_type == 'long-form' else video_type)
+                        
+                        # Get next available slot (will automatically find next available time)
+                        # This ensures sequential scheduling - each video gets the next free slot
+                        publish_time = self.schedule_manager.get_next_available_slot(schedule_video_type)
+                        logger.info(f"Next available slot for {video_path} ({schedule_video_type}): {publish_time}")
+                        
+                        # Generate metadata
+                        from langflix.youtube.video_manager import VideoFileManager
+                        from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                        from pathlib import Path
+                        
+                        video_manager = VideoFileManager()
+                        metadata_generator = YouTubeMetadataGenerator()
+                        
+                        # Convert string path to Path object
+                        video_path_obj = Path(video_path)
+                        if not video_path_obj.exists():
+                            logger.error(f"Video file not found: {video_path}")
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Video file not found: {video_path}"
+                            })
+                            continue
+                        
+                        try:
+                            video_metadata = video_manager._extract_video_metadata(video_path_obj)
+                            if not video_metadata:
+                                logger.error(f"Failed to extract metadata from {video_path}")
+                                results.append({
+                                    "video_path": video_path,
+                                    "success": False,
+                                    "error": "Failed to extract video metadata"
+                                })
+                                continue
+                        except Exception as e:
+                            logger.error(f"Error extracting metadata from {video_path}: {e}", exc_info=True)
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Error extracting metadata: {str(e)}"
+                            })
+                            continue
+                        
+                        try:
+                            youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        except Exception as e:
+                            logger.error(f"Error generating metadata for {video_path}: {e}", exc_info=True)
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": f"Error generating metadata: {str(e)}"
+                            })
+                            continue
+                        
+                        # Upload with publishAt
+                        from langflix.youtube.uploader import YouTubeUploader
+                        uploader = YouTubeUploader()
+                        
+                        logger.info(f"Starting scheduled batch upload: {video_path} for {publish_time}")
+                        result = uploader.upload_video(
+                            video_path=video_path,
+                            metadata=youtube_metadata,
+                            publish_at=publish_time
+                        )
+                        
+                        if result.success:
+                            # Store schedule in DB for tracking
+                            success, message, scheduled_time = self.schedule_manager.schedule_video(
+                                video_path, schedule_video_type, publish_time
+                            )
+                            
+                            # Use actual scheduled_time from DB
+                            actual_scheduled_time = scheduled_time if scheduled_time else publish_time
+                            
+                            if success:
+                                self.schedule_manager.update_schedule_with_video_id(
+                                    video_path, result.video_id, 'completed'
+                                )
+                                self.schedule_manager.update_quota_usage(schedule_video_type)
+                            
+                            # Update video status
+                            self._update_video_upload_status(
+                                video_path,
+                                result.video_id,
+                                result.video_url,
+                                'completed'
+                            )
+                            
+                            # Clear video cache
+                            try:
+                                from langflix.core.redis_client import get_redis_job_manager
+                                redis_manager = get_redis_job_manager()
+                                redis_manager.invalidate_video_cache()
+                            except Exception as e:
+                                logger.warning(f"Failed to clear video cache: {e}")
+                            
+                            results.append({
+                                "video_path": video_path,
+                                "scheduled_time": actual_scheduled_time.isoformat() if hasattr(actual_scheduled_time, 'isoformat') else str(actual_scheduled_time),
+                                "success": True,
+                                "video_id": result.video_id,
+                                "video_url": result.video_url
+                            })
+                        else:
+                            results.append({
+                                "video_path": video_path,
+                                "success": False,
+                                "error": result.error_message or "Upload failed"
+                            })
+                    except Exception as e:
+                        logger.error(f"Error scheduling {video_path}: {e}", exc_info=True)
+                        results.append({
+                            "video_path": video_path,
+                            "success": False,
+                            "error": str(e)
+                        })
+                
+                return jsonify({
+                    "success": all(r.get('success') for r in results),
+                    "results": results,
+                    "success_count": sum(1 for r in results if r.get('success')),
+                    "failed_count": sum(1 for r in results if not r.get('success'))
+                })
+            except ValueError as e:
+                # Database connection errors
+                error_msg = str(e)
+                if "database" in error_msg.lower() or "postgresql" in error_msg.lower():
+                    logger.error(f"Database connection error in batch schedule: {e}")
+                    return jsonify({
+                        "error": "Database connection failed",
+                        "details": error_msg,
+                        "hint": "Please ensure PostgreSQL is running"
+                    }), 503
+                return jsonify({"error": error_msg}), 400
+            except Exception as e:
+                logger.error(f"Error in batch upload schedule: {e}", exc_info=True)
+                return jsonify({"error": str(e)}), 500
+        
         @self.app.route('/api/quota/status')
         def get_quota_status():
             """Get YouTube API quota usage status"""

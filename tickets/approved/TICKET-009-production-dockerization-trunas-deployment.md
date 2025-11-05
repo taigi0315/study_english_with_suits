@@ -1248,3 +1248,59 @@ services:
 - 헬스체크 100% 통과
 - 문서화 완료
 
+---
+
+## ✅ Implementation Status
+
+**Implementation Start Date:** 2025-01-30  
+**Branch:** `feature/TICKET-009-dockerize-and-deploy`
+
+### Current Status: In Progress
+
+#### Completed ✅
+- [x] TrueNAS 배포 가이드 문서 생성 (한국어/영어)
+- [x] docker-compose.truenas.yml 초안 생성
+- [x] Health check 엔드포인트 확인 (이미 구현됨)
+
+#### In Progress 🔄
+- [ ] Production Dockerfile 생성 (Multi-stage, Celery 제외)
+- [ ] docker-compose.truenas.yml 업데이트 (Celery 제거, PostgreSQL optional)
+
+#### Pending 📋
+- [ ] .dockerignore 파일 생성
+- [ ] GitHub Actions CI/CD 파이프라인 생성
+- [ ] Makefile에 Docker 명령 추가
+- [ ] 테스트 및 검증
+
+### Implementation Notes
+
+**Key Decisions Made:**
+1. **Celery 제외**: 현재 FastAPI BackgroundTasks + QueueProcessor 사용 중이므로 Celery 불필요
+2. **PostgreSQL Optional**: 데이터베이스는 선택적 기능이므로 환경 변수로 제어
+3. **Redis 필수**: 작업 큐 관리에 사용 중
+4. **Health Checks**: 이미 구현되어 있음 (`/health`, `/health/detailed`)
+
+**Current Architecture:**
+- FastAPI 서버: 메인 API (포트 8000)
+- Redis: 작업 상태 관리 및 큐
+- PostgreSQL: 선택적 (database.enabled=true일 때만)
+- QueueProcessor: FastAPI lifespan에서 백그라운드 실행
+
+**Files Created:**
+- `deploy/docker-compose.truenas.yml` - TrueNAS 배포용 Compose 파일
+- `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_kor.md` - 한국어 배포 가이드
+- `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_eng.md` - 영어 배포 가이드
+
+**Files to Create:**
+- `Dockerfile` - Production multi-stage Dockerfile
+- `.dockerignore` - 빌드 제외 파일 목록
+- `.github/workflows/ci.yml` - CI/CD 파이프라인
+- `Makefile` 업데이트 - Docker 명령 추가
+
+### Next Steps
+1. Production Dockerfile 생성 (builder, runtime, api stages)
+2. docker-compose.truenas.yml에서 Celery 관련 서비스 제거
+3. .dockerignore 파일 생성
+4. CI/CD 파이프라인 생성 (Phase 1: Build & Test)
+5. Makefile 업데이트
+

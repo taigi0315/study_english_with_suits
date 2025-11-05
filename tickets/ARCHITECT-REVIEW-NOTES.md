@@ -170,3 +170,35 @@
 - 서버 재시작: QUEUED 작업 자동 재개, PROCESSING 작업 타임아웃
 - Redis lock: 중복 프로세서 방지 (`SETNX jobs:processor_lock`)
 
+---
+
+### New Ticket Review Session - 2025-01-30 (Fifth)
+
+**Tickets Reviewed:**
+10. TICKET-028: Implement File Management API Endpoints - ✅ APPROVED
+
+**Key Findings:**
+- API 파일 관리 엔드포인트 완성 (GET details, DELETE)
+- Storage backend abstraction 활용 (ADR-011)
+- 보안: Path traversal 방지, protected files 패턴
+- API 완성도 향상 및 사용자 경험 개선
+
+**Implementation Order:**
+1. Phase 2 - Sprint 2 (Weeks 3-4): TICKET-028
+
+**Dependencies:**
+- TICKET-028: Storage backend 이미 존재 (ADR-011)
+- 독립적으로 구현 가능
+
+**Technical Decisions:**
+- File ID: Relative path 사용 (가장 간단, `list_files()`와 일치)
+- Storage backend 메서드: `file_exists()`, `delete_file()`, `get_file_url()` 사용
+- Path validation: `../` 및 absolute path 거부
+- Protected files: 하드코딩된 패턴 (향후 설정으로 이동 고려)
+- Performance: `list_files()`는 모든 파일 나열 (향후 pagination 고려)
+
+**Code Corrections Made:**
+- Storage backend 메서드 이름 수정 (`exists()` → `file_exists()`, `delete()` → `delete_file()`)
+- `list_files()` 구현 수정 (빈 prefix로 모든 파일 나열, recursive 파라미터 없음)
+- `delete_file()` 반환값 확인 추가
+

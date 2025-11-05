@@ -1,6 +1,6 @@
 # LangFlix API Module Documentation (ENG)
 
-Last updated: 2025-11-02
+Last updated: 2025-01-30
 
 ## Overview
 The `langflix/api` package provides the FastAPI-based HTTP interface for LangFlix. It exposes health endpoints, job management for video processing, and file listing utilities. It wires middleware, exception handling, and static mounts, and integrates with Redis-backed job storage.

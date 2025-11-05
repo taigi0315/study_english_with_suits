@@ -1,4 +1,4 @@
-# [TICKET-020] Fix Scheduled Time Mismatch Between UI and Backend
+# [TICKET-027] Fix Scheduled Time Mismatch Between UI and Backend
 
 ## Priority
 - [x] High (User experience, data consistency)

@@ -4,7 +4,7 @@
 
 The `langflix/core/` module contains the core video editing functionality for LangFlix. This module orchestrates the creation of educational video sequences, including long-form (side-by-side) and short-form (vertical) video layouts.
 
-**Last Updated:** 2025-11-05  
+**Last Updated:** 2025-01-30  
 **Related Tickets:** TICKET-001, TICKET-005, TICKET-024, TICKET-025
 
 ## Purpose

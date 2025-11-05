@@ -176,7 +176,7 @@ LangFlix는 두 가지 인증 방법을 지원합니다:
 
 **참고:** `youtube_credentials.json` 파일의 Redirect URI는 애플리케이션이 자동으로 업데이트하지만, **Google Cloud Console에도 수동으로 추가해야 합니다**.
 
-더 자세한 문제 해결 방법은 [REDIRECT_URI_FIX.md](../../REDIRECT_URI_FIX.md)를 참고하세요.
+더 자세한 문제 해결 방법은 [REDIRECT_URI_FIX_kor.md](./youtube/REDIRECT_URI_FIX_kor.md)를 참고하세요.
 
 ## 다음 단계
 

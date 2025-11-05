@@ -176,7 +176,7 @@ This error occurs when the redirect URI used by the application doesn't match wh
 
 **Note:** The redirect URI in your `youtube_credentials.json` file will be updated automatically by the application, but you **must also add it manually in Google Cloud Console**.
 
-For more detailed troubleshooting, see [REDIRECT_URI_FIX.md](../../REDIRECT_URI_FIX.md).
+For more detailed troubleshooting, see [REDIRECT_URI_FIX_eng.md](./youtube/REDIRECT_URI_FIX_eng.md).
 
 ## Next Steps
 

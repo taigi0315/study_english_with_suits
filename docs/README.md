@@ -36,7 +36,7 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 - **[Monitoring Module](monitoring/README_eng.md)** - Health checks and performance monitoring
 - **[Tasks Module](tasks/)** - Background task processing (Celery)
 - **[Slides Module](slides/)** - Educational slide generation
-- **[YouTube Module](youtube/)** - YouTube upload and scheduling
+- **[YouTube Module](youtube/README_eng.md)** - YouTube upload and scheduling
 - **[Utils Module](utils/)** - Utility functions
   - [TempFileManager](utils/temp_file_manager_eng.md) - Temporary file management
   - [Filename Utils](utils/filename_utils_eng.md) - Filename sanitization

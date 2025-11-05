@@ -157,21 +157,16 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Get context video with subtitles (needed for extracting expression clip with subtitles)
-            # For multi-expression groups, use group_id to reuse group-specific subtitle file
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression, group_id=group_id
-            )
-            
-            # Extract expression video clip with audio and subtitles from context
-            # Reset timestamps to start from 0 to prevent delay in repeated clips
+            # Extract expression video clip from ORIGINAL context video (before subtitle overlay)
+            # This ensures accurate timing since subtitle overlay can cause re-encoding timestamp drift
+            # We'll add subtitles to the expression clip separately if needed
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
             
-            # Extract with -ss for seeking, then reset timestamps
+            # Extract from original context video (not context_with_subtitles) to avoid timestamp drift
             # Use both -ss and setpts to ensure timestamps are reset correctly
-            input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+            input_stream = ffmpeg.input(str(context_video_path), ss=relative_start, t=expression_duration)
             # Reset PTS to start from 0 for both video and audio
             video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
             audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
@@ -199,7 +194,7 @@ class VideoEditor:
                 stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
                 logger.error(
                     f"❌ FFmpeg failed to extract expression clip:\n"
-                    f"   Input: {context_with_subtitles}\n"
+                    f"   Input: {context_video_path}\n"
                     f"   Relative start: {relative_start:.2f}s\n"
                     f"   Duration: {expression_duration:.2f}s\n"
                     f"   Expression: {expression.expression}\n"

@@ -4,8 +4,8 @@
 
 `langflix/core/` 모듈은 LangFlix의 핵심 비디오 편집 기능을 포함합니다. 이 모듈은 long-form (side-by-side) 및 short-form (vertical) 비디오 레이아웃을 포함한 교육용 비디오 시퀀스 생성을 조율합니다.
 
-**최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001, TICKET-005
+**최종 업데이트:** 2025-11-05  
+**관련 티켓:** TICKET-001, TICKET-005, TICKET-024, TICKET-025
 
 ## 목적
 

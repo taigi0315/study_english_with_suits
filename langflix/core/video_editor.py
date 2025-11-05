@@ -242,19 +242,43 @@ class VideoEditor:
                     transition_duration = context_to_expr_transition.get('duration', 1.0)
                     sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
                     
-                    # Validate asset files exist
-                    transition_image_full = Path(transition_image_path)
-                    if not transition_image_full.is_absolute():
-                        transition_image_full = Path(self.output_dir.parent.parent / transition_image_path)
+                    # Find asset files using multiple possible paths (similar to _get_background_config)
+                    import os
+                    transition_image_full = None
+                    sound_effect_full = None
                     
-                    sound_effect_full = Path(sound_effect_path)
-                    if not sound_effect_full.is_absolute():
-                        sound_effect_full = Path(self.output_dir.parent.parent / sound_effect_path)
+                    # Try multiple possible paths for transition image
+                    image_paths = [
+                        Path(transition_image_path),
+                        Path(".").absolute() / transition_image_path,
+                        Path(os.getcwd()) / transition_image_path,
+                        Path(__file__).parent.parent.parent / transition_image_path,
+                        self.output_dir.parent.parent.parent.parent / transition_image_path,
+                    ]
+                    for path in image_paths:
+                        if path.exists():
+                            transition_image_full = path.absolute()
+                            logger.info(f"Found transition image: {transition_image_full}")
+                            break
                     
-                    if not transition_image_full.exists() or not sound_effect_full.exists():
+                    # Try multiple possible paths for sound effect
+                    sound_paths = [
+                        Path(sound_effect_path),
+                        Path(".").absolute() / sound_effect_path,
+                        Path(os.getcwd()) / sound_effect_path,
+                        Path(__file__).parent.parent.parent / sound_effect_path,
+                        self.output_dir.parent.parent.parent.parent / sound_effect_path,
+                    ]
+                    for path in sound_paths:
+                        if path.exists():
+                            sound_effect_full = path.absolute()
+                            logger.info(f"Found sound effect: {sound_effect_full}")
+                            break
+                    
+                    if not transition_image_full or not sound_effect_full:
                         logger.warning(
-                            f"Transition assets missing (image: {transition_image_full.exists()}, "
-                            f"sound: {sound_effect_full.exists()}), skipping transition"
+                            f"Transition assets missing (image: {transition_image_full is not None}, "
+                            f"sound: {sound_effect_full is not None}), skipping transition"
                         )
                         # Fall back to direct concatenation
                         concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
@@ -425,18 +449,22 @@ class VideoEditor:
             
             logger.info(f"Transition video params: {width}x{height}, fps={fps}, codec={source_vp.codec}")
             
-            # Create video from static image using loop filter
-            # Duration must match exactly
-            image_input = ffmpeg.input(str(image_path), loop=1, t=duration)
+            # Create video from static image
+            # FFmpeg: -loop 1 loops the input, -framerate sets frame rate, -t sets duration
+            # This creates a video from the static image for the specified duration
+            image_input = ffmpeg.input(str(image_path), loop=1, framerate=fps, t=duration)
             
-            # Scale image to match source resolution
+            # Scale image to match source resolution and ensure correct fps
             video_stream = ffmpeg.filter(image_input['v'], 'scale', width, height)
             video_stream = ffmpeg.filter(video_stream, 'fps', fps=fps)
+            # Reset timestamps to start from 0 for proper concatenation
+            video_stream = ffmpeg.filter(video_stream, 'setpts', 'PTS-STARTPTS')
             
             # Add sound effect, loop if needed to match duration
             sound_input = ffmpeg.input(str(sound_effect_path), stream_loop=-1)
-            # Trim sound effect to match duration and apply volume
+            # Trim sound effect to match duration and apply volume (volume filter uses multiplier, not dB)
             sound_stream = ffmpeg.filter(sound_input['a'], 'atrim', duration=duration)
+            # Volume filter: value is multiplier (0.0 = silence, 1.0 = original, 2.0 = double)
             sound_stream = ffmpeg.filter(sound_stream, 'volume', volume=sound_effect_volume)
             
             # Create silent audio if source has audio, mix sound effect
@@ -2813,9 +2841,28 @@ class VideoEditor:
             
             if not expression_video_clip_path.exists():
                 logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
-                (ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
-                 .output(str(expression_video_clip_path), vcodec='libx264', acodec='aac', ac=2, ar=48000, preset='fast', crf=23)
-                 .overwrite_output().run(quiet=True))
+                # Use same extraction method as long-form with timestamp reset
+                input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+                # Reset PTS to start from 0 for both video and audio (same as long-form)
+                video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
+                audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
+                
+                # Extract with timestamp reset (same as long-form)
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        audio_stream,
+                        str(expression_video_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
             else:
                 logger.info(f"Reusing expression clip from long-form: {expression_video_clip_path}")
             
@@ -2847,19 +2894,43 @@ class VideoEditor:
                 transition_duration = context_to_expr_transition.get('duration', 1.0)
                 sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
                 
-                # Validate asset files exist
-                transition_image_full = Path(transition_image_path)
-                if not transition_image_full.is_absolute():
-                    transition_image_full = Path(self.output_dir.parent.parent / transition_image_path)
+                # Find asset files using multiple possible paths (similar to _get_background_config)
+                import os
+                transition_image_full = None
+                sound_effect_full = None
                 
-                sound_effect_full = Path(sound_effect_path)
-                if not sound_effect_full.is_absolute():
-                    sound_effect_full = Path(self.output_dir.parent.parent / sound_effect_path)
+                # Try multiple possible paths for transition image
+                image_paths = [
+                    Path(transition_image_path),
+                    Path(".").absolute() / transition_image_path,
+                    Path(os.getcwd()) / transition_image_path,
+                    Path(__file__).parent.parent.parent / transition_image_path,
+                    self.output_dir.parent.parent.parent.parent / transition_image_path,
+                ]
+                for path in image_paths:
+                    if path.exists():
+                        transition_image_full = path.absolute()
+                        logger.info(f"Found transition image: {transition_image_full}")
+                        break
                 
-                if not transition_image_full.exists() or not sound_effect_full.exists():
+                # Try multiple possible paths for sound effect
+                sound_paths = [
+                    Path(sound_effect_path),
+                    Path(".").absolute() / sound_effect_path,
+                    Path(os.getcwd()) / sound_effect_path,
+                    Path(__file__).parent.parent.parent / sound_effect_path,
+                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
+                ]
+                for path in sound_paths:
+                    if path.exists():
+                        sound_effect_full = path.absolute()
+                        logger.info(f"Found sound effect: {sound_effect_full}")
+                        break
+                
+                if not transition_image_full or not sound_effect_full:
                     logger.warning(
-                        f"Transition assets missing (image: {transition_image_full.exists()}, "
-                        f"sound: {sound_effect_full.exists()}), skipping transition"
+                        f"Transition assets missing (image: {transition_image_full is not None}, "
+                        f"sound: {sound_effect_full is not None}), skipping transition"
                     )
                     # Fall back to direct concatenation
                     logger.info("Concatenating context + expression repeat (transition disabled)")

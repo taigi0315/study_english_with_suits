@@ -752,7 +752,15 @@ class VideoEditor:
                 temp_sub = temp_dir / temp_sub_name
                 self._register_temp_file(temp_sub)
                 subs_overlay.create_dual_language_copy(Path(sub_path), temp_sub)
-                subs_overlay.apply_subtitles_with_file(Path(video_path), temp_sub, output_path, is_expression=False)
+                
+                # Adjust subtitle timestamps for context video (context video starts at context_start_time)
+                # Subtitles have absolute timestamps, but context video is sliced from context_start_time
+                context_start_seconds = self._time_to_seconds(expression.context_start_time)
+                temp_sub_adjusted = temp_dir / f"temp_dual_lang_adjusted_{group_id or safe_name}.srt"
+                self._register_temp_file(temp_sub_adjusted)
+                subs_overlay.adjust_subtitle_timestamps(temp_sub, context_start_seconds, temp_sub_adjusted)
+                
+                subs_overlay.apply_subtitles_with_file(Path(video_path), temp_sub_adjusted, output_path, is_expression=False)
             else:
                 # drawtext fallback with translation only
                 translation_text = ""

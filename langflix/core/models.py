@@ -55,6 +55,10 @@ class ExpressionAnalysis(BaseModel):
         description="List of 1-3 similar expressions or alternative ways to say the same thing",
         min_length=1,
     )
+    scene_type: Optional[str] = Field(
+        default=None,
+        description="Type of scene: humor, drama, tension, emotional, witty, confrontation, etc."
+    )
     
     # New fields for expression-based learning
     difficulty: Optional[int] = Field(

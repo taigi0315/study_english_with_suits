@@ -35,7 +35,7 @@ class VideoEditor:
             episode_name: Episode name for file naming
         """
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)  # Create parent directories if needed
         # Use centralized temp file manager instead of local tracking
         from langflix.utils.temp_file_manager import get_temp_manager
         self.temp_manager = get_temp_manager()
@@ -49,9 +49,9 @@ class VideoEditor:
         self.context_slide_combined_dir = self.output_dir.parent / "context_slide_combined"
         self.short_videos_dir = self.output_dir.parent / "short_form_videos"  # Updated to new name
         
-        # Ensure directories exist
-        self.context_slide_combined_dir.mkdir(exist_ok=True)
-        self.short_videos_dir.mkdir(exist_ok=True)
+        # Ensure directories exist (create parent directories if needed)
+        self.context_slide_combined_dir.mkdir(parents=True, exist_ok=True)
+        self.short_videos_dir.mkdir(parents=True, exist_ok=True)
     
     @staticmethod
     def _ensure_expression_dialogue(expression: ExpressionAnalysis) -> ExpressionAnalysis:

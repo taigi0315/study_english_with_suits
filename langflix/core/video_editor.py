@@ -2822,6 +2822,7 @@ class VideoEditor:
             expression = self._ensure_expression_dialogue(expression)
             
             # Step 1: Create context video with dual-language subtitles (same as long-form)
+            # Note: We create this for concatenation later, but extract expression clip from original
             context_with_subtitles = self._add_subtitles_to_context(
                 context_video_path, expression
             )
@@ -2839,13 +2840,15 @@ class VideoEditor:
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
             # Extract expression video clip with audio (same as long-form)
+            # Extract from original context_video_path (not context_with_subtitles) to ensure accurate timing
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             
             if not expression_video_clip_path.exists():
                 logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
                 # Use same extraction method as long-form with timestamp reset
-                input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+                # Extract from original context_video_path to avoid timestamp drift from subtitle overlay
+                input_stream = ffmpeg.input(str(context_video_path), ss=relative_start, t=expression_duration)
                 # Reset PTS to start from 0 for both video and audio (same as long-form)
                 video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')

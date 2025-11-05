@@ -185,7 +185,7 @@ class LangFlixPipeline:
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
                  video_file: str = None,
-                 enable_expression_grouping: bool = True):
+                 enable_expression_grouping: bool = False):
         """
         Initialize the LangFlix pipeline
         

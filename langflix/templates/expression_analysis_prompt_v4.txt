@@ -7,11 +7,6 @@ Here is a segment of dialogue from the TV show "{show_name}":
 **YOUR MISSION:**
 Find 1-3 expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 
-**IMPORTANT:** You can extract MULTIPLE expressions from the SAME context if they are all valuable and teachable.
-If you find 2-3 excellent expressions in one dialogue segment, include ALL of them.
-However, only extract multiple expressions from one context if ALL expressions are valuable, reusable, and clearly teachable.
-If unsure, extract only the BEST single expression.
-
 **LANGUAGE LEVEL:** {level_description}
 
 ---

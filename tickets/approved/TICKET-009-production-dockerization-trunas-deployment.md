@@ -1267,10 +1267,8 @@ services:
 - [ ] docker-compose.truenas.yml 업데이트 (Celery 제거, PostgreSQL optional)
 
 #### Pending 📋
-- [ ] .dockerignore 파일 생성
-- [ ] GitHub Actions CI/CD 파이프라인 생성
-- [ ] Makefile에 Docker 명령 추가
-- [ ] 테스트 및 검증
+- [ ] 로컬 Docker 빌드 테스트
+- [ ] TrueNAS 실제 배포 테스트
 
 ### Implementation Notes
 
@@ -1291,16 +1289,18 @@ services:
 - `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_kor.md` - 한국어 배포 가이드
 - `docs/deployment/TRUENAS_DEPLOYMENT_GUIDE_eng.md` - 영어 배포 가이드
 
-**Files to Create:**
-- `Dockerfile` - Production multi-stage Dockerfile
-- `.dockerignore` - 빌드 제외 파일 목록
-- `.github/workflows/ci.yml` - CI/CD 파이프라인
-- `Makefile` 업데이트 - Docker 명령 추가
+**Files Created:**
+- ✅ `Dockerfile` - Production multi-stage Dockerfile
+- ✅ `.dockerignore` - 빌드 제외 파일 목록
+- ✅ `.github/workflows/ci.yml` - CI/CD 파이프라인 (Phase 1)
+- ✅ `Makefile` - Docker 명령 추가됨
 
 ### Next Steps
-1. Production Dockerfile 생성 (builder, runtime, api stages)
-2. docker-compose.truenas.yml에서 Celery 관련 서비스 제거
-3. .dockerignore 파일 생성
-4. CI/CD 파이프라인 생성 (Phase 1: Build & Test)
-5. Makefile 업데이트
+1. ✅ Production Dockerfile 생성 완료
+2. ✅ docker-compose.truenas.yml 업데이트 완료
+3. ✅ .dockerignore 파일 생성 완료
+4. ✅ CI/CD 파이프라인 생성 완료 (Phase 1: Build & Test)
+5. ✅ Makefile 업데이트 완료
+6. 📋 로컬 Docker 빌드 테스트 (다음 단계)
+7. 📋 TrueNAS 실제 배포 테스트 (사용 가능할 때)
 

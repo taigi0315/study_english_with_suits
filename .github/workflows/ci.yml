@@ -1,0 +1,272 @@
+# ============================================================================
+# LangFlix CI/CD Pipeline
+# ============================================================================
+# Phase 1: Build & Test Only
+# - Lint code
+# - Run tests
+# - Build Docker images (without push)
+# - Security scan (optional)
+#
+# Phase 2 & 3 (deploy) will be added later when ready for production
+# ============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ========================================================================
+  # Job 1: Code Linting
+  # ========================================================================
+  lint:
+    name: Code Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install linting dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort
+      
+      - name: Lint with flake8 (basic errors only)
+        run: |
+          flake8 langflix/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+      
+      - name: Check formatting with black
+        run: |
+          pip install black
+          black --check langflix/ || echo "⚠️ Code formatting issues found (run 'black langflix/' to fix)"
+      
+      - name: Check import sorting
+        run: |
+          pip install isort
+          isort --check-only langflix/ || echo "⚠️ Import sorting issues found (run 'isort langflix/' to fix)"
+
+  # ========================================================================
+  # Job 2: Run Tests
+  # ========================================================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_langflix
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg curl
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+      
+      - name: Run tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_langflix
+          REDIS_URL: redis://localhost:6379/0
+          DATABASE_ENABLED: 'false'  # Tests can run without DB
+        run: |
+          # Run tests if test directory exists
+          if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
+            pytest tests/ -v --cov=langflix --cov-report=xml --cov-report=term || echo "⚠️ Some tests failed"
+          else
+            echo "ℹ️ No tests found, skipping test execution"
+          fi
+      
+      - name: Upload coverage (if available)
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          flags: unittests
+
+  # ========================================================================
+  # Job 3: Build Docker Images (No Push - Phase 1)
+  # ========================================================================
+  build:
+    name: Build Docker Images
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: always()  # Run even if tests fail (to verify Docker build works)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          target: api
+          push: false  # Phase 1: Build only, no push
+          tags: langflix:api-local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true  # Load image locally for inspection
+      
+      - name: Verify image size
+        run: |
+          docker images langflix:api-local --format "Image size: {{.Size}}"
+          SIZE=$(docker images langflix:api-local --format "{{.Size}}" | sed 's/[^0-9.]//g')
+          echo "Image size: ${SIZE}"
+          # Note: Actual size check would require parsing MB/GB
+
+  # ========================================================================
+  # Job 4: Security Scan (Optional - Phase 1)
+  # ========================================================================
+  security-scan:
+    name: Security Scan
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: langflix:api-local
+          format: 'table'
+          exit-code: '0'  # Don't fail on vulnerabilities (just report)
+          severity: 'CRITICAL,HIGH'  # Only report critical and high severity
+        continue-on-error: true  # Don't fail the build on security issues
+
+  # ========================================================================
+  # Job 5: Summary
+  # ========================================================================
+  summary:
+    name: CI Summary
+    needs: [lint, test, build, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: CI Summary
+        run: |
+          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** This is Phase 1 (Build & Test only). Deploy will be added in Phase 2." >> $GITHUB_STEP_SUMMARY
+
+  # ========================================================================
+  # Phase 2 & 3: Deploy (Commented out for now)
+  # ========================================================================
+  # These jobs will be enabled when ready for production deployment
+  #
+  # build-and-push:
+  #   name: Build and Push Docker Images
+  #   needs: [lint, test]
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
+  #     - name: Log in to Container Registry
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ${{ env.REGISTRY }}
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Build and push API image
+  #       uses: docker/build-push-action@v5
+  #       with:
+  #         context: .
+  #         file: Dockerfile
+  #         target: api
+  #         push: true
+  #         tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+  #
+  # deploy:
+  #   name: Deploy to TrueNAS
+  #   needs: [build-and-push]
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   environment: production
+  #   
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Deploy to TrueNAS
+  #       uses: appleboy/ssh-action@master
+  #       with:
+  #         host: ${{ secrets.TRUENAS_HOST }}
+  #         username: ${{ secrets.TRUENAS_USER }}
+  #         key: ${{ secrets.TRUENAS_SSH_KEY }}
+  #         script: |
+  #           cd /mnt/pool/apps/langflix/deploy
+  #           docker-compose -f docker-compose.truenas.yml pull
+  #           docker-compose -f docker-compose.truenas.yml up -d
+

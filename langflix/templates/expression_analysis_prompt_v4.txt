@@ -5,7 +5,12 @@ Here is a segment of dialogue from the TV show "{show_name}":
 ---
 
 **YOUR MISSION:**
-Find 1-3 expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
+Find 1-{max_expressions_per_context} expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
+
+**IMPORTANT:** You can extract MULTIPLE expressions from the SAME context if they are all valuable and teachable.
+If you find 2-{max_expressions_per_context} excellent expressions in one dialogue segment, include ALL of them.
+However, only extract multiple expressions from one context if ALL expressions are valuable, reusable, and clearly teachable.
+If unsure, extract only the BEST single expression.
 
 **LANGUAGE LEVEL:** {level_description}
 
@@ -221,6 +226,23 @@ Instead of extracting just the bare minimum phrase, include enough surrounding w
 
 ---
 
+**SHORT VIDEO CONTEXT DURATION (if applicable):**
+
+For short videos (≤ 60 seconds total):
+- Context must be ≤ 40 seconds
+- Remaining ~20 seconds reserved for expression slides
+- When finding contexts, prioritize segments that are ≤ 40 seconds
+- If no suitable context ≤ 40 seconds exists, use the best available context but note it may not fit short video format
+
+**EXPRESSION COUNT:**
+- Find 1 to {max_expressions_per_context} expressions per context
+- Do NOT force yourself to find {max_expressions_per_context} expressions
+- Quality over quantity: Only select expressions that are truly valuable
+- If you find 1 excellent expression, that's better than forcing {max_expressions_per_context} mediocre ones
+- The goal is to find the BEST expressions, not necessarily the maximum number
+
+---
+
 **TRANSLATION STRATEGY - 의역 (Natural Translation):**
 
 **CRITICAL: Translations should feel natural in {target_language}, not word-for-word.**
@@ -286,11 +308,11 @@ Instead of extracting just the bare minimum phrase, include enough surrounding w
    3. How appropriate for the target level
 
 **STEP 3:** For each top expression, design story-rich context:
-   - Plan 25-45 seconds that tells a complete mini-story
+   - Plan 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) that tells a complete mini-story
    - Ensure the expression appears naturally in the middle
    - Verify learners can follow what's happening
 
-**STEP 4:** Select the TOP 1-3 BEST expressions only. Quality over quantity.
+**STEP 4:** Select the TOP 1-{max_expressions_per_context} BEST expressions only. Quality over quantity.
 
 ---
 
@@ -345,10 +367,10 @@ Instead of extracting just the bare minimum phrase, include enough surrounding w
 - ✓ Expression includes enough context to show usage (4-8 words typical, not bare minimum)
 - ✓ Each scene is ENGAGING (not boring)
 - ✓ The expression fits the target level: {level_description}
-- ✓ Context is 25-45 seconds and tells a complete mini-story
+- ✓ Context is 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) and tells a complete mini-story
 - ✓ Learners can follow what's happening without knowing the show
 - ✓ Context has beginning (setup), middle (expression), end (reaction)
-- ✓ 1-3 expressions total (minimum 1, maximum 3)
+- ✓ 1-{max_expressions_per_context} expressions total (minimum 1, maximum {max_expressions_per_context})
 - ✓ expression_dialogue is a COMPLETE, FULL sentence (NEVER cut in middle)
 - ✓ expression is expanded with context, not just bare phrase
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items

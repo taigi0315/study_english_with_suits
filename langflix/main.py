@@ -185,7 +185,7 @@ class LangFlixPipeline:
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
                  video_file: str = None,
-                 enable_expression_grouping: bool = False):
+                 enable_expression_grouping: bool = True):
         """
         Initialize the LangFlix pipeline
         
@@ -765,56 +765,58 @@ class LangFlixPipeline:
                 is_multi_expression = len(expression_group.expressions) > 1
                 
                 if is_multi_expression:
-                    # Multi-expression group: Create context video with multi-expression slide FIRST
+                    # Multi-expression group: Create single video with structure
+                    # context (with subtitles) → transition → expr1 (repeat) → transition → expr2 (repeat) → ...
                     try:
                         logger.info(
-                            f"Creating context video with multi-expression slide for group {group_idx+1} "
+                            f"Creating multi-expression sequence for group {group_idx+1} "
                             f"({len(expression_group.expressions)} expressions)"
                         )
                         
-                        # For multi-expression groups, use a group-specific context subtitle file
-                        # Create context video with subtitles for the group (use first expression's subtitle as base)
-                        context_with_subtitles = self.video_editor._add_subtitles_to_context(
-                            str(context_video), 
-                            expression_group.expressions[0],  # Use first expression for subtitle context
-                            group_id=f"group_{group_idx+1:02d}"  # Pass group ID for unique filename
+                        # Collect expression source videos and indices for the group
+                        # All expressions in a group use the same original video for audio extraction
+                        expression_source_videos = [str(original_video) if original_video else str(context_video)] * len(expression_group.expressions)
+                        expression_indices = [global_expression_index + expr_idx for expr_idx in range(len(expression_group.expressions))]
+                        
+                        # Create multi-expression sequence
+                        # Structure: context → transition → expr1 repeat → transition → expr2 repeat → ...
+                        group_id = f"group_{group_idx+1:02d}"
+                        educational_video = self.video_editor.create_multi_expression_sequence(
+                            expressions=expression_group.expressions,
+                            context_video_path=str(context_video),
+                            expression_source_videos=expression_source_videos,
+                            expression_indices=expression_indices,
+                            group_id=group_id
                         )
                         
-                        # Create context video with multi-expression slide
-                        context_video_with_slide = self.video_editor.create_context_video_with_multi_slide(
-                            context_with_subtitles,  # Context video with subtitles
-                            expression_group
-                        )
-                        
-                        educational_videos.append(context_video_with_slide)
-                        logger.info(f"✅ Context video with multi-expression slide created: {context_video_with_slide}")
+                        educational_videos.append(educational_video)
+                        logger.info(f"✅ Multi-expression sequence created: {educational_video}")
+                        global_expression_index += len(expression_group.expressions)
                         
                     except Exception as e:
                         logger.error(
-                            f"Error creating context video with multi-slide for group {group_idx+1}: {e}"
+                            f"Error creating multi-expression sequence for group {group_idx+1}: {e}",
+                            exc_info=True
                         )
-                        # Continue to create expression videos even if context video failed
-                
-                # Create educational video for EACH expression in the group
-                # Each expression gets its own video with its own slide
-                for expr_idx, expression in enumerate(expression_group.expressions):
+                        # Continue to next group even if this one failed
+                else:
+                    # Single-expression group: Create educational video with context + expression repeat
+                    expression = expression_group.expressions[0]
                     try:
                         logger.info(
                             f"Creating educational video for expression {global_expression_index+1}/{len(self.expressions)}: "
-                            f"'{expression.expression}' (group {group_idx+1}, expr {expr_idx+1})"
+                            f"'{expression.expression}' (group {group_idx+1}, single expression)"
                         )
                         
                         # Create educational sequence with global expression index for voice alternation
-                        # Multi-expression groups: left (expression repeat only) | right (expression's own slide)
-                        # Single-expression groups: left (context + expression repeat) | right (expression's own slide)
-                        # For multi-expression groups, pass group_id to reuse group-specific subtitle file
+                        # Single-expression groups: left (context + transition + expression repeat) | right (expression's own slide)
                         educational_video = self.video_editor.create_educational_sequence(
                             expression,
-                            str(context_video),  # Shared context clip for the group
+                            str(context_video),  # Context clip for the group
                             expression_source_video,  # Original video for expression audio
                             expression_index=global_expression_index,  # Global index for voice alternation
-                            skip_context=is_multi_expression,  # Skip context for multi-expression groups
-                            group_id=f"group_{group_idx+1:02d}" if is_multi_expression else None  # Reuse group subtitle for multi-expression
+                            skip_context=False,  # Include context for single-expression groups
+                            group_id=None  # No group ID for single-expression groups
                         )
                         
                         educational_videos.append(educational_video)
@@ -823,8 +825,9 @@ class LangFlixPipeline:
                         
                     except Exception as e:
                         logger.error(
-                            f"Error creating educational video for expression {expr_idx+1} "
-                            f"in group {group_idx+1}: {e}"
+                            f"Error creating educational video for expression {global_expression_index+1} "
+                            f"in group {group_idx+1}: {e}",
+                            exc_info=True
                         )
                         global_expression_index += 1
                         continue

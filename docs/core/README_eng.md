@@ -255,6 +255,109 @@ Creates short-form educational video sequence with vertical layout:
 
 **Returns:** Path to created short-form video
 
+### Video Creation Process
+
+The video creation process follows a clear hierarchy:
+
+#### 1. Context Video (Original Video Slice)
+**Location:** `langflix/core/video_processor.py::extract_clip()`
+
+Creates a slice of the original video containing the context around an expression.
+
+**Process:**
+- Extracts a clip from the original video file
+- Uses `context_start_time` and `context_end_time` from the expression
+- FFmpeg command: `ffmpeg -ss {start_time} -i {original_video} -t {duration} -c:v libx264 -c:a aac`
+- Output: Raw context video clip (no subtitles, original resolution)
+
+**Example:**
+```python
+# Original video: 00:00:00 - 00:45:00 (full episode)
+# Expression context: 00:05:30 - 00:06:10
+# Context video: 00:05:30 - 00:06:10 (40 seconds slice)
+```
+
+**Key Points:**
+- Direct slice from original video
+- No modifications (preserves original quality)
+- Contains both video and audio streams
+- Used as base for all subsequent processing
+
+#### 2. Context Video with Subtitles (Subtitle Overlay)
+**Location:** `langflix/core/video_editor.py::_add_subtitles_to_context()`
+
+Adds dual-language subtitles to the context video using FFmpeg's subtitle filter.
+
+**Process:**
+1. Finds or creates dual-language subtitle file (`.srt` format)
+   - Subtitle file is created by `SubtitleProcessor.create_dual_language_subtitle_file()`
+   - Timestamps are already adjusted relative to `context_start_time` (starts at 00:00:00)
+2. Applies subtitles using FFmpeg `subtitles` filter
+   - FFmpeg command: `ffmpeg -i {context_video} -vf "subtitles={subtitle_file}"`
+   - Subtitles are burned into the video (hardcoded)
+3. Output: Context video with subtitles overlaid
+
+**Subtitle File Creation:**
+- Created by `SubtitleProcessor.create_dual_language_subtitle_file()`
+- Extracts subtitles from original SRT file within context time range
+- Adjusts timestamps: `relative_time = absolute_time - context_start_time`
+- Generates dual-language SRT (original + translation)
+
+**Example:**
+```python
+# Context video: 00:05:30 - 00:06:10 (from original)
+# Subtitle file has timestamps adjusted:
+#   Original: 00:05:35,000 --> 00:05:37,500 "Hello"
+#   Adjusted: 00:00:05,000 --> 00:00:07,500 "Hello"
+# Result: Context video with subtitles starting at 00:00:00
+```
+
+**Key Points:**
+- Subtitles are burned into the video (not separate track)
+- Timestamps are adjusted to match context video (starts at 0)
+- Dual-language format: original text + translation
+- Reused for expression extraction (ensures subtitle sync)
+
+#### 3. Expression Video (Context Video Slice)
+**Location:** `langflix/core/video_editor.py::create_multi_expression_sequence()` (line 500-507)
+
+Extracts the expression segment from the context video with subtitles.
+
+**Process:**
+1. Uses `context_with_subtitles` as source (not original video)
+   - **CRITICAL:** Must use subtitle-applied context to ensure subtitle sync
+2. Calculates relative timestamps within context video:
+   - `relative_start = expression_start_time - context_start_time`
+   - `relative_end = expression_end_time - context_start_time`
+3. Extracts clip using FFmpeg with relative timestamps:
+   - FFmpeg command: `ffmpeg -ss {relative_start} -i {context_with_subtitles} -t {duration}`
+   - Resets timestamps: `setpts=PTS-STARTPTS` (starts at 00:00:00)
+4. For multi-expression groups: Uses `pad` filter to match 2560x720 resolution
+   - Places original video on left half (0,0)
+   - Fills right half with black (maintains original quality)
+5. Output: Expression video clip with subtitles synchronized
+
+**Example:**
+```python
+# Context video: 00:05:30 - 00:06:10 (40 seconds, with subtitles)
+# Expression: 00:05:50 - 00:05:55 (within context)
+# Relative: 00:00:20 - 00:00:25 (within context video)
+# Expression clip: 00:00:20 - 00:00:25 from context_with_subtitles
+# Result: 5-second expression clip with synchronized subtitles
+```
+
+**Key Points:**
+- **MUST** use `context_with_subtitles` (not original or raw context)
+- Subtitles are already synchronized (no adjustment needed)
+- Timestamps reset to 0 for proper concatenation
+- Original resolution preserved (pad filter for layout compatibility)
+
+**Why This Order Matters:**
+1. Context video is clean slice (no processing)
+2. Subtitles added once to context (efficient, synchronized)
+3. Expression extracted from subtitle-applied context (guaranteed sync)
+4. No subtitle timestamp issues (all relative to context)
+
 ### Helper Methods
 
 #### `_add_subtitles_to_context()`

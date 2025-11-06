@@ -872,11 +872,12 @@ class LangFlixPipeline:
                 logger.warning(f"Could not delete temp file {video_file}: {e}")
         
         # Clean up all temporary files created by VideoEditor
+        # For long form, clean up everything (preserve_short_format=False) (TICKET-029)
         logger.info("Cleaning up VideoEditor temporary files...")
         if hasattr(self, 'video_editor'):
             try:
-                # Clean up registered temp files
-                self.video_editor._cleanup_temp_files()
+                # Clean up registered temp files (long form videos don't preserve temp files)
+                self.video_editor._cleanup_temp_files(preserve_short_format=False)
                 
                 # Also clean up any remaining temp_* files in long_form_videos directory
                 final_videos_dir = self.paths['language']['final_videos']
@@ -966,6 +967,17 @@ class LangFlixPipeline:
                     logger.info(f"  - {batch_path}")
             else:
                 logger.warning("No short format videos were created successfully")
+            
+            # After creating short videos, preserve expression videos (TICKET-029)
+            if hasattr(self, 'video_editor'):
+                try:
+                    # Clean up but preserve short format expression videos
+                    self.video_editor._cleanup_temp_files(preserve_short_format=True)
+                    # Clear the tracking list after preservation
+                    self.video_editor.short_format_temp_files.clear()
+                    logger.info("✅ Short format expression videos preserved")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup short format temp files: {e}")
                 
         except Exception as e:
             logger.error(f"Error creating short videos: {e}")

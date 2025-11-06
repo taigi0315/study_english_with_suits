@@ -52,6 +52,9 @@ class VideoEditor:
         # Ensure directories exist (create parent directories if needed)
         self.context_slide_combined_dir.mkdir(parents=True, exist_ok=True)
         self.short_videos_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Track short format temp files for preservation (TICKET-029)
+        self.short_format_temp_files = []
     
     @staticmethod
     def _ensure_expression_dialogue(expression: ExpressionAnalysis) -> ExpressionAnalysis:
@@ -938,30 +941,92 @@ class VideoEditor:
             logger.error(f"Error creating timeline from cached TTS: {e}")
             raise
     
-    def _cleanup_temp_files(self) -> None:
-        """Clean up all temporary files created by this VideoEditor instance."""
+    def _cleanup_temp_files(self, preserve_short_format: bool = False) -> None:
+        """Clean up all temporary files created by this VideoEditor instance.
+        
+        Args:
+            preserve_short_format: If True, preserve short format expression videos
+        """
         try:
+            # Get list of files to preserve
+            files_to_preserve = set()
+            if preserve_short_format:
+                files_to_preserve = set(self.short_format_temp_files)
+                # Move preserved files to permanent location
+                self._preserve_short_format_files(files_to_preserve)
+            
             # Clean up files registered via _register_temp_file
             if hasattr(self, 'temp_manager'):
+                # Remove preserved files from temp manager before cleanup
+                if preserve_short_format:
+                    for file_path in files_to_preserve:
+                        if Path(file_path) in self.temp_manager.temp_files:
+                            self.temp_manager.temp_files.remove(Path(file_path))
                 self.temp_manager.cleanup_all()
             
             # Also clean up any temp_* files in output_dir (long_form_videos)
+            # But exclude short format files if preserving
             if hasattr(self, 'output_dir') and self.output_dir.exists():
                 temp_files = list(self.output_dir.glob("temp_*.mkv"))
                 temp_files.extend(list(self.output_dir.glob("temp_*.txt")))
                 temp_files.extend(list(self.output_dir.glob("temp_*.wav")))
                 
+                cleaned_count = 0
                 for temp_file in temp_files:
+                    if preserve_short_format and temp_file in files_to_preserve:
+                        continue  # Skip preserved files
                     try:
                         if temp_file.exists():
                             temp_file.unlink()
+                            cleaned_count += 1
                             logger.debug(f"Cleaned up temp file: {temp_file.name}")
                     except Exception as e:
                         logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
                 
-                logger.info(f"✅ Cleaned up {len(temp_files)} temporary files from {self.output_dir}")
+                logger.info(f"✅ Cleaned up {cleaned_count} temporary files from {self.output_dir}")
         except Exception as e:
             logger.warning(f"Error during temp file cleanup: {e}")
+    
+    def _preserve_short_format_files(self, files_to_preserve: set) -> None:
+        """Move short format temp files to permanent location with better naming.
+        
+        Args:
+            files_to_preserve: Set of Path objects to preserve
+        """
+        try:
+            # Create expressions directory in short_videos
+            expressions_dir = self.short_videos_dir / "expressions"
+            expressions_dir.mkdir(parents=True, exist_ok=True)
+            
+            for temp_file in files_to_preserve:
+                if not Path(temp_file).exists():
+                    continue
+                
+                temp_path = Path(temp_file)
+                filename = temp_path.name
+                
+                # Create better filename (remove temp_ prefix, keep expression name)
+                # Priority: vstack files (complete individual videos) -> expression_{expression_name}.mkv
+                if "_vstack_short_" in filename:
+                    # Extract expression name from "temp_vstack_short_{expression}.mkv"
+                    expression_part = filename.replace("temp_vstack_short_", "").replace(".mkv", "")
+                    new_name = f"expression_{expression_part}.mkv"
+                elif "_expr_clip_long_" in filename:
+                    new_name = filename.replace("temp_expr_clip_long_", "expr_clip_")
+                elif "_expr_repeated_" in filename:
+                    new_name = filename.replace("temp_expr_repeated_", "expr_repeated_")
+                else:
+                    new_name = filename.replace("temp_", "")
+                
+                new_path = expressions_dir / new_name
+                
+                # Move file
+                import shutil
+                shutil.move(str(temp_path), str(new_path))
+                logger.info(f"✅ Preserved short format expression video: {new_path}")
+                
+        except Exception as e:
+            logger.warning(f"Error preserving short format files: {e}")
     
     def __del__(self):
         """Ensure temporary files are cleaned up when object is destroyed"""
@@ -3300,6 +3365,8 @@ class VideoEditor:
             logger.info("Creating short-form vertical layout with vstack")
             vstack_temp_path = self.output_dir / f"temp_vstack_short_{safe_expression}.mkv"
             self._register_temp_file(vstack_temp_path)
+            # Track vstack file for preservation (TICKET-029) - this is the complete individual expression video
+            self.short_format_temp_files.append(vstack_temp_path)
             vstack_keep_width(str(concatenated_video_path), str(slide_path), str(vstack_temp_path))
             
             # Step 7: Apply final audio gain (+30%) as separate pass (same as long-form)

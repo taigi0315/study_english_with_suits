@@ -337,9 +337,9 @@ class VideoEditor:
             self._register_temp_file(hstack_temp_path)
             hstack_keep_height(str(left_side_path), str(educational_slide), str(hstack_temp_path))
             
-            # Step 5: Apply final audio gain (+30%) as separate pass
-            logger.info("Applying final audio gain (+30%) to long-form output")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.30)
+            # Step 5: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
+            logger.info("Applying final audio gain (+69%) to long-form output")
+            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"Educational sequence created: {output_path}")
             return str(output_path)
@@ -590,9 +590,9 @@ class VideoEditor:
             self._register_temp_file(hstack_temp_path)
             hstack_keep_height(str(current_path), str(educational_slide), str(hstack_temp_path))
             
-            # Step 6: Apply final audio gain (+30%) as separate pass
-            logger.info("Applying final audio gain (+30%) to multi-expression output")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.30)
+            # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
+            logger.info("Applying final audio gain (+69%) to multi-expression output")
+            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"✅ Multi-expression sequence created: {output_path}")
             return str(output_path)
@@ -2256,9 +2256,9 @@ class VideoEditor:
             
             hstack_keep_height(context_video_path, multi_slide_path, str(hstack_temp_path))
             
-            # Apply final audio gain (+30%)
-            logger.info("Applying final audio gain (+30%) to context video with multi-slide")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.30)
+            # Apply final audio gain (+69%) (30% increase from current 30% = 1.30 * 1.30)
+            logger.info("Applying final audio gain (+69%) to context video with multi-slide")
+            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"Context video with multi-expression slide created: {output_path}")
             return str(output_path)

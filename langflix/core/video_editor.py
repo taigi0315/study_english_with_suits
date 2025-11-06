@@ -3369,10 +3369,10 @@ class VideoEditor:
             self.short_format_temp_files.append(vstack_temp_path)
             vstack_keep_width(str(concatenated_video_path), str(slide_path), str(vstack_temp_path))
             
-            # Step 7: Apply final audio gain (+30%) as separate pass (same as long-form)
-            logger.info("Applying final audio gain (+30%) to short-form output")
+            # Step 7: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
+            logger.info("Applying final audio gain (+69%) to short-form output")
             logger.info(f"Video duration: {total_duration:.2f}s")
-            apply_final_audio_gain(str(vstack_temp_path), str(output_path), gain_factor=1.30)
+            apply_final_audio_gain(str(vstack_temp_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
             return str(output_path), total_duration

@@ -54,11 +54,15 @@ output/Series/Episode/translations/ko/
 ├── context_slide_combined/  # Educational videos
 │   ├── educational_expression_01.mkv
 │   └── educational_expression_02.mkv
-└── short_videos/            # Short-format batched videos
-    ├── batch_01_120s.mkv   # ~120 seconds, multiple expressions
-    ├── batch_02_115s.mkv
-    └── batch_03_95s.mkv
+└── short_form_videos/       # Short-format videos directory
+    ├── short-form_{episode}_{batch_number}.mkv  # Batched videos (~120s)
+    └── expressions/         # Individual expression videos (<60s) (TICKET-029)
+        ├── expression_{expression_1}.mkv
+        ├── expression_{expression_2}.mkv
+        └── ...
 ```
+
+**Note:** Individual expression videos (in `expressions/` subdirectory) are preserved for copyright compliance. These videos are typically 10-60 seconds, perfect for platforms requiring <60 second content to avoid copyright restrictions.
 
 ### CLI Integration
 

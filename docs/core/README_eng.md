@@ -197,7 +197,9 @@ The main class that orchestrates video creation.
 - Uses `TempFileManager` for all temporary file operations
 - Temporary files are automatically cleaned up via context managers
 - No manual cleanup required - `TempFileManager` handles it via `atexit` registration
-- Individual short video files are automatically cleaned up after batch creation
+- Individual short video files are preserved in `short_form_videos/expressions/` for copyright compliance (TICKET-029)
+- Only batched videos (~120s) are kept for long-form content
+- Individual expression videos (<60s) are preserved separately for <60 second uploads
 
 **Key Methods:**
 
@@ -249,11 +251,19 @@ Creates short-form educational video sequence with vertical layout:
 - No separate audio processing - audio stays with video throughout
 
 **Parameters:**
-- `expressions`: List of ExpressionAnalysis objects
-- `context_video_path`: Path to context video
-- `output_filename`: Output filename
+- `context_video_path`: Path to context video with subtitles
+- `expression`: ExpressionAnalysis object
+- `expression_index`: Index of expression (for voice alternation)
+- `subtitle_file_path`: Optional path to subtitle file
 
-**Returns:** Path to created short-form video
+**Returns:** Tuple of (output_path, duration)
+
+**File Preservation (TICKET-029):**
+- Individual expression videos (`temp_vstack_short_{expression}.mkv`) are automatically preserved
+- Preserved files are moved to `short_form_videos/expressions/` directory
+- Files are renamed to `expression_{expression_name}.mkv` (removes "temp_" prefix)
+- These videos are typically 10-60 seconds, perfect for copyright-compliant uploads
+- Long form videos continue to delete all temp files as before
 
 ### Video Creation Process
 

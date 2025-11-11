@@ -123,8 +123,8 @@ services:
       - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
       
       # 설정 파일 (읽기 전용)
+      # Note: .env file is not mounted - all environment variables are passed via 'environment' section
       - ../config.yaml:/app/config.yaml:ro
-      - ../.env:/app/.env:ro
     
     depends_on:
       redis:

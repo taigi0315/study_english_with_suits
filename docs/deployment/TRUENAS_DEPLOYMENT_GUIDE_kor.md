@@ -175,13 +175,7 @@ EOF
 
 실서비스 배포 전 비밀번호 및 API 키를 실제 값으로 교체하고, `.env` 파일은 소스 관리에서 제외하세요.
 
-**중요:** `.env` 파일이 Docker 컨테이너에서 읽을 수 있도록 권한을 설정해야 합니다:
-
-```bash
-# .env 파일 권한 설정 (컨테이너 사용자 UID 1000이 읽을 수 있도록)
-sudo chmod 644 /mnt/Pool_2/Projects/langflix/deploy/.env
-sudo chown 1000:1000 /mnt/Pool_2/Projects/langflix/deploy/.env
-```
+> **참고:** Docker Compose 파일에서 `.env` 파일은 마운트되지 않습니다. 모든 환경 변수는 `environment` 섹션을 통해 직접 전달되므로, TrueNAS ACL 권한 문제를 피할 수 있습니다. `.env` 파일은 Docker Compose가 변수를 읽어서 `environment` 섹션에 전달하는 용도로만 사용됩니다.
 
 > **참고:** 실제 미디어 경로가 `/mnt/Media/Shows` 처럼 다르면 `TRUENAS_MEDIA_PATH=/mnt/Media` 로 지정하거나, Compose 볼륨을 직접 `- /mnt/Media/Shows:/media/shows:ro` 형태로 수정하세요. 대소문자까지 경로와 일치해야 합니다.
 
@@ -410,29 +404,19 @@ Error: [Errno 13] Permission denied: '/app/.env'
 
 **해결 방법:**
 
-1. **`.env` 파일 권한 설정:**
-   ```bash
-   cd /mnt/Pool_2/Projects/langflix/deploy
-   sudo chmod 644 .env
-   sudo chown 1000:1000 .env
-   ```
+> **참고:** 최신 버전의 `docker-compose.truenas.yml`에서는 `.env` 파일이 컨테이너에 마운트되지 않습니다. 모든 환경 변수는 `environment` 섹션을 통해 직접 전달되므로 이 오류는 발생하지 않습니다.
 
-2. **파일 존재 확인:**
-   ```bash
-   ls -la /mnt/Pool_2/Projects/langflix/deploy/.env
-   ```
+만약 이 오류가 발생한다면:
 
-3. **컨테이너 재시작:**
-   ```bash
-   sudo docker compose -f docker-compose.truenas.yml restart langflix-api
-   ```
+1. **최신 `docker-compose.truenas.yml` 파일 사용 확인:**
+   - `.env` 파일 마운트 라인이 제거되었는지 확인 (`- ../.env:/app/.env:ro` 라인이 없어야 함)
+   - 최신 코드를 TrueNAS에 복사했는지 확인
 
-4. **TrueNAS ACL 때문에 `chmod`가 작동하지 않는 경우:**
-   - TrueNAS 웹 UI → **Storage** → 데이터세트 선택 → **Permissions**에서 `.env` 파일 권한 조정
-   - 또는 `midclt` 명령어 사용:
-     ```bash
-     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/deploy/.env mode=644 user=1000 group=1000
-     ```
+2. **컨테이너 재시작:**
+   ```bash
+   sudo docker compose -f docker-compose.truenas.yml down
+   sudo docker compose -f docker-compose.truenas.yml up -d
+   ```
 
 ### 컨테이너가 시작되지 않음
 - `sudo docker compose -f docker-compose.truenas.yml logs`로 에러 확인

@@ -215,11 +215,13 @@ services:
 
 ## 8A단계: Docker Compose CLI로 배포(셸 방식)
 
+**기본 방법 (권장):** `truenas_admin` 계정에서 `sudo` 사용
+
 ```bash
 cd /mnt/Pool_2/Projects/langflix/deploy
 
 # 이미지 다운로드 혹은 빌드
-docker compose -f docker-compose.truenas.yml pull
+sudo docker compose -f docker-compose.truenas.yml pull
 # 또는
 sudo docker compose -f docker-compose.truenas.yml build
 
@@ -230,15 +232,18 @@ sudo docker compose -f docker-compose.truenas.yml up -d
 sudo docker compose -f docker-compose.truenas.yml ps
 ```
 
-> TrueNAS SCALE에서는 Docker 소켓이 root 소유이므로 `truenas_admin` 계정으로 실행할 때는 `sudo`를 함께 사용하세요. `apps` 사용자로 전환하면 `sudo` 없이 실행할 수 있습니다.
+> **참고:** TrueNAS SCALE에서는 Docker 소켓이 root 소유이므로 `truenas_admin` 계정으로 실행할 때는 `sudo`를 함께 사용해야 합니다. 일부 시스템에서는 `apps` 사용자가 비활성화되어 있을 수 있으므로, `sudo`를 사용하는 방법을 권장합니다.
 
-`apps` 사용자로 실행하려면:
+**대안 (선택사항):** `apps` 사용자 사용 (시스템에서 활성화된 경우에만)
 
 ```bash
+# apps 사용자로 전환 (시스템에서 활성화된 경우에만 작동)
 sudo -iu apps
 cd /mnt/Pool_2/Projects/langflix/deploy
 docker compose -f docker-compose.truenas.yml up -d
 ```
+
+> **주의:** `apps` 사용자가 "currently not available" 오류가 발생하면, 시스템 관리자가 해당 사용자를 활성화해야 합니다. 대부분의 경우 `sudo`를 사용하는 방법이 더 간단합니다.
 
 ---
 

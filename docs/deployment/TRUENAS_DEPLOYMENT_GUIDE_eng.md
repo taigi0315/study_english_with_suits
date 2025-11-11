@@ -214,28 +214,35 @@ Adjust mount paths if your dataset layout differs.
 
 ## Step 8A: Deploy via Docker Compose CLI (Shell Workflow)
 
+**Default Method (Recommended):** Use `sudo` with `truenas_admin` account
+
 ```bash
 cd /mnt/Pool_2/Projects/langflix/deploy
 
 # Pull or build images
-docker compose -f docker-compose.truenas.yml pull
+sudo docker compose -f docker-compose.truenas.yml pull
 # or
-docker compose -f docker-compose.truenas.yml build
+sudo docker compose -f docker-compose.truenas.yml build
 
 # Start stack
-docker compose -f docker-compose.truenas.yml up -d
+sudo docker compose -f docker-compose.truenas.yml up -d
 
 # Verify
-docker compose -f docker-compose.truenas.yml ps
+sudo docker compose -f docker-compose.truenas.yml ps
 ```
 
-If you need to run commands as the `apps` user:
+> **Note:** In TrueNAS SCALE, the Docker socket is owned by root, so you must use `sudo` when running commands as `truenas_admin`. Some systems may have the `apps` user disabled, so using `sudo` is recommended.
+
+**Alternative (Optional):** Use `apps` user (only if enabled on your system)
 
 ```bash
+# Switch to apps user (only works if enabled on your system)
 sudo -iu apps
 cd /mnt/Pool_2/Projects/langflix/deploy
 docker compose -f docker-compose.truenas.yml up -d
 ```
+
+> **Warning:** If you get "currently not available" error with `apps` user, the system administrator needs to enable that user. In most cases, using `sudo` is simpler.
 
 ---
 

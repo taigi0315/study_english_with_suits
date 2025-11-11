@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database (Optional - only start if DATABASE_ENABLED=true)
   # To enable: Set DATABASE_ENABLED=true in .env file

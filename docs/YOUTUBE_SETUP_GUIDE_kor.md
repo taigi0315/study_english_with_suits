@@ -33,27 +33,29 @@ LangFlix에서 YouTube 업로드 기능을 사용하려면 Google Cloud Console�
 
 1. 다운로드된 파일 이름은 `client_secret_XXXXX.json` 형태입니다
 2. 파일 이름을 `youtube_credentials.json`으로 변경
-3. **프로젝트 루트 디렉토리**에 저장 (`config.yaml`과 같은 위치)
+3. `assets/` 디렉토리에 저장 (Docker 컨테이너가 해당 경로를 마운트함)
 
 **파일 위치 예시:**
 ```
 study_english_with_sutis/
+├── assets/
+│   ├── youtube_credentials.json  ← 여기에 저장
+│   └── youtube_token.json        ← 로그인 후 토큰이 저장될 파일
 ├── config.yaml
-├── youtube_credentials.json  ← 여기에 저장
-├── langflix/
-└── ...
+└── langflix/
 ```
 
 ### 4단계: 파일 위치 확인
 
 자격 증명 파일 위치:
 ```bash
-/Users/changikchoi/Documents/study_english_with_sutis/youtube_credentials.json
+/Users/changikchoi/Documents/study_english_with_sutis/assets/youtube_credentials.json
+/Users/changikchoi/Documents/study_english_with_sutis/assets/youtube_token.json
 ```
 
 존재 여부 확인:
 ```bash
-ls -la youtube_credentials.json
+ls -la assets/youtube_credentials.json assets/youtube_token.json
 ```
 
 ### 5단계: Redirect URI 설정 (이메일 기반 로그인용) ⚠️ 필수!

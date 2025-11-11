@@ -85,3 +85,14 @@ FROM runtime AS api
 # Default command: Start FastAPI server
 CMD ["python", "-m", "langflix.api.main"]
 
+# ----------------------------------------------------------------------------
+# Stage 4: UI - Flask-based management dashboard
+# ----------------------------------------------------------------------------
+FROM runtime AS ui
+
+ENV LANGFLIX_UI_PORT=5000
+EXPOSE 5000
+
+# Default command: Start Flask web UI
+CMD ["python", "-m", "langflix.youtube.web_ui"]
+

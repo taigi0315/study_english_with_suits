@@ -33,27 +33,29 @@ To use YouTube upload features in LangFlix, you need to set up OAuth 2.0 credent
 
 1. The downloaded file will be named something like `client_secret_XXXXX.json`
 2. Rename it to `youtube_credentials.json`
-3. Place it in the **project root directory** (same level as `config.yaml`)
+3. Place it inside the `assets/` directory so Docker can mount it into the UI container.
 
 **Example file location:**
 ```
 study_english_with_sutis/
+├── assets/
+│   ├── youtube_credentials.json  ← Place it here
+│   └── youtube_token.json        ← Empty file will be populated after login
 ├── config.yaml
-├── youtube_credentials.json  ← Place it here
-├── langflix/
-└── ...
+└── langflix/
 ```
 
 ### Step 4: Verify File Location
 
 The credentials file should be at:
 ```bash
-/Users/changikchoi/Documents/study_english_with_sutis/youtube_credentials.json
+/Users/changikchoi/Documents/study_english_with_sutis/assets/youtube_credentials.json
+/Users/changikchoi/Documents/study_english_with_sutis/assets/youtube_token.json
 ```
 
 You can verify it exists:
 ```bash
-ls -la youtube_credentials.json
+ls -la assets/youtube_credentials.json assets/youtube_token.json
 ```
 
 ### Step 5: Configure Redirect URI (For Email-Based Login) ⚠️ Required!

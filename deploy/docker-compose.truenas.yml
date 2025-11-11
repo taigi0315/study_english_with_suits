@@ -20,7 +20,7 @@ services:
       # PostgreSQL 데이터 영구 저장
       - postgres_data:/var/lib/postgresql/data
       # 백업 디렉토리 (선택사항)
-      - ${TRUENAS_DATA_PATH}/langflix/db-backups:/backups:rw
+      - ${TRUENAS_DATA_PATH}/db-backups:/backups:rw
     
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -106,19 +106,23 @@ services:
     
     volumes:
       # TrueNAS 미디어 파일 (읽기 전용)
-      - ${TRUENAS_MEDIA_PATH}/shows:/media/shows:ro
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       
       # 출력 디렉토리 (쓰기 가능)
-      - ${TRUENAS_DATA_PATH}/langflix/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
       
       # Assets (읽기 전용)
-      - ${TRUENAS_DATA_PATH}/langflix/assets:/data/assets:ro
+      - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       
       # 로그 (쓰기 가능)
-      - ${TRUENAS_DATA_PATH}/langflix/logs:/data/logs:rw
+      - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       
       # 캐시 (쓰기 가능)
-      - ${TRUENAS_DATA_PATH}/langflix/cache:/app/cache:rw
+      - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
+
+      # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
+      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
       
       # 설정 파일 (읽기 전용)
       - ../config.yaml:/app/config.yaml:ro
@@ -146,6 +150,37 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
+
+  langflix-ui:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: ui
+    container_name: langflix-ui
+    restart: unless-stopped
+    
+    environment:
+      - REDIS_URL=${LANGFLIX_REDIS_URL:-redis://:${REDIS_PASSWORD}@langflix-redis:6379/0}
+      - LANGFLIX_API_BASE_URL=http://langflix-api:8000
+      - LANGFLIX_OUTPUT_DIR=/data/output
+      - LANGFLIX_MEDIA_DIR=/media/shows
+      - LANGFLIX_UI_PORT=${UI_PORT:-5000}
+    
+    ports:
+      - "${UI_PORT:-5000}:5000"
+    
+    volumes:
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
+      - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
+      - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
+      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
+    
+    depends_on:
+      langflix-api:
+        condition: service_started
 
   # Note: Celery services removed per architect review
   # Current implementation uses FastAPI BackgroundTasks + QueueProcessor

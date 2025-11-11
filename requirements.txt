@@ -53,6 +53,14 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 
+# UI dependencies
+Flask>=2.3.3
+
+# YouTube API dependencies for UI
+google-api-python-client>=2.111.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
 # Redis for shared job state (Phase 7)
 redis>=5.0.0
 hiredis>=2.2.0  # High-performance Redis parser

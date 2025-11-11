@@ -169,4 +169,15 @@ app = create_app()
 # Allow running with: python -m langflix.api.main
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("langflix.api.main:app", host="127.0.0.1", port=8000, reload=True)
+
+    reload_enabled = os.getenv("UVICORN_RELOAD", "false").lower() in ("1", "true", "yes")
+    uvicorn_host = os.getenv("UVICORN_HOST", "0.0.0.0")
+    uvicorn_port = int(os.getenv("UVICORN_PORT", "8000"))
+
+    uvicorn.run(
+        "langflix.api.main:app",
+        host=uvicorn_host,
+        port=uvicorn_port,
+        reload=reload_enabled,
+    )
+

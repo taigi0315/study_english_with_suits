@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 
+logger = logging.getLogger(__name__)
+
 # YouTube API imports
 try:
     from google.auth.transport.requests import Request
@@ -24,8 +26,6 @@ except ImportError:
     YOUTUBE_API_AVAILABLE = False
     Flow = None
     logger.warning("YouTube API libraries not installed. Install with: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
-
-logger = logging.getLogger(__name__)
 
 # YouTube API scopes
 SCOPES = [

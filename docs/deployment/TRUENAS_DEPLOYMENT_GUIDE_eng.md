@@ -1,491 +1,400 @@
-# TrueNAS Deployment Guide (English)
+# TrueNAS SCALE Deployment Guide (English)
 
 ## Overview
 
-This guide explains how to deploy the LangFlix application to a TrueNAS server.
+This guide explains how to deploy the LangFlix application on **TrueNAS SCALE** (the Linux-based community edition of TrueNAS). TrueNAS SCALE ships with Kubernetes and Docker tooling, so LangFlix can run directly on the system without creating additional virtual machines. We provide two supported approaches:
 
-**Current Situation:**
-- Running PostgreSQL, Redis, and application in Docker on macOS
-- Media files stored on TrueNAS server
-- Need to run all services on TrueNAS and access media files
+1. **Docker Compose CLI (recommended for CLI workflows):** Manage the stack from the SCALE shell.
+2. **Apps → Docker Compose App (GUI workflow):** Import the `docker-compose.truenas.yml` file through the Apps catalog.
 
-**Deployment Targets:**
-- TrueNAS Scale (Linux-based, Docker support) - **Recommended**
-- TrueNAS Core (FreeBSD-based) - Requires VM or Docker Desktop
+Choose the method that matches your operational style. Both approaches rely on TrueNAS datasets to store media, application output, logs, and backups. The examples below assume the LangFlix project lives at `/mnt/Pool_2/Projects/langflix`, matching the prompt:
+
+```bash
+truenas_admin@truenas[/mnt/Pool_2/Projects/langflix]$ pwd
+/mnt/Pool_2/Projects/langflix
+```
+
+Adjust paths if your datasets differ.
 
 ---
 
 ## Prerequisites
 
-### 1. Check TrueNAS Version
+### Platform
+- TrueNAS SCALE 23.10 (Cobia) or newer
+- Admin access to the TrueNAS SCALE web UI
+- Apps service enabled (k3s + Docker)
 
-**TrueNAS Scale (Recommended):**
-- Linux-based with direct Docker support
-- Can use Docker Compose
-- Easiest deployment method
+### Storage
+- Existing dataset containing media library (read-only inside the container)
+- New dataset for LangFlix application data (read/write)
+- Optional datasets for logs and backups, or use subdirectories of the application dataset
 
-**TrueNAS Core:**
-- FreeBSD-based, no direct Docker support
-- Need to run Docker Desktop in VM or
-- Create separate Linux VM
+### Credentials and API keys
+- PostgreSQL password
+- Redis password
+- Gemini API key (and any optional external API credentials)
 
-### 2. Requirements
-
-- SSH access to TrueNAS server
-- Docker and Docker Compose installed (Apps in TrueNAS Scale)
-- Knowledge of TrueNAS media file paths
-- GitHub repository access or ability to upload project files
+### Networking
+- Static IP or DHCP reservation for the TrueNAS SCALE host
+- Open LAN firewall ports for API access (`8000` by default)
+- Reverse proxy (optional) if exposing externally
 
 ---
 
-## Step 1: Prepare TrueNAS Environment
+## Step 1: Prepare Datasets on TrueNAS SCALE
 
-### Docker Setup on TrueNAS Scale
+1. **Create/confirm datasets**
+   - Web UI → **Storage** → **Pools**
+   - For example:
+     - `mnt/Pool_2/Media` (existing media files, read-only)
+     - `mnt/Pool_2/Projects/langflix` (LangFlix application data and repository)
+2. **Set permissions**
+   - Keep default owner (`root:root`); we will mount with UID/GID 1000 inside containers using bind mounts and adjust permissions later.
+3. **Record absolute paths** for use in the `.env` file and Docker Compose volumes.
 
-1. **Access TrueNAS Web UI**
-   - Open browser and navigate to TrueNAS IP (e.g., `http://192.168.1.100`)
+---
 
-2. **Install Apps (Docker included)**
-   - Click **Apps** in left menu
-   - Search for **Docker** or **Docker Compose** in **Available Applications**
-   - Install (TrueNAS Scale uses Kubernetes, so Apps automatically provides Docker)
+## Step 2: Access the SCALE Shell
 
-3. **Shell Access**
-   - Click **System Settings** → **Shell** in left menu
-   - Or SSH: `ssh admin@truenas-ip`
+You can use either of the following:
+- Web UI → **System Settings** → **Shell**
+- SSH into SCALE: `ssh root@truenas-ip`
 
-### Check TrueNAS Paths
+> **Tip:** Use `sudo -iu apps` if you prefer to run Docker commands as the built-in `apps` user (introduced in Cobia). For simplicity, the guide uses `root`. Adjust according to your security policies.
 
-Check media file paths on TrueNAS:
+---
+
+## Step 3: Install Docker Compose CLI (if needed)
+
+TrueNAS SCALE bundles Docker and the Compose plugin, but confirm availability:
 
 ```bash
-# Run on TrueNAS shell
-ls -la /mnt/
-
-# Common patterns:
-# /mnt/pool/media/shows
-# /mnt/tank/media/shows
-# /mnt/storage/media/shows
+docker version
+docker compose version
 ```
 
-**Important:** Note this path for use in docker-compose.yml later.
+If the Compose plugin is missing, reinstall it:
+
+```bash
+apt update
+apt install -y docker-compose-plugin
+```
+
+SCALE package management is supported but avoid dist-upgrade operations—stick to targeted installs.
 
 ---
 
-## Step 2: Prepare Project Files
+## Step 4: Clone LangFlix Repository
 
-### Option A: Clone from Git (Recommended)
+Choose a location within your application dataset (here `/mnt/Pool_2/Projects/langflix`):
 
 ```bash
-# Run on TrueNAS shell
-cd /mnt/pool/apps/  # Or your desired path
+cd /mnt/Pool_2/Projects
 git clone https://github.com/your-username/study_english_with_sutis.git langflix
 cd langflix
 ```
 
-### Option B: Upload Files Directly
-
-1. Upload files via SMB/NFS share
-2. Or use `scp`:
-   ```bash
-   # Run on local Mac
-   scp -r /path/to/project admin@truenas-ip:/mnt/pool/apps/langflix
-   ```
+You can fork or pin a specific revision as needed.
 
 ---
 
-## Step 3: Configure Environment Variables
-
-Create `.env` file in `deploy/` directory:
+## Step 5: Create Supporting Directories
 
 ```bash
-cd /mnt/pool/apps/langflix/deploy
-nano .env
+mkdir -p /mnt/Pool_2/Projects/langflix/{output,logs,cache,assets,db-backups}
+chown -R 1000:1000 /mnt/Pool_2/Projects/langflix
+chmod -R 755 /mnt/Pool_2/Projects/langflix
 ```
 
-Enter the following:
+The UID/GID `1000:1000` matches the default unprivileged user inside many containers. Adjust if your images use a different UID.
+
+---
+
+## Step 6: Configure Environment Variables
+
+Create the `.env` file under `deploy/`:
 
 ```bash
-# TrueNAS Path Settings (change to actual paths)
-# Path where media files are stored
-TRUENAS_MEDIA_PATH=/mnt/pool/media
+cd /mnt/Pool_2/Projects/langflix/deploy
+cat <<'EOF' > .env
+# TrueNAS SCALE dataset paths
+TRUENAS_MEDIA_PATH=/mnt/Pool_2/Media  # Adjust to your actual media dataset root
+TRUENAS_DATA_PATH=/mnt/Pool_2/Projects/langflix
 
-# Application data storage path
-TRUENAS_DATA_PATH=/mnt/pool/apps/langflix
+# Database configuration
+POSTGRES_USER=langflix
+POSTGRES_PASSWORD=change_me_securely
+POSTGRES_DB=langflix
 
-# Database Password
-POSTGRES_PASSWORD=your_secure_password_here
+# Redis configuration
+REDIS_PASSWORD=change_me_securely
+LANGFLIX_REDIS_URL=redis://:${REDIS_PASSWORD}@langflix-redis:6379/0
 
-# Redis Password
-REDIS_PASSWORD=your_redis_password_here
+# UI configuration
+LANGFLIX_UI_PORT=5000
+LANGFLIX_OUTPUT_DIR=/data/output
+LANGFLIX_MEDIA_DIR=/media/shows
+LANGFLIX_API_BASE_URL=http://langflix-api:8000
 
-# API Keys (Required)
+# Backend server configuration
+UVICORN_HOST=0.0.0.0
+UVICORN_PORT=8000
+UVICORN_RELOAD=false
+
+# API keys
 GEMINI_API_KEY=your_gemini_api_key_here
-
-# Optional API Keys
 GOOGLE_API_KEY_1=
 LEMONFOX_API_KEY=
 
-# Port Settings (Optional)
+# Network configuration
 API_PORT=8000
 POSTGRES_PORT=5432
 REDIS_PORT=6379
 
-# Log Level
+# Logging
 LOG_LEVEL=INFO
+EOF
 ```
 
-**Important:**
-- Change `TRUENAS_MEDIA_PATH` to actual TrueNAS media path
-- `TRUENAS_DATA_PATH` is where application data will be stored
-- Change passwords to secure ones
+Update passwords and keys before production use. Keep `.env` out of version control.
 
+> **Tip:** If your media lives at a different location (e.g. `/mnt/Media/Shows`), set `TRUENAS_MEDIA_PATH` to the parent (`/mnt/Media`) and update the compose mount path if the folder name differs in case or structure. You can also replace the volume mapping with the exact path, e.g. `- /mnt/Media/Shows:/media/shows:ro`.
+
+### YouTube OAuth Credentials
+
+1. Download OAuth credentials from Google Cloud Console as `youtube_credentials.json`.
+2. Create an empty `youtube_token.json` (the app will populate it after authentication).
+3. Copy both files to `${TRUENAS_DATA_PATH}/assets/` on TrueNAS:
+   ```bash
+   scp youtube_credentials.json youtube_token.json \
+       truenas_admin@truenas-ip:/mnt/Pool_2/Projects/langflix/assets/
+   ```
+4. Ensure proper ownership and permissions for the Docker user (UID/GID 1000):
+   ```bash
+   sudo chown 1000:1000 /mnt/Pool_2/Projects/langflix/assets/youtube_token.json
+   sudo chmod 600 /mnt/Pool_2/Projects/langflix/assets/youtube_token.json
+   sudo chmod 640 /mnt/Pool_2/Projects/langflix/assets/youtube_credentials.json
+   ```
+5. The compose file mounts these files into the UI container automatically (read-only for credentials, writable for token).
 ---
 
-## Step 4: Create Directory Structure
+## Step 7: Review Docker Compose File
 
-Create necessary directories on TrueNAS:
-
-```bash
-# Create application data directories
-sudo mkdir -p /mnt/pool/apps/langflix/{output,logs,cache,assets,db-backups}
-
-# Set permissions (give write access to Docker user)
-sudo chown -R 1000:1000 /mnt/pool/apps/langflix
-sudo chmod -R 755 /mnt/pool/apps/langflix
-
-# Verify media path (read-only access is sufficient)
-ls -la /mnt/pool/media/shows
-```
-
----
-
-## Step 5: Verify Docker Compose File
-
-The `deploy/docker-compose.truenas.yml` file is ready.
-
-Verify key settings:
+Open `deploy/docker-compose.truenas.yml` and confirm volumes use dataset paths:
 
 ```yaml
-volumes:
-  # Media files (read-only)
-  - ${TRUENAS_MEDIA_PATH}/shows:/media/shows:ro
-  
-  # Output directory (writable)
-  - ${TRUENAS_DATA_PATH}/langflix/output:/data/output:rw
+services:
+  api:
+    volumes:
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/logs:/var/log/langflix:rw
+      - ${TRUENAS_DATA_PATH}/cache:/data/cache:rw
+  langflix-ui:
+    environment:
+      - LANGFLIX_API_BASE_URL=http://langflix-api:8000
+      - LANGFLIX_OUTPUT_DIR=/data/output
+      - LANGFLIX_MEDIA_DIR=/media/shows
+    ports:
+      - "${UI_PORT:-5000}:5000"
+    volumes:
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
+      - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
+      - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
+      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
 ```
 
-Verify that paths in `.env` file are correct.
+Adjust mount paths if your dataset layout differs.
 
 ---
 
-## Step 6: Build and Run Docker Images
-
-### Run on TrueNAS Scale
+## Step 8A: Deploy via Docker Compose CLI (Shell Workflow)
 
 ```bash
-cd /mnt/pool/apps/langflix/deploy
+cd /mnt/Pool_2/Projects/langflix/deploy
 
-# Start services with Docker Compose
-docker-compose -f docker-compose.truenas.yml up -d
+# Pull or build images
+docker compose -f docker-compose.truenas.yml pull
+# or
+docker compose -f docker-compose.truenas.yml build
 
-# Check logs
-docker-compose -f docker-compose.truenas.yml logs -f
+# Start stack
+docker compose -f docker-compose.truenas.yml up -d
 
-# Check service status
-docker-compose -f docker-compose.truenas.yml ps
+# Verify
+docker compose -f docker-compose.truenas.yml ps
 ```
 
-### Using Dockge
-
-1. **Access Dockge Web UI**
-   - Open browser to `http://truenas-ip:31014`
-
-2. **Create New Stack**
-   - Click "+ Compose"
-   - Stack Name: `langflix`
-
-3. **Copy docker-compose.truenas.yml content**
-   - Paste file content into Dockge's YAML editor
-
-4. **Set Environment Variables**
-   - Enter environment variables in ".env" section
-
-5. **Click Deploy**
-
----
-
-## Step 7: Verify Services
-
-### Check API Status
+If you need to run commands as the `apps` user:
 
 ```bash
-# API health check
-curl http://localhost:8000/health
-
-# Or in browser
-http://truenas-ip:8000/health
-```
-
-### Check API Documentation
-
-Open in browser:
-```
-http://truenas-ip:8000/docs
-```
-
-### Check Container Status
-
-```bash
-# All container status
-docker ps
-
-# Specific service logs
-docker logs langflix-api
-docker logs langflix-celery-worker
-docker logs langflix-postgres
-docker logs langflix-redis
-```
-
-### Verify Media File Access
-
-```bash
-# Check media files inside container
-docker exec langflix-api ls -la /media/shows
-
-# Check output directory
-docker exec langflix-api ls -la /data/output
+sudo -iu apps
+cd /mnt/Pool_2/Projects/langflix/deploy
+docker compose -f docker-compose.truenas.yml up -d
 ```
 
 ---
 
-## Step 8: Network Access Configuration
+## Step 8B: Deploy via Apps → Docker Compose App (GUI Workflow)
 
-### TrueNAS Firewall Settings
+1. Web UI → **Apps** → **Launch Docker Compose App** (Cobia and later).
+2. Set **Application Name:** `langflix`.
+3. Paste the contents of `docker-compose.truenas.yml`.
+4. Enable **Use Custom Environment File** and paste `.env` contents or define key/value pairs manually.
+5. Confirm storage paths in the **Volumes** section.
+6. Click **Install**. SCALE will create a Compose app under the `ix-applications` dataset.
 
-In TrueNAS Web UI:
-1. **Network** → **Firewall** menu
-2. Open required ports:
-   - `8000` (API)
-   - `5432` (PostgreSQL - internal network only)
-   - `6379` (Redis - internal network only)
+> The GUI workflow is useful when you prefer declarative management and visibility in the Apps dashboard.
 
-### External Access (Optional)
+---
 
-To access from outside:
-1. Set up port forwarding on router
-2. Or set up reverse proxy (Nginx, Traefik, etc.)
+## Step 9: Verify Services
+
+```bash
+curl http://truenas-ip:8000/health
+curl http://truenas-ip:8000/docs
+curl http://truenas-ip:5000/
+```
+
+Check logs:
+
+```bash
+docker compose -f docker-compose.truenas.yml logs -f api
+docker compose -f docker-compose.truenas.yml logs -f langflix-ui
+docker compose -f docker-compose.truenas.yml logs -f postgres
+```
+
+Inspect container mounts:
+
+```bash
+docker exec -it langflix-api ls -lah /media/shows
+docker exec -it langflix-api ls -lah /data/output
+docker exec -it langflix-ui ls -lah /data/output
+```
+
+---
+
+## Step 10: Networking & Security
+
+- Ensure the SCALE firewall or upstream router allows inbound traffic to ports `8000` (API) and `5000` (UI).
+- For public exposure, place LangFlix behind a reverse proxy (Traefik, Nginx Proxy Manager, Caddy, etc.).
+- Keep `.env` files and secrets restricted to privileged users.
+- Regenerate PostgreSQL/Redis passwords periodically.
+
+---
+
+## Step 11: Maintenance
+
+### Updating LangFlix
+
+```bash
+cd /mnt/Pool_2/Projects/langflix
+git pull
+cd deploy
+docker compose -f docker-compose.truenas.yml pull
+docker compose -f docker-compose.truenas.yml up -d
+```
+
+### Development Cycle / Resetting Environment
+
+Before rebuilding or applying configuration changes, stop and clean existing containers/resources:
+
+```bash
+cd /mnt/Pool_2/Projects/langflix/deploy
+
+# Stop containers (preserves volumes)
+sudo docker compose -f docker-compose.truenas.yml down
+
+# Optional: remove volumes (Redis data, etc.)
+sudo docker compose -f docker-compose.truenas.yml down -v
+
+# Optional: remove built images to force rebuild
+sudo docker compose -f docker-compose.truenas.yml down --rmi local
+sudo docker system prune -f
+```
+
+### Backups
+
+```bash
+docker exec langflix-postgres pg_dump -U langflix langflix \
+  > /mnt/Pool_2/Projects/langflix/db-backups/backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+Leverage TrueNAS replication and snapshot tasks for dataset-level backups.
+
+### Monitoring
+
+```bash
+docker compose -f docker-compose.truenas.yml logs -f
+docker stats
+```
+
+Consider integrating SCALE metrics with Prometheus/Grafana for long-term observability.
 
 ---
 
 ## Troubleshooting
 
-### Containers Won't Start
+### Containers will not start
+- Inspect Compose logs: `docker compose -f docker-compose.truenas.yml logs`
+- Confirm dataset paths exist and are mounted
+- Check file permissions (`ls -lah /mnt/Pool_2/Projects/langflix`)
+- If only the UI container fails, verify `${TRUENAS_DATA_PATH}/assets` exists and that `LANGFLIX_API_BASE_URL` resolves to `langflix-api`.
 
-**Check:**
-```bash
-# Check logs
-docker-compose -f docker-compose.truenas.yml logs
+### PostgreSQL/Redis connection issues
+- Verify `.env` credentials
+- Test directly in containers:
+  ```bash
+  docker exec langflix-postgres pg_isready -U langflix
+  docker exec langflix-redis redis-cli -a "$REDIS_PASSWORD" ping
+  ```
 
-# Specific service logs
-docker logs langflix-api
-```
+### Media path not accessible
+- Confirm dataset path in `.env` → `TRUENAS_MEDIA_PATH`
+- Ensure the dataset is exported correctly and accessible to the container user
+- Check container mount: `docker exec langflix-api ls /media`
 
-**Common Issues:**
-
-1. **Path doesn't exist**
-   ```bash
-   # Create directories
-   sudo mkdir -p /mnt/pool/apps/langflix/{output,logs,cache}
-   ```
-
-2. **Permission issues**
-   ```bash
-   # Grant permissions to Docker user
-   sudo chown -R 1000:1000 /mnt/pool/apps/langflix
-   sudo chmod -R 755 /mnt/pool/apps/langflix
-   ```
-
-3. **Cannot access media path**
-   ```bash
-   # Check media path
-   ls -la /mnt/pool/media/shows
-   
-   # Check from container
-   docker exec langflix-api ls -la /media/shows
-   ```
-
-### Database Connection Failed
-
-**Check:**
-```bash
-# PostgreSQL container status
-docker ps | grep postgres
-
-# PostgreSQL logs
-docker logs langflix-postgres
-
-# Test connection
-docker exec langflix-postgres pg_isready -U langflix
-```
-
-### Redis Connection Failed
-
-**Check:**
-```bash
-# Redis container status
-docker ps | grep redis
-
-# Redis logs
-docker logs langflix-redis
-
-# Test connection
-docker exec langflix-redis redis-cli -a your_password ping
-```
-
-### Cannot Find Media Files
-
-**Check:**
-```bash
-# Check media path on host
-ls -la /mnt/pool/media/shows
-
-# Check from container
-docker exec langflix-api ls -la /media/shows
-
-# Check environment variables
-docker exec langflix-api env | grep LANGFLIX_STORAGE
-```
-
-**Solution:**
-- Verify `TRUENAS_MEDIA_PATH` in `.env` file
-- Check volume mount paths in `docker-compose.truenas.yml`
-- Verify media path actually exists
-
----
-
-## Updates and Maintenance
-
-### Update Application
-
-```bash
-cd /mnt/pool/apps/langflix/deploy
-
-# Get latest code from Git
-cd ..
-git pull
-cd deploy
-
-# Rebuild images and restart
-docker-compose -f docker-compose.truenas.yml build
-docker-compose -f docker-compose.truenas.yml up -d
-
-# Or restart specific service only
-docker-compose -f docker-compose.truenas.yml restart langflix-api
-```
-
-### Database Backup
-
-```bash
-# PostgreSQL backup
-docker exec langflix-postgres pg_dump -U langflix langflix > /mnt/pool/apps/langflix/db-backups/backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Create automatic backup script (optional)
-```
-
-### Check Logs
-
-```bash
-# All service logs
-docker-compose -f docker-compose.truenas.yml logs -f
-
-# Specific service logs
-docker-compose -f docker-compose.truenas.yml logs -f langflix-api
-
-# Check log files (TrueNAS host)
-tail -f /mnt/pool/apps/langflix/logs/langflix.log
-```
-
----
-
-## Resource Management
-
-### Check Resource Usage
-
-```bash
-# Container resource usage
-docker stats
-
-# Disk usage
-docker system df
-```
-
-### Adjust Resource Limits
-
-Adjust resource limits in `docker-compose.truenas.yml` based on TrueNAS resources:
-
-```yaml
-deploy:
-  resources:
-    limits:
-      cpus: '4'      # Number of CPU cores
-      memory: 8G     # Memory limit
-```
-
----
-
-## Security Considerations
-
-1. **Change Passwords**
-   - Change default passwords in `.env` file to secure ones
-   - Strengthen PostgreSQL and Redis passwords
-
-2. **Network Isolation**
-   - PostgreSQL and Redis should only be accessible from internal network
-   - Only expose API to external
-
-3. **File Permissions**
-   - Mount media files as read-only (`:ro`)
-   - Grant write permissions to output directory only to necessary users
-
-4. **Regular Updates**
-   - Regularly update Docker images
-   - Apply security patches
+### UI logs show PostgreSQL connection refused
+- This happens when `DATABASE_ENABLED=false` (default) and the PostgreSQL service is not running.
+- If you need database-backed features (quota tracking, scheduler, etc.), set `DATABASE_ENABLED=true` in `.env` and start the database profile:
+  ```bash
+  sudo docker compose -f docker-compose.truenas.yml --profile database up -d
+  ```
+- Otherwise, the warnings can be ignored.
+### Resource constraints
+- Increase dataset quotas or host RAM/CPU
+- Use Compose `deploy.resources` limits to prevent resource starvation
 
 ---
 
 ## Summary
 
-**Deployment Steps Summary:**
+1. Prepare datasets for media and application data.
+2. Clone LangFlix, configure `.env`, and verify Compose volumes.
+3. Deploy using the Docker Compose CLI or Apps GUI.
+4. Validate service health and secure access.
+5. Maintain via Git updates, Docker image refresh, and dataset snapshots.
 
-1. ✅ Prepare TrueNAS environment (Docker, verify paths)
-2. ✅ Prepare project files (Git clone or upload)
-3. ✅ Configure environment variables (create `.env` file)
-4. ✅ Create directory structure
-5. ✅ Run Docker Compose
-6. ✅ Verify services and test
-
-**Key Paths:**
-- Media files: `/mnt/pool/media/shows` (read-only)
-- Application data: `/mnt/pool/apps/langflix/` (writable)
-- Logs: `/mnt/pool/apps/langflix/logs/`
-- Output: `/mnt/pool/apps/langflix/output/`
+TrueNAS SCALE provides a robust platform for container workloads while retaining the power of ZFS for storage management.
 
 **Access URLs:**
 - API: `http://truenas-ip:8000`
 - API Documentation: `http://truenas-ip:8000/docs`
-- Health Check: `http://truenas-ip:8000/health`
+- LangFlix UI Dashboard: `http://truenas-ip:5000`
 
 ---
 
 ## Additional Resources
 
-- [Dockge Setup Guide](DOCKGE_SETUP_eng.md)
-- [Docker Network Media Path Configuration](DOCKER_NETWORK_MEDIA_eng.md)
-- [CI/CD SSH Setup](CI_CD_SSH_SETUP.md)
-- [API Reference](../API_REFERENCE.md)
+- TrueNAS SCALE Documentation: <https://www.truenas.com/docs/scale/>
+- Docker Compose App Documentation: <https://www.truenas.com/docs/scale/scaletutorials/dockercompose/>
+- LangFlix Project Documentation: `docs/project.md`
 
 ---
 
-**Last Updated:** 2025-01-30
+**Last Updated:** 2025-11-10
 

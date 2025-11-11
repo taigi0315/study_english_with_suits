@@ -35,7 +35,8 @@ YouTube 로그인 기능을 사용하려면 **OAuth 2.0 Client ID와 Client Secr
 ### Step 4: 자격 증명 다운로드
 1. 생성된 OAuth 클라이언트 ID 창에서 **"DOWNLOAD JSON"** 클릭
 2. 다운로드된 파일 이름은 `client_secret_XXXXX.json` 형태
-3. 이 파일을 프로젝트 루트로 복사하고 이름을 `youtube_credentials.json`으로 변경
+3. 파일 이름을 `youtube_credentials.json`으로 변경한 뒤 `assets/` 디렉토리에 복사합니다.
+4. 빈 `youtube_token.json` 파일을 `assets/` 디렉토리에 생성해 두면 로그인 후 토큰이 저장됩니다.
 
 ### Step 5: Redirect URI 추가 (이메일 로그인용) ⚠️ 필수!
 
@@ -74,13 +75,13 @@ YouTube 로그인 기능을 사용하려면 **OAuth 2.0 Client ID와 Client Secr
 
 ```bash
 cd /Users/changikchoi/Documents/study_english_with_sutis
-ls -la youtube_credentials.json
-cat youtube_credentials.json | grep client_id
+ls -la assets/youtube_credentials.json assets/youtube_token.json
+cat assets/youtube_credentials.json | grep client_id
 ```
 
 ## 🚀 다음 단계
 
-1. `youtube_credentials.json` 파일을 프로젝트 루트에 배치
+1. `youtube_credentials.json` / `youtube_token.json` 파일을 `assets/` 디렉토리에 배치
 2. Redirect URI 설정 (Step 5)
 3. 애플리케이션 재시작
 4. 이메일 입력 후 로그인 테스트

@@ -175,6 +175,14 @@ EOF
 
 Update passwords and keys before production use. Keep `.env` out of version control.
 
+**Important:** Set permissions on the `.env` file so Docker containers can read it:
+
+```bash
+# Set .env file permissions (allow container user UID 1000 to read)
+sudo chmod 644 /mnt/Pool_2/Projects/langflix/deploy/.env
+sudo chown 1000:1000 /mnt/Pool_2/Projects/langflix/deploy/.env
+```
+
 > **Tip:** If your media lives at a different location (e.g. `/mnt/Media/Shows`), set `TRUENAS_MEDIA_PATH` to the parent (`/mnt/Media`) and update the compose mount path if the folder name differs in case or structure. You can also replace the volume mapping with the exact path, e.g. `- /mnt/Media/Shows:/media/shows:ro`.
 
 ### YouTube OAuth Credentials
@@ -391,6 +399,39 @@ Error response from daemon: error while creating mount source path '/mnt/Pool_2/
    sudo docker compose -f docker-compose.truenas.yml down
    sudo docker compose -f docker-compose.truenas.yml up -d
    ```
+
+### .env file permission error (`Permission denied: '/app/.env'`)
+
+**Symptom:**
+```
+Error: [Errno 13] Permission denied: '/app/.env'
+```
+
+**Solution:**
+
+1. **Set `.env` file permissions:**
+   ```bash
+   cd /mnt/Pool_2/Projects/langflix/deploy
+   sudo chmod 644 .env
+   sudo chown 1000:1000 .env
+   ```
+
+2. **Verify file exists:**
+   ```bash
+   ls -la /mnt/Pool_2/Projects/langflix/deploy/.env
+   ```
+
+3. **Restart container:**
+   ```bash
+   sudo docker compose -f docker-compose.truenas.yml restart langflix-api
+   ```
+
+4. **If `chmod` doesn't work due to TrueNAS ACLs:**
+   - Adjust `.env` file permissions via TrueNAS web UI → **Storage** → select dataset → **Permissions**
+   - Or use `midclt` command:
+     ```bash
+     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/deploy/.env mode=644 user=1000 group=1000
+     ```
 
 ### Containers will not start
 - Inspect Compose logs: `sudo docker compose -f docker-compose.truenas.yml logs`

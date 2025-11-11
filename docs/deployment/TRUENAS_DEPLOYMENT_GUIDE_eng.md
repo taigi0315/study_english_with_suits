@@ -101,11 +101,27 @@ You can fork or pin a specific revision as needed.
 
 ## Step 5: Create Supporting Directories
 
+Create the directories that Docker Compose will mount as volumes and set proper permissions.
+
 ```bash
-mkdir -p /mnt/Pool_2/Projects/langflix/{output,logs,cache,assets,db-backups}
-chown -R 1000:1000 /mnt/Pool_2/Projects/langflix
-chmod -R 755 /mnt/Pool_2/Projects/langflix
+cd /mnt/Pool_2/Projects/langflix
+
+# Create required directories
+sudo mkdir -p output logs cache assets db-backups
+
+# Set permissions for Docker container user (UID/GID 1000)
+sudo chown -R 1000:1000 output logs cache assets db-backups
+sudo chmod -R 755 output logs cache assets db-backups
+
+# Verify YouTube credential files are in assets directory
+ls -la assets/youtube_credentials.json assets/youtube_token.json
 ```
+
+> **Important:** Due to TrueNAS ACLs (Access Control Lists), `chmod`/`chown` may not work as expected. In that case, adjust dataset permissions via TrueNAS web UI or use `midclt` command:
+> ```bash
+> # Alternative: Set permissions via TrueNAS API
+> sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix mode=755 user=1000 group=1000
+> ```
 
 The UID/GID `1000:1000` matches the default unprivileged user inside many containers. Adjust if your images use a different UID.
 
@@ -346,8 +362,38 @@ Consider integrating SCALE metrics with Prometheus/Grafana for long-term observa
 
 ## Troubleshooting
 
+### Directory creation permission error (`chmod: operation not permitted`)
+
+**Symptom:**
+```
+Error response from daemon: error while creating mount source path '/mnt/Pool_2/Projects/langflix/output': chmod /mnt/Pool_2/Projects/langflix/output: operation not permitted
+```
+
+**Solution:**
+
+1. **Create required directories beforehand:**
+   ```bash
+   cd /mnt/Pool_2/Projects/langflix
+   sudo mkdir -p output logs cache assets db-backups
+   sudo chown -R 1000:1000 output logs cache assets db-backups
+   sudo chmod -R 755 output logs cache assets db-backups
+   ```
+
+2. **If `chmod` doesn't work due to TrueNAS ACLs:**
+   - Adjust permissions via TrueNAS web UI → **Storage** → select dataset → **Permissions**
+   - Or use `midclt` command:
+     ```bash
+     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/output mode=755 user=1000 group=1000
+     ```
+
+3. **After completing Step 5, restart Docker Compose:**
+   ```bash
+   sudo docker compose -f docker-compose.truenas.yml down
+   sudo docker compose -f docker-compose.truenas.yml up -d
+   ```
+
 ### Containers will not start
-- Inspect Compose logs: `docker compose -f docker-compose.truenas.yml logs`
+- Inspect Compose logs: `sudo docker compose -f docker-compose.truenas.yml logs`
 - Confirm dataset paths exist and are mounted
 - Check file permissions (`ls -lah /mnt/Pool_2/Projects/langflix`)
 - If only the UI container fails, verify `${TRUENAS_DATA_PATH}/assets` exists and that `LANGFLIX_API_BASE_URL` resolves to `langflix-api`.

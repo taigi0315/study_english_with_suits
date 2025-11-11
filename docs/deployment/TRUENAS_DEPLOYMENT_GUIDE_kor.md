@@ -101,11 +101,27 @@ cd langflix
 
 ## 5단계: 지원 디렉토리 생성
 
+Docker Compose가 볼륨 마운트를 위해 필요한 디렉토리를 미리 생성하고 권한을 설정합니다.
+
 ```bash
-mkdir -p /mnt/Pool_2/Projects/langflix/{output,logs,cache,assets,db-backups}
-chown -R 1000:1000 /mnt/Pool_2/Projects/langflix
-chmod -R 755 /mnt/Pool_2/Projects/langflix
+cd /mnt/Pool_2/Projects/langflix
+
+# 필요한 디렉토리 생성
+sudo mkdir -p output logs cache assets db-backups
+
+# Docker 컨테이너 사용자(UID/GID 1000)가 접근할 수 있도록 권한 설정
+sudo chown -R 1000:1000 output logs cache assets db-backups
+sudo chmod -R 755 output logs cache assets db-backups
+
+# assets 디렉토리에 YouTube 자격 증명 파일이 있는지 확인
+ls -la assets/youtube_credentials.json assets/youtube_token.json
 ```
+
+> **중요:** TrueNAS의 ACL(접근 제어 목록) 때문에 `chmod`/`chown`이 작동하지 않을 수 있습니다. 그 경우 TrueNAS 웹 UI에서 데이터세트의 권한을 조정하거나, `midclt` 명령어를 사용하세요:
+> ```bash
+> # TrueNAS API를 통한 권한 설정 (대안)
+> sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix mode=755 user=1000 group=1000
+> ```
 
 UID/GID `1000:1000`은 다수 컨테이너에서 기본으로 사용하는 비특권 사용자입니다. 이미지에 따라 다른 UID를 사용한다면 값도 함께 조정하세요.
 
@@ -347,8 +363,38 @@ docker stats
 
 ## 문제 해결
 
+### 디렉토리 생성 권한 오류 (`chmod: operation not permitted`)
+
+**증상:**
+```
+Error response from daemon: error while creating mount source path '/mnt/Pool_2/Projects/langflix/output': chmod /mnt/Pool_2/Projects/langflix/output: operation not permitted
+```
+
+**해결 방법:**
+
+1. **필요한 디렉토리를 미리 생성:**
+   ```bash
+   cd /mnt/Pool_2/Projects/langflix
+   sudo mkdir -p output logs cache assets db-backups
+   sudo chown -R 1000:1000 output logs cache assets db-backups
+   sudo chmod -R 755 output logs cache assets db-backups
+   ```
+
+2. **TrueNAS ACL 때문에 `chmod`가 작동하지 않는 경우:**
+   - TrueNAS 웹 UI → **Storage** → 데이터세트 선택 → **Permissions**에서 권한 조정
+   - 또는 `midclt` 명령어 사용:
+     ```bash
+     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/output mode=755 user=1000 group=1000
+     ```
+
+3. **5단계를 다시 실행한 후 Docker Compose 재시작:**
+   ```bash
+   sudo docker compose -f docker-compose.truenas.yml down
+   sudo docker compose -f docker-compose.truenas.yml up -d
+   ```
+
 ### 컨테이너가 시작되지 않음
-- `docker compose -f docker-compose.truenas.yml logs`로 에러 확인
+- `sudo docker compose -f docker-compose.truenas.yml logs`로 에러 확인
 - 데이터세트 경로 및 권한 확인 (`ls -lah /mnt/Pool_2/Projects/langflix`)
 - UI 컨테이너만 실패한다면 `${TRUENAS_DATA_PATH}/assets` 존재 여부와 `LANGFLIX_API_BASE_URL`이 `langflix-api`로 해석되는지 확인
 

@@ -99,31 +99,122 @@ cd langflix
 
 ---
 
-## 5단계: 지원 디렉토리 생성
+## 5단계: 지원 디렉토리 생성 및 권한 설정
 
-Docker Compose가 볼륨 마운트를 위해 필요한 디렉토리를 미리 생성하고 권한을 설정합니다.
+Docker Compose가 볼륨 마운트를 위해 필요한 디렉토리를 미리 생성하고 **반드시 올바른 권한을 설정**해야 합니다. 이 단계를 건너뛰면 컨테이너가 시작되지 않거나 파일 접근 오류가 발생합니다.
+
+### 5-1. 디렉토리 생성
 
 ```bash
 cd /mnt/Pool_2/Projects/langflix
 
 # 필요한 디렉토리 생성
 sudo mkdir -p output logs cache assets db-backups
+```
 
+### 5-2. 디렉토리 권한 설정 (중요!)
+
+Docker 컨테이너 내부에서 사용하는 사용자는 UID/GID `1000:1000`입니다. 호스트의 파일과 디렉토리를 이 사용자가 접근할 수 있도록 권한을 설정해야 합니다.
+
+```bash
 # Docker 컨테이너 사용자(UID/GID 1000)가 접근할 수 있도록 권한 설정
 sudo chown -R 1000:1000 output logs cache assets db-backups
 sudo chmod -R 755 output logs cache assets db-backups
-
-# assets 디렉토리에 YouTube 자격 증명 파일이 있는지 확인
-ls -la assets/youtube_credentials.json assets/youtube_token.json
 ```
 
-> **중요:** TrueNAS의 ACL(접근 제어 목록) 때문에 `chmod`/`chown`이 작동하지 않을 수 있습니다. 그 경우 TrueNAS 웹 UI에서 데이터세트의 권한을 조정하거나, `midclt` 명령어를 사용하세요:
-> ```bash
-> # TrueNAS API를 통한 권한 설정 (대안)
-> sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix mode=755 user=1000 group=1000
-> ```
+**권한 확인:**
+```bash
+ls -la /mnt/Pool_2/Projects/langflix/
+# 출력 예시:
+# drwxr-xr-x 1 1000 1000 output
+# drwxr-xr-x 1 1000 1000 logs
+# drwxr-xr-x 1 1000 1000 cache
+# drwxr-xr-x 1 1000 1000 assets
+# drwxr-xr-x 1 1000 1000 db-backups
+```
 
-UID/GID `1000:1000`은 다수 컨테이너에서 기본으로 사용하는 비특권 사용자입니다. 이미지에 따라 다른 UID를 사용한다면 값도 함께 조정하세요.
+### 5-3. TrueNAS ACL 문제 해결
+
+TrueNAS의 ACL(접근 제어 목록) 때문에 `chmod`/`chown`이 작동하지 않을 수 있습니다. 다음 방법을 시도하세요:
+
+**방법 1: TrueNAS 웹 UI 사용 (권장)**
+1. 웹 UI → **Storage** → **Pools**
+2. 데이터세트 선택 (예: `Pool_2/Projects/langflix`)
+3. **Permissions** 클릭
+4. 각 디렉토리(`output`, `logs`, `cache`, `assets`, `db-backups`)에 대해:
+   - **User**: `1000` 또는 `apps` 선택
+   - **Group**: `1000` 선택
+   - **Mode**: `755` 설정
+   - **Apply** 클릭
+
+**방법 2: midclt 명령어 사용**
+```bash
+# TrueNAS API를 통한 권한 설정
+sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/output mode=755 user=1000 group=1000
+sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/logs mode=755 user=1000 group=1000
+sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/cache mode=755 user=1000 group=1000
+sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/assets mode=755 user=1000 group=1000
+sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/db-backups mode=755 user=1000 group=1000
+```
+
+> **참고:** `midclt` 명령어가 작동하지 않는 경우, TrueNAS 웹 UI를 사용하거나 시스템 관리자에게 문의하세요.
+
+### 5-4. 미디어 경로 권한 설정
+
+미디어 파일이 있는 경로도 컨테이너가 읽을 수 있도록 권한을 설정해야 합니다:
+
+```bash
+# 미디어 경로 확인 (예: /mnt/Pool_2/Media/Shows/Suits)
+MEDIA_PATH="/mnt/Pool_2/Media/Shows/Suits"  # 실제 경로로 변경
+
+# 읽기 권한 설정 (컨테이너는 읽기만 필요)
+sudo chown -R 1000:1000 "$MEDIA_PATH"
+sudo chmod -R 755 "$MEDIA_PATH"
+
+# 권한 확인
+ls -la "$MEDIA_PATH" | head -5
+```
+
+**컨테이너 내부에서 접근 테스트:**
+```bash
+# 컨테이너 시작 후 테스트
+sudo docker exec langflix-api ls -lah /media/shows
+# Permission denied 오류가 발생하면 미디어 경로 권한을 다시 확인하세요
+```
+
+### 5-5. YouTube 자격 증명 파일 권한 설정
+
+YouTube 기능을 사용하려면 자격 증명 파일의 권한도 올바르게 설정해야 합니다:
+
+```bash
+# 파일이 존재하는지 확인
+ls -la assets/youtube_credentials.json assets/youtube_token.json
+
+# 파일 권한 설정
+sudo chown 1000:1000 assets/youtube_credentials.json
+sudo chown 1000:1000 assets/youtube_token.json
+
+# youtube_credentials.json: 읽기 전용 (644)
+sudo chmod 644 assets/youtube_credentials.json
+
+# youtube_token.json: 읽기/쓰기 (600, 더 안전)
+sudo chmod 600 assets/youtube_token.json
+
+# 권한 확인
+ls -la assets/youtube_*.json
+# 출력 예시:
+# -rw-r--r-- 1 1000 1000 youtube_credentials.json
+# -rw------- 1 1000 1000 youtube_token.json
+```
+
+**컨테이너 내부에서 파일 접근 테스트:**
+```bash
+# 컨테이너 시작 후 테스트
+sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
+# Permission denied 오류가 발생하면 파일 권한을 다시 확인하세요
+```
+
+> **중요:** UID/GID `1000:1000`은 다수 컨테이너에서 기본으로 사용하는 비특권 사용자입니다. 이미지에 따라 다른 UID를 사용한다면 값도 함께 조정하세요.
 
 ---
 
@@ -182,19 +273,69 @@ EOF
 ### YouTube OAuth 자격 증명 준비
 
 1. Google Cloud Console에서 OAuth 자격 증명을 다운로드하여 `youtube_credentials.json` 으로 저장합니다.
+   - 자세한 설정 방법은 [YouTube Setup Guide](../youtube/YOUTUBE_SETUP_GUIDE_kor.md)를 참고하세요.
+
 2. 빈 `youtube_token.json` 파일을 생성합니다(애플리케이션이 토큰을 자동 저장).
+   ```bash
+   touch youtube_token.json
+   ```
+
 3. 두 파일을 TrueNAS의 `${TRUENAS_DATA_PATH}/assets/` 경로로 복사합니다.
+   
+   **로컬 컴퓨터에서 실행:**
+   ```bash
+   # SMB 마운트 사용 (macOS)
+   mount_smbfs //truenas_admin@truenas-ip/Projects /tmp/truenas
+   cp youtube_credentials.json youtube_token.json /tmp/truenas/langflix/assets/
+   umount /tmp/truenas
+   ```
+   
+   **또는 TrueNAS 웹 UI 사용:**
+   - 웹 UI → **Storage** → **Pools** → `Pool_2/Projects/langflix/assets/`
+   - 파일 업로드 기능 사용
+   
+   **또는 SSH/SCP 사용:**
    ```bash
    scp youtube_credentials.json youtube_token.json \
        truenas_admin@truenas-ip:/mnt/Pool_2/Projects/langflix/assets/
    ```
-4. Docker 컨테이너가 접근할 수 있도록 권한을 조정합니다(UID/GID 1000).
+
+4. **Docker 컨테이너가 접근할 수 있도록 권한을 조정합니다(UID/GID 1000).**
+   
+   **TrueNAS에서 실행:**
    ```bash
-   sudo chown 1000:1000 /mnt/Pool_2/Projects/langflix/assets/youtube_token.json
-   sudo chmod 600 /mnt/Pool_2/Projects/langflix/assets/youtube_token.json
-   sudo chmod 640 /mnt/Pool_2/Projects/langflix/assets/youtube_credentials.json
+   cd /mnt/Pool_2/Projects/langflix/assets
+   
+   # 파일 소유권 변경
+   sudo chown 1000:1000 youtube_credentials.json youtube_token.json
+   
+   # 파일 권한 설정
+   # youtube_credentials.json: 읽기 전용 (644)
+   sudo chmod 644 youtube_credentials.json
+   
+   # youtube_token.json: 읽기/쓰기 (600, 더 안전)
+   sudo chmod 600 youtube_token.json
+   
+   # 권한 확인
+   ls -la youtube_*.json
+   # 출력 예시:
+   # -rw-r--r-- 1 1000 1000 youtube_credentials.json
+   # -rw------- 1 1000 1000 youtube_token.json
    ```
-5. Compose 파일에서 해당 파일을 자동으로 마운트합니다(다음 단계 참고).
+
+5. **컨테이너 내부에서 파일 접근 테스트:**
+   ```bash
+   # 컨테이너 시작 후 테스트
+   sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
+   sudo docker exec langflix-ui ls -la /app/youtube_*.json
+   ```
+   
+   `Permission denied` 오류가 발생하면:
+   - 파일 소유권이 `1000:1000`인지 확인
+   - 파일 권한이 올바른지 확인 (`644` 또는 `600`)
+   - TrueNAS ACL이 권한을 차단하지 않는지 확인
+
+6. Compose 파일에서 해당 파일을 자동으로 마운트합니다(다음 단계 참고).
 
 ---
 
@@ -232,6 +373,30 @@ services:
 ---
 
 ## 8A단계: Docker Compose CLI로 배포(셸 방식)
+
+### 방법 1: run.sh 스크립트 사용 (권장)
+
+`deploy/run.sh` 스크립트를 사용하면 디렉토리 생성, 권한 설정, Docker Compose 시작을 자동으로 처리합니다.
+
+```bash
+cd /mnt/Pool_2/Projects/langflix/deploy
+
+# 실행 권한 부여 (최초 1회)
+chmod +x run.sh shutdown.sh
+
+# 시작
+./run.sh
+```
+
+스크립트는 다음을 자동으로 수행합니다:
+- `.env` 파일 확인
+- 필요한 디렉토리 생성 (`output`, `logs`, `cache`, `assets`, `db-backups`)
+- 디렉토리 권한 설정 (UID/GID 1000:1000)
+- YouTube 자격 증명 파일 확인
+- Docker Compose 시작
+- 컨테이너 상태 확인
+
+### 방법 2: 수동 실행
 
 **기본 방법 (권장):** `truenas_admin` 계정에서 `sudo` 사용
 
@@ -329,6 +494,23 @@ docker compose -f docker-compose.truenas.yml up -d
 
 구성을 변경하거나 새로 빌드하기 전에 기존 컨테이너와 리소스를 정리하세요.
 
+**방법 1: shutdown.sh 스크립트 사용 (권장)**
+
+```bash
+cd /mnt/Pool_2/Projects/langflix/deploy
+
+# 컨테이너만 정지 (볼륨 유지)
+./shutdown.sh
+
+# 볼륨까지 삭제 (Redis 데이터 초기화)
+./shutdown.sh --remove-volumes
+
+# 이미지까지 제거 (강제 재빌드)
+./shutdown.sh --remove-volumes --remove-images
+```
+
+**방법 2: 수동 실행**
+
 ```bash
 cd /mnt/Pool_2/Projects/langflix/deploy
 
@@ -372,27 +554,67 @@ docker stats
 Error response from daemon: error while creating mount source path '/mnt/Pool_2/Projects/langflix/output': chmod /mnt/Pool_2/Projects/langflix/output: operation not permitted
 ```
 
+**원인:**
+- Docker Compose가 볼륨 마운트를 위해 디렉토리를 자동 생성하려고 시도하지만, TrueNAS ACL 때문에 권한 설정이 실패합니다.
+- 디렉토리가 이미 존재하더라도 소유권이 올바르지 않으면 같은 오류가 발생할 수 있습니다.
+
 **해결 방법:**
 
-1. **필요한 디렉토리를 미리 생성:**
+1. **필요한 디렉토리를 미리 생성하고 권한 설정:**
    ```bash
    cd /mnt/Pool_2/Projects/langflix
+   
+   # 디렉토리 생성
    sudo mkdir -p output logs cache assets db-backups
+   
+   # 소유권 변경 (중요!)
    sudo chown -R 1000:1000 output logs cache assets db-backups
+   
+   # 권한 설정
    sudo chmod -R 755 output logs cache assets db-backups
+   
+   # 권한 확인
+   ls -la | grep -E "output|logs|cache|assets|db-backups"
+   # 출력 예시:
+   # drwxr-xr-x 1 1000 1000 output
+   # drwxr-xr-x 1 1000 1000 logs
+   # ...
    ```
 
-2. **TrueNAS ACL 때문에 `chmod`가 작동하지 않는 경우:**
-   - TrueNAS 웹 UI → **Storage** → 데이터세트 선택 → **Permissions**에서 권한 조정
-   - 또는 `midclt` 명령어 사용:
-     ```bash
-     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/output mode=755 user=1000 group=1000
-     ```
+2. **TrueNAS ACL 때문에 `chmod`/`chown`이 작동하지 않는 경우:**
+   
+   **방법 A: TrueNAS 웹 UI 사용 (권장)**
+   - 웹 UI → **Storage** → **Pools** → 데이터세트 선택
+   - **Permissions** 클릭
+   - 각 디렉토리에 대해:
+     - **User**: `1000` 또는 `apps` 선택
+     - **Group**: `1000` 선택
+     - **Mode**: `755` 설정
+     - **Apply** 클릭
+   
+   **방법 B: midclt 명령어 사용**
+   ```bash
+   sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/output mode=755 user=1000 group=1000
+   sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/logs mode=755 user=1000 group=1000
+   sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/cache mode=755 user=1000 group=1000
+   sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/assets mode=755 user=1000 group=1000
+   sudo midclt call filesystem.setperm path=/mnt/Pool_2/Projects/langflix/db-backups mode=755 user=1000 group=1000
+   ```
+   
+   > **참고:** `midclt` 명령어가 작동하지 않는 경우, TrueNAS 웹 UI를 사용하거나 시스템 관리자에게 문의하세요.
 
 3. **5단계를 다시 실행한 후 Docker Compose 재시작:**
    ```bash
+   cd /mnt/Pool_2/Projects/langflix/deploy
    sudo docker compose -f docker-compose.truenas.yml down
    sudo docker compose -f docker-compose.truenas.yml up -d
+   ```
+
+4. **run.sh 스크립트 사용:**
+   - `run.sh` 스크립트는 디렉토리 생성과 권한 설정을 자동으로 처리합니다.
+   ```bash
+   cd /mnt/Pool_2/Projects/langflix/deploy
+   ./run.sh
    ```
 
 ### .env 파일 권한 오류 (`Permission denied: '/app/.env'`)
@@ -431,10 +653,46 @@ Error: [Errno 13] Permission denied: '/app/.env'
   docker exec langflix-redis redis-cli -a "$REDIS_PASSWORD" ping
   ```
 
-### 미디어 경로 접근 불가
-- `.env`의 `TRUENAS_MEDIA_PATH` 확인
-- 데이터세트가 컨테이너에서 읽기 가능하도록 권한 조정
-- `docker exec langflix-api ls /media`로 마운트 확인
+### 미디어 경로 접근 불가 (`Permission denied`)
+
+**증상:**
+```bash
+sudo docker exec langflix-api ls -lah /media/shows
+# ls: cannot open directory '/media/shows': Permission denied
+```
+
+**해결 방법:**
+
+1. **미디어 경로 권한 확인 및 설정:**
+   ```bash
+   # 실제 미디어 경로 확인 (예: /mnt/Pool_2/Media/Shows/Suits)
+   MEDIA_PATH="/mnt/Pool_2/Media/Shows/Suits"  # 실제 경로로 변경
+   
+   # 권한 설정
+   sudo chown -R 1000:1000 "$MEDIA_PATH"
+   sudo chmod -R 755 "$MEDIA_PATH"
+   
+   # 권한 확인
+   ls -la "$MEDIA_PATH" | head -5
+   ```
+
+2. **컨테이너 내부에서 접근 테스트:**
+   ```bash
+   sudo docker exec langflix-api ls -lah /media/shows
+   # 파일 목록이 보이면 성공
+   ```
+
+3. **TrueNAS ACL 문제인 경우:**
+   - 웹 UI → **Storage** → 데이터세트 선택 → **Permissions**
+   - 미디어 경로에 대해 User `1000`, Group `1000`, Mode `755` 설정
+   - 또는 `midclt` 명령어 사용:
+     ```bash
+     sudo midclt call filesystem.setperm path=/mnt/Pool_2/Media/Shows/Suits mode=755 user=1000 group=1000
+     ```
+
+4. **`.env`의 `TRUENAS_MEDIA_PATH` 확인:**
+   - 실제 미디어 파일이 있는 경로의 부모 디렉토리를 지정
+   - 예: `/mnt/Pool_2/Media` (실제 파일은 `/mnt/Pool_2/Media/Shows/Suits`에 있음)
 
 ### UI 로그에 PostgreSQL 연결 실패 메시지가 나오는 경우
 - 기본값(`DATABASE_ENABLED=false`)에서는 PostgreSQL 서비스를 사용하지 않으므로 연결 거부 메시지가 나타날 수 있습니다.
@@ -443,6 +701,57 @@ Error: [Errno 13] Permission denied: '/app/.env'
   sudo docker compose -f docker-compose.truenas.yml --profile database up -d
   ```
 - 데이터베이스 기능이 필요 없다면 해당 경고는 무시해도 됩니다.
+
+### YouTube 자격 증명 파일 접근 오류 (`Permission denied`)
+
+**증상:**
+```bash
+sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
+# cat: /app/youtube_credentials.json: Permission denied
+```
+
+**해결 방법:**
+
+1. **파일 소유권 확인:**
+   ```bash
+   ls -la /mnt/Pool_2/Projects/langflix/assets/youtube_*.json
+   # 출력 예시:
+   # -rwxrwx--- 1 changik root youtube_credentials.json  # 잘못된 소유권
+   # -rw-r--r-- 1 1000 1000 youtube_credentials.json    # 올바른 소유권
+   ```
+
+2. **파일 소유권 및 권한 설정:**
+   ```bash
+   cd /mnt/Pool_2/Projects/langflix/assets
+   
+   # 소유권 변경
+   sudo chown 1000:1000 youtube_credentials.json youtube_token.json
+   
+   # 권한 설정
+   sudo chmod 644 youtube_credentials.json  # 읽기 전용
+   sudo chmod 600 youtube_token.json        # 읽기/쓰기 (더 안전)
+   
+   # 확인
+   ls -la youtube_*.json
+   # 출력 예시:
+   # -rw-r--r-- 1 1000 1000 youtube_credentials.json
+   # -rw------- 1 1000 1000 youtube_token.json
+   ```
+
+3. **컨테이너 내부에서 접근 테스트:**
+   ```bash
+   # 컨테이너 재시작
+   sudo docker compose -f docker-compose.truenas.yml restart langflix-ui
+   
+   # 파일 접근 테스트
+   sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
+   sudo docker exec langflix-ui ls -la /app/youtube_*.json
+   ```
+
+4. **TrueNAS ACL 문제인 경우:**
+   - 웹 UI → **Storage** → 데이터세트 선택 → **Permissions**
+   - `assets/youtube_credentials.json` 파일에 대해 User `1000`, Group `1000`, Mode `644` 설정
+   - `assets/youtube_token.json` 파일에 대해 User `1000`, Group `1000`, Mode `600` 설정
 ### 리소스 부족
 - 호스트의 CPU/RAM 증설 또는 데이터세트 쿼터 조정
 - Compose `deploy.resources` 섹션으로 리소스 제한/예약 설정

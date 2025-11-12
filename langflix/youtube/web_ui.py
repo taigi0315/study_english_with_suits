@@ -133,7 +133,11 @@ class VideoManagementUI:
                 }), 500
             # Re-raise for non-API routes to use Flask's default handling
             raise e
-        
+    
+    def _build_api_url(self, path: str) -> str:
+        """Build API URL using configured base URL"""
+        return f"{self.api_base_url}{path}"
+    
     def _setup_routes(self):
         """Setup Flask routes"""
         
@@ -1611,7 +1615,8 @@ class VideoManagementUI:
                 
                 # Call FastAPI backend with file uploads
                 import requests
-                fastapi_url = "http://localhost:8000/api/v1/jobs"
+                # Use configured API base URL (from environment variable)
+                fastapi_url = self._build_api_url("/api/v1/jobs")
                 
                 # Prepare files for upload
                 files = {}

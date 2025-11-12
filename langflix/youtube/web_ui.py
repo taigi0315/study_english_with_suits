@@ -42,10 +42,22 @@ class VideoManagementUI:
             logger.warning(f"Redis not available for OAuth state storage, using in-memory: {e}")
             oauth_state_storage = None
         
-        self.upload_manager = YouTubeUploadManager()
+        # Use absolute paths for YouTube credentials (mounted in Docker)
+        youtube_creds_file = os.getenv("YOUTUBE_CREDENTIALS_FILE", "/app/youtube_credentials.json")
+        youtube_token_file = os.getenv("YOUTUBE_TOKEN_FILE", "/app/youtube_token.json")
+        
+        # Fallback to current directory if files don't exist at mounted paths
+        if not os.path.exists(youtube_creds_file):
+            youtube_creds_file = os.path.join(os.getcwd(), "youtube_credentials.json")
+        if not os.path.exists(youtube_token_file):
+            youtube_token_file = os.path.join(os.getcwd(), "youtube_token.json")
+        
+        self.upload_manager = YouTubeUploadManager(credentials_file=youtube_creds_file)
         # Pass OAuth state storage to uploader
         if hasattr(self.upload_manager, 'uploader'):
             self.upload_manager.uploader.oauth_state_storage = oauth_state_storage
+            # Also set token file path
+            self.upload_manager.uploader.token_file = youtube_token_file
         
         self.metadata_generator = YouTubeMetadataGenerator()
         try:

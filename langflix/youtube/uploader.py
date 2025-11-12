@@ -702,13 +702,23 @@ class YouTubeUploader:
                 channel = response['items'][0]
                 snippet = channel['snippet']
                 
+                # Safely get thumbnail URL (may not always be available)
+                thumbnail_url = ''
+                if 'thumbnails' in snippet:
+                    thumbnails = snippet['thumbnails']
+                    # Try different thumbnail sizes in order of preference
+                    for size in ['default', 'medium', 'high', 'standard']:
+                        if size in thumbnails and 'url' in thumbnails[size]:
+                            thumbnail_url = thumbnails[size]['url']
+                            break
+                
                 return {
                     'channel_id': channel['id'],
-                    'title': snippet['title'],
+                    'title': snippet.get('title', 'Unknown Channel'),
                     'description': snippet.get('description', ''),
-                    'thumbnail_url': snippet['thumbnails']['default']['url'],
+                    'thumbnail_url': thumbnail_url,
                     'country': snippet.get('country', ''),
-                    'published_at': snippet['publishedAt']
+                    'published_at': snippet.get('publishedAt', '')
                 }
             
             return None

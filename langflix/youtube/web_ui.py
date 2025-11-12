@@ -22,11 +22,12 @@ class VideoManagementUI:
     """Web UI for video file management"""
     
     def __init__(self, output_dir: str = "output", media_dir: str = "assets/media", port: int = 5000):
+        raw_api_base = os.getenv("LANGFLIX_API_BASE_URL", "http://langflix-api:8000")
+        self.api_base_url = raw_api_base.rstrip("/")
         self.output_dir = output_dir
         self.media_dir = media_dir
         self.port = port
         # Use absolute path for video manager
-        import os
         abs_output_dir = os.path.abspath(output_dir)
         self.video_manager = VideoFileManager(abs_output_dir)
         
@@ -41,10 +42,22 @@ class VideoManagementUI:
             logger.warning(f"Redis not available for OAuth state storage, using in-memory: {e}")
             oauth_state_storage = None
         
-        self.upload_manager = YouTubeUploadManager()
+        # Use absolute paths for YouTube credentials (mounted in Docker)
+        youtube_creds_file = os.getenv("YOUTUBE_CREDENTIALS_FILE", "/app/youtube_credentials.json")
+        youtube_token_file = os.getenv("YOUTUBE_TOKEN_FILE", "/app/youtube_token.json")
+        
+        # Fallback to current directory if files don't exist at mounted paths
+        if not os.path.exists(youtube_creds_file):
+            youtube_creds_file = os.path.join(os.getcwd(), "youtube_credentials.json")
+        if not os.path.exists(youtube_token_file):
+            youtube_token_file = os.path.join(os.getcwd(), "youtube_token.json")
+        
+        self.upload_manager = YouTubeUploadManager(credentials_file=youtube_creds_file)
         # Pass OAuth state storage to uploader
         if hasattr(self.upload_manager, 'uploader'):
             self.upload_manager.uploader.oauth_state_storage = oauth_state_storage
+            # Also set token file path
+            self.upload_manager.uploader.token_file = youtube_token_file
         
         self.metadata_generator = YouTubeMetadataGenerator()
         try:
@@ -75,7 +88,6 @@ class VideoManagementUI:
         self.job_queue.set_job_processor(processor)
         
         # Flask 앱 초기화 시 템플릿 디렉토리 경로 설정
-        import os
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         self.app = Flask(__name__, template_folder=template_dir)
         
@@ -121,7 +133,11 @@ class VideoManagementUI:
                 }), 500
             # Re-raise for non-API routes to use Flask's default handling
             raise e
-        
+    
+    def _build_api_url(self, path: str) -> str:
+        """Build API URL using configured base URL"""
+        return f"{self.api_base_url}{path}"
+    
     def _setup_routes(self):
         """Setup Flask routes"""
         
@@ -846,7 +862,6 @@ class VideoManagementUI:
                         video_metadata = v
                         break
                     # Try with absolute path
-                    import os
                     abs_video_path = os.path.abspath(video_path)
                     abs_v_path = os.path.abspath(v.path)
                     if abs_v_path == abs_video_path:
@@ -980,7 +995,6 @@ class VideoManagementUI:
         def batch_delete_videos():
             """Delete multiple video files"""
             try:
-                import os
                 data = request.get_json()
                 video_paths = data.get('video_paths', [])
                 
@@ -1421,7 +1435,6 @@ class VideoManagementUI:
                 
                 if not video_file.exists():
                     logger.error(f"Video file not found: {video_file}")
-                    import os
                     logger.error(f"Current working directory: {os.getcwd()}")
                     logger.error(f"Output directory: {self.video_manager.output_dir}")
                     return jsonify({"error": "Video file not found"}), 404
@@ -1602,7 +1615,8 @@ class VideoManagementUI:
                 
                 # Call FastAPI backend with file uploads
                 import requests
-                fastapi_url = "http://localhost:8000/api/v1/jobs"
+                # Use configured API base URL (from environment variable)
+                fastapi_url = self._build_api_url("/api/v1/jobs")
                 
                 # Prepare files for upload
                 files = {}
@@ -1676,7 +1690,7 @@ class VideoManagementUI:
                 else:
                     # Try to get from FastAPI backend as fallback
                     import requests
-                    fastapi_url = f"http://localhost:8000/api/v1/jobs/{job_id}"
+                    fastapi_url = self._build_api_url(f"/api/v1/jobs/{job_id}")
                     response = requests.get(fastapi_url)
                     
                     if response.status_code == 200:
@@ -1703,7 +1717,7 @@ class VideoManagementUI:
                 
                 # Call FastAPI backend batch endpoint
                 import requests
-                fastapi_url = "http://localhost:8000/api/v1/batch"
+                fastapi_url = self._build_api_url("/api/v1/batch")
                 
                 response = requests.post(fastapi_url, json=data)
                 
@@ -1722,7 +1736,7 @@ class VideoManagementUI:
             """Get batch status from FastAPI backend"""
             try:
                 import requests
-                fastapi_url = f"http://localhost:8000/api/v1/batch/{batch_id}"
+                fastapi_url = self._build_api_url(f"/api/v1/batch/{batch_id}")
                 response = requests.get(fastapi_url)
                 
                 if response.status_code == 200:
@@ -1793,6 +1807,12 @@ class VideoManagementUI:
                 logger.error(f"Error cancelling job: {e}")
                 return jsonify({"error": str(e)}), 500
     
+    def _build_api_url(self, path: str) -> str:
+        """Construct API URL using configured base."""
+        if not path.startswith('/'):
+            path = f'/{path}'
+        return f"{self.api_base_url}{path}"
+    
     def run(self, debug: bool = False):
         """Run the web UI"""
         logger.info(f"Starting Video Management UI on port {self.port}")
@@ -1809,5 +1829,10 @@ if __name__ == "__main__":
     templates_dir.mkdir(exist_ok=True)
     
     # Run the UI
-    ui = VideoManagementUI()
-    ui.run(debug=True)
+    output_dir = os.getenv("LANGFLIX_OUTPUT_DIR", "output")
+    media_dir = os.getenv("LANGFLIX_MEDIA_DIR", "assets/media")
+    ui_port = int(os.getenv("LANGFLIX_UI_PORT", "5000"))
+    debug_enabled = os.getenv("LANGFLIX_UI_DEBUG", "false").lower() in ("1", "true", "yes")
+    
+    ui = VideoManagementUI(output_dir=output_dir, media_dir=media_dir, port=ui_port)
+    ui.run(debug=debug_enabled)

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 
+logger = logging.getLogger(__name__)
+
 # YouTube API imports
 try:
     from google.auth.transport.requests import Request
@@ -24,8 +26,6 @@ except ImportError:
     YOUTUBE_API_AVAILABLE = False
     Flow = None
     logger.warning("YouTube API libraries not installed. Install with: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
-
-logger = logging.getLogger(__name__)
 
 # YouTube API scopes
 SCOPES = [
@@ -94,23 +94,57 @@ class YouTubeUploader:
                         creds = None
                 else:
                     flow = InstalledAppFlow.from_client_secrets_file(self.credentials_file, SCOPES)
-                    # Use fixed port 8080 for consistency
-                    try:
-                        creds = flow.run_local_server(port=8080, open_browser=True)
-                    except OSError as e:
-                        if "Address already in use" in str(e) or "address already in use" in str(e).lower():
-                            error_msg = (
-                                f"Port 8080 is already in use. Please close other applications using this port.\n"
-                                f"Error: {str(e)}"
-                            )
-                            logger.error(error_msg)
-                            raise OSError(error_msg)
-                        raise
+                    # Try multiple ports if 8080 is in use (for Docker environments)
+                    ports_to_try = [8080, 8081, 8082, 8083, 8084]
+                    creds = None
+                    last_error = None
+                    
+                    for port in ports_to_try:
+                        try:
+                            # In Docker/headless environments, don't open browser
+                            open_browser = os.getenv("LANGFLIX_UI_OPEN_BROWSER", "false").lower() in ("1", "true", "yes")
+                            creds = flow.run_local_server(port=port, open_browser=open_browser)
+                            logger.info(f"OAuth flow completed on port {port}")
+                            break
+                        except OSError as e:
+                            if "Address already in use" in str(e) or "address already in use" in str(e).lower():
+                                logger.warning(f"Port {port} is already in use, trying next port...")
+                                last_error = e
+                                continue
+                            raise
+                    
+                    if creds is None:
+                        error_msg = (
+                            f"All OAuth ports ({', '.join(map(str, ports_to_try))}) are in use. "
+                            f"Please close other applications using these ports.\n"
+                            f"Last error: {str(last_error)}"
+                        )
+                        logger.error(error_msg)
+                        raise OSError(error_msg)
                 
                 # Save credentials for next run
                 if creds:
-                    with open(self.token_file, 'w') as token:
-                        token.write(creds.to_json())
+                    try:
+                        # Ensure directory exists
+                        token_dir = os.path.dirname(os.path.abspath(self.token_file))
+                        if token_dir and not os.path.exists(token_dir):
+                            os.makedirs(token_dir, mode=0o755, exist_ok=True)
+                        
+                        # Write token file
+                        with open(self.token_file, 'w') as token:
+                            token.write(creds.to_json())
+                        
+                        # Set permissions (read/write for owner only)
+                        try:
+                            os.chmod(self.token_file, 0o600)
+                        except (OSError, PermissionError) as e:
+                            logger.warning(f"Could not set permissions on {self.token_file}: {e}")
+                        
+                        logger.info(f"Saved YouTube token to {self.token_file}")
+                    except (OSError, PermissionError) as e:
+                        logger.error(f"Failed to save YouTube token to {self.token_file}: {e}")
+                        # Don't raise - authentication succeeded even if token save failed
+                        # User will need to re-authenticate next time
             
             # Build YouTube service
             self.service = build('youtube', 'v3', credentials=creds)
@@ -668,13 +702,23 @@ class YouTubeUploader:
                 channel = response['items'][0]
                 snippet = channel['snippet']
                 
+                # Safely get thumbnail URL (may not always be available)
+                thumbnail_url = ''
+                if 'thumbnails' in snippet:
+                    thumbnails = snippet['thumbnails']
+                    # Try different thumbnail sizes in order of preference
+                    for size in ['default', 'medium', 'high', 'standard']:
+                        if size in thumbnails and 'url' in thumbnails[size]:
+                            thumbnail_url = thumbnails[size]['url']
+                            break
+                
                 return {
                     'channel_id': channel['id'],
-                    'title': snippet['title'],
+                    'title': snippet.get('title', 'Unknown Channel'),
                     'description': snippet.get('description', ''),
-                    'thumbnail_url': snippet['thumbnails']['default']['url'],
+                    'thumbnail_url': thumbnail_url,
                     'country': snippet.get('country', ''),
-                    'published_at': snippet['publishedAt']
+                    'published_at': snippet.get('publishedAt', '')
                 }
             
             return None

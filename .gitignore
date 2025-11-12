@@ -60,14 +60,18 @@ ehthumbs.db
 Thumbs.db
 
 
-.DS_Storeyoutube_token.json
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Legacy credential patterns
 client_secret_*.json
-youtube_credentials.json
-youtube_token.json
 examples/*credentials*.json
 examples/client_secret_*.json
 examples/youtube_token.json
 
-# macOS system files
-.DS_Store
-**/.DS_Store
+# YouTube OAuth files
+assets/youtube_credentials.json
+assets/youtube_token.json
+youtube_credentials.json
+youtube_token.json

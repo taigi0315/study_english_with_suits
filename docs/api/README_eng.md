@@ -35,6 +35,11 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - Lifespan shutdown:
   - Stops `QueueProcessor` gracefully (requeues current job if processing)
   - Closes database connections gracefully if database was enabled
+- `LANGFLIX_API_BASE_URL` environment variable controls how the Flask web UI talks to the FastAPI backend.
+  - If set, the value (minus trailing slash) is used verbatim.
+  - If not set, the UI automatically selects `http://localhost:8000` for local development.
+  - Inside Docker/Container environments (`LANGFLIX_RUNNING_IN_DOCKER=1` or automatic detection), it defaults to `http://langflix-api:8000`.
+  - This dual fallback lets the same build work in both local and Compose-based deployments without manual tweaks.
 
 ## Dependency Injection
 

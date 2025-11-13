@@ -35,6 +35,11 @@
 - Lifespan 종료:
   - `QueueProcessor` 우아하게 중지 (처리 중인 작업이 있으면 재큐잉)
   - 데이터베이스가 활성화된 경우 연결 정리
+- Flask Web UI와 FastAPI 백엔드 사이의 API 엔드포인트는 `LANGFLIX_API_BASE_URL` 환경 변수로 지정합니다.
+  - 값이 설정되어 있으면 (마지막 슬래시 제거 후) 그대로 사용합니다.
+  - 값이 없으면 로컬 개발 환경에서는 자동으로 `http://localhost:8000`을 선택합니다.
+  - Docker/컨테이너 환경(`LANGFLIX_RUNNING_IN_DOCKER=1` 또는 자동 감지)에서는 기본적으로 `http://langflix-api:8000`을 사용합니다.
+  - 이중 기본값을 통해 추가 설정 없이 로컬과 Docker Compose 배포 모두에서 동일한 UI를 사용할 수 있습니다.
 
 ## 의존성 주입
 

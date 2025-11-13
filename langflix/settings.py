@@ -556,7 +556,8 @@ def get_slides_quality() -> int:
 # Legacy functions - maintained for compatibility
 def get_video_config(attribute: str = None):
     """Legacy: Get video processing configuration"""
-    video_cfg = get_video_config()
+    # Use the module-level function, not self-recursion
+    video_cfg = _config_loader.get_section('video') or {}
     if attribute and isinstance(video_cfg, dict):
         return video_cfg.get(attribute)
     return video_cfg

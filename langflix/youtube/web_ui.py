@@ -18,16 +18,69 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_API_BASE_LOCAL = "http://localhost:8000"
+DEFAULT_API_BASE_DOCKER = "http://langflix-api:8000"
+
+
+def _is_truthy(value: str) -> bool:
+    """Convert common truthy string to boolean."""
+    return value.lower() in {"1", "true", "yes", "on"} if value else False
+
+
+def _is_running_inside_docker() -> bool:
+    """
+    Best-effort detection for Docker/Container environments.
+    
+    Primarily relies on explicit override via LANGFLIX_RUNNING_IN_DOCKER.
+    Falls back to checking /.dockerenv or Docker markers in /proc/1/cgroup.
+    """
+    override = os.getenv("LANGFLIX_RUNNING_IN_DOCKER")
+    if override is not None:
+        return _is_truthy(override)
+    
+    if Path("/.dockerenv").exists():
+        return True
+    
+    cgroup_path = Path("/proc/1/cgroup")
+    try:
+        if cgroup_path.exists():
+            content = cgroup_path.read_text(errors="ignore")
+            if "docker" in content or "container" in content:
+                return True
+    except OSError:
+        # Ignore permission errors or missing /proc (e.g., macOS)
+        pass
+    
+    return False
+
+
+def resolve_api_base_url() -> str:
+    """
+    Determine API base URL with sane defaults for local and Docker environments.
+    
+    Priority:
+    1. LANGFLIX_API_BASE_URL environment variable (user override)
+    2. Detected Docker/container runtime (defaults to langflix-api hostname)
+    3. Local development fallback (localhost)
+    """
+    raw_api_base = os.getenv("LANGFLIX_API_BASE_URL")
+    if raw_api_base:
+        sanitized = raw_api_base.rstrip("/")
+        logger.info("Using API base URL from LANGFLIX_API_BASE_URL: %s", sanitized)
+        return sanitized
+    
+    if _is_running_inside_docker():
+        logger.info("Docker environment detected. Using default API base URL: %s", DEFAULT_API_BASE_DOCKER)
+        return DEFAULT_API_BASE_DOCKER
+    
+    logger.info("Defaulting API base URL to local development endpoint: %s", DEFAULT_API_BASE_LOCAL)
+    return DEFAULT_API_BASE_LOCAL
+
 class VideoManagementUI:
     """Web UI for video file management"""
     
     def __init__(self, output_dir: str = "output", media_dir: str = "assets/media", port: int = 5000):
-        # Default to localhost for local development, langflix-api for Docker
-        # Check if running in Docker by checking for common Docker environment variables
-        is_docker = os.getenv("DOCKER_CONTAINER") == "true" or os.path.exists("/.dockerenv")
-        default_api_url = "http://langflix-api:8000" if is_docker else "http://localhost:8000"
-        raw_api_base = os.getenv("LANGFLIX_API_BASE_URL", default_api_url)
-        self.api_base_url = raw_api_base.rstrip("/")
+        self.api_base_url = resolve_api_base_url()
         self.output_dir = output_dir
         self.media_dir = media_dir
         self.port = port

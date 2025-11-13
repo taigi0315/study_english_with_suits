@@ -1,6 +1,6 @@
 # LangFlix API Module Documentation (ENG)
 
-Last updated: 2025-01-30
+Last updated: 2025-11-13
 
 ## Overview
 The `langflix/api` package provides the FastAPI-based HTTP interface for LangFlix. It exposes health endpoints, job management for video processing, and file listing utilities. It wires middleware, exception handling, and static mounts, and integrates with Redis-backed job storage.
@@ -16,7 +16,7 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
   - `responses.py`: Response DTOs (job status, expressions).
 - `routes/`
   - `health.py`: Service/Redis health endpoints and cleanup.
-  - `files.py`: Output file listing and stubs for detail/delete.
+  - `files.py`: Storage-backed file inventory, metadata lookup, protected deletion.
   - `jobs.py`: Endpoints to create jobs, query job status/expressions, list jobs.
   - `batch.py`: Endpoints for batch video processing (create batch, get batch status).
   - `tasks/processing.py`: (present but not used directly here; job processing is defined in `routes/jobs.py`).
@@ -35,6 +35,11 @@ The `langflix/api` package provides the FastAPI-based HTTP interface for LangFli
 - Lifespan shutdown:
   - Stops `QueueProcessor` gracefully (requeues current job if processing)
   - Closes database connections gracefully if database was enabled
+- `LANGFLIX_API_BASE_URL` environment variable controls how the Flask web UI talks to the FastAPI backend.
+  - If set, the value (minus trailing slash) is used verbatim.
+  - If not set, the UI automatically selects `http://localhost:8000` for local development.
+  - Inside Docker/Container environments (`LANGFLIX_RUNNING_IN_DOCKER=1` or automatic detection), it defaults to `http://langflix-api:8000`.
+  - This dual fallback lets the same build work in both local and Compose-based deployments without manual tweaks.
 
 ## Dependency Injection
 
@@ -118,9 +123,9 @@ async def my_endpoint(storage: StorageBackend = Depends(get_storage)):
 - `/health/tts` (GET): Individual TTS service health check endpoint.
 - `/health/redis` (GET): Redis health via job manager.
 - `/health/redis/cleanup` (POST): Cleanup expired/stale jobs.
-- `/api/v1/files` (GET): List files under `output/` recursively.
-- `/api/v1/files/{file_id}` (GET): Stub for file details (TODO).
-- `/api/v1/files/{file_id}` (DELETE): Stub for deletion (TODO).
+- `/api/v1/files` (GET): Enumerate files via the configured storage backend (Local or GCS), returning metadata (`size`, `mime`, timestamps, public URL).
+- `/api/v1/files/{file_id}` (GET): Fetch normalized metadata for a specific file; rejects traversal attempts and directory requests.
+- `/api/v1/files/{file_id}` (DELETE): Remove a file through the storage backend while protecting sensitive assets (`config.yaml`, `.env`, `*.log`, etc.).
 - `/api/v1/jobs` (POST): Create a new job with `UploadFile` video+subtitle and form fields; starts background processing.
 - `/api/v1/jobs/{job_id}` (GET): Fetch current job state from Redis.
 - `/api/v1/jobs/{job_id}/expressions` (GET): Returns expressions from Redis (same source as job status).
@@ -214,9 +219,60 @@ except Exception as e:
 - Validate upload sizes/types further if needed.
 - Redis availability is assumed; startup logs on failure but app remains up—consider fail-fast or degraded mode indicator.
 
+## File Management Endpoints
+
+### Storage-backed design
+- All file operations receive a `StorageBackend` via `Depends(get_storage)` ensuring parity between Local filesystem and Google Cloud Storage.
+- Paths are normalized with `PurePosixPath`, block traversal (`..`) and absolute references, and unify separators.
+- Metadata helpers supply size, MIME type, created/modified timestamps, and shareable URLs. Local backends read filesystem stats, while GCS reloads blob metadata on demand.
+
+### Listing files
+- `GET /api/v1/files` iterates `storage.list_files("")`, normalizes each entry, resolves metadata, and filters out directories.
+- Response payload:
+  ```json
+  {
+    "files": [
+      {
+        "file_id": "short_form_videos/expressions/expression_hi.mkv",
+        "name": "expression_hi.mkv",
+        "path": "short_form_videos/expressions/expression_hi.mkv",
+        "url": "...",
+        "size": 1234567,
+        "type": "video/x-matroska",
+        "modified": 1731492801.123,
+        "created": 1731492000.456,
+        "is_directory": false
+      }
+    ],
+    "total": 1
+  }
+  ```
+  - `modified`/`created` are UNIX timestamps (seconds) for consistency with prior UI expectations.
+  - `url` is an absolute filesystem path for LocalStorage or public URL for GCS.
+
+### File details
+- `GET /api/v1/files/{file_id:path}` validates the identifier, checks existence via `storage.file_exists`, collects metadata, and rejects directory requests.
+- Returns `404` for missing assets, `400` for directories, and `400` if traversal is detected.
+- Errors are logged with context and wrapped into FastAPI `HTTPException` responses.
+
+### File deletion
+- `DELETE /api/v1/files/{file_id:path}` performs:
+  1. Path normalization and existence check.
+  2. Metadata lookup to block directory deletions.
+  3. Protection filter (`config.yaml`, `.env`, `*.log`, `langflix.log`, `requirements.txt`) using `fnmatch`.
+  4. `storage.delete_file` invocation with boolean success check.
+- Returns `{ "message": "...", "file_id": "...", "deleted": true }` on success.
+- Responds with `403` for protected files, `400` for directories, `404` for missing files, and `500` for storage-layer failures.
+
+### Testing
+- API coverage lives in `tests/api/test_files_routes.py`:
+  - Dependency overrides inject `LocalStorage` backed by pytest `tmp_path`.
+  - Verifies listing metadata, MIME detection, path validation, deletion flows, and protection rules.
+  - Uses helper writers to construct isolated fixtures without polluting real output directories.
+
 ## Extensibility
 - ✅ `dependencies.get_db/get_storage` implemented - Database and storage integration complete (TICKET-010)
-- Replace stubbed file detail/delete with actual storage-backed operations.
+- ✅ Storage-backed file detail/delete endpoints (TICKET-028) with security checks and metadata introspection.
 - ✅ `/jobs/{id}/expressions` aligned with Redis (source of truth) - `jobs_db` dependency removed (TICKET-003).
 
 ## Usage Example

@@ -22,7 +22,11 @@ class VideoManagementUI:
     """Web UI for video file management"""
     
     def __init__(self, output_dir: str = "output", media_dir: str = "assets/media", port: int = 5000):
-        raw_api_base = os.getenv("LANGFLIX_API_BASE_URL", "http://langflix-api:8000")
+        # Default to localhost for local development, langflix-api for Docker
+        # Check if running in Docker by checking for common Docker environment variables
+        is_docker = os.getenv("DOCKER_CONTAINER") == "true" or os.path.exists("/.dockerenv")
+        default_api_url = "http://langflix-api:8000" if is_docker else "http://localhost:8000"
+        raw_api_base = os.getenv("LANGFLIX_API_BASE_URL", default_api_url)
         self.api_base_url = raw_api_base.rstrip("/")
         self.output_dir = output_dir
         self.media_dir = media_dir

@@ -18,7 +18,7 @@ class MediaScanner:
     """Scans media directories for video files and associated subtitles"""
     
     SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.webm']
-    SUPPORTED_SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass']
+    SUPPORTED_SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass', '.smi']
     
     def __init__(self, media_directory: str, scan_recursive: bool = True):
         """

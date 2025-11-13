@@ -391,8 +391,9 @@ class VideoEditor:
             )
             logger.info(f"Context with subtitles created: {context_with_subtitles}")
             
-            # Step 1b: Create context video with multi-expression slide (TICKET-025)
-            # For multi-expression groups, show context video with slide showing all expressions
+            # Step 1b: For multi-expression groups, we'll add the multi-expression slide at the end
+            # Don't create context_with_multi_slide here - we'll use plain context_with_subtitles
+            # and add the multi-expression slide in the final hstack step
             from langflix.core.models import ExpressionGroup
             expression_group = ExpressionGroup(
                 context_start_time=expressions[0].context_start_time,
@@ -400,16 +401,9 @@ class VideoEditor:
                 expressions=expressions
             )
             
-            # Create context video with multi-expression slide (left: context, right: slide)
-            context_with_multi_slide = self.create_context_video_with_multi_slide(
-                context_video_path=str(context_with_subtitles),
-                expression_group=expression_group
-            )
-            logger.info(f"Context video with multi-expression slide created: {context_with_multi_slide}")
-            
             # Step 2: Build sequence segments
-            # Structure: context (with multi-slide) → transition → expr1 repeat → transition → expr2 repeat → ...
-            segments = [context_with_multi_slide]  # Start with context video + multi-expression slide
+            # Structure: context (plain, no slide yet) → transition → expr1 repeat → transition → expr2 repeat → ...
+            segments = [str(context_with_subtitles)]  # Start with plain context video (slide added later)
             
             # Get transition configuration
             from langflix import settings
@@ -609,23 +603,21 @@ class VideoEditor:
                         concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
                         current_path = temp_concat_path_fallback
             
-            # Step 4: Create educational slide with background and TTS audio
-            # Use the first expression for slide content (all expressions share same slide)
+            # Step 4: Create multi-expression slide (not individual educational slide)
+            # For multi-expression groups, use the multi-expression slide showing all expressions
             left_duration = get_duration_seconds(str(current_path))
-            educational_slide = self._create_educational_slide(
-                expression_source_videos[0],  # Use first expression's source video for audio
-                expressions[0],  # Use first expression for slide content
-                expression_indices[0],  # Use first expression index for voice alternation
-                target_duration=left_duration
+            logger.info(f"Creating multi-expression slide for {len(expressions)} expressions (duration: {left_duration:.2f}s)")
+            multi_expression_slide = self._create_multi_expression_slide(
+                expression_group, duration=left_duration
             )
             
             # Step 5: Use hstack to create side-by-side layout (long-form)
             # Left: context → transition → expr1 repeat → transition → expr2 repeat → ...
-            # Right: educational slide
+            # Right: multi-expression slide (showing all expressions in the group)
             logger.info("Creating long-form side-by-side layout with hstack")
             hstack_temp_path = self.output_dir / f"temp_hstack_multi_{safe_group_id}.mkv"
             self._register_temp_file(hstack_temp_path)
-            hstack_keep_height(str(current_path), str(educational_slide), str(hstack_temp_path))
+            hstack_keep_height(str(current_path), str(multi_expression_slide), str(hstack_temp_path))
             
             # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
             logger.info("Applying final audio gain (+69%) to multi-expression output")

@@ -60,8 +60,12 @@ async def process_video_task(
         
         # Save uploaded file contents using temp file manager
         # Files will be automatically cleaned up when context exits
-        with temp_manager.create_temp_file(suffix='.mkv', prefix=f'{job_id}_video_') as temp_video_path:
-            with temp_manager.create_temp_file(suffix='.srt', prefix=f'{job_id}_subtitle_') as temp_subtitle_path:
+        # Determine file extensions from filenames
+        video_ext = Path(video_filename).suffix or '.mkv'
+        subtitle_ext = Path(subtitle_filename).suffix or '.srt'
+        
+        with temp_manager.create_temp_file(suffix=video_ext, prefix=f'{job_id}_video_') as temp_video_path:
+            with temp_manager.create_temp_file(suffix=subtitle_ext, prefix=f'{job_id}_subtitle_') as temp_subtitle_path:
                 # Write file contents
                 temp_video_path.write_bytes(video_content)
                 temp_subtitle_path.write_bytes(subtitle_content)
@@ -163,8 +167,13 @@ async def create_job(
         if not video_file.filename or not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
             raise HTTPException(status_code=400, detail="Invalid video file type")
         
-        if not subtitle_file.filename or not subtitle_file.filename.lower().endswith('.srt'):
-            raise HTTPException(status_code=400, detail="Invalid subtitle file type")
+        # Support multiple subtitle formats: SRT, VTT, SMI, ASS, SSA
+        supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
+        if not subtitle_file.filename or not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
+            )
         
         # Check file sizes (optional validation)
         video_content = await video_file.read()

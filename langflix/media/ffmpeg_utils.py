@@ -45,10 +45,20 @@ class AudioParams:
 
 # --------------------------- Probe helpers ---------------------------
 
-def run_ffprobe(path: str) -> Dict[str, Any]:
+def run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]:
     """Run ffprobe and return parsed JSON, raising on failure.
 
     We use subprocess here because ffmpeg-python's probe may hide stderr.
+    
+    Args:
+        path: Path to video file
+        timeout: Timeout in seconds (default: 30)
+        
+    Raises:
+        TimeoutError: If ffprobe times out
+        FileNotFoundError: If ffprobe is not found
+        subprocess.CalledProcessError: If ffprobe command fails
+        json.JSONDecodeError: If output cannot be parsed as JSON
     """
     try:
         cmd = [
@@ -59,16 +69,35 @@ def run_ffprobe(path: str) -> Dict[str, Any]:
             "-of", "json",
             path,
         ]
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        completed = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            check=True,
+            timeout=timeout
+        )
         return json.loads(completed.stdout or "{}")
-    except Exception as e:
-        logger.error(f"ffprobe failed for {path}: {e}")
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"FFprobe timeout for {path} after {timeout}s")
+        raise TimeoutError(f"FFprobe timeout for {path} after {timeout}s") from e
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr")
+        logger.error(f"FFprobe failed for {path}: returncode={e.returncode}, stderr={stderr}")
         # Try ffmpeg-python probe as a fallback
         try:
             return ffmpeg.probe(path)  # type: ignore[no-any-return]
         except Exception as ee:
             logger.error(f"ffmpeg.probe fallback also failed for {path}: {ee}")
             raise
+    except FileNotFoundError:
+        logger.error("FFprobe not found. Please install ffmpeg.")
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse FFprobe JSON output for {path}: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"FFprobe error for {path}: {e}")
+        raise
 
 
 def get_streams(probe: Dict[str, Any], stream_type: str) -> list[Dict[str, Any]]:

@@ -18,7 +18,7 @@ import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ffmpeg
 
@@ -272,6 +272,80 @@ def output_with_explicit_streams(v_in, a_in, out_path: Path | str, **encode_args
 
 # --------------------------- Concat helpers ---------------------------
 
+def concat_filter_multiple(segment_paths: List[str], out_path: Path | str) -> None:
+    """Concatenate multiple segments at once using filter concat (much faster than sequential).
+    
+    This is optimized for speed - concatenates all segments in a single pass instead of
+    sequentially, which avoids multiple re-encodings.
+    
+    Args:
+        segment_paths: List of paths to video segments to concatenate
+        out_path: Output path for concatenated video
+    """
+    if len(segment_paths) == 0:
+        raise ValueError("No segments provided for concatenation")
+    if len(segment_paths) == 1:
+        import shutil
+        shutil.copy2(segment_paths[0], out_path)
+        ensure_dir(Path(out_path))
+        return
+    
+    logger.info(f"Concatenating {len(segment_paths)} segments in single pass (filter concat)")
+    
+    # Get frame rate from first segment for normalization
+    first_vp = get_video_params(segment_paths[0])
+    target_fps = 25.0
+    if first_vp.r_frame_rate:
+        try:
+            if '/' in first_vp.r_frame_rate:
+                num, den = map(float, first_vp.r_frame_rate.split('/'))
+                target_fps = num / den if den > 0 else 25.0
+            else:
+                target_fps = float(first_vp.r_frame_rate)
+        except (ValueError, ZeroDivisionError):
+            target_fps = 25.0
+    
+    # Create inputs and normalize all segments
+    inputs = []
+    video_streams = []
+    audio_streams = []
+    
+    for i, segment_path in enumerate(segment_paths):
+        segment_in = ffmpeg.input(segment_path)
+        # Normalize frame rate and reset timestamps
+        v = ffmpeg.filter(segment_in["v"], 'fps', fps=target_fps)
+        v = ffmpeg.filter(v, 'setpts', 'PTS-STARTPTS')
+        a = ffmpeg.filter(segment_in["a"], 'asetpts', 'PTS-STARTPTS')
+        video_streams.append(v)
+        audio_streams.append(a)
+    
+    # Concatenate all segments at once (much faster than sequential)
+    # n=len(segment_paths) means we have n segments to concatenate
+    all_streams = []
+    for v, a in zip(video_streams, audio_streams):
+        all_streams.extend([v, a])
+    
+    concat_node = ffmpeg.concat(*all_streams, v=1, a=1, n=len(segment_paths)).node
+    
+    try:
+        output_with_explicit_streams(
+            concat_node[0],
+            concat_node[1],
+            out_path,
+            **make_video_encode_args_from_source(segment_paths[0]),
+            **make_audio_encode_args(normalize=True),
+        )
+        logger.info(f"✅ Successfully concatenated {len(segment_paths)} segments")
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ concat_filter_multiple FAILED: Cannot concatenate {len(segment_paths)} segments\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr[:1000]}\n"
+        )
+        raise RuntimeError(f"concat_filter_multiple failed: {stderr[:500]}") from e
+
+
 def concat_filter_with_explicit_map(
     left_path: str,
     right_path: str,
@@ -364,14 +438,19 @@ def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> No
     
     logger.debug(f"Using demuxer concat with copy mode (fastest) for {out_path}")
     
-    (
-        ffmpeg
-        .input(str(list_file), format="concat", safe=0)
-        .output(str(out_path), **encode_args)
-        .overwrite_output()
-        .run(quiet=True)
-    )
-    ensure_dir(Path(out_path))
+    try:
+        (
+            ffmpeg
+            .input(str(list_file), format="concat", safe=0)
+            .output(str(out_path), **encode_args)
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        ensure_dir(Path(out_path))
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.warning(f"Demuxer concat failed (copy mode): {stderr[:500]}")
+        raise
 
 
 # --------------------------- Stack helpers ---------------------------

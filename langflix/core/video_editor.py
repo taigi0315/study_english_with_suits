@@ -589,14 +589,23 @@ class VideoEditor:
                 current_path = temp_concat_path
             except Exception as e:
                 logger.warning(f"Demuxer concat failed, falling back to filter concat: {e}")
-                # Fallback: concatenate sequentially (slower but more compatible)
-                current_path = segments[0]
-                for i in range(1, len(segments)):
-                    next_segment = segments[i]
-                    temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
-                    self._register_temp_file(temp_concat_path_fallback)
-                    concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
-                    current_path = temp_concat_path_fallback
+                # Fallback: concatenate all segments at once (much faster than sequential)
+                from langflix.media.ffmpeg_utils import concat_filter_multiple
+                logger.info(f"Using filter concat to concatenate {len(segments)} segments in single pass")
+                try:
+                    concat_filter_multiple([str(s) for s in segments], str(temp_concat_path))
+                    current_path = temp_concat_path
+                except Exception as filter_error:
+                    logger.warning(f"Single-pass filter concat failed, falling back to sequential: {filter_error}")
+                    # Last resort: concatenate sequentially (slowest but most compatible)
+                    current_path = segments[0]
+                    for i in range(1, len(segments)):
+                        logger.info(f"Concatenating segment {i+1}/{len(segments)}...")
+                        next_segment = segments[i]
+                        temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
+                        self._register_temp_file(temp_concat_path_fallback)
+                        concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
+                        current_path = temp_concat_path_fallback
             
             # Step 4: Create educational slide with background and TTS audio
             # Use the first expression for slide content (all expressions share same slide)

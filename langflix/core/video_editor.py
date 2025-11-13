@@ -560,17 +560,41 @@ class VideoEditor:
                 # Add expression repeat
                 segments.append(str(repeated_expression_path))
             
-            # Step 3: Concatenate all segments sequentially
+            # Step 3: Concatenate all segments efficiently
+            # Instead of concatenating one-by-one (which re-encodes everything each time),
+            # create a concat list file and use demuxer concat (much faster)
             logger.info(f"Concatenating {len(segments)} segments into multi-expression sequence")
-            current_path = segments[0]
             
-            for i in range(1, len(segments)):
-                next_segment = segments[i]
-                temp_concat_path = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
-                self._register_temp_file(temp_concat_path)
-                
-                concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path)
+            # Create concat list file for demuxer concat (faster than sequential filter concat)
+            concat_list_path = self.output_dir / f"temp_concat_list_multi_{safe_group_id}.txt"
+            self._register_temp_file(concat_list_path)
+            
+            with open(concat_list_path, 'w') as f:
+                for segment in segments:
+                    # Escape single quotes in path for concat demuxer
+                    escaped_path = str(segment).replace("'", "'\\''")
+                    f.write(f"file '{escaped_path}'\n")
+            
+            # Use demuxer concat if all segments have uniform parameters (much faster)
+            # Otherwise fall back to filter concat
+            temp_concat_path = self.output_dir / f"temp_concat_multi_{safe_group_id}_all.mkv"
+            self._register_temp_file(temp_concat_path)
+            
+            try:
+                from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
+                logger.info("Using demuxer concat for faster concatenation (all segments uniform)")
+                concat_demuxer_if_uniform(str(concat_list_path), str(temp_concat_path))
                 current_path = temp_concat_path
+            except Exception as e:
+                logger.warning(f"Demuxer concat failed, falling back to filter concat: {e}")
+                # Fallback: concatenate sequentially (slower but more compatible)
+                current_path = segments[0]
+                for i in range(1, len(segments)):
+                    next_segment = segments[i]
+                    temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
+                    self._register_temp_file(temp_concat_path_fallback)
+                    concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
+                    current_path = temp_concat_path_fallback
             
             # Step 4: Create educational slide with background and TTS audio
             # Use the first expression for slide content (all expressions share same slide)

@@ -434,3 +434,62 @@ Beyond original ticket criteria:
 
 **Recommended Owner:** Backend engineer familiar with FastAPI and storage abstraction
 
+---
+## ✅ Implementation Complete
+
+**Implemented by:** Implementation Agent  
+**Implementation Date:** 2025-11-13  
+**Branch:** feature/TICKET-028-file-management-api-endpoints  
+**PR:** (pending)
+
+### What Was Implemented
+- Replaced placeholder file routes with storage-backed handlers covering listing, metadata retrieval, and deletion.
+- Added helper utilities for path normalization, MIME detection, timestamp conversion, and backend-specific metadata resolution (LocalStorage & GCS).
+- Introduced deletion safeguards: protected filename patterns, directory prevention, and consistent error logging.
+
+### Files Modified
+- `langflix/api/routes/files.py` — Complete endpoint implementations, validation helpers, and logging.
+- `docs/api/README_eng.md` — Documented new file management behavior, payload structure, and tests.
+- `docs/api/README_kor.md` — Korean documentation synchronized with the English update.
+
+### Files Created
+- `tests/api/test_files_routes.py` — FastAPI TestClient coverage for listing, detail lookup, validation failures, deletion flows, and protected assets.
+
+### Tests Added
+**API Tests**
+- `tests/api/test_files_routes.py`
+  - `test_list_files_returns_metadata`
+  - `test_get_file_details_returns_metadata`
+  - `test_get_file_details_not_found`
+  - `test_get_file_details_invalid_path`
+  - `test_delete_file_removes_file`
+  - `test_delete_file_protected_pattern`
+  - `test_delete_directory_blocked`
+
+**Execution**
+- `pytest tests/api/test_files_routes.py`
+
+### Documentation Updated
+- [x] Inline comments/logging for new helpers.
+- [x] `docs/api/README_eng.md`
+- [x] `docs/api/README_kor.md`
+
+### Verification Performed
+- [x] Pytest suite for file routes passing.
+- [x] `read_lints` clean for touched files.
+- [x] Manual reasoning over Local vs GCS metadata handling and traversal prevention.
+
+### Deviations from Original Plan
+- None. Implementation aligns with architect guidance and planned approach.
+
+### Breaking Changes
+- None. Responses remain backward compatible; new fields (`url`, timestamps) are additive.
+
+### Known Limitations / Future Work
+- Large directories may require pagination or filtering in future enhancements.
+- Remote metadata currently surfaces size/type/time; extended attributes (checksums, owners) can be layered later.
+
+### Additional Notes
+- Tests use dependency overrides to isolate storage interactions from real output directories.
+- Errors align with centralized API exception handler schema (`error`, `status_code`, `details`).
+

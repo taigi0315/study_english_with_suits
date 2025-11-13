@@ -1,6 +1,6 @@
 # LangFlix API 모듈 문서 (KOR)
 
-최종 업데이트: 2025-01-30
+최종 업데이트: 2025-11-13
 
 ## 개요
 `langflix/api` 패키지는 LangFlix의 FastAPI 기반 HTTP 인터페이스를 제공합니다. 헬스 체크, 영상 처리 잡 관리, 파일 목록 제공 기능을 포함하며, 미들웨어/예외 처리/정적 경로 마운트 및 Redis 잡 저장소와의 연계를 담당합니다.
@@ -16,7 +16,7 @@
   - `responses.py`: 응답 DTO(잡 상태, 표현식 목록).
 - `routes/`
   - `health.py`: 서비스/Redis 헬스 엔드포인트 및 정리.
-  - `files.py`: `output/` 파일 목록 및 상세/삭제 스텁.
+  - `files.py`: 스토리지 연동 파일 인벤토리, 메타데이터 조회, 보호 삭제 로직.
   - `jobs.py`: 잡 생성, 상태/표현식 조회, 잡 목록 API.
   - `batch.py`: 배치 비디오 처리 엔드포인트 (배치 생성, 배치 상태 조회).
 - `tasks/processing.py`: (존재하나 여기서는 직접 사용되지 않음; 실제 처리는 `routes/jobs.py` 내 백그라운드 태스크에서 수행).
@@ -156,9 +156,9 @@ except Exception as e:
 - `/health/tts` (GET): 개별 TTS 서비스 헬스 체크 엔드포인트.
 - `/health/redis` (GET): 잡 매니저를 통한 Redis 헬스 체크.
 - `/health/redis/cleanup` (POST): 만료/정체 잡 정리.
-- `/api/v1/files` (GET): `output/` 재귀 파일 목록.
-- `/api/v1/files/{file_id}` (GET): 파일 상세 스텁(TODO).
-- `/api/v1/files/{file_id}` (DELETE): 파일 삭제 스텁(TODO).
+- `/api/v1/files` (GET): 설정된 스토리지(Local/GCS)에 저장된 파일을 열람하고 메타데이터(`size`, `mime`, 타임스탬프, URL)를 반환.
+- `/api/v1/files/{file_id}` (GET): 특정 파일 메타데이터 조회; 경로 정규화/역참조 차단/디렉터리 요청 거부 포함.
+- `/api/v1/files/{file_id}` (DELETE): 스토리지 백엔드를 통해 파일 삭제. 민감 자산(`config.yaml`, `.env`, `*.log` 등)은 보호되어 403 반환.
 - `/api/v1/jobs` (POST): 영상+자막 업로드와 폼 필드로 새 잡 생성, 백그라운드 처리 시작.
 - `/api/v1/jobs/{job_id}` (GET): Redis에서 현재 잡 상태 조회.
 - `/api/v1/jobs/{job_id}/expressions` (GET): Redis에서 표현식 반환(작업 상태와 동일한 소스).
@@ -214,9 +214,58 @@ API는 API와 CLI 처리 모두에 대한 통합 인터페이스를 제공하는
 - 업로드 크기/타입 검증 강화 권장.
 - Redis 비가용 시 앱은 기동되나 경고만 로그 → 장애 전파/격하 모드 정책 검토 권장.
 
+## 파일 관리 엔드포인트
+
+### 스토리지 기반 설계
+- FastAPI 의존성 `Depends(get_storage)`로 모든 요청에서 `StorageBackend` 인스턴스를 획득하여 LocalStorage와 GCS 간 동작을 통일.
+- `PurePosixPath`를 활용해 경로를 정규화하고, 역참조(`..`) 및 절대 경로를 차단하며 구분자를 통일.
+- 메타데이터 헬퍼가 크기, MIME, 생성/수정 시각, 공유 가능한 URL을 제공합니다. LocalStorage는 파일 시스템 stat을 사용하고, GCS는 blob 메타데이터를 즉시 갱신합니다.
+
+### 파일 목록
+- `GET /api/v1/files`는 `storage.list_files("")` 결과를 순회하며 정규화/메타데이터 수집 후 디렉터리를 필터링합니다.
+- 응답 예시:
+  ```json
+  {
+    "files": [
+      {
+        "file_id": "short_form_videos/expressions/expression_hi.mkv",
+        "name": "expression_hi.mkv",
+        "path": "short_form_videos/expressions/expression_hi.mkv",
+        "url": "...",
+        "size": 1234567,
+        "type": "video/x-matroska",
+        "modified": 1731492801.123,
+        "created": 1731492000.456,
+        "is_directory": false
+      }
+    ],
+    "total": 1
+  }
+  ```
+  - `modified`/`created`는 기존 UI 호환성을 유지하기 위해 UNIX 타임스탬프(초)로 제공됩니다.
+  - `url`은 LocalStorage는 절대 경로, GCS는 public URL을 반환합니다.
+
+### 파일 상세
+- `GET /api/v1/files/{file_id:path}`는 경로를 정규화하고 `storage.file_exists`로 존재 여부를 확인한 뒤 메타데이터를 반환합니다.
+- 디렉터리 요청은 400, 존재하지 않는 파일은 404, 경로 역참조 시도는 400을 반환합니다.
+- 모든 오류는 로깅 후 FastAPI `HTTPException`으로 감쌉니다.
+
+### 파일 삭제
+- `DELETE /api/v1/files/{file_id:path}` 흐름:
+  1. 경로 정규화 및 존재 여부 확인.
+  2. 메타데이터를 조회하여 디렉터리 삭제를 차단.
+  3. `fnmatch` 기반 보호 패턴(`config.yaml`, `.env`, `*.log`, `langflix.log`, `requirements.txt`) 검사.
+  4. `storage.delete_file` 실행 후 성공 여부 확인.
+- 성공 시 `{ "message": "...", "file_id": "...", "deleted": true }` 응답.
+- 보호 파일은 403, 디렉터리는 400, 존재하지 않는 파일은 404, 스토리지 오류는 500을 반환합니다.
+
+### 테스트
+- `tests/api/test_files_routes.py`에서 의존성 오버라이드를 이용해 pytest `tmp_path` 기반 LocalStorage를 주입.
+- 목록/메타데이터/MIME 검증, 경로 검증, 삭제 성공/보호/디렉터리 차단 시나리오를 검증합니다.
+
 ## 확장 포인트
 - ✅ `dependencies.get_db/get_storage` 구현 완료 - 데이터베이스 및 스토리지 통합 완료 (TICKET-010)
-- 파일 상세/삭제 스텁을 실제 스토리지 연동으로 대체.
+- ✅ 파일 상세/삭제 엔드포인트를 스토리지 연동 및 보안 검증 로직으로 교체 (TICKET-028).
 - ✅ `/jobs/{id}/expressions`를 Redis 기반 단일 소스 진실로 통합 완료 - `jobs_db` 의존 제거됨 (TICKET-003).
 
 ## 사용 예시

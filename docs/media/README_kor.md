@@ -5,7 +5,7 @@
 `langflix/media/` 모듈은 LangFlix를 위한 중앙집중식 FFmpeg 유틸리티를 포함합니다. 이 모듈은 오디오 보존과 최적 성능을 보장하는 안정적이고 유지보수 가능한 비디오 및 오디오 처리 함수를 제공합니다.
 
 **최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001
+**관련 티켓:** TICKET-001, TICKET-033
 
 ## 목적
 
@@ -28,11 +28,26 @@
 
 ### 프로빙 함수
 
-#### `run_ffprobe(path: str) -> Dict[str, Any]`
+#### `run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]`
 ffprobe를 실행하고 파싱된 JSON을 반환하며, 실패 시 예외 발생.
 
+**TICKET-033 개선사항:** 타임아웃 지원 및 향상된 에러 처리 추가.
+
 - 안정적인 오류 처리를 위해 subprocess 사용
+- 네트워크 마운트에서 무한 대기 방지를 위한 타임아웃 포함 (기본값: 30초)
 - 필요 시 ffmpeg-python probe로 fallback
+- stderr 출력을 포함한 상세한 에러 메시지 제공
+- 특정 예외 발생: `TimeoutError`, `FileNotFoundError`, `json.JSONDecodeError`
+
+**매개변수:**
+- `path`: 비디오 파일 경로
+- `timeout`: 타임아웃(초) (기본값: 30)
+
+**예외:**
+- `TimeoutError`: ffprobe가 타임아웃된 경우
+- `FileNotFoundError`: ffprobe를 찾을 수 없는 경우
+- `subprocess.CalledProcessError`: ffprobe 명령이 실패한 경우
+- `json.JSONDecodeError`: 출력을 JSON으로 파싱할 수 없는 경우
 
 #### `get_video_params(path: str) -> VideoParams`
 파일에서 비디오 파라미터를 추출합니다.
@@ -330,7 +345,54 @@ apply_final_audio_gain("final_video.mkv", "output.mkv", gain_factor=1.25)
 
 **이유:** 파이프라인 전체에서 오디오 보존, 최종 단계에서만 수정.
 
+## MediaScanner 모듈
+
+### 개요
+`MediaScanner` 클래스(`langflix/media/media_scanner.py`)는 미디어 디렉토리를 스캔하여 비디오 파일과 관련 자막 파일을 찾습니다.
+
+**TICKET-033 개선사항:** 향상된 에러 처리 및 파일 접근 가능성 확인.
+
+### 주요 메서드
+
+#### `_get_video_metadata(video_path: Path) -> Dict[str, Any]`
+포괄적인 에러 처리를 통해 ffprobe를 사용하여 비디오 메타데이터를 추출합니다.
+
+**개선사항 (TICKET-033):**
+- 프로빙 전 파일 접근 가능성 사전 확인
+- 타임아웃 지원이 있는 개선된 `run_ffprobe()` 함수 사용
+- stderr 출력을 포함한 상세한 에러 로깅 제공
+- 특정 예외 타입 처리: `CalledProcessError`, `FileNotFoundError`, `JSONDecodeError`, `PermissionError`, `TimeoutError`
+- 실패 시 빈 dict 반환 (우아한 성능 저하)
+
+**에러 처리:**
+- 파일 없음: 경고 로그 및 빈 dict 반환
+- 권한 거부: TrueNAS 마운트 가이드와 함께 에러 로그
+- 타임아웃: 네트워크 마운트 문제를 나타내는 에러 로그
+- FFprobe 에러: 디버깅을 위한 stderr 출력 로그
+- JSON 파싱 에러: 손상된 파일 또는 FFprobe 문제를 나타내는 에러 로그
+
+#### `_check_file_accessible(video_path: Path) -> Tuple[bool, Optional[str]]`
+처리 전 비디오 파일 접근 가능 여부를 확인합니다.
+
+**확인 사항:**
+- 파일 존재
+- 경로가 파일인지 (디렉토리가 아닌지)
+- 파일 읽기 가능 여부
+- 파일이 비어있지 않은지
+
+**반환:**
+- 접근 가능한 경우: `(True, None)`
+- 접근 불가능한 경우: `(False, error_message)`
+
 ## 테스트
+
+### 단위 테스트
+- `tests/unit/test_media_scanner.py` - MediaScanner 에러 처리 및 메타데이터 추출
+  - 파일 접근 가능성 확인
+  - FFprobe 에러 시나리오
+  - 타임아웃 처리
+  - 권한 에러
+  - JSON 파싱 에러
 
 ### 통합 테스트
 - `tests/integration/test_media_pipeline_audio.py` - 파이프라인을 통한 오디오 보존

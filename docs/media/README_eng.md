@@ -5,7 +5,7 @@
 The `langflix/media/` module contains centralized FFmpeg utilities for LangFlix. This module provides reliable, maintainable video and audio processing functions that ensure audio preservation and optimal performance.
 
 **Last Updated:** 2025-01-30  
-**Related Ticket:** TICKET-001
+**Related Tickets:** TICKET-001, TICKET-033
 
 ## Purpose
 
@@ -28,11 +28,26 @@ This module is responsible for:
 
 ### Probing Functions
 
-#### `run_ffprobe(path: str) -> Dict[str, Any]`
+#### `run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]`
 Runs ffprobe and returns parsed JSON, raising on failure.
 
+**TICKET-033 Enhancement:** Added timeout support and improved error handling.
+
 - Uses subprocess for reliable error handling
+- Includes timeout (default: 30 seconds) to prevent hanging on network mounts
 - Falls back to ffmpeg-python probe if needed
+- Provides detailed error messages with stderr output
+- Raises specific exceptions: `TimeoutError`, `FileNotFoundError`, `json.JSONDecodeError`
+
+**Parameters:**
+- `path`: Path to video file
+- `timeout`: Timeout in seconds (default: 30)
+
+**Raises:**
+- `TimeoutError`: If ffprobe times out
+- `FileNotFoundError`: If ffprobe is not found
+- `subprocess.CalledProcessError`: If ffprobe command fails
+- `json.JSONDecodeError`: If output cannot be parsed as JSON
 
 #### `get_video_params(path: str) -> VideoParams`
 Extracts video parameters from a file.
@@ -330,7 +345,54 @@ Log media parameters for debugging.
 
 **Reason:** Preserves audio throughout pipeline, only modifies at final step.
 
+## MediaScanner Module
+
+### Overview
+The `MediaScanner` class (`langflix/media/media_scanner.py`) scans media directories to discover video files and their associated subtitle files.
+
+**TICKET-033 Enhancement:** Improved error handling and file accessibility checks.
+
+### Key Methods
+
+#### `_get_video_metadata(video_path: Path) -> Dict[str, Any]`
+Extracts video metadata using ffprobe with comprehensive error handling.
+
+**Improvements (TICKET-033):**
+- Pre-checks file accessibility before probing
+- Uses improved `run_ffprobe()` function with timeout support
+- Provides detailed error logging with stderr output
+- Handles specific exception types: `CalledProcessError`, `FileNotFoundError`, `JSONDecodeError`, `PermissionError`, `TimeoutError`
+- Returns empty dict on failure (graceful degradation)
+
+**Error Handling:**
+- File not found: Logs warning and returns empty dict
+- Permission denied: Logs error with TrueNAS mount guidance
+- Timeout: Logs error indicating network mount issues
+- FFprobe errors: Logs stderr output for debugging
+- JSON parsing errors: Logs error indicating corrupted file or FFprobe issue
+
+#### `_check_file_accessible(video_path: Path) -> Tuple[bool, Optional[str]]`
+Checks if video file is accessible before processing.
+
+**Checks:**
+- File exists
+- Path is a file (not directory)
+- File is readable
+- File is not empty
+
+**Returns:**
+- `(True, None)` if accessible
+- `(False, error_message)` if not accessible
+
 ## Testing
+
+### Unit Tests
+- `tests/unit/test_media_scanner.py` - MediaScanner error handling and metadata extraction
+  - File accessibility checks
+  - FFprobe error scenarios
+  - Timeout handling
+  - Permission errors
+  - JSON parsing errors
 
 ### Integration Tests
 - `tests/integration/test_media_pipeline_audio.py` - Audio preservation through pipeline

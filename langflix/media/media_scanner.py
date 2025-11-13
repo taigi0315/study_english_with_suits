@@ -5,8 +5,10 @@ Scans media directories to discover video files and their associated subtitle fi
 import os
 import re
 import logging
+import subprocess
+import json
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 import ffmpeg
 
 logger = logging.getLogger(__name__)
@@ -199,6 +201,38 @@ class MediaScanner:
         
         return None
     
+    def _check_file_accessible(self, video_path: Path) -> Tuple[bool, Optional[str]]:
+        """
+        Check if video file is accessible
+        
+        Args:
+            video_path: Path to video file
+            
+        Returns:
+            Tuple of (is_accessible, error_message)
+        """
+        if not video_path.exists():
+            return False, f"File does not exist: {video_path}"
+        
+        if not video_path.is_file():
+            return False, f"Path is not a file: {video_path}"
+        
+        try:
+            if not os.access(video_path, os.R_OK):
+                return False, f"File is not readable: {video_path}"
+        except Exception as e:
+            return False, f"Cannot check file permissions: {e}"
+        
+        # Try to get file size (basic accessibility check)
+        try:
+            size = video_path.stat().st_size
+            if size == 0:
+                return False, f"File is empty: {video_path}"
+        except Exception as e:
+            return False, f"Cannot access file: {e}"
+        
+        return True, None
+    
     def _get_video_metadata(self, video_path: Path) -> Dict[str, Any]:
         """
         Extract video metadata using ffprobe
@@ -209,15 +243,25 @@ class MediaScanner:
         Returns:
             Dictionary with video metadata
         """
+        # Pre-check: Verify file exists and is accessible
+        is_accessible, error_msg = self._check_file_accessible(video_path)
+        if not is_accessible:
+            logger.warning(f"Video file not accessible: {error_msg}")
+            return {}
+        
+        # Use improved run_ffprobe function from ffmpeg_utils
         try:
-            probe = ffmpeg.probe(str(video_path))
-            video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+            from langflix.media.ffmpeg_utils import run_ffprobe
+            
+            probe = run_ffprobe(str(video_path))
+            video_stream = next((s for s in probe.get('streams', []) if s.get('codec_type') == 'video'), None)
             
             if not video_stream:
+                logger.warning(f"No video stream found in {video_path}")
                 return {}
             
             # Get duration
-            duration = float(probe['format'].get('duration', 0))
+            duration = float(probe.get('format', {}).get('duration', 0))
             
             # Get resolution
             width = video_stream.get('width', 0)
@@ -225,11 +269,11 @@ class MediaScanner:
             resolution = f"{width}x{height}"
             
             # Get file size
-            size_bytes = int(probe['format'].get('size', 0))
+            size_bytes = int(probe.get('format', {}).get('size', 0))
             size_mb = round(size_bytes / (1024 * 1024), 2)
             
             # Get format
-            format_name = probe['format'].get('format_name', 'Unknown')
+            format_name = probe.get('format', {}).get('format_name', 'Unknown')
             
             return {
                 "duration": duration,
@@ -240,7 +284,42 @@ class MediaScanner:
                 "format": format_name,
                 "codec": video_stream.get('codec_name', 'Unknown')
             }
+        except subprocess.CalledProcessError as e:
+            # FFprobe command failed - log stderr for debugging
+            stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr output")
+            logger.error(
+                f"FFprobe command failed for {video_path}: "
+                f"returncode={e.returncode}, stderr={stderr}"
+            )
+            return {}
+        except FileNotFoundError:
+            logger.error(
+                f"FFprobe not found. Please ensure ffmpeg/ffprobe is installed and in PATH. "
+                f"Failed to probe: {video_path}"
+            )
+            return {}
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Failed to parse FFprobe JSON output for {video_path}: {e}. "
+                f"This may indicate a corrupted video file or FFprobe issue."
+            )
+            return {}
+        except PermissionError as e:
+            logger.error(
+                f"Permission denied accessing video file {video_path}: {e}. "
+                f"Check file permissions and TrueNAS mount settings."
+            )
+            return {}
+        except TimeoutError as e:
+            logger.error(
+                f"Timeout accessing video file {video_path}: {e}. "
+                f"This may indicate network mount issues."
+            )
+            return {}
         except Exception as e:
-            logger.error(f"Failed to probe video metadata for {video_path}: {e}")
+            logger.error(
+                f"Failed to probe video metadata for {video_path}: {type(e).__name__}: {e}",
+                exc_info=True  # Include full traceback
+            )
             return {}
 

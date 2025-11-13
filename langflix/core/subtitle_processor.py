@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import re
 
 from .models import ExpressionAnalysis
-from .subtitle_parser import parse_srt_file
+from .subtitle_parser import parse_srt_file, parse_subtitle_file_by_extension
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ class SubtitleProcessor:
             List of subtitle dictionaries
         """
         try:
-            subtitles = parse_srt_file(self.subtitle_file_path)
+            # Use extension-based parser to support multiple formats (SRT, SMI, etc.)
+            subtitles = parse_subtitle_file_by_extension(self.subtitle_file_path)
             logger.info(f"Loaded {len(subtitles)} subtitle entries")
             return subtitles
         except Exception as e:

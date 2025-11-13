@@ -1,0 +1,20 @@
+<SAMI>
+<HEAD>
+<TITLE>Sample SMI Subtitle</TITLE>
+<STYLE TYPE="text/css">
+<!--
+  P { font-family: Arial; font-weight: normal; color: white; }
+  .KRCC { Name: Korean; lang: ko-KR; SAMI_TYPE: CC; }
+  .ENCC { Name: English; lang: en-US; SAMI_TYPE: CC; }
+-->
+</STYLE>
+</HEAD>
+<BODY>
+<SYNC Start="0"><P Class="KRCC">안녕하세요</P></SYNC>
+<SYNC Start="2000"><P Class="KRCC">반갑습니다</P></SYNC>
+<SYNC Start="5000"><P Class="ENCC">Hello</P></SYNC>
+<SYNC Start="7000"><P Class="ENCC">Nice to meet you</P></SYNC>
+<SYNC Start="10000"><P Class="KRCC">오늘 날씨가 좋네요</P></SYNC>
+</BODY>
+</SAMI>
+

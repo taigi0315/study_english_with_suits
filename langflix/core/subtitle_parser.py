@@ -1,8 +1,10 @@
 import pysrt
 import re
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from datetime import timedelta
 from langflix import settings
 from langflix.core.subtitle_exceptions import (
     SubtitleNotFoundError,
@@ -14,7 +16,7 @@ from langflix.core.subtitle_exceptions import (
 logger = logging.getLogger(__name__)
 
 # Supported subtitle formats
-SUPPORTED_FORMATS = {'.srt', '.vtt', '.ass', '.ssa'}
+SUPPORTED_FORMATS = {'.srt', '.vtt', '.ass', '.ssa', '.smi'}
 
 
 def validate_subtitle_file(file_path: str) -> tuple[bool, Optional[str]]:
@@ -170,6 +172,179 @@ def parse_srt_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
             path=file_path,
             reason=str(e)
         )
+
+def parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]]:
+    """
+    Parses a .smi subtitle file into a list of dictionaries.
+    
+    Args:
+        file_path: Path to the subtitle file
+        validate: Whether to validate file before parsing (default: True)
+    
+    Returns:
+        List of dictionaries with 'start_time', 'end_time', 'text' keys
+        Times are in "HH:MM:SS.mmm" format (compatible with SRT format)
+        
+    Raises:
+        SubtitleNotFoundError: If file doesn't exist
+        SubtitleFormatError: If format is invalid
+        SubtitleParseError: If parsing fails
+    """
+    try:
+        # Validate file if requested
+        if validate:
+            validate_subtitle_file(file_path)
+        
+        # Detect encoding
+        try:
+            encoding = detect_encoding(file_path)
+        except SubtitleEncodingError:
+            logger.warning(f"Failed to detect encoding, trying UTF-8")
+            encoding = 'utf-8'
+        
+        # Parse XML with detected encoding
+        try:
+            tree = ET.parse(file_path, parser=ET.XMLParser(encoding=encoding))
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise SubtitleParseError(
+                path=file_path,
+                reason=f"Invalid XML structure: {e}"
+            )
+        except UnicodeDecodeError:
+            # Try common Korean encodings
+            fallback_encodings = ['euc-kr', 'cp949', 'utf-8', 'latin-1']
+            logger.warning(f"Failed with {encoding}, trying fallback encodings")
+            
+            for fallback in fallback_encodings:
+                try:
+                    tree = ET.parse(file_path, parser=ET.XMLParser(encoding=fallback))
+                    root = tree.getroot()
+                    logger.info(f"Successfully parsed with fallback encoding: {fallback}")
+                    break
+                except (UnicodeDecodeError, ET.ParseError):
+                    continue
+            else:
+                raise SubtitleEncodingError(
+                    path=file_path,
+                    attempted_encodings=[encoding] + fallback_encodings
+                )
+        
+        result = []
+        sync_elements = root.findall('.//SYNC')
+        
+        for i, sync in enumerate(sync_elements):
+            start_attr = sync.get('Start')
+            if not start_attr:
+                continue
+            
+            # Convert milliseconds to seconds
+            try:
+                start_time_ms = int(start_attr)
+            except ValueError:
+                logger.warning(f"Invalid Start attribute: {start_attr}, skipping")
+                continue
+            
+            start_time_seconds = start_time_ms / 1000.0
+            
+            # Calculate end_time from next sync or use default duration
+            if i + 1 < len(sync_elements):
+                next_start_attr = sync_elements[i + 1].get('Start')
+                if next_start_attr:
+                    try:
+                        next_start_ms = int(next_start_attr)
+                        end_time_seconds = next_start_ms / 1000.0
+                    except ValueError:
+                        end_time_seconds = start_time_seconds + 2.0
+                else:
+                    end_time_seconds = start_time_seconds + 2.0
+            else:
+                # Default duration for last subtitle
+                end_time_seconds = start_time_seconds + 2.0
+            
+            # Extract text from P tags
+            text_parts = []
+            for p_tag in sync.findall('.//P'):
+                # Get text content, handling nested tags
+                text = ''.join(p_tag.itertext()).strip()
+                if text:
+                    text_parts.append(text)
+            
+            if text_parts:
+                # Join multiple P tags with newline
+                text = '\n'.join(text_parts)
+                
+                # Convert seconds to "HH:MM:SS.mmm" format (compatible with SRT)
+                start_time_str = _seconds_to_time_string(start_time_seconds)
+                end_time_str = _seconds_to_time_string(end_time_seconds)
+                
+                result.append({
+                    'start_time': start_time_str,
+                    'end_time': end_time_str,
+                    'text': text
+                })
+        
+        logger.info(f"Parsed {len(result)} SMI subtitle entries from {file_path}")
+        return result
+        
+    except (SubtitleNotFoundError, SubtitleFormatError, SubtitleEncodingError):
+        # Re-raise our custom exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error parsing SMI file: {e}")
+        raise SubtitleParseError(
+            path=file_path,
+            reason=f"Failed to parse SMI file: {e}"
+        )
+
+
+def _seconds_to_time_string(seconds: float) -> str:
+    """
+    Convert seconds to "HH:MM:SS.mmm" format (compatible with SRT format).
+    
+    Args:
+        seconds: Time in seconds as float
+        
+    Returns:
+        Time string in "HH:MM:SS.mmm" format
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
+
+
+def parse_subtitle_file_by_extension(file_path: str) -> List[Dict[str, Any]]:
+    """
+    Parse subtitle file based on extension.
+    Supports SRT, VTT, ASS, SSA, and SMI formats.
+    
+    Args:
+        file_path: Path to subtitle file
+        
+    Returns:
+        List of dictionaries with 'start_time', 'end_time', 'text' keys
+        
+    Raises:
+        SubtitleFormatError: If format is not supported
+        SubtitleParseError: If parsing fails
+    """
+    path = Path(file_path)
+    extension = path.suffix.lower()
+    
+    if extension == '.srt':
+        return parse_srt_file(file_path)
+    elif extension == '.smi':
+        return parse_smi_file(file_path)
+    elif extension in {'.vtt', '.ass', '.ssa'}:
+        # TODO: Implement parsers for VTT, ASS, SSA if not already done
+        raise NotImplementedError(f"Parser for {extension} not yet implemented")
+    else:
+        raise SubtitleFormatError(
+            format_type=extension,
+            reason=f"Unsupported format: {extension}. Supported formats: {', '.join(SUPPORTED_FORMATS)}"
+        )
+
 
 def parse_subtitle_file(file_path: str) -> List[pysrt.SubRipItem]:
     """

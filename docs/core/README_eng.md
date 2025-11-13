@@ -5,7 +5,7 @@
 The `langflix/core/` module contains the core video editing functionality for LangFlix. This module orchestrates the creation of educational video sequences, including long-form (side-by-side) and short-form (vertical) video layouts.
 
 **Last Updated:** 2025-01-30  
-**Related Tickets:** TICKET-001, TICKET-005, TICKET-024, TICKET-025
+**Related Tickets:** TICKET-001, TICKET-005, TICKET-024, TICKET-025, TICKET-030
 
 ## Purpose
 
@@ -441,6 +441,81 @@ The pipeline follows a clear separation:
 - Easier to test each stage
 - Clearer error handling
 - Better maintainability
+
+### SubtitleParser Module
+
+The module responsible for parsing various subtitle formats into a unified data structure.
+
+**Location:** `langflix/core/subtitle_parser.py`
+
+**TICKET-030 Enhancement:** Added SMI subtitle format support.
+
+**Supported Formats:**
+- `.srt` - SubRip format (most common)
+- `.smi` - SAMI format (widely used in Korea) **[NEW]**
+- `.vtt` - WebVTT format
+- `.ass` - Advanced SubStation Alpha
+- `.ssa` - SubStation Alpha
+
+**Key Functions:**
+
+#### `parse_srt_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]]`
+Parses a .srt subtitle file into a list of dictionaries.
+
+**Returns:**
+- List of dictionaries with `'start_time'`, `'end_time'`, `'text'` keys
+- Times are in "HH:MM:SS.mmm" format
+
+#### `parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]]`
+Parses a .smi subtitle file into a list of dictionaries.
+
+**TICKET-030 Enhancement:** New function for SMI format support.
+
+**Features:**
+- XML-based parsing using `xml.etree.ElementTree`
+- Automatic encoding detection (UTF-8, EUC-KR, CP949)
+- Fallback encoding support for Korean files
+- Multi-language SMI support (extracts all languages)
+- Handles SYNC elements with Start attributes
+- Calculates end_time from next SYNC or uses default duration
+
+**Returns:**
+- List of dictionaries with `'start_time'`, `'end_time'`, `'text'` keys
+- Times are in "HH:MM:SS.mmm" format (compatible with SRT format)
+
+**Example:**
+```python
+from langflix.core.subtitle_parser import parse_smi_file
+
+# Parse SMI file
+subtitles = parse_smi_file("path/to/subtitle.smi")
+for sub in subtitles:
+    print(f"{sub['start_time']} --> {sub['end_time']}: {sub['text']}")
+```
+
+#### `parse_subtitle_file_by_extension(file_path: str) -> List[Dict[str, Any]]`
+Parse subtitle file based on extension. Automatically selects the appropriate parser.
+
+**Supported formats:** SRT, SMI, VTT, ASS, SSA
+
+**Example:**
+```python
+from langflix.core.subtitle_parser import parse_subtitle_file_by_extension
+
+# Automatically detects format and uses appropriate parser
+subtitles = parse_subtitle_file_by_extension("path/to/subtitle.smi")
+```
+
+**Encoding Detection:**
+- Uses `chardet` library for automatic encoding detection
+- Fallback encodings: UTF-8, CP949, EUC-KR, Latin-1
+- Handles Korean encodings commonly used in SMI files
+
+**Error Handling:**
+- `SubtitleNotFoundError`: File doesn't exist
+- `SubtitleFormatError`: Unsupported format
+- `SubtitleEncodingError`: Encoding detection/decoding failed
+- `SubtitleParseError`: Parsing failed (invalid structure)
 
 ### ExpressionAnalyzer Class
 

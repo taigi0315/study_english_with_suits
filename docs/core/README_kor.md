@@ -5,7 +5,7 @@
 `langflix/core/` 모듈은 LangFlix의 핵심 비디오 편집 기능을 포함합니다. 이 모듈은 long-form (side-by-side) 및 short-form (vertical) 비디오 레이아웃을 포함한 교육용 비디오 시퀀스 생성을 조율합니다.
 
 **최종 업데이트:** 2025-01-30  
-**관련 티켓:** TICKET-001, TICKET-005, TICKET-024, TICKET-025
+**관련 티켓:** TICKET-001, TICKET-005, TICKET-024, TICKET-025, TICKET-030
 
 ## 목적
 
@@ -431,6 +431,81 @@ FFmpeg의 subtitle 필터를 사용하여 컨텍스트 비디오에 이중 언�
 - 각 단계 테스트 용이
 - 더 명확한 오류 처리
 - 더 나은 유지보수성
+
+### SubtitleParser 모듈
+
+다양한 자막 형식을 통합된 데이터 구조로 파싱하는 모듈입니다.
+
+**위치:** `langflix/core/subtitle_parser.py`
+
+**TICKET-030 개선사항:** SMI 자막 형식 지원 추가.
+
+**지원 형식:**
+- `.srt` - SubRip 형식 (가장 일반적)
+- `.smi` - SAMI 형식 (한국에서 널리 사용됨) **[신규]**
+- `.vtt` - WebVTT 형식
+- `.ass` - Advanced SubStation Alpha
+- `.ssa` - SubStation Alpha
+
+**주요 함수:**
+
+#### `parse_srt_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]]`
+.srt 자막 파일을 딕셔너리 리스트로 파싱합니다.
+
+**반환:**
+- `'start_time'`, `'end_time'`, `'text'` 키를 가진 딕셔너리 리스트
+- 시간은 "HH:MM:SS.mmm" 형식
+
+#### `parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]]`
+.smi 자막 파일을 딕셔너리 리스트로 파싱합니다.
+
+**TICKET-030 개선사항:** SMI 형식 지원을 위한 새로운 함수.
+
+**기능:**
+- `xml.etree.ElementTree`를 사용한 XML 기반 파싱
+- 자동 인코딩 감지 (UTF-8, EUC-KR, CP949)
+- 한국어 파일을 위한 fallback 인코딩 지원
+- 다국어 SMI 지원 (모든 언어 추출)
+- Start 속성을 가진 SYNC 요소 처리
+- 다음 SYNC에서 end_time 계산 또는 기본 지속 시간 사용
+
+**반환:**
+- `'start_time'`, `'end_time'`, `'text'` 키를 가진 딕셔너리 리스트
+- 시간은 "HH:MM:SS.mmm" 형식 (SRT 형식과 호환)
+
+**예제:**
+```python
+from langflix.core.subtitle_parser import parse_smi_file
+
+# SMI 파일 파싱
+subtitles = parse_smi_file("path/to/subtitle.smi")
+for sub in subtitles:
+    print(f"{sub['start_time']} --> {sub['end_time']}: {sub['text']}")
+```
+
+#### `parse_subtitle_file_by_extension(file_path: str) -> List[Dict[str, Any]]`
+확장자에 따라 자막 파일을 파싱합니다. 자동으로 적절한 파서를 선택합니다.
+
+**지원 형식:** SRT, SMI, VTT, ASS, SSA
+
+**예제:**
+```python
+from langflix.core.subtitle_parser import parse_subtitle_file_by_extension
+
+# 형식을 자동으로 감지하고 적절한 파서 사용
+subtitles = parse_subtitle_file_by_extension("path/to/subtitle.smi")
+```
+
+**인코딩 감지:**
+- `chardet` 라이브러리를 사용한 자동 인코딩 감지
+- Fallback 인코딩: UTF-8, CP949, EUC-KR, Latin-1
+- SMI 파일에서 일반적으로 사용되는 한국어 인코딩 처리
+
+**에러 처리:**
+- `SubtitleNotFoundError`: 파일이 존재하지 않음
+- `SubtitleFormatError`: 지원되지 않는 형식
+- `SubtitleEncodingError`: 인코딩 감지/디코딩 실패
+- `SubtitleParseError`: 파싱 실패 (잘못된 구조)
 
 ### ExpressionAnalyzer 클래스
 

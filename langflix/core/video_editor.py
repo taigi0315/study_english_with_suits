@@ -511,17 +511,19 @@ class VideoEditor:
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
                 
                 try:
+                    # Get encoding settings from config (optimized for speed)
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg.output(
                             video_stream,
                             audio_stream,
                             str(expression_video_clip_path),
-                            vcodec='libx264',
-                            acodec='aac',
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            acodec=video_args.get('acodec', 'aac'),
                             ac=2,
                             ar=48000,
-                            preset='fast',
-                            crf=23
+                            preset=video_args.get('preset', 'veryfast'),
+                            crf=video_args.get('crf', 25)
                         )
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
@@ -1641,15 +1643,16 @@ class VideoEditor:
                 
                 # Create the slide with both video and boosted audio directly
                 try:
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], boosted_audio, str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
-                               acodec='aac',
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
                                t=slide_duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -1683,15 +1686,16 @@ class VideoEditor:
                     
                     audio_input = ffmpeg.input(str(audio_2x_path))
                     
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], audio_input['a'], str(output_path),
                                vf="scale=1280:720",
-                               vcodec='libx264',
-                               acodec='aac',
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
                                t=slide_duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -1702,27 +1706,29 @@ class VideoEditor:
                         video_input = ffmpeg.input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
                         audio_input = ffmpeg.input(str(audio_2x_path))
                         
+                        video_args = self._get_video_output_args()
                         (
                             ffmpeg
                             .output(video_input['v'], audio_input['a'], str(output_path),
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   preset='fast',
-                                   crf=23)
+                                   vcodec=video_args.get('vcodec', 'libx264'),
+                                   acodec=video_args.get('acodec', 'aac'),
+                                   preset=video_args.get('preset', 'veryfast'),
+                                   crf=video_args.get('crf', 25))
                             .overwrite_output()
                             .run(quiet=True)
                         )
                     except Exception as emergency_error:
                         logger.error(f"Emergency fallback also failed: {emergency_error}")
                         # Last resort: create basic video without audio
+                        video_args = self._get_video_output_args()
                         (
                             ffmpeg
                             .input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
                             .output(str(output_path),
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   preset='fast',
-                                   crf=23)
+                                   vcodec=video_args.get('vcodec', 'libx264'),
+                                   acodec=video_args.get('acodec', 'aac'),
+                                   preset=video_args.get('preset', 'veryfast'),
+                                   crf=video_args.get('crf', 25))
                             .overwrite_output()
                             .run(quiet=True)
                         )
@@ -1961,14 +1967,15 @@ class VideoEditor:
                 
                 # Create the slide with video only (completely silent, no audio track)
                 try:
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
+                               vcodec=video_args.get('vcodec', 'libx264'),
                                t=duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -2194,13 +2201,14 @@ class VideoEditor:
             
             # Create silent slide (no audio - context video will have its own audio)
             try:
+                video_args = self._get_video_output_args()
                 (
                     ffmpeg
                     .output(video_input['v'], str(output_path),
                            vf=f"scale=1280:720,{video_filter}",
-                           vcodec='libx264',
-                           preset='fast',
-                           crf=23,
+                           vcodec=video_args.get('vcodec', 'libx264'),
+                           preset=video_args.get('preset', 'veryfast'),
+                           crf=video_args.get('crf', 25),
                            t=duration)
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
@@ -2362,11 +2370,14 @@ class VideoEditor:
                     audio_out = ffmpeg.filter([context_input['a'], slide_input['a']], 'concat', n=2, v=0, a=1)
                     
                     # Combine video with transition and audio concatenation
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_out, audio_out, str(output_path),
-                               vcodec='libx264', acodec='aac', preset='fast',
-                               ac=2, ar=48000, crf=23)
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
+                               preset=video_args.get('preset', 'veryfast'),
+                               ac=2, ar=48000, crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -3247,17 +3258,18 @@ class VideoEditor:
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
                 
                 # Extract with timestamp reset (same as long-form)
+                video_args = self._get_video_output_args()
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
                         str(expression_video_clip_path),
-                        vcodec='libx264',
-                        acodec='aac',
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
                         ac=2,
                         ar=48000,
-                        preset='fast',
-                        crf=23
+                        preset=video_args.get('preset', 'veryfast'),
+                        crf=video_args.get('crf', 25)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -3484,11 +3496,14 @@ class VideoEditor:
             audio_out = ffmpeg.filter([context_input['a'], expr_input['a']], 'concat', n=2, v=0, a=1)
             
             # Combine video with transition and audio concatenation
+            video_args = self._get_video_output_args()
             (
                 ffmpeg
                 .output(video_out, audio_out, str(output_path),
-                       vcodec='libx264', acodec='aac', preset='fast',
-                       ac=2, ar=48000, crf=23)
+                       vcodec=video_args.get('vcodec', 'libx264'),
+                       acodec=video_args.get('acodec', 'aac'),
+                       preset=video_args.get('preset', 'veryfast'),
+                       ac=2, ar=48000, crf=video_args.get('crf', 25))
                 .overwrite_output()
                 .run(quiet=True)
             )

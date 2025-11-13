@@ -158,11 +158,15 @@ def should_copy_video(input_path: str) -> bool:
     return vp.codec is not None and vp.width is not None and vp.height is not None
 
 
-def make_video_encode_args_from_source(source_path: str) -> Dict[str, Any]:
+def make_video_encode_args_from_source(source_path: str, include_preset_crf: bool = True) -> Dict[str, Any]:
     """Create encoder arguments that match the source video as closely as possible.
 
     If source codec is usable with filters, we reuse it; otherwise fallback to libx264
     while preserving width/height. We do NOT force yuv420p unless necessary.
+    
+    Args:
+        source_path: Path to source video file
+        include_preset_crf: If True, include preset and crf from settings (default: True)
     """
     vp = get_video_params(source_path)
     args: Dict[str, Any] = {}
@@ -181,6 +185,18 @@ def make_video_encode_args_from_source(source_path: str) -> Dict[str, Any]:
         encoder = "libx264"
 
     args["vcodec"] = encoder
+    
+    # Add preset and CRF from settings for optimal encoding speed
+    if include_preset_crf:
+        try:
+            from langflix import settings
+            video_config = settings.get_video_config()
+            args["preset"] = video_config.get("preset", "veryfast")
+            args["crf"] = video_config.get("crf", 25)
+        except Exception:
+            # Fallback if settings not available
+            args["preset"] = "veryfast"
+            args["crf"] = 25
 
     # Preserve resolution by not adding explicit scale; when filters require scale,
     # the caller should provide it based on source params.
@@ -336,25 +352,17 @@ def concat_filter_with_explicit_map(
 def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> None:
     """Use concat demuxer when all inputs are uniform; caller must ensure uniformity.
     
+    Optimized: Uses copy mode (no re-encoding) for maximum speed.
+    This is much faster than re-encoding, especially for TrueNAS deployments.
+    
     Note: This is a simplified version that reads from a concat list file.
     For in-memory concat, use repeat_av_demuxer pattern.
     """
-    # First, probe one of the input files to get encoding params
-    import tempfile
-    first_file = None
-    try:
-        with open(list_file) as f:
-            first_line = f.readline().strip()
-            if first_line.startswith("file "):
-                first_file = first_line[6:-1]  # Remove 'file ' prefix and quotes
-    except Exception as e:
-        logger.warning(f"Could not read concat file to determine encoding: {e}")
+    # Use copy mode for maximum speed - no re-encoding needed for uniform inputs
+    # This is 10-100x faster than re-encoding, especially important for TrueNAS
+    encode_args = {"vcodec": "copy", "acodec": "copy"}
     
-    if first_file and Path(first_file).exists():
-        encode_args = {**make_video_encode_args_from_source(str(first_file)), **make_audio_encode_args_copy()}
-    else:
-        # Fallback: use copy for both
-        encode_args = {"vcodec": "copy", "acodec": "copy"}
+    logger.debug(f"Using demuxer concat with copy mode (fastest) for {out_path}")
     
     (
         ffmpeg

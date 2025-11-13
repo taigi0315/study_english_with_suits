@@ -102,10 +102,12 @@ video:
   audio_codec: "aac"
   
   # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
-  preset: "fast"
+  # Optimized for speed: veryfast is ~2-3x faster than fast with minimal quality loss
+  preset: "veryfast"
   
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
-  crf: 23
+  # Optimized for speed: 25 provides good quality while encoding much faster than 23
+  crf: 25
   
   # Output resolution
   resolution: "1280x720"

@@ -18,7 +18,7 @@ import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ffmpeg
 
@@ -158,11 +158,15 @@ def should_copy_video(input_path: str) -> bool:
     return vp.codec is not None and vp.width is not None and vp.height is not None
 
 
-def make_video_encode_args_from_source(source_path: str) -> Dict[str, Any]:
+def make_video_encode_args_from_source(source_path: str, include_preset_crf: bool = True) -> Dict[str, Any]:
     """Create encoder arguments that match the source video as closely as possible.
 
     If source codec is usable with filters, we reuse it; otherwise fallback to libx264
     while preserving width/height. We do NOT force yuv420p unless necessary.
+    
+    Args:
+        source_path: Path to source video file
+        include_preset_crf: If True, include preset and crf from settings (default: True)
     """
     vp = get_video_params(source_path)
     args: Dict[str, Any] = {}
@@ -181,6 +185,18 @@ def make_video_encode_args_from_source(source_path: str) -> Dict[str, Any]:
         encoder = "libx264"
 
     args["vcodec"] = encoder
+    
+    # Add preset and CRF from settings for optimal encoding speed
+    if include_preset_crf:
+        try:
+            from langflix import settings
+            video_config = settings.get_video_config()
+            args["preset"] = video_config.get("preset", "veryfast")
+            args["crf"] = video_config.get("crf", 25)
+        except Exception:
+            # Fallback if settings not available
+            args["preset"] = "veryfast"
+            args["crf"] = 25
 
     # Preserve resolution by not adding explicit scale; when filters require scale,
     # the caller should provide it based on source params.
@@ -255,6 +271,80 @@ def output_with_explicit_streams(v_in, a_in, out_path: Path | str, **encode_args
 
 
 # --------------------------- Concat helpers ---------------------------
+
+def concat_filter_multiple(segment_paths: List[str], out_path: Path | str) -> None:
+    """Concatenate multiple segments at once using filter concat (much faster than sequential).
+    
+    This is optimized for speed - concatenates all segments in a single pass instead of
+    sequentially, which avoids multiple re-encodings.
+    
+    Args:
+        segment_paths: List of paths to video segments to concatenate
+        out_path: Output path for concatenated video
+    """
+    if len(segment_paths) == 0:
+        raise ValueError("No segments provided for concatenation")
+    if len(segment_paths) == 1:
+        import shutil
+        shutil.copy2(segment_paths[0], out_path)
+        ensure_dir(Path(out_path))
+        return
+    
+    logger.info(f"Concatenating {len(segment_paths)} segments in single pass (filter concat)")
+    
+    # Get frame rate from first segment for normalization
+    first_vp = get_video_params(segment_paths[0])
+    target_fps = 25.0
+    if first_vp.r_frame_rate:
+        try:
+            if '/' in first_vp.r_frame_rate:
+                num, den = map(float, first_vp.r_frame_rate.split('/'))
+                target_fps = num / den if den > 0 else 25.0
+            else:
+                target_fps = float(first_vp.r_frame_rate)
+        except (ValueError, ZeroDivisionError):
+            target_fps = 25.0
+    
+    # Create inputs and normalize all segments
+    inputs = []
+    video_streams = []
+    audio_streams = []
+    
+    for i, segment_path in enumerate(segment_paths):
+        segment_in = ffmpeg.input(segment_path)
+        # Normalize frame rate and reset timestamps
+        v = ffmpeg.filter(segment_in["v"], 'fps', fps=target_fps)
+        v = ffmpeg.filter(v, 'setpts', 'PTS-STARTPTS')
+        a = ffmpeg.filter(segment_in["a"], 'asetpts', 'PTS-STARTPTS')
+        video_streams.append(v)
+        audio_streams.append(a)
+    
+    # Concatenate all segments at once (much faster than sequential)
+    # n=len(segment_paths) means we have n segments to concatenate
+    all_streams = []
+    for v, a in zip(video_streams, audio_streams):
+        all_streams.extend([v, a])
+    
+    concat_node = ffmpeg.concat(*all_streams, v=1, a=1, n=len(segment_paths)).node
+    
+    try:
+        output_with_explicit_streams(
+            concat_node[0],
+            concat_node[1],
+            out_path,
+            **make_video_encode_args_from_source(segment_paths[0]),
+            **make_audio_encode_args(normalize=True),
+        )
+        logger.info(f"✅ Successfully concatenated {len(segment_paths)} segments")
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ concat_filter_multiple FAILED: Cannot concatenate {len(segment_paths)} segments\n"
+            f"   Output: {out_path}\n"
+            f"   Error: {stderr[:1000]}\n"
+        )
+        raise RuntimeError(f"concat_filter_multiple failed: {stderr[:500]}") from e
+
 
 def concat_filter_with_explicit_map(
     left_path: str,
@@ -340,7 +430,7 @@ def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> No
     For in-memory concat, use repeat_av_demuxer pattern.
     """
     # First, probe one of the input files to get encoding params
-    import tempfile
+    # This ensures we use appropriate encoding settings, not just copy mode
     first_file = None
     try:
         with open(list_file) as f:
@@ -351,9 +441,10 @@ def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> No
         logger.warning(f"Could not read concat file to determine encoding: {e}")
     
     if first_file and Path(first_file).exists():
+        # Use encoding args from source (includes preset/crf from config)
         encode_args = {**make_video_encode_args_from_source(str(first_file)), **make_audio_encode_args_copy()}
     else:
-        # Fallback: use copy for both
+        # Fallback: use copy for both (fastest but may fail if not uniform)
         encode_args = {"vcodec": "copy", "acodec": "copy"}
     
     (

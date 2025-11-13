@@ -391,8 +391,9 @@ class VideoEditor:
             )
             logger.info(f"Context with subtitles created: {context_with_subtitles}")
             
-            # Step 1b: Create context video with multi-expression slide (TICKET-025)
-            # For multi-expression groups, show context video with slide showing all expressions
+            # Step 1b: For multi-expression groups, we'll add the multi-expression slide at the end
+            # Don't create context_with_multi_slide here - we'll use plain context_with_subtitles
+            # and add the multi-expression slide in the final hstack step
             from langflix.core.models import ExpressionGroup
             expression_group = ExpressionGroup(
                 context_start_time=expressions[0].context_start_time,
@@ -400,16 +401,9 @@ class VideoEditor:
                 expressions=expressions
             )
             
-            # Create context video with multi-expression slide (left: context, right: slide)
-            context_with_multi_slide = self.create_context_video_with_multi_slide(
-                context_video_path=str(context_with_subtitles),
-                expression_group=expression_group
-            )
-            logger.info(f"Context video with multi-expression slide created: {context_with_multi_slide}")
-            
             # Step 2: Build sequence segments
-            # Structure: context (with multi-slide) → transition → expr1 repeat → transition → expr2 repeat → ...
-            segments = [context_with_multi_slide]  # Start with context video + multi-expression slide
+            # Structure: context (plain, no slide yet) → transition → expr1 repeat → transition → expr2 repeat → ...
+            segments = [str(context_with_subtitles)]  # Start with plain context video (slide added later)
             
             # Get transition configuration
             from langflix import settings
@@ -511,17 +505,19 @@ class VideoEditor:
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
                 
                 try:
+                    # Get encoding settings from config (optimized for speed)
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg.output(
                             video_stream,
                             audio_stream,
                             str(expression_video_clip_path),
-                            vcodec='libx264',
-                            acodec='aac',
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            acodec=video_args.get('acodec', 'aac'),
                             ac=2,
                             ar=48000,
-                            preset='fast',
-                            crf=23
+                            preset=video_args.get('preset', 'veryfast'),
+                            crf=video_args.get('crf', 25)
                         )
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
@@ -560,35 +556,68 @@ class VideoEditor:
                 # Add expression repeat
                 segments.append(str(repeated_expression_path))
             
-            # Step 3: Concatenate all segments sequentially
+            # Step 3: Concatenate all segments efficiently
+            # Instead of concatenating one-by-one (which re-encodes everything each time),
+            # create a concat list file and use demuxer concat (much faster)
             logger.info(f"Concatenating {len(segments)} segments into multi-expression sequence")
-            current_path = segments[0]
             
-            for i in range(1, len(segments)):
-                next_segment = segments[i]
-                temp_concat_path = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
-                self._register_temp_file(temp_concat_path)
-                
-                concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path)
+            # Create concat list file for demuxer concat (faster than sequential filter concat)
+            concat_list_path = self.output_dir / f"temp_concat_list_multi_{safe_group_id}.txt"
+            self._register_temp_file(concat_list_path)
+            
+            with open(concat_list_path, 'w') as f:
+                for segment in segments:
+                    # Escape single quotes in path for concat demuxer
+                    escaped_path = str(segment).replace("'", "'\\''")
+                    f.write(f"file '{escaped_path}'\n")
+            
+            # Use demuxer concat if all segments have uniform parameters (much faster)
+            # Otherwise fall back to filter concat
+            temp_concat_path = self.output_dir / f"temp_concat_multi_{safe_group_id}_all.mkv"
+            self._register_temp_file(temp_concat_path)
+            
+            try:
+                from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
+                logger.info("Using demuxer concat for faster concatenation (all segments uniform)")
+                concat_demuxer_if_uniform(str(concat_list_path), str(temp_concat_path))
                 current_path = temp_concat_path
+            except Exception as e:
+                logger.warning(f"Demuxer concat failed, falling back to filter concat: {e}")
+                # Fallback: concatenate all segments at once (much faster than sequential)
+                from langflix.media.ffmpeg_utils import concat_filter_multiple
+                logger.info(f"Using filter concat to concatenate {len(segments)} segments in single pass")
+                try:
+                    concat_filter_multiple([str(s) for s in segments], str(temp_concat_path))
+                    current_path = temp_concat_path
+                except Exception as filter_error:
+                    logger.warning(f"Single-pass filter concat failed, falling back to sequential: {filter_error}")
+                    # Last resort: concatenate sequentially (slowest but most compatible)
+                    # This is the original working method
+                    current_path = segments[0]
+                    for i in range(1, len(segments)):
+                        logger.info(f"Concatenating segment {i+1}/{len(segments)}...")
+                        next_segment = segments[i]
+                        temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
+                        self._register_temp_file(temp_concat_path_fallback)
+                        from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                        concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
+                        current_path = temp_concat_path_fallback
             
-            # Step 4: Create educational slide with background and TTS audio
-            # Use the first expression for slide content (all expressions share same slide)
+            # Step 4: Create multi-expression slide (not individual educational slide)
+            # For multi-expression groups, use the multi-expression slide showing all expressions
             left_duration = get_duration_seconds(str(current_path))
-            educational_slide = self._create_educational_slide(
-                expression_source_videos[0],  # Use first expression's source video for audio
-                expressions[0],  # Use first expression for slide content
-                expression_indices[0],  # Use first expression index for voice alternation
-                target_duration=left_duration
+            logger.info(f"Creating multi-expression slide for {len(expressions)} expressions (duration: {left_duration:.2f}s)")
+            multi_expression_slide = self._create_multi_expression_slide(
+                expression_group, duration=left_duration
             )
             
             # Step 5: Use hstack to create side-by-side layout (long-form)
             # Left: context → transition → expr1 repeat → transition → expr2 repeat → ...
-            # Right: educational slide
+            # Right: multi-expression slide (showing all expressions in the group)
             logger.info("Creating long-form side-by-side layout with hstack")
             hstack_temp_path = self.output_dir / f"temp_hstack_multi_{safe_group_id}.mkv"
             self._register_temp_file(hstack_temp_path)
-            hstack_keep_height(str(current_path), str(educational_slide), str(hstack_temp_path))
+            hstack_keep_height(str(current_path), str(multi_expression_slide), str(hstack_temp_path))
             
             # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
             logger.info("Applying final audio gain (+69%) to multi-expression output")
@@ -1617,15 +1646,16 @@ class VideoEditor:
                 
                 # Create the slide with both video and boosted audio directly
                 try:
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], boosted_audio, str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
-                               acodec='aac',
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
                                t=slide_duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -1659,15 +1689,16 @@ class VideoEditor:
                     
                     audio_input = ffmpeg.input(str(audio_2x_path))
                     
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], audio_input['a'], str(output_path),
                                vf="scale=1280:720",
-                               vcodec='libx264',
-                               acodec='aac',
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
                                t=slide_duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -1678,27 +1709,29 @@ class VideoEditor:
                         video_input = ffmpeg.input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
                         audio_input = ffmpeg.input(str(audio_2x_path))
                         
+                        video_args = self._get_video_output_args()
                         (
                             ffmpeg
                             .output(video_input['v'], audio_input['a'], str(output_path),
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   preset='fast',
-                                   crf=23)
+                                   vcodec=video_args.get('vcodec', 'libx264'),
+                                   acodec=video_args.get('acodec', 'aac'),
+                                   preset=video_args.get('preset', 'veryfast'),
+                                   crf=video_args.get('crf', 25))
                             .overwrite_output()
                             .run(quiet=True)
                         )
                     except Exception as emergency_error:
                         logger.error(f"Emergency fallback also failed: {emergency_error}")
                         # Last resort: create basic video without audio
+                        video_args = self._get_video_output_args()
                         (
                             ffmpeg
                             .input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
                             .output(str(output_path),
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   preset='fast',
-                                   crf=23)
+                                   vcodec=video_args.get('vcodec', 'libx264'),
+                                   acodec=video_args.get('acodec', 'aac'),
+                                   preset=video_args.get('preset', 'veryfast'),
+                                   crf=video_args.get('crf', 25))
                             .overwrite_output()
                             .run(quiet=True)
                         )
@@ -1937,14 +1970,15 @@ class VideoEditor:
                 
                 # Create the slide with video only (completely silent, no audio track)
                 try:
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_input['v'], str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
-                               vcodec='libx264',
+                               vcodec=video_args.get('vcodec', 'libx264'),
                                t=duration,
-                               preset='fast',
-                               crf=23)
+                               preset=video_args.get('preset', 'veryfast'),
+                               crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -2170,13 +2204,14 @@ class VideoEditor:
             
             # Create silent slide (no audio - context video will have its own audio)
             try:
+                video_args = self._get_video_output_args()
                 (
                     ffmpeg
                     .output(video_input['v'], str(output_path),
                            vf=f"scale=1280:720,{video_filter}",
-                           vcodec='libx264',
-                           preset='fast',
-                           crf=23,
+                           vcodec=video_args.get('vcodec', 'libx264'),
+                           preset=video_args.get('preset', 'veryfast'),
+                           crf=video_args.get('crf', 25),
                            t=duration)
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
@@ -2338,11 +2373,14 @@ class VideoEditor:
                     audio_out = ffmpeg.filter([context_input['a'], slide_input['a']], 'concat', n=2, v=0, a=1)
                     
                     # Combine video with transition and audio concatenation
+                    video_args = self._get_video_output_args()
                     (
                         ffmpeg
                         .output(video_out, audio_out, str(output_path),
-                               vcodec='libx264', acodec='aac', preset='fast',
-                               ac=2, ar=48000, crf=23)
+                               vcodec=video_args.get('vcodec', 'libx264'),
+                               acodec=video_args.get('acodec', 'aac'),
+                               preset=video_args.get('preset', 'veryfast'),
+                               ac=2, ar=48000, crf=video_args.get('crf', 25))
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -3223,17 +3261,18 @@ class VideoEditor:
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
                 
                 # Extract with timestamp reset (same as long-form)
+                video_args = self._get_video_output_args()
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
                         str(expression_video_clip_path),
-                        vcodec='libx264',
-                        acodec='aac',
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
                         ac=2,
                         ar=48000,
-                        preset='fast',
-                        crf=23
+                        preset=video_args.get('preset', 'veryfast'),
+                        crf=video_args.get('crf', 25)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -3460,11 +3499,14 @@ class VideoEditor:
             audio_out = ffmpeg.filter([context_input['a'], expr_input['a']], 'concat', n=2, v=0, a=1)
             
             # Combine video with transition and audio concatenation
+            video_args = self._get_video_output_args()
             (
                 ffmpeg
                 .output(video_out, audio_out, str(output_path),
-                       vcodec='libx264', acodec='aac', preset='fast',
-                       ac=2, ar=48000, crf=23)
+                       vcodec=video_args.get('vcodec', 'libx264'),
+                       acodec=video_args.get('acodec', 'aac'),
+                       preset=video_args.get('preset', 'veryfast'),
+                       ac=2, ar=48000, crf=video_args.get('crf', 25))
                 .overwrite_output()
                 .run(quiet=True)
             )

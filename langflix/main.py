@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 # Import our modules
-from langflix.core.subtitle_parser import parse_srt_file, chunk_subtitles
+from langflix.core.subtitle_parser import parse_srt_file, parse_subtitle_file_by_extension, chunk_subtitles
 from langflix.core.expression_analyzer import analyze_chunk, group_expressions_by_context
 from langflix.core.video_processor import VideoProcessor
 from langflix.core.subtitle_processor import SubtitleProcessor
@@ -118,8 +118,8 @@ def validate_and_sanitize_path(path_str: str, path_type: str = "file") -> Path:
     if path_type == "subtitle":
         if not path.exists():
             raise FileNotFoundError(f"Subtitle file not found: {path}")
-        if not path.suffix.lower() in ['.srt', '.vtt']:
-            raise ValueError(f"Invalid subtitle file format. Expected .srt or .vtt, got: {path.suffix}")
+        if not path.suffix.lower() in ['.srt', '.vtt', '.smi', '.ass', '.ssa']:
+            raise ValueError(f"Invalid subtitle file format. Expected .srt, .vtt, .smi, .ass, or .ssa, got: {path.suffix}")
         if not path.is_file():
             raise ValueError(f"Subtitle path is not a file: {path}")
     
@@ -401,9 +401,10 @@ class LangFlixPipeline:
             raise
     
     def _parse_subtitles(self) -> List[Dict[str, Any]]:
-        """Parse subtitle file"""
+        """Parse subtitle file (supports SRT, VTT, SMI, ASS, SSA formats)"""
         try:
-            subtitles = parse_srt_file(str(self.subtitle_file))
+            # Use extension-based parser to support multiple formats
+            subtitles = parse_subtitle_file_by_extension(str(self.subtitle_file))
             logger.info(f"Parsed {len(subtitles)} subtitle entries")
             return subtitles
         except Exception as e:

@@ -202,27 +202,25 @@ def parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
             logger.warning(f"Failed to detect encoding, trying UTF-8")
             encoding = 'utf-8'
         
-        # Parse XML with detected encoding
+        # Parse SMI file using regex (more tolerant of malformed XML)
+        # Many SMI files have complex HTML structures that break XML parsers
+        # So we use regex to extract SYNC blocks and text content directly
         try:
-            tree = ET.parse(file_path, parser=ET.XMLParser(encoding=encoding))
-            root = tree.getroot()
-        except ET.ParseError as e:
-            raise SubtitleParseError(
-                path=file_path,
-                reason=f"Invalid XML structure: {e}"
-            )
-        except UnicodeDecodeError:
+            # Read file with detected encoding
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+        except (UnicodeDecodeError, ValueError):
             # Try common Korean encodings
             fallback_encodings = ['euc-kr', 'cp949', 'utf-8', 'latin-1']
             logger.warning(f"Failed with {encoding}, trying fallback encodings")
             
             for fallback in fallback_encodings:
                 try:
-                    tree = ET.parse(file_path, parser=ET.XMLParser(encoding=fallback))
-                    root = tree.getroot()
-                    logger.info(f"Successfully parsed with fallback encoding: {fallback}")
+                    with open(file_path, 'r', encoding=fallback) as f:
+                        content = f.read()
+                    logger.info(f"Successfully read with fallback encoding: {fallback}")
                     break
-                except (UnicodeDecodeError, ET.ParseError):
+                except (UnicodeDecodeError, ValueError):
                     continue
             else:
                 raise SubtitleEncodingError(
@@ -230,15 +228,23 @@ def parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
                     attempted_encodings=[encoding] + fallback_encodings
                 )
         
-        result = []
-        sync_elements = root.findall('.//SYNC')
+        # Extract SYNC blocks using regex
+        # Pattern: <SYNC Start=123><P Class=...>text</P></SYNC>
+        # More tolerant of malformed XML
+        import re
         
-        for i, sync in enumerate(sync_elements):
-            start_attr = sync.get('Start')
-            if not start_attr:
-                continue
-            
-            # Convert milliseconds to seconds
+        # Find all SYNC blocks
+        sync_pattern = r'<SYNC\s+Start=(\d+)>(.*?)</SYNC>'
+        sync_matches = re.findall(sync_pattern, content, re.DOTALL | re.IGNORECASE)
+        
+        if not sync_matches:
+            # Try alternative pattern without closing tag
+            sync_pattern_alt = r'<SYNC\s+Start=(\d+)>(.*?)(?=<SYNC|</BODY>|$)'
+            sync_matches = re.findall(sync_pattern_alt, content, re.DOTALL | re.IGNORECASE)
+        
+        result = []
+        
+        for i, (start_attr, sync_content) in enumerate(sync_matches):
             try:
                 start_time_ms = int(start_attr)
             except ValueError:
@@ -248,25 +254,54 @@ def parse_smi_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
             start_time_seconds = start_time_ms / 1000.0
             
             # Calculate end_time from next sync or use default duration
-            if i + 1 < len(sync_elements):
-                next_start_attr = sync_elements[i + 1].get('Start')
-                if next_start_attr:
-                    try:
-                        next_start_ms = int(next_start_attr)
-                        end_time_seconds = next_start_ms / 1000.0
-                    except ValueError:
-                        end_time_seconds = start_time_seconds + 2.0
-                else:
+            if i + 1 < len(sync_matches):
+                next_start_attr = sync_matches[i + 1][0]
+                try:
+                    next_start_ms = int(next_start_attr)
+                    end_time_seconds = next_start_ms / 1000.0
+                except ValueError:
                     end_time_seconds = start_time_seconds + 2.0
             else:
                 # Default duration for last subtitle
                 end_time_seconds = start_time_seconds + 2.0
             
-            # Extract text from P tags
+            # Extract text from P tags using regex
+            # Remove all HTML tags and extract text
+            # Handle HTML entities
+            html_entities = {
+                '&nbsp;': ' ',
+                '&amp;': '&',
+                '&lt;': '<',
+                '&gt;': '>',
+                '&quot;': '"',
+                '&apos;': "'",
+            }
+            
+            # Extract P tag content
+            p_pattern = r'<P[^>]*>(.*?)</P>'
+            p_matches = re.findall(p_pattern, sync_content, re.DOTALL | re.IGNORECASE)
+            
             text_parts = []
-            for p_tag in sync.findall('.//P'):
-                # Get text content, handling nested tags
-                text = ''.join(p_tag.itertext()).strip()
+            for p_content in p_matches:
+                # Remove HTML tags
+                text = re.sub(r'<[^>]+>', '', p_content)
+                # Replace HTML entities
+                for entity, char in html_entities.items():
+                    text = text.replace(entity, char)
+                # Replace <br> tags with newline
+                text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+                text = text.strip()
+                if text:
+                    text_parts.append(text)
+            
+            # If no P tags found, try to extract any text content
+            if not text_parts:
+                # Remove all tags and extract text
+                text = re.sub(r'<[^>]+>', '', sync_content)
+                for entity, char in html_entities.items():
+                    text = text.replace(entity, char)
+                text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+                text = text.strip()
                 if text:
                     text_parts.append(text)
             

@@ -598,12 +598,14 @@ class VideoEditor:
                 except Exception as filter_error:
                     logger.warning(f"Single-pass filter concat failed, falling back to sequential: {filter_error}")
                     # Last resort: concatenate sequentially (slowest but most compatible)
+                    # This is the original working method
                     current_path = segments[0]
                     for i in range(1, len(segments)):
                         logger.info(f"Concatenating segment {i+1}/{len(segments)}...")
                         next_segment = segments[i]
                         temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
                         self._register_temp_file(temp_concat_path_fallback)
+                        from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
                         concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
                         current_path = temp_concat_path_fallback
             

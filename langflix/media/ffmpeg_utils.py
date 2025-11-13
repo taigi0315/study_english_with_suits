@@ -426,31 +426,35 @@ def concat_filter_with_explicit_map(
 def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> None:
     """Use concat demuxer when all inputs are uniform; caller must ensure uniformity.
     
-    Optimized: Uses copy mode (no re-encoding) for maximum speed.
-    This is much faster than re-encoding, especially for TrueNAS deployments.
-    
     Note: This is a simplified version that reads from a concat list file.
     For in-memory concat, use repeat_av_demuxer pattern.
     """
-    # Use copy mode for maximum speed - no re-encoding needed for uniform inputs
-    # This is 10-100x faster than re-encoding, especially important for TrueNAS
-    encode_args = {"vcodec": "copy", "acodec": "copy"}
-    
-    logger.debug(f"Using demuxer concat with copy mode (fastest) for {out_path}")
-    
+    # First, probe one of the input files to get encoding params
+    # This ensures we use appropriate encoding settings, not just copy mode
+    first_file = None
     try:
-        (
-            ffmpeg
-            .input(str(list_file), format="concat", safe=0)
-            .output(str(out_path), **encode_args)
-            .overwrite_output()
-            .run(quiet=True)
-        )
-        ensure_dir(Path(out_path))
-    except ffmpeg.Error as e:
-        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
-        logger.warning(f"Demuxer concat failed (copy mode): {stderr[:500]}")
-        raise
+        with open(list_file) as f:
+            first_line = f.readline().strip()
+            if first_line.startswith("file "):
+                first_file = first_line[6:-1]  # Remove 'file ' prefix and quotes
+    except Exception as e:
+        logger.warning(f"Could not read concat file to determine encoding: {e}")
+    
+    if first_file and Path(first_file).exists():
+        # Use encoding args from source (includes preset/crf from config)
+        encode_args = {**make_video_encode_args_from_source(str(first_file)), **make_audio_encode_args_copy()}
+    else:
+        # Fallback: use copy for both (fastest but may fail if not uniform)
+        encode_args = {"vcodec": "copy", "acodec": "copy"}
+    
+    (
+        ffmpeg
+        .input(str(list_file), format="concat", safe=0)
+        .output(str(out_path), **encode_args)
+        .overwrite_output()
+        .run(quiet=True)
+    )
+    ensure_dir(Path(out_path))
 
 
 # --------------------------- Stack helpers ---------------------------

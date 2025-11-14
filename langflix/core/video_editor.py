@@ -382,14 +382,11 @@ class VideoEditor:
             
             logger.info(f"Creating multi-expression sequence for group {group_id} ({len(expressions)} expressions)")
             
-            # Step 1: Create context video with subtitles (reuse for all expressions)
-            # Use first expression for subtitle context (all expressions share same context)
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path,
-                expressions[0],  # Use first expression for subtitle context
-                group_id=group_id
-            )
-            logger.info(f"Context with subtitles created: {context_with_subtitles}")
+            # Step 1: Prepare context video WITHOUT subtitles first
+            # Subtitles will be applied to the final concatenated video to ensure they appear throughout
+            # Using context video directly (subtitles applied later after concatenation)
+            context_without_subtitles = Path(context_video_path)
+            logger.info(f"Using context video (subtitles will be applied later): {context_without_subtitles}")
 
             from langflix.core.models import ExpressionGroup
             expression_group = ExpressionGroup(
@@ -398,15 +395,12 @@ class VideoEditor:
                 expressions=expressions
             )
 
-            # Prepare context video for multi-expression layout
-            # No padding needed - hstack will handle side-by-side layout automatically
-            # Just use the context video with subtitles directly
-            context_with_multi_slide = Path(context_with_subtitles)
-            logger.info(f"Using context video for multi-expression sequence: {context_with_multi_slide}")
+            # Store subtitle info for later application
+            subtitle_expression = expressions[0]  # Use first expression for subtitle context
 
             # Step 2: Build sequence segments
-            # Structure: context (with padding) → transition → expr1 repeat → transition → expr2 repeat → ...
-            segments = [str(context_with_multi_slide)]  # Start with padded context video (slide added later)
+            # Structure: context → transition → expr1 repeat → transition → expr2 repeat → ...
+            segments = [str(context_without_subtitles)]  # Start with context video (subtitles applied later)
 
             # Get transition configuration
             from langflix import settings
@@ -493,13 +487,12 @@ class VideoEditor:
                     f"({relative_start:.2f}s - {relative_end:.2f}s, duration: {expression_duration:.2f}s)"
                 )
                 
-                # Extract expression clip from context_with_subtitles (CRITICAL: use subtitle-applied context)
-                # Keep original resolution and use pad filter to place video on left half only
-                # This maintains original quality and allows easier scaling with other videos
+                # Extract expression clip from context video (WITHOUT subtitles)
+                # Subtitles will be applied to the final concatenated video
                 expression_video_clip_path = self.output_dir / f"temp_expr_clip_multi_{safe_group_id}_{expr_idx}.mkv"
                 self._register_temp_file(expression_video_clip_path)
                 
-                input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
+                input_stream = ffmpeg.input(str(context_without_subtitles), ss=relative_start, t=expression_duration)
                 video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
                 # DO NOT pad here - padding was causing resolution mismatch (2560x720 instead of 1280x720)
                 # The expression clip should maintain original resolution (1280x720)
@@ -540,15 +533,14 @@ class VideoEditor:
                 # Step 2c: Add transition before expression (after context for first expression)
                 if transition_enabled:
                     # Add transition before each expression (after context for first, between expressions for others)
-                    # Use context_with_subtitles as source to match 1280x720 resolution
-                    # (context_with_multi_slide was causing 2560x720 which is incorrect)
+                    # Use context video (without subtitles) as source to match 1280x720 resolution
                     transition_video_path = self.output_dir / f"temp_transition_multi_{safe_group_id}_{expr_idx}.mkv"
                     transition_video = self._create_transition_video(
                         duration=transition_duration,
                         image_path=str(transition_image_full),
                         sound_effect_path=str(sound_effect_full),
                         output_path=transition_video_path,
-                        source_video_path=str(context_with_subtitles),  # Use context video to match 1280x720 resolution
+                        source_video_path=str(context_without_subtitles),  # Use context video to match 1280x720 resolution
                         fps=25,
                         sound_effect_volume=sound_volume
                     )
@@ -621,9 +613,34 @@ class VideoEditor:
             self._register_temp_file(hstack_temp_path)
             hstack_keep_height(str(current_path), str(multi_expression_slide), str(hstack_temp_path))
             
+            # Step 5.5: Apply subtitles to the final hstacked video
+            # This ensures subtitles appear throughout the entire video, not just the context portion
+            logger.info("Applying subtitles to multi-expression sequence")
+            hstack_with_subs_path = self.output_dir / f"temp_hstack_subs_multi_{safe_group_id}.mkv"
+            self._register_temp_file(hstack_with_subs_path)
+            
+            # Create/find subtitle file
+            subtitle_dir = self.output_dir.parent / "subtitles"
+            from langflix.subtitles import overlay as subs_overlay
+            sub_path = subs_overlay.find_subtitle_file(subtitle_dir, subtitle_expression.expression)
+            
+            if sub_path and Path(sub_path).exists():
+                import tempfile
+                temp_dir = Path(tempfile.gettempdir())
+                temp_sub_name = f"temp_dual_lang_multi_{safe_group_id}.srt"
+                temp_sub = temp_dir / temp_sub_name
+                self._register_temp_file(temp_sub)
+                subs_overlay.create_dual_language_copy(Path(sub_path), temp_sub)
+                subs_overlay.apply_subtitles_with_file(Path(hstack_temp_path), temp_sub, hstack_with_subs_path, is_expression=False)
+                logger.info(f"✅ Subtitles applied to multi-expression video")
+            else:
+                # No subtitle file found, use hstack output as-is
+                logger.warning(f"No subtitle file found for {subtitle_expression.expression}, proceeding without subtitles")
+                hstack_with_subs_path = hstack_temp_path
+            
             # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
             logger.info("Applying final audio gain (+69%) to multi-expression output")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
+            apply_final_audio_gain(str(hstack_with_subs_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"✅ Multi-expression sequence created: {output_path}")
             return str(output_path)

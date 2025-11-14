@@ -284,6 +284,26 @@ python tests/functional/test_llm_only.py --subtitle "assets/subtitles/Suits.S01E
 python tests/functional/run_end_to_end_test.py
 ```
 
+## 📦 Deployment Bundle
+
+Need to copy the project to a deployment host (e.g., TrueNAS) without development artifacts?
+
+```bash
+# Create a minimal bundle under dist/
+make deploy-zip
+
+# Custom output filename
+make deploy-zip OUTPUT=/tmp/langflix_deploy.zip
+
+# Include documentation directory if desired
+make deploy-zip INCLUDE_DOCS=1
+
+# Include assets/media directory (opt-in)
+make deploy-zip INCLUDE_MEDIA=1
+```
+
+The bundle contains the LangFlix application code, Docker/Compose resources, configuration templates, and assets required for deployment while omitting virtual environments, tests, caches, and other development-only files. Large media libraries under `assets/media` are excluded by default to keep the archive lean; opt in with `INCLUDE_MEDIA=1` when they are required.
+
 ## 📖 Usage
 
 ### 🚀 **Complete End-to-End Pipeline (Recommended)**

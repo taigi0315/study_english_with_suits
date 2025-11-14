@@ -99,6 +99,20 @@ You can fork or pin a specific revision as needed.
 
 ---
 
+### Optional: Create a Minimal Deployment Bundle
+
+If you prefer to prepare the project on a development machine and copy a lean archive to TrueNAS, generate a bundle before transfer:
+
+```bash
+make deploy-zip                 # Creates dist/langflix_deploy_<timestamp>.zip
+make deploy-zip OUTPUT=/tmp/langflix.zip INCLUDE_DOCS=1
+make deploy-zip INCLUDE_MEDIA=1
+```
+
+The ZIP file includes only the application code, Docker resources, configuration templates, and assets required for deployment, excluding virtual environments, tests, caches, and other development artifacts. Media libraries under `assets/media` are excluded by default; use `INCLUDE_MEDIA=1` only when you need to ship bundled media.
+
+---
+
 ## Step 5: Create Supporting Directories and Set Permissions
 
 Create the directories that Docker Compose will mount as volumes and **set proper permissions**. Skipping this step will cause containers to fail to start or result in file access errors.
@@ -348,6 +362,7 @@ services:
     volumes:
       - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       - ${TRUENAS_DATA_PATH}/logs:/var/log/langflix:rw
       - ${TRUENAS_DATA_PATH}/cache:/data/cache:rw
   langflix-ui:
@@ -360,6 +375,7 @@ services:
     volumes:
       - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw

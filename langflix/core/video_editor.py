@@ -1348,44 +1348,38 @@ class VideoEditor:
             # Get background configuration with proper fallbacks
             background_input, input_type = self._get_background_config()
             
-            # Generate TTS audio using only expression_dialogue
-            tts_text = expression.expression_dialogue
-            logger.info(f"Generating TTS audio for: '{tts_text}'")
-            
-            # Edge case: Truncate if too long for TTS provider
-            MAX_TTS_CHARS = 500  # Adjust based on provider
-            if len(tts_text) > MAX_TTS_CHARS:
-                logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
-                tts_text = tts_text[:MAX_TTS_CHARS]
-            
-            # Import TTS modules
-            from langflix.tts.factory import create_tts_client
             from langflix import settings
             
-            # Get TTS configuration with validation
-            tts_config = settings.get_tts_config()
-            if not tts_config:
-                raise ValueError("TTS configuration is not available")
+            tts_config = settings.get_tts_config() or {}
+            provider = settings.get_tts_provider() if tts_config else None
+            provider_config = tts_config.get(provider, {}) if provider else {}
+            provider_config_for_audio = provider_config if provider_config else {"response_format": "wav"}
+            tts_enabled = settings.is_tts_enabled() and provider and bool(provider_config)
             
-            provider = settings.get_tts_provider()
-            if not provider:
-                raise ValueError("TTS provider is not configured")
-            
-            provider_config = tts_config.get(provider, {})
-            if not provider_config:
-                raise ValueError(f"Configuration for TTS provider '{provider}' is not found")
-            
-            logger.info(f"Using TTS provider: {provider}")
-            logger.info(f"Provider config keys: {list(provider_config.keys())}")
-            
-            # Create TTS audio directory for permanent storage
+            # Create audio timeline directory (used for both TTS and original audio)
             tts_audio_dir = self.output_dir.parent / "tts_audio"
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"TTS audio directory: {tts_audio_dir}")
+            logger.info(f"Audio timeline directory: {tts_audio_dir}")
             
             # Check if TTS is enabled and decide on audio workflow
-            if settings.is_tts_enabled():
+            if tts_enabled:
                 try:
+                    from langflix.tts.factory import create_tts_client
+                    
+                    # Prepare dialogue text for TTS generation
+                    tts_text = expression.expression_dialogue or ""
+                    if not isinstance(tts_text, str):
+                        tts_text = str(tts_text)
+                    
+                    MAX_TTS_CHARS = 500  # Adjust based on provider
+                    if len(tts_text) > MAX_TTS_CHARS:
+                        logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
+                        tts_text = tts_text[:MAX_TTS_CHARS]
+                    
+                    logger.info(f"TTS enabled - generating synthetic audio for: '{tts_text}'")
+                    logger.info(f"Using TTS provider: {provider}")
+                    logger.info(f"Provider config keys: {list(provider_config.keys())}")
+                    
                     # TTS Workflow: Generate synthetic speech
                     logger.info("TTS is enabled - using synthetic speech")
                     logger.info("Creating TTS client...")
@@ -1406,13 +1400,15 @@ class VideoEditor:
                     # Fallback to original audio when TTS fails
                     logger.warning("TTS failed, falling back to original audio extraction")
                     audio_path, expression_duration = self._extract_original_audio_timeline(
-                        expression, expression_source_video, tts_audio_dir, expression_index, provider_config
+                        expression, expression_source_video, tts_audio_dir, expression_index, provider_config_for_audio
                     )
             else:
-                # Original Audio Workflow: Extract from source video
-                logger.info("TTS is disabled - using original audio extraction")
+                if settings.is_tts_enabled():
+                    logger.warning("TTS is enabled but provider configuration is missing; falling back to original audio extraction")
+                else:
+                    logger.info("TTS is disabled - using original audio extraction")
                 audio_path, expression_duration = self._extract_original_audio_timeline(
-                    expression, expression_source_video, tts_audio_dir, expression_index, provider_config
+                    expression, expression_source_video, tts_audio_dir, expression_index, provider_config_for_audio
                 )
             
             # Use the timeline audio directly (no need for 2x conversion since timeline is already complete)

@@ -178,6 +178,15 @@ transitions:
     sound_effect_path: "assets/sound_effect.mp3"
     sound_effect_volume: 0.5  # Volume level (0.0-1.0)
   
+  # Transition from video segment to educational slide (long-form and short-form sequential layout)
+  context_to_slide_transition:
+    enabled: true
+    duration: 1.0  # 1 second transition
+    image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
+    image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
+    sound_effect_path: "assets/sound_effect.mp3"
+    sound_effect_volume: 0.5  # Volume level (0.0-1.0)
+  
   # Transition between different expressions
   expression_to_expression:
     type: "xfade"            # Options: fade, xfade, none

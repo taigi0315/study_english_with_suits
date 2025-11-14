@@ -113,11 +113,11 @@ class VideoEditor:
                                   skip_context: bool = False,
                                   group_id: Optional[str] = None) -> str:
         """
-        Create educational video sequence with long-form layout:
-        - If skip_context=False: Left half: context video → expression repeat (with subtitles)
-        - If skip_context=True: Left half: expression repeat only (with subtitles, no context)
-        - Right half: educational slide (background + text + audio 3x)
-        - Slide visible throughout entire duration
+        Create educational video sequence with long-form sequential layout:
+        - Full-screen video: context video → expression repeat (with subtitles)
+        - Transition: 1-second transition video (if enabled)
+        - Full-screen slide: educational slide (background + text + audio 3x)
+        - Sequential layout: video → transition → slide (TICKET-038)
         
         Args:
             expression: ExpressionAnalysis object
@@ -330,16 +330,121 @@ class VideoEditor:
                 expression_video_path, expression, expression_index, target_duration=left_duration
             )
             
-            # Step 4: Use hstack to create side-by-side layout (long-form)
-            # Left: context → expression repeat, Right: educational slide
-            logger.info("Creating long-form side-by-side layout with hstack")
-            hstack_temp_path = self.output_dir / f"temp_hstack_long_{safe_expression}.mkv"
-            self._register_temp_file(hstack_temp_path)
-            hstack_keep_height(str(left_side_path), str(educational_slide), str(hstack_temp_path))
+            # Step 4: Create sequential layout (long-form): video → transition → slide
+            # TICKET-038: Changed from side-by-side (hstack) to sequential full-screen layout
+            logger.info("Creating long-form sequential layout (video → transition → slide)")
+            
+            # Get transition configuration
+            from langflix import settings
+            transition_config = settings.get_transitions_config()
+            context_to_slide_transition = transition_config.get('context_to_slide_transition', {})
+            
+            # Default to enabled if not specified
+            transition_enabled = context_to_slide_transition.get('enabled', True)
+            
+            if transition_enabled:
+                # Create transition video between video segment and slide
+                transition_image_path = context_to_slide_transition.get('image_path_16_9', 'assets/transition_16_9.png')
+                sound_effect_path = context_to_slide_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
+                transition_duration = context_to_slide_transition.get('duration', 1.0)
+                sound_volume = context_to_slide_transition.get('sound_effect_volume', 0.5)
+                
+                # Find transition assets using multiple possible paths
+                import os
+                transition_image_full = None
+                sound_effect_full = None
+                
+                # Try multiple possible paths for transition image
+                image_paths = [
+                    Path(transition_image_path),
+                    Path(".").absolute() / transition_image_path,
+                    Path(os.getcwd()) / transition_image_path,
+                    Path(__file__).parent.parent.parent / transition_image_path,
+                    self.output_dir.parent.parent.parent.parent / transition_image_path,
+                ]
+                for path in image_paths:
+                    if path.exists():
+                        transition_image_full = path.absolute()
+                        logger.info(f"Found transition image: {transition_image_full}")
+                        break
+                
+                # Try multiple possible paths for sound effect
+                sound_paths = [
+                    Path(sound_effect_path),
+                    Path(".").absolute() / sound_effect_path,
+                    Path(os.getcwd()) / sound_effect_path,
+                    Path(__file__).parent.parent.parent / sound_effect_path,
+                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
+                ]
+                for path in sound_paths:
+                    if path.exists():
+                        sound_effect_full = path.absolute()
+                        logger.info(f"Found sound effect: {sound_effect_full}")
+                        break
+                
+                if transition_image_full and sound_effect_full:
+                    # Create transition video matching left_side_path resolution
+                    transition_video_path = self.output_dir / f"temp_transition_video_slide_{safe_expression}.mkv"
+                    self._register_temp_file(transition_video_path)
+                    transition_video = self._create_transition_video(
+                        duration=transition_duration,
+                        image_path=str(transition_image_full),
+                        sound_effect_path=str(sound_effect_full),
+                        output_path=transition_video_path,
+                        source_video_path=str(left_side_path),  # Match video segment resolution
+                        fps=25,
+                        sound_effect_volume=sound_volume
+                    )
+                    
+                    # Concatenate sequentially: left_side_path → transition → educational_slide
+                    # First: video + transition
+                    temp_video_transition = self.output_dir / f"temp_video_transition_{safe_expression}.mkv"
+                    self._register_temp_file(temp_video_transition)
+                    concat_filter_with_explicit_map(
+                        str(left_side_path),
+                        str(transition_video),
+                        str(temp_video_transition)
+                    )
+                    
+                    # Then: (video + transition) + slide
+                    sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
+                    self._register_temp_file(sequential_temp_path)
+                    concat_filter_with_explicit_map(
+                        str(temp_video_transition),
+                        str(educational_slide),
+                        str(sequential_temp_path)
+                    )
+                    
+                    temp_output_path = sequential_temp_path
+                else:
+                    logger.warning(
+                        f"Transition assets missing (image: {transition_image_full is not None}, "
+                        f"sound: {sound_effect_full is not None}), using direct concatenation"
+                    )
+                    # Fall back to direct concatenation without transition
+                    sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
+                    self._register_temp_file(sequential_temp_path)
+                    concat_filter_with_explicit_map(
+                        str(left_side_path),
+                        str(educational_slide),
+                        str(sequential_temp_path)
+                    )
+                    temp_output_path = sequential_temp_path
+            else:
+                # Transition disabled: direct concatenation
+                logger.info("Transition disabled, using direct concatenation")
+                sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
+                self._register_temp_file(sequential_temp_path)
+                concat_filter_with_explicit_map(
+                    str(left_side_path),
+                    str(educational_slide),
+                    str(sequential_temp_path)
+                )
+                temp_output_path = sequential_temp_path
             
             # Step 5: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
             logger.info("Applying final audio gain (+69%) to long-form output")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
+            apply_final_audio_gain(str(temp_output_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"Educational sequence created: {output_path}")
             return str(output_path)
@@ -1195,7 +1300,41 @@ class VideoEditor:
                 # already handles the timestamp adjustment via _generate_dual_language_srt
                 
                 logger.info(f"Applying subtitles to context video (file: {sub_path.name}, context_start: {expression.context_start_time})")
-                subs_overlay.apply_subtitles_with_file(Path(video_path), temp_sub, output_path, is_expression=False)
+                
+                # TICKET-040: Add expression subtitle at top (yellow) in addition to original subtitles
+                # Calculate expression timing relative to context
+                expression_start_relative = self._time_to_seconds(expression.expression_start_time) - \
+                                           self._time_to_seconds(expression.context_start_time)
+                expression_end_relative = self._time_to_seconds(expression.expression_end_time) - \
+                                         self._time_to_seconds(expression.context_start_time)
+                
+                # Calculate total expression duration including repeats
+                from langflix import settings
+                repeat_count = settings.get_expression_repeat_count()
+                expression_duration = expression_end_relative - expression_start_relative
+                total_expression_duration = expression_duration * repeat_count
+                
+                # Generate expression subtitle SRT
+                expression_subtitle_content = self.subtitle_processor.generate_expression_subtitle_srt(
+                    expression,
+                    expression_start_relative,
+                    expression_start_relative + total_expression_duration  # Include all repeats
+                )
+                
+                # Save expression subtitle to temp file
+                expression_subtitle_path = temp_dir / f"temp_expression_subtitle_{group_id or safe_name}.srt"
+                expression_subtitle_path.write_text(expression_subtitle_content, encoding='utf-8')
+                self._register_temp_file(expression_subtitle_path)
+                
+                # Apply dual subtitle layers (original at bottom + expression at top)
+                subs_overlay.apply_dual_subtitle_layers(
+                    str(video_path),
+                    str(temp_sub),
+                    str(expression_subtitle_path),
+                    str(output_path),
+                    expression_start_relative,
+                    expression_start_relative + total_expression_duration
+                )
             else:
                 # drawtext fallback with translation only
                 translation_text = ""
@@ -3268,9 +3407,9 @@ class VideoEditor:
     def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
                                   expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
         """
-        Create vertical short-format video (9:16) with context video on top and slide on bottom.
-        Total duration = context_duration + (TTS_duration * repeat_count) + (0.5s * (repeat_count - 1))
-        Context video plays normally, then freezes on last frame while TTS plays repeat_count times.
+        Create vertical short-format video (9:16) with centered video and letterbox, then transition to slide.
+        Sequential layout: video (centered, letterboxed) → transition → slide (full-screen) (TICKET-039)
+        Video maintains original aspect ratio with black bars top/bottom.
         
         Args:
             context_video_path: Path to context video with subtitles
@@ -3464,19 +3603,134 @@ class VideoEditor:
             # Step 5: Create silent slide with total duration (same approach as long-form uses left_duration)
             slide_path = self._create_educational_slide_silent(expression, total_duration)
             
-            # Step 6: Use vstack to create vertical layout (short-form) - same approach as long-form hstack
-            # Top: context → expression repeat, Bottom: educational slide
-            logger.info("Creating short-form vertical layout with vstack")
-            vstack_temp_path = self.output_dir / f"temp_vstack_short_{safe_expression}.mkv"
-            self._register_temp_file(vstack_temp_path)
-            # Track vstack file for preservation (TICKET-029) - this is the complete individual expression video
-            self.short_format_temp_files.append(vstack_temp_path)
-            vstack_keep_width(str(concatenated_video_path), str(slide_path), str(vstack_temp_path))
+            # Step 6: Center video with letterbox (short-form)
+            # TICKET-039: Changed from top-bottom (vstack) to centered video with letterbox
+            logger.info("Creating short-form centered video with letterbox")
+            letterboxed_video_path = self.output_dir / f"temp_letterboxed_short_{safe_expression}.mkv"
+            self._register_temp_file(letterboxed_video_path)
+            # Track for preservation (TICKET-029) - this is the complete individual expression video
+            self.short_format_temp_files.append(letterboxed_video_path)
             
-            # Step 7: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
+            # Center video in 9:16 frame (1080x1920) with letterbox
+            from langflix.media.ffmpeg_utils import center_video_with_letterbox
+            center_video_with_letterbox(
+                str(concatenated_video_path),
+                target_width=1080,
+                target_height=1920,
+                out_path=str(letterboxed_video_path)
+            )
+            
+            # Step 7: Create transition video between letterboxed video and slide
+            # Get transition configuration
+            transition_config = settings.get_transitions_config()
+            context_to_slide_transition = transition_config.get('context_to_slide_transition', {})
+            
+            # Default to enabled if not specified
+            transition_enabled = context_to_slide_transition.get('enabled', True)
+            
+            if transition_enabled:
+                # Create transition video (9:16 format for short-form)
+                transition_image_path = context_to_slide_transition.get('image_path_9_16', 'assets/transition_9_16.png')
+                sound_effect_path = context_to_slide_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
+                transition_duration = context_to_slide_transition.get('duration', 1.0)
+                sound_volume = context_to_slide_transition.get('sound_effect_volume', 0.5)
+                
+                # Find transition assets using multiple possible paths
+                import os
+                transition_image_full = None
+                sound_effect_full = None
+                
+                # Try multiple possible paths for transition image
+                image_paths = [
+                    Path(transition_image_path),
+                    Path(".").absolute() / transition_image_path,
+                    Path(os.getcwd()) / transition_image_path,
+                    Path(__file__).parent.parent.parent / transition_image_path,
+                    self.output_dir.parent.parent.parent.parent / transition_image_path,
+                ]
+                for path in image_paths:
+                    if path.exists():
+                        transition_image_full = path.absolute()
+                        logger.info(f"Found transition image: {transition_image_full}")
+                        break
+                
+                # Try multiple possible paths for sound effect
+                sound_paths = [
+                    Path(sound_effect_path),
+                    Path(".").absolute() / sound_effect_path,
+                    Path(os.getcwd()) / sound_effect_path,
+                    Path(__file__).parent.parent.parent / sound_effect_path,
+                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
+                ]
+                for path in sound_paths:
+                    if path.exists():
+                        sound_effect_full = path.absolute()
+                        logger.info(f"Found sound effect: {sound_effect_full}")
+                        break
+                
+                if transition_image_full and sound_effect_full:
+                    # Create transition video matching letterboxed video resolution (1080x1920)
+                    transition_video_path = self.output_dir / f"temp_transition_short_slide_{safe_expression}.mkv"
+                    self._register_temp_file(transition_video_path)
+                    transition_video = self._create_transition_video(
+                        duration=transition_duration,
+                        image_path=str(transition_image_full),
+                        sound_effect_path=str(sound_effect_full),
+                        output_path=transition_video_path,
+                        source_video_path=str(letterboxed_video_path),  # Match letterboxed video resolution
+                        fps=25,
+                        sound_effect_volume=sound_volume
+                    )
+                    
+                    # Concatenate sequentially: letterboxed_video → transition → slide
+                    # First: video + transition
+                    temp_video_transition = self.output_dir / f"temp_video_transition_short_{safe_expression}.mkv"
+                    self._register_temp_file(temp_video_transition)
+                    concat_filter_with_explicit_map(
+                        str(letterboxed_video_path),
+                        str(transition_video),
+                        str(temp_video_transition)
+                    )
+                    
+                    # Then: (video + transition) + slide
+                    sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
+                    self._register_temp_file(sequential_temp_path)
+                    concat_filter_with_explicit_map(
+                        str(temp_video_transition),
+                        str(slide_path),
+                        str(sequential_temp_path)
+                    )
+                    temp_output_path = sequential_temp_path
+                else:
+                    logger.warning(
+                        f"Transition assets missing (image: {transition_image_full is not None}, "
+                        f"sound: {sound_effect_full is not None}), using direct concatenation"
+                    )
+                    # Fall back to direct concatenation without transition
+                    sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
+                    self._register_temp_file(sequential_temp_path)
+                    concat_filter_with_explicit_map(
+                        str(letterboxed_video_path),
+                        str(slide_path),
+                        str(sequential_temp_path)
+                    )
+                    temp_output_path = sequential_temp_path
+            else:
+                # Transition disabled: direct concatenation
+                logger.info("Transition disabled, using direct concatenation")
+                sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
+                self._register_temp_file(sequential_temp_path)
+                concat_filter_with_explicit_map(
+                    str(letterboxed_video_path),
+                    str(slide_path),
+                    str(sequential_temp_path)
+                )
+                temp_output_path = sequential_temp_path
+            
+            # Step 8: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
             logger.info("Applying final audio gain (+69%) to short-form output")
             logger.info(f"Video duration: {total_duration:.2f}s")
-            apply_final_audio_gain(str(vstack_temp_path), str(output_path), gain_factor=1.69)
+            apply_final_audio_gain(str(temp_output_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
             return str(output_path), total_duration

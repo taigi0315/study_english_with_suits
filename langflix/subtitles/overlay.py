@@ -214,6 +214,86 @@ def apply_subtitles_with_file(input_video: Path, subtitle_file: Path, output_pat
     return output_path
 
 
+def apply_dual_subtitle_layers(
+    video_path: str,
+    original_subtitle_path: str,
+    expression_subtitle_path: str,
+    output_path: str,
+    expression_start_relative: float,
+    expression_end_relative: float
+) -> Path:
+    """
+    Apply two subtitle layers:
+    - Original subtitles at bottom (existing behavior)
+    - Expression subtitle at top (yellow, bold) during expression segments only
+    
+    TICKET-040: Dual subtitle layer support for expression highlighting.
+    
+    Args:
+        video_path: Input video path
+        original_subtitle_path: Path to original dual-language subtitle SRT
+        expression_subtitle_path: Path to expression-only subtitle SRT
+        output_path: Output video path
+        expression_start_relative: Expression start time relative to context (seconds)
+        expression_end_relative: Expression end time relative to context (seconds)
+        
+    Returns:
+        Path to output video with dual subtitles
+    """
+    # Build force_style for expression subtitle (top, yellow, bold)
+    # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = yellow (BGR format), Bold=1
+    expression_style = (
+        "Alignment=8,"  # Top center
+        "PrimaryColour=&H00FFFF00,"  # Yellow (BGR: 00FFFF00 = #FFFF00)
+        "OutlineColour=&H00000000,"  # Black outline
+        "Outline=2,"
+        "Bold=1,"
+        "FontSize=28,"
+        "BorderStyle=3"
+    )
+    
+    # Build force_style for original subtitle (bottom, white) - default behavior
+    original_style = build_ass_force_style(is_expression=False)
+    
+    # Apply subtitles using filter chain
+    # FFmpeg allows chaining multiple subtitles filters using comma separator
+    # First: original subtitles at bottom, Second: expression subtitles at top
+    video_input = ffmpeg.input(str(video_path))
+    
+    # Apply first subtitle layer (original at bottom)
+    video_with_original = video_input['v'].filter(
+        'subtitles',
+        original_subtitle_path,
+        force_style=original_style
+    )
+    
+    # Apply second subtitle layer (expression at top) on top of first
+    video_with_both = video_with_original.filter(
+        'subtitles',
+        expression_subtitle_path,
+        force_style=expression_style
+    )
+    
+    # Output with audio
+    (
+        ffmpeg
+        .output(
+            video_with_both,
+            video_input['a'] if 'a' in video_input else None,
+            str(output_path),
+            vcodec="libx264",
+            acodec="aac",
+            ac=2,
+            ar=48000,
+        )
+        .overwrite_output()
+        .run(quiet=True)
+    )
+    
+    logger.info(f"Applied dual subtitle layers: original (bottom) + expression (top, yellow)")
+    return Path(output_path)
+
+
 def drawtext_fallback_single_line(input_video: Path, text: str, output_path: Path) -> Path:
     def _clean(text_: str) -> str:
         text_ = text_.replace("'", "").replace('"', "").replace("\n", " ")

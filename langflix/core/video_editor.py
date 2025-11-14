@@ -619,10 +619,27 @@ class VideoEditor:
             hstack_with_subs_path = self.output_dir / f"temp_hstack_subs_multi_{safe_group_id}.mkv"
             self._register_temp_file(hstack_with_subs_path)
             
-            # Create/find subtitle file
+            # Find subtitle file for multi-expression group
+            # Subtitle files are named: group_XX_expr_YY_expression_text.srt
             subtitle_dir = self.output_dir.parent / "subtitles"
             from langflix.subtitles import overlay as subs_overlay
-            sub_path = subs_overlay.find_subtitle_file(subtitle_dir, subtitle_expression.expression)
+            from langflix.utils.filename_utils import sanitize_for_expression_filename
+            
+            # For multi-expression groups, subtitle file has group prefix
+            safe_expr_text = sanitize_for_expression_filename(subtitle_expression.expression)
+            sub_path = None
+            
+            # Try to find subtitle file with group prefix (e.g., group_01_expr_01_...)
+            if subtitle_dir.exists():
+                # Pattern: group_XX_expr_01_expression_text.srt (first expression)
+                pattern = f"{group_id}_expr_01_*.srt"
+                matches = list(subtitle_dir.glob(pattern))
+                if matches:
+                    sub_path = matches[0]
+                    logger.info(f"Found subtitle file with group prefix: {sub_path.name}")
+                else:
+                    # Fallback: try without group prefix
+                    sub_path = subs_overlay.find_subtitle_file(subtitle_dir, subtitle_expression.expression)
             
             if sub_path and Path(sub_path).exists():
                 import tempfile
@@ -632,10 +649,10 @@ class VideoEditor:
                 self._register_temp_file(temp_sub)
                 subs_overlay.create_dual_language_copy(Path(sub_path), temp_sub)
                 subs_overlay.apply_subtitles_with_file(Path(hstack_temp_path), temp_sub, hstack_with_subs_path, is_expression=False)
-                logger.info(f"✅ Subtitles applied to multi-expression video")
+                logger.info(f"✅ Subtitles applied to multi-expression video from: {sub_path.name}")
             else:
                 # No subtitle file found, use hstack output as-is
-                logger.warning(f"No subtitle file found for {subtitle_expression.expression}, proceeding without subtitles")
+                logger.warning(f"No subtitle file found for group {group_id}, proceeding without subtitles")
                 hstack_with_subs_path = hstack_temp_path
             
             # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)

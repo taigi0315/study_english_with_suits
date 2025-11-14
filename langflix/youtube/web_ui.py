@@ -148,6 +148,12 @@ class VideoManagementUI:
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
         self.app = Flask(__name__, template_folder=template_dir)
         
+        # Disable Flask/Werkzeug HTTP request logging (too verbose and not useful)
+        # Only log errors and warnings
+        import logging as std_logging
+        werkzeug_logger = std_logging.getLogger('werkzeug')
+        werkzeug_logger.setLevel(std_logging.WARNING)
+        
         # Register error handlers to ensure JSON responses for API errors
         self._setup_error_handlers()
         

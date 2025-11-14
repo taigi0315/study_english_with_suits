@@ -55,6 +55,21 @@ class RedisJobManager:
         try:
             updates['updated_at'] = datetime.now(timezone.utc).isoformat()
             
+            # Ensure progress only increases (prevent progress bar from going backwards)
+            if 'progress' in updates:
+                current_job = self.get_job(job_id)
+                if current_job and 'progress' in current_job:
+                    current_progress = int(current_job['progress'])
+                    new_progress = int(updates['progress'])
+                    # Only update if new progress is greater than current
+                    if new_progress < current_progress:
+                        logger.debug(f"⏭️ Skipping progress update for job {job_id}: {new_progress}% < {current_progress}% (preventing backward progress)")
+                        # Remove progress from updates to prevent backward movement
+                        updates = {k: v for k, v in updates.items() if k != 'progress'}
+                        # But still update other fields like current_step
+                        if not updates:
+                            return True  # Nothing to update
+            
             # Convert all values to strings for Redis storage
             string_updates = {}
             for key, value in updates.items():

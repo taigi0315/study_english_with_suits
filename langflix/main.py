@@ -224,7 +224,7 @@ class LangFlixPipeline:
         # Initialize processors
         self.video_processor = VideoProcessor(str(self.video_dir), video_file=str(self.video_file) if self.video_file else None)
         self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file))
-        self.video_editor = VideoEditor(str(self.paths['language']['final_videos']), self.language_code, self.episode_name)
+        self.video_editor = VideoEditor(str(self.paths['language']['final_videos']), self.language_code, self.episode_name, subtitle_processor=self.subtitle_processor)
         
         # Pipeline state
         self.subtitles = []

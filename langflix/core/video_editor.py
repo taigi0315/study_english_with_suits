@@ -25,7 +25,7 @@ class VideoEditor:
     Creates educational video sequences from expression analysis results
     """
     
-    def __init__(self, output_dir: str = "output", language_code: str = None, episode_name: str = None):
+    def __init__(self, output_dir: str = "output", language_code: str = None, episode_name: str = None, subtitle_processor = None):
         """
         Initialize VideoEditor
         
@@ -33,6 +33,7 @@ class VideoEditor:
             output_dir: Directory for output files
             language_code: Target language code for font selection
             episode_name: Episode name for file naming
+            subtitle_processor: Optional SubtitleProcessor instance for generating expression subtitles
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)  # Create parent directories if needed
@@ -43,6 +44,7 @@ class VideoEditor:
         self.cache_manager = get_cache_manager()  # Advanced cache manager
         self.language_code = language_code
         self.episode_name = episode_name or "Unknown_Episode"
+        self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
         # Set up paths for different video types
         self.final_videos_dir = self.output_dir  # This will be long_form_videos

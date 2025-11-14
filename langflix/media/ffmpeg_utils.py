@@ -17,6 +17,7 @@ import json
 import logging
 import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,119 @@ import ffmpeg
 from langflix import settings
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------- FFprobe Cache ---------------------------
+
+def _get_ffprobe_cache_key(path: str) -> Tuple[str, float, int]:
+    """
+    Generate cache key for ffprobe results based on file path, mtime, and size.
+    
+    This ensures cache invalidation when file is modified or replaced.
+    
+    Args:
+        path: Path to media file
+        
+    Returns:
+        Tuple of (resolved_path, mtime, size) for use as cache key
+        
+    Raises:
+        OSError: If file does not exist or cannot be accessed
+    """
+    p = Path(path)
+    stat = p.stat()
+    return (str(p.resolve()), stat.st_mtime, stat.st_size)
+
+
+@lru_cache(maxsize=512)
+def _cached_ffprobe_result(cache_key: Tuple[str, float, int], timeout: int) -> Dict[str, Any]:
+    """
+    Cached ffprobe execution with LRU eviction.
+    
+    This is the actual cached function. Cache key includes file metadata
+    (mtime, size) to ensure automatic invalidation on file changes.
+    
+    Args:
+        cache_key: Tuple of (path, mtime, size) from _get_ffprobe_cache_key
+        timeout: Timeout in seconds for ffprobe execution
+        
+    Returns:
+        Parsed ffprobe JSON output as dictionary
+        
+    Raises:
+        TimeoutError: If ffprobe times out
+        FileNotFoundError: If ffprobe is not found
+        subprocess.CalledProcessError: If ffprobe command fails
+        json.JSONDecodeError: If output cannot be parsed as JSON
+    """
+    path = cache_key[0]  # Extract actual path from cache key
+    logger.debug(f"🔍 FFprobe cache MISS for {Path(path).name} (mtime={cache_key[1]}, size={cache_key[2]})")
+    
+    try:
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_format",
+            "-show_streams",
+            "-of", "json",
+            path,
+        ]
+        completed = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            check=True,
+            timeout=timeout
+        )
+        result = json.loads(completed.stdout or "{}")
+        logger.debug(f"✅ FFprobe completed for {Path(path).name}")
+        return result
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"FFprobe timeout for {path} after {timeout}s")
+        raise TimeoutError(f"FFprobe timeout for {path} after {timeout}s") from e
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr")
+        logger.error(f"FFprobe failed for {path}: returncode={e.returncode}, stderr={stderr}")
+        # Try ffmpeg-python probe as a fallback
+        try:
+            return ffmpeg.probe(path)  # type: ignore[no-any-return]
+        except Exception as ee:
+            logger.error(f"ffmpeg.probe fallback also failed for {path}: {ee}")
+            raise
+    except FileNotFoundError:
+        logger.error("FFprobe not found. Please install ffmpeg.")
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse FFprobe JSON output for {path}: {e}")
+        raise
+
+
+def clear_ffprobe_cache() -> None:
+    """
+    Clear all cached ffprobe results.
+    
+    Useful for testing or when you know files have been modified
+    outside of the normal detection mechanism.
+    """
+    _cached_ffprobe_result.cache_clear()
+    logger.info("🗑️ FFprobe cache cleared")
+
+
+def get_ffprobe_cache_info() -> Dict[str, int]:
+    """
+    Get cache statistics for monitoring and debugging.
+    
+    Returns:
+        Dictionary with 'hits', 'misses', 'size', and 'maxsize'
+    """
+    info = _cached_ffprobe_result.cache_info()
+    return {
+        'hits': info.hits,
+        'misses': info.misses,
+        'size': info.currsize,
+        'maxsize': info.maxsize
+    }
+
 
 
 # --------------------------- Data models ---------------------------
@@ -47,14 +161,66 @@ class AudioParams:
 
 # --------------------------- Probe helpers ---------------------------
 
-def run_ffprobe(path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
+def run_ffprobe(path: str, timeout: Optional[int] = None, use_cache: bool = True) -> Dict[str, Any]:
     """Run ffprobe and return parsed JSON, raising on failure.
 
-    We use subprocess here because ffmpeg-python's probe may hide stderr.
+    Results are cached by default using file path, mtime, and size as cache key.
+    Cache automatically invalidates when file is modified.
     
     Args:
         path: Path to video file
         timeout: Timeout in seconds (if None, use configuration value)
+        use_cache: Whether to use cache (default: True). Set to False for real-time uploads.
+        
+    Returns:
+        Parsed ffprobe JSON output as dictionary
+        
+    Raises:
+        TimeoutError: If ffprobe times out
+        FileNotFoundError: If ffprobe is not found
+        subprocess.CalledProcessError: If ffprobe command fails
+        json.JSONDecodeError: If output cannot be parsed as JSON
+        OSError: If file cannot be accessed for cache key generation
+    """
+    effective_timeout = timeout if timeout is not None else settings.get_ffprobe_timeout_seconds()
+    
+    if not use_cache:
+        # Bypass cache for special cases (e.g., real-time uploads)
+        logger.debug(f"⏭️ FFprobe cache bypassed for {Path(path).name}")
+        return _run_ffprobe_uncached(path, effective_timeout)
+    
+    try:
+        # Generate cache key based on file metadata
+        cache_key = _get_ffprobe_cache_key(path)
+        
+        # Check if we have cached result
+        cache_info_before = _cached_ffprobe_result.cache_info()
+        result = _cached_ffprobe_result(cache_key, effective_timeout)
+        cache_info_after = _cached_ffprobe_result.cache_info()
+        
+        # Log cache hit
+        if cache_info_after.hits > cache_info_before.hits:
+            logger.debug(f"✨ FFprobe cache HIT for {Path(path).name} (hit rate: {cache_info_after.hits}/{cache_info_after.hits + cache_info_after.misses})")
+        
+        return result
+    except OSError as e:
+        # File stat failed, fallback to uncached probe
+        logger.warning(f"Failed to stat file for cache key: {e}, falling back to uncached probe")
+        return _run_ffprobe_uncached(path, effective_timeout)
+
+
+def _run_ffprobe_uncached(path: str, timeout: int) -> Dict[str, Any]:
+    """
+    Run ffprobe without caching (internal helper).
+    
+    This is used when cache is explicitly bypassed or when file stat fails.
+    
+    Args:
+        path: Path to video file
+        timeout: Timeout in seconds
+        
+    Returns:
+        Parsed ffprobe JSON output as dictionary
         
     Raises:
         TimeoutError: If ffprobe times out
@@ -62,8 +228,6 @@ def run_ffprobe(path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
         subprocess.CalledProcessError: If ffprobe command fails
         json.JSONDecodeError: If output cannot be parsed as JSON
     """
-    effective_timeout = timeout if timeout is not None else settings.get_ffprobe_timeout_seconds()
-    
     try:
         cmd = [
             "ffprobe",
@@ -78,12 +242,12 @@ def run_ffprobe(path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
             capture_output=True, 
             text=True, 
             check=True,
-            timeout=effective_timeout
+            timeout=timeout
         )
         return json.loads(completed.stdout or "{}")
     except subprocess.TimeoutExpired as e:
-        logger.error(f"FFprobe timeout for {path} after {effective_timeout}s")
-        raise TimeoutError(f"FFprobe timeout for {path} after {effective_timeout}s") from e
+        logger.error(f"FFprobe timeout for {path} after {timeout}s")
+        raise TimeoutError(f"FFprobe timeout for {path} after {timeout}s") from e
     except subprocess.CalledProcessError as e:
         stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr")
         logger.error(f"FFprobe failed for {path}: returncode={e.returncode}, stderr={stderr}")

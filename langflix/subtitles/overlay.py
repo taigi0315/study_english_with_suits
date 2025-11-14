@@ -274,17 +274,29 @@ def apply_dual_subtitle_layers(
         force_style=expression_style
     )
     
-    # Output with audio
+    # Get audio stream safely (try-except for cases where audio might not exist)
+    try:
+        audio_stream = video_input['a']
+    except (KeyError, TypeError):
+        audio_stream = None
+    
+    # Output with audio (if available)
+    output_args = {
+        'vcodec': 'libx264',
+        'acodec': 'aac' if audio_stream else None,
+        'ac': 2 if audio_stream else None,
+        'ar': 48000 if audio_stream else None,
+    }
+    # Remove None values
+    output_args = {k: v for k, v in output_args.items() if v is not None}
+    
     (
         ffmpeg
         .output(
             video_with_both,
-            video_input['a'] if 'a' in video_input else None,
+            audio_stream if audio_stream else None,
             str(output_path),
-            vcodec="libx264",
-            acodec="aac",
-            ac=2,
-            ar=48000,
+            **output_args
         )
         .overwrite_output()
         .run(quiet=True)

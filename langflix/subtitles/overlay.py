@@ -283,24 +283,38 @@ def apply_dual_subtitle_layers(
     # Output with audio (if available)
     output_args = {
         'vcodec': 'libx264',
-        'acodec': 'aac' if audio_stream else None,
-        'ac': 2 if audio_stream else None,
-        'ar': 48000 if audio_stream else None,
     }
-    # Remove None values
-    output_args = {k: v for k, v in output_args.items() if v is not None}
     
-    (
-        ffmpeg
-        .output(
-            video_with_both,
-            audio_stream if audio_stream else None,
-            str(output_path),
-            **output_args
+    if audio_stream:
+        output_args.update({
+            'acodec': 'aac',
+            'ac': 2,
+            'ar': 48000,
+        })
+        # Output with video and audio
+        (
+            ffmpeg
+            .output(
+                video_with_both,
+                audio_stream,
+                str(output_path),
+                **output_args
+            )
+            .overwrite_output()
+            .run(quiet=True)
         )
-        .overwrite_output()
-        .run(quiet=True)
-    )
+    else:
+        # Output video only (no audio)
+        (
+            ffmpeg
+            .output(
+                video_with_both,
+                str(output_path),
+                **output_args
+            )
+            .overwrite_output()
+            .run(quiet=True)
+        )
     
     logger.info(f"Applied dual subtitle layers: original (bottom) + expression (top, yellow)")
     return Path(output_path)

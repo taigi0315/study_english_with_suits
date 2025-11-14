@@ -180,14 +180,24 @@ class VideoEditor:
             # Input seeking (ss before input) is faster but less accurate
             # Output seeking (ss after input) is slower but more accurate - required for subtitle sync
             # See: https://trac.ffmpeg.org/wiki/Seeking
+            # 
+            # CORRECT ORDER for subtitle sync:
+            # 1. First, use trim filter to extract the clip segment (precise frame-accurate extraction)
+            # 2. Then, reset timestamps using setpts filters (required for repeated clips)
+            # This ensures accurate seeking AND proper timestamp reset
             input_stream = ffmpeg.input(str(context_with_subtitles))
-            # Apply seeking and duration trimming after input (output seeking)
-            # Then reset PTS to start from 0 for both video and audio
-            video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
-            audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
             
-            # Extract with timestamp reset using setpts filters
-            # The setpts filters already ensure timestamps start from 0
+            # Step 1: Extract clip segment using trim filter for precise frame-accurate extraction
+            # trim filter: start=relative_start, end=relative_start+expression_duration
+            video_stream = ffmpeg.filter(input_stream['v'], 'trim', start=relative_start, duration=expression_duration)
+            audio_stream = ffmpeg.filter(input_stream['a'], 'atrim', start=relative_start, duration=expression_duration)
+            
+            # Step 2: Reset timestamps to start from 0 (required for repeated clips)
+            # This ensures the extracted clip starts at timestamp 0, not at relative_start
+            video_stream = ffmpeg.filter(video_stream, 'setpts', 'PTS-STARTPTS')
+            audio_stream = ffmpeg.filter(audio_stream, 'asetpts', 'PTS-STARTPTS')
+            
+            # Extract with trim filter and timestamp reset
             try:
                 (
                     ffmpeg.output(
@@ -199,9 +209,7 @@ class VideoEditor:
                         ac=2,
                         ar=48000,
                         preset='fast',
-                        crf=23,
-                        ss=relative_start,  # Output seeking: apply after input for accuracy
-                        t=expression_duration  # Duration limit
+                        crf=23
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
@@ -1609,9 +1617,9 @@ class VideoEditor:
             # Check if we should use expression audio instead of TTS
             if use_expression_audio and expression_video_clip_path:
                 logger.info("Using expression audio from original video for slide (instead of TTS)")
-                # IMPORTANT: Extract audio from original expression_video_path (expression_source_video)
-                # not from context-extracted clip, to ensure audio matches the expression exactly
-                # expression_video_clip_path is actually the original expression_video_path passed from caller
+                # IMPORTANT: expression_video_clip_path is actually the original expression_video_path
+                # (expression_source_video) passed from create_educational_sequence caller
+                # Extract audio from original video using expression timestamps for accurate matching
                 expression_audio_path = self.output_dir / f"temp_expression_audio_{sanitize_for_expression_filename(expression.expression)}.wav"
                 self._register_temp_file(expression_audio_path)
                 
@@ -1621,18 +1629,26 @@ class VideoEditor:
                 expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
                 expression_audio_duration = expression_end_seconds - expression_start_seconds
                 
-                logger.info(f"Extracting expression audio from original video: {expression_video_clip_path}")
+                # Verify we're using the original video path (not a clip)
+                original_video_path = expression_video_clip_path  # This is actually the original video
+                logger.info(f"Extracting expression audio from original video: {original_video_path}")
                 logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time} ({expression_audio_duration:.2f}s)")
+                logger.info(f"Audio segment: {expression_start_seconds:.2f}s - {expression_end_seconds:.2f}s (duration: {expression_audio_duration:.2f}s)")
                 
                 try:
-                    # Use output seeking for accurate audio extraction
-                    audio_input = ffmpeg.input(str(expression_video_clip_path))
+                    # Use output seeking for accurate audio extraction from original video
+                    # Input the original video file
+                    audio_input = ffmpeg.input(str(original_video_path))
                     audio_stream = audio_input['a']
-                except (KeyError, TypeError):
-                    logger.warning(f"No audio stream found in {expression_video_clip_path}, creating silent audio")
+                except (KeyError, TypeError) as e:
+                    logger.warning(f"No audio stream found in {original_video_path}: {e}, creating silent audio")
                     # Create silent audio as fallback
                     audio_stream = ffmpeg.input('anullsrc=channel_layout=stereo:sample_rate=48000', f='lavfi')
+                    # If using silent audio, don't apply seeking
+                    expression_start_seconds = 0
+                    expression_audio_duration = target_duration or 3.0
                 
+                # Extract audio segment with output seeking (ss after input for accuracy)
                 (
                     ffmpeg
                     .output(

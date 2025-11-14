@@ -122,10 +122,14 @@ class ExpressionMediaSlicer:
             local_output = self.output_dir / output_filename
             
             # FFmpeg command
+            # IMPORTANT: Put -ss AFTER -i for accurate seeking and subtitle sync
+            # When -ss is before -i (input seeking), it's faster but less accurate
+            # When -ss is after -i (output seeking), it's slower but more accurate
+            # For subtitle sync, we need accurate seeking, so use output seeking
             ffmpeg_cmd = [
                 'ffmpeg',
-                '-ss', str(start_time),  # Seek to start
                 '-i', media_path,
+                '-ss', str(start_time),  # Seek to start (output seeking for accuracy)
                 '-t', str(duration),  # Duration
                 '-c:v', 'libx264',
                 '-preset', self.quality_settings['preset'],

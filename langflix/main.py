@@ -27,6 +27,7 @@ from langflix.core.video_editor import VideoEditor
 from langflix.services.output_manager import OutputManager, create_output_structure
 from langflix.core.models import ExpressionAnalysis, ExpressionGroup
 from langflix.utils.filename_utils import sanitize_for_expression_filename
+from langflix.profiling import PipelineProfiler, profile_stage
 from langflix import settings
 
 # Database imports (optional)
@@ -185,7 +186,8 @@ class LangFlixPipeline:
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
                  video_file: str = None,
-                 enable_expression_grouping: bool = True):
+                 enable_expression_grouping: bool = True,
+                 profiler: Optional[PipelineProfiler] = None):
         """
         Initialize the LangFlix pipeline
         
@@ -232,9 +234,14 @@ class LangFlixPipeline:
         self.processed_expressions = 0
         self.enable_expression_grouping = enable_expression_grouping
         
+        # TICKET-037: Profiling support
+        self.profiler = profiler
+        
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline
+        
+        TICKET-037: Integrated profiling support for performance measurement.
         
         Args:
             max_expressions: Maximum number of expressions to process
@@ -247,6 +254,19 @@ class LangFlixPipeline:
         Returns:
             Dictionary with processing results
         """
+        # TICKET-037: Start profiling if enabled
+        if self.profiler:
+            self.profiler.start(metadata={
+                "subtitle_file": str(self.subtitle_file),
+                "video_dir": str(self.video_dir),
+                "output_dir": str(self.output_dir),
+                "language_code": self.language_code,
+                "max_expressions": max_expressions,
+                "dry_run": dry_run,
+                "test_mode": test_mode,
+                "no_shorts": no_shorts
+            })
+        
         try:
             logger.info("🎬 Starting LangFlix Pipeline")
             logger.info(f"Subtitle file: {self.subtitle_file}")
@@ -281,7 +301,8 @@ class LangFlixPipeline:
             logger.info("Step 1: Parsing subtitles...")
             if self.progress_callback:
                 self.progress_callback(10, "Parsing subtitles...")
-            self.subtitles = self._parse_subtitles()
+            with profile_stage("parse_subtitles", self.profiler):
+                self.subtitles = self._parse_subtitles()
             if not self.subtitles:
                 raise ValueError("No subtitles found")
             
@@ -289,7 +310,8 @@ class LangFlixPipeline:
             logger.info("Step 2: Chunking subtitles...")
             if self.progress_callback:
                 self.progress_callback(20, "Chunking subtitles...")
-            self.chunks = chunk_subtitles(self.subtitles)
+            with profile_stage("chunk_subtitles", self.profiler, metadata={"num_subtitles": len(self.subtitles)}):
+                self.chunks = chunk_subtitles(self.subtitles)
             logger.info(f"Created {len(self.chunks)} chunks")
             
             # Step 3: Analyze expressions
@@ -298,7 +320,8 @@ class LangFlixPipeline:
                 logger.info("🧪 TEST MODE: Processing only first chunk")
             if self.progress_callback:
                 self.progress_callback(30, "Analyzing expressions...")
-            self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
+            with profile_stage("analyze_expressions", self.profiler, metadata={"num_chunks": len(self.chunks)}):
+                self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
                 logger.error("❌ No expressions found after analysis")
                 logger.error("This could be due to:")
@@ -317,7 +340,8 @@ class LangFlixPipeline:
             # Group expressions by context (if enabled and we have expressions)
             if self.enable_expression_grouping and len(self.expressions) > 0:
                 logger.info("Grouping expressions by shared context...")
-                self.expression_groups = group_expressions_by_context(self.expressions)
+                with profile_stage("group_expressions", self.profiler, metadata={"num_expressions": len(self.expressions)}):
+                    self.expression_groups = group_expressions_by_context(self.expressions)
                 
                 # Log grouping statistics
                 single_expr_groups = sum(1 for g in self.expression_groups if len(g.expressions) == 1)
@@ -333,14 +357,15 @@ class LangFlixPipeline:
             else:
                 # Create single-expression groups for backward compatibility
                 logger.info("Creating single-expression groups (grouping disabled or single expression)")
-                self.expression_groups = [
-                    ExpressionGroup(
-                        context_start_time=expr.context_start_time,
-                        context_end_time=expr.context_end_time,
-                        expressions=[expr]
-                    )
-                    for expr in self.expressions
-                ]
+                with profile_stage("group_expressions", self.profiler, metadata={"num_expressions": len(self.expressions)}):
+                    self.expression_groups = [
+                        ExpressionGroup(
+                            context_start_time=expr.context_start_time,
+                            context_end_time=expr.context_end_time,
+                            expressions=[expr]
+                        )
+                        for expr in self.expressions
+                    ]
             
             # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:
@@ -356,20 +381,23 @@ class LangFlixPipeline:
                 logger.info("Step 4: Processing expressions...")
                 if self.progress_callback:
                     self.progress_callback(50, "Processing expressions...")
-                self._process_expressions()
+                with profile_stage("process_expressions", self.profiler, metadata={"num_expressions": len(self.expressions)}):
+                    self._process_expressions()
                 
                 # Step 5: Create educational videos (only if expressions exist)
                 logger.info("Step 5: Creating educational videos...")
                 if self.progress_callback:
                     self.progress_callback(70, "Creating educational videos...")
-                self._create_educational_videos()
+                with profile_stage("create_educational_videos", self.profiler, metadata={"num_groups": len(self.expression_groups)}):
+                    self._create_educational_videos()
                 
                 # Step 6: Create short-format videos (unless disabled)
                 if not no_shorts:
                     logger.info("Step 6: Creating short-format videos...")
                     if self.progress_callback:
                         self.progress_callback(80, "Creating short-format videos...")
-                    self._create_short_videos()
+                    with profile_stage("create_short_videos", self.profiler, metadata={"num_groups": len(self.expression_groups)}):
+                        self._create_short_videos()
                 else:
                     logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
             elif not dry_run and not self.expressions:
@@ -382,13 +410,25 @@ class LangFlixPipeline:
             # Step 7: Generate summary
             if self.progress_callback:
                 self.progress_callback(95, "Generating summary...")
-            summary = self._generate_summary()
+            with profile_stage("generate_summary", self.profiler):
+                summary = self._generate_summary()
             
             # Step 8: Cleanup temporary files
             logger.info("Step 8: Cleaning up temporary files...")
             if self.progress_callback:
                 self.progress_callback(98, "Cleaning up temporary files...")
-            self._cleanup_resources()
+            with profile_stage("cleanup_resources", self.profiler):
+                self._cleanup_resources()
+            
+            # TICKET-037: Stop profiling and save report
+            if self.profiler:
+                self.profiler.stop()
+                try:
+                    report_path = self.profiler.save_report()
+                    logger.info(f"📊 Profiling report saved to: {report_path}")
+                    summary['profiling_report'] = str(report_path)
+                except Exception as e:
+                    logger.warning(f"Failed to save profiling report: {e}")
             
             if self.progress_callback:
                 self.progress_callback(100, "Pipeline completed successfully!")
@@ -1224,6 +1264,19 @@ Examples:
         help="Skip creating short-format videos (default: create short videos)"
     )
     
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable pipeline profiling and generate JSON performance report"
+    )
+    
+    parser.add_argument(
+        "--profile-output",
+        type=str,
+        default=None,
+        help="Path to save profiling report (default: profiles/profile_<timestamp>.json)"
+    )
+    
     args = parser.parse_args()
 
     # Setup logging based on verbose flag
@@ -1233,12 +1286,22 @@ Examples:
         # Validate input arguments before processing
         validate_input_arguments(args)
         
+        # TICKET-037: Initialize profiler if --profile flag is set
+        profiler = None
+        if args.profile:
+            from langflix.profiling import PipelineProfiler
+            from pathlib import Path
+            output_path = Path(args.profile_output) if args.profile_output else None
+            profiler = PipelineProfiler(output_path=output_path)
+            logger.info("📊 Pipeline profiling enabled")
+        
         # Initialize pipeline
         pipeline = LangFlixPipeline(
             subtitle_file=args.subtitle,
             video_dir=args.video_dir,
             output_dir=args.output_dir,
-            language_code=args.language_code
+            language_code=args.language_code,
+            profiler=profiler
         )
         
         # Run pipeline
@@ -1261,6 +1324,8 @@ Examples:
         print(f"✅ Processed expressions: {summary['processed_expressions']}")
         print(f"📁 Output directory: {summary['output_directory']}")
         print(f"⏰ Completed at: {summary['timestamp']}")
+        if args.profile and 'profiling_report' in summary:
+            print(f"📊 Profiling report: {summary['profiling_report']}")
         print("="*50)
         
         if not args.dry_run:

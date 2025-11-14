@@ -175,6 +175,71 @@ threshold = settings.get_clip_copy_threshold_seconds()  # float 반환 (기본�
 - 다중 표현 비디오 시퀀스
 - 오디오 게인 조정
 
+#### 다중 표현 비디오 생성
+
+**메서드:** `create_multi_expression_sequence()`
+
+동일한 컨텍스트에서 여러 표현을 포함하는 단일 교육용 비디오를 생성합니다. 비디오 구조:
+- **왼쪽**: 컨텍스트 → 전환 → 표현 1 (반복) → 전환 → 표현 2 (반복) → ...
+- **오른쪽**: 모든 표현을 보여주는 다중 표현 슬라이드
+
+**최근 수정사항 (2025-11-14):**
+
+1. **해상도 불일치 수정 (PR #39)**
+   - **문제**: 표현 클립이 잘못 2560x720으로 패딩되어 연결 실패 발생
+   - **해결**: 불필요한 패딩 제거, 연결 과정에서 1280x720 유지
+   - **결과**: 최종 hstack이 올바르게 2560x720 side-by-side 레이아웃 생성
+
+2. **자막 타이밍 수정 (PR #40)**
+   - **문제**: 자막이 컨텍스트 부분(~28초)에만 나타나고, 전환 및 표현 반복 부분 누락
+   - **해결**: 컨텍스트가 아닌 최종 hstack 비디오(연결 후)에 자막 적용
+   - **결과**: 자막이 전체 비디오 duration 동안 표시됨
+
+3. **자막 파일 찾기 수정 (Commit dc43518, 92de4c9)**
+   - **문제**: 다중 표현 그룹의 자막 파일을 찾지 못함 (패턴 불일치)
+   - **해결**: 그룹 prefix 패턴 (`group_XX_expr_01_*.srt`) 사용하여 자막 파일 위치 확인
+   - **결과**: 자막이 올바르게 찾아지고 적용됨
+
+4. **파일 검증 수정 (Commit 7724501)**
+   - **문제**: 손상된 표현 클립 파일로 인한 연쇄 실패
+   - **해결**: 클립 사용 전 파일 검증 추가 (존재 여부, 크기, ffprobe 검증)
+   - **결과**: 손상된 파일 조기 감지, 문제가 있는 표현은 우아하게 건너뜀
+
+**워크플로우:**
+
+```python
+# 1. 자막 없는 컨텍스트 비디오 생성
+context_without_subtitles = Path(context_video_path)
+
+# 2. 표현 클립 추출 (1280x720, 검증됨)
+for expression in expressions:
+    extract_clip(context_without_subtitles, ...)
+    validate_file(expression_clip)  # NEW: 파일 검증
+    repeat_expression_clip(...)
+
+# 3. 연결: 컨텍스트 → 전환 → 표현 반복
+concatenated_video = concat_all_segments(...)
+
+# 4. 다중 표현 슬라이드 생성
+multi_slide = create_multi_expression_slide(...)
+
+# 5. Hstack: side-by-side 레이아웃 (2560x720)
+hstacked = hstack_keep_height(concatenated_video, multi_slide)
+
+# 6. 최종 비디오에 자막 적용 (NEW: hstack 후)
+subtitle_file = find_subtitle_file(group_id)  # NEW: 그룹 인식 검색
+apply_subtitles(hstacked, subtitle_file)
+
+# 7. 오디오 게인 적용
+final_video = apply_audio_gain(hstacked_with_subs)
+```
+
+**에러 처리:**
+
+- 손상된 표현 클립은 감지되어 건너뜀
+- 누락된 자막 파일은 로그에 기록되지만 전체 비디오 실패로 이어지지 않음
+- 각 표현은 독립적으로 처리됨 (하나의 실패가 다른 것들을 망가뜨리지 않음)
+
 ### Models (`models.py`)
 
 표현 및 표현 그룹에 대한 데이터 구조를 정의합니다.

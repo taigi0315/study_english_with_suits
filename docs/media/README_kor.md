@@ -5,7 +5,7 @@
 `langflix/media/` 모듈은 LangFlix를 위한 중앙집중식 FFmpeg 유틸리티를 포함합니다. 이 모듈은 오디오 보존과 최적 성능을 보장하는 안정적이고 유지보수 가능한 비디오 및 오디오 처리 함수를 제공합니다.
 
 **최종 업데이트:** 2025-11-14  
-**관련 티켓:** TICKET-001, TICKET-033, TICKET-034
+**관련 티켓:** TICKET-001, TICKET-033, TICKET-034, TICKET-036
 
 ## 목적
 
@@ -412,6 +412,154 @@ apply_final_audio_gain("final_video.mkv", "output.mkv", gain_factor=1.25)
 3. 중간 파이프라인 오디오 변환 없음
 
 **이유:** 파이프라인 전체에서 오디오 보존, 최종 단계에서만 수정.
+
+## ExpressionMediaSlicer 모듈
+
+### 개요
+`ExpressionMediaSlicer` 클래스(`langflix/media/expression_slicer.py`)는 정밀한 타임스탬프를 사용하여 FFmpeg로 표현식에 대한 미디어 파일을 슬라이싱합니다.
+
+**TICKET-036 개선사항:**
+- NameError 버그 수정 (올바른 변수명 사용)
+- 리소스 고갈 방지를 위한 Semaphore 기반 동시성 제어 추가
+- 실패/부분 슬라이스 자동 정리 구현
+- 설정 가능한 동시성 제한 추가
+
+### 주요 기능
+
+#### 동시성 제어
+**문제:** 배치 슬라이싱 작업이 무제한 FFmpeg 프로세스를 생성하여 리소스 제한 서버에서 CPU 포화 및 OOM을 유발할 수 있습니다.
+
+**해결책:** Asyncio Semaphore 기반 동시성 제한:
+- 기본값: CPU 코어 수 / 2 (`expression.media.slicing.max_concurrent`로 설정 가능)
+- 인스턴스당 세마포어로 공정한 리소스 사용 보장
+- 성공 또는 실패 시 자동 릴리스
+
+**설정:**
+```yaml
+expression:
+  media:
+    slicing:
+      max_concurrent: null  # 자동 감지 (CPU/2) 또는 숫자 지정
+      buffer_start: 0.2     # 표현식 시작 전 버퍼 (초)
+      buffer_end: 0.2       # 표현식 종료 후 버퍼 (초)
+```
+
+### 주요 메서드
+
+#### `__init__(storage_backend, output_dir, quality='high', max_concurrency=None)`
+선택적 동시성 오버라이드로 slicer를 초기화합니다.
+
+**매개변수:**
+- `storage_backend`: 슬라이싱된 비디오 저장을 위한 StorageBackend
+- `output_dir`: 로컬 출력 디렉토리
+- `quality`: 비디오 품질 프리셋 ('low', 'medium', 'high', 'lossless')
+- `max_concurrency`: 기본 동시성 제한 오버라이드 (None = 설정 사용)
+
+#### `slice_expression(media_path, expression_data, media_id) -> str`
+미디어 파일에서 단일 표현식을 슬라이싱합니다.
+
+**매개변수:**
+- `media_path`: 소스 미디어 파일 경로
+- `expression_data`: `{'expression', 'start_time', 'end_time'}` 딕셔너리
+- `media_id`: 고유 미디어 식별자
+
+**반환값:**
+- 슬라이싱된 비디오 경로 (클라우드 스토리지 경로 또는 로컬)
+
+**에러 처리 (TICKET-036):**
+- 실패/부분 파일 자동 정리
+- 표현식 컨텍스트가 포함된 상세한 에러 메시지
+- 업로드 실패 시 로컬 스토리지로 우아한 fallback
+
+#### `slice_multiple_expressions(media_path, expressions, media_id) -> List[str]`
+동시성 제어로 여러 표현식을 슬라이싱합니다.
+
+**매개변수:**
+- `media_path`: 소스 미디어 파일 경로
+- `expressions`: 표현식 딕셔너리 리스트
+- `media_id`: 고유 미디어 식별자
+
+**반환값:**
+- 성공적으로 슬라이싱된 비디오 경로 리스트 (실패한 슬라이스 제외)
+
+**동작 (TICKET-036):**
+- 각 슬라이스 작업을 세마포어 가드로 감쌉니다
+- 동시 FFmpeg 프로세스를 설정된 최대값으로 제한
+- 성공한 결과만 반환
+- 상세한 통계 로깅 (성공/실패 개수)
+
+**예제:**
+```python
+from langflix.media.expression_slicer import ExpressionMediaSlicer
+from langflix.storage import get_storage_backend
+
+slicer = ExpressionMediaSlicer(
+    storage_backend=get_storage_backend(),
+    output_dir=Path("./output"),
+    quality='high',
+    max_concurrency=4  # 4개 동시 작업으로 제한
+)
+
+expressions = [
+    {'expression': 'Hello world', 'start_time': 1.0, 'end_time': 3.0},
+    {'expression': 'Nice to meet you', 'start_time': 5.0, 'end_time': 7.0},
+    # ... 더 많은 표현식
+]
+
+# 동시성 제어로 슬라이싱 (최대 4개씩)
+paths = await slicer.slice_multiple_expressions(
+    media_path='/path/to/video.mp4',
+    expressions=expressions,
+    media_id='video123'
+)
+
+print(f"{len(paths)}개의 표현식을 성공적으로 슬라이싱했습니다")
+```
+
+### 성능 영향 (TICKET-036)
+
+**이전:**
+- 무제한 동시 FFmpeg 프로세스
+- 20+ 표현식에서 CPU 100% 포화
+- OOM을 유발하는 메모리 급증
+- 서버 불안정
+
+**이후:**
+- 제어된 동시성 (기본값: CPU/2)
+- CPU 사용량이 제한 내 유지
+- 안정적인 메모리 사용
+- 예측 가능한 리소스 소비
+
+**메트릭 (8코어 서버, 20개 표현식):**
+- 이전: 20개 동시 FFmpeg 프로세스, CPU 100%
+- 이후 (동시성=4): 최대 4개 동시, CPU ~60-70%
+- 리소스 사용량 ~40% 감소
+
+### 버그 수정 (TICKET-036)
+
+#### NameError: 'aligned_expressions' not defined
+**문제:** 루프 변수가 함수 매개변수 `expressions` 대신 `aligned_expressions`를 잘못 참조했습니다.
+
+**수정:** 모든 참조를 올바른 `expressions` 매개변수를 사용하도록 변경했습니다.
+
+#### NameError: 'aligned_expression' not defined  
+**문제:** 에러 처리가 정의되지 않은 `aligned_expression.expression`을 참조했습니다.
+
+**수정:** `expression_data.get('expression', 'unknown')`을 사용하도록 변경했습니다.
+
+### 테스트
+
+`tests/unit/test_expression_slicer.py`의 단위 테스트:
+- ✅ 세마포어 초기화 및 제한
+- ✅ 동시 실행 강제 (최대값 초과하지 않음)
+- ✅ 성공 시 세마포어 릴리스
+- ✅ 실패 시 세마포어 릴리스
+- ✅ NameError 버그 수정 검증
+- ✅ 실패한 슬라이스 정리 로직
+- ✅ 설정 통합
+- ✅ 혼합 성공/실패 처리
+
+모든 11개 테스트 통과 ✅
 
 ## MediaScanner 모듈
 

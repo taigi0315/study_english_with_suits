@@ -175,6 +175,71 @@ Handles video composition, subtitle overlay, and educational video creation.
 - Multi-expression video sequences
 - Audio gain adjustments
 
+#### Multi-Expression Video Creation
+
+**Method:** `create_multi_expression_sequence()`
+
+Creates a single educational video containing multiple expressions from the same context. The video structure is:
+- **Left side**: Context → Transition → Expression 1 (repeated) → Transition → Expression 2 (repeated) → ...
+- **Right side**: Multi-expression slide showing all expressions
+
+**Recent Fixes (2025-11-14):**
+
+1. **Resolution Mismatch Fix (PR #39)**
+   - **Problem**: Expression clips were incorrectly padded to 2560x720, causing concatenation failures
+   - **Solution**: Removed unnecessary padding, maintain 1280x720 throughout concatenation
+   - **Result**: Final hstack correctly creates 2560x720 side-by-side layout
+
+2. **Subtitle Timing Fix (PR #40)**
+   - **Problem**: Subtitles only appeared on context portion (~28s), missing transitions and expression repeats
+   - **Solution**: Apply subtitles to final hstacked video (after concatenation) instead of context only
+   - **Result**: Subtitles now appear throughout entire video duration
+
+3. **Subtitle File Finding Fix (Commit dc43518, 92de4c9)**
+   - **Problem**: Subtitle files not found for multi-expression groups (pattern mismatch)
+   - **Solution**: Use group prefix pattern (`group_XX_expr_01_*.srt`) to locate subtitle files
+   - **Result**: Subtitles correctly found and applied
+
+4. **File Validation Fix (Commit 7724501)**
+   - **Problem**: Corrupted expression clip files caused cascade failures
+   - **Solution**: Added file validation (existence, size, ffprobe validation) before using clips
+   - **Result**: Corrupted files detected early, problematic expressions skipped gracefully
+
+**Workflow:**
+
+```python
+# 1. Create context video WITHOUT subtitles
+context_without_subtitles = Path(context_video_path)
+
+# 2. Extract expression clips (1280x720, validated)
+for expression in expressions:
+    extract_clip(context_without_subtitles, ...)
+    validate_file(expression_clip)  # NEW: File validation
+    repeat_expression_clip(...)
+
+# 3. Concatenate: context → transitions → expression repeats
+concatenated_video = concat_all_segments(...)
+
+# 4. Create multi-expression slide
+multi_slide = create_multi_expression_slide(...)
+
+# 5. Hstack: side-by-side layout (2560x720)
+hstacked = hstack_keep_height(concatenated_video, multi_slide)
+
+# 6. Apply subtitles to FINAL video (NEW: after hstack)
+subtitle_file = find_subtitle_file(group_id)  # NEW: group-aware search
+apply_subtitles(hstacked, subtitle_file)
+
+# 7. Apply audio gain
+final_video = apply_audio_gain(hstacked_with_subs)
+```
+
+**Error Handling:**
+
+- Corrupted expression clips are detected and skipped
+- Missing subtitle files are logged but don't fail entire video
+- Each expression is processed independently (one failure doesn't break others)
+
 ### Models (`models.py`)
 
 Defines data structures for expressions and expression groups.

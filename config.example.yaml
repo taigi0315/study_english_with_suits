@@ -53,6 +53,21 @@ video:
   
   # Audio bitrate (default: 128k)
   audio_bitrate: "192k"
+  
+  # Clip extraction settings (TICKET-035)
+  clip_extraction:
+    # Strategy for clip extraction: 'auto', 'copy', or 'encode'
+    # - 'auto': Try stream copy first, fallback to re-encode on failure (recommended, fastest)
+    # - 'copy': Stream copy only, fail if not possible (fastest, may fail on some clips)
+    # - 'encode': Always re-encode (slowest, most accurate, most compatible)
+    # Default: 'auto'
+    strategy: "auto"
+    
+    # Threshold in seconds for attempting stream copy
+    # Clips shorter than this will attempt stream copy (if strategy allows)
+    # Longer clips use re-encode directly for better frame accuracy
+    # Default: 30.0
+    copy_threshold_seconds: 30.0
 
 # ============================================================================
 # Font Configuration

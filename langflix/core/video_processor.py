@@ -151,15 +151,22 @@ class VideoProcessor:
             }
     
     def extract_clip(self, video_path: Path, start_time: str, end_time: str, 
-                   output_path: Path) -> bool:
+                   output_path: Path, strategy: Optional[str] = None) -> bool:
         """
-        Extract video clip between start and end times
+        Extract video clip between start and end times with adaptive strategy.
+        
+        TICKET-035: Implements adaptive clip extraction with stream copy fallback.
+        - 'auto': Try stream copy first, fallback to re-encode (fastest, recommended)
+        - 'copy': Stream copy only (fastest, may fail)
+        - 'encode': Always re-encode (slowest, most compatible)
         
         Args:
             video_path: Path to source video file
             start_time: Start time in format "HH:MM:SS.mmm"
             end_time: End time in format "HH:MM:SS.mmm"
             output_path: Path for output clip
+            strategy: Extraction strategy ('auto', 'copy', 'encode'). 
+                     If None, uses configuration setting.
             
         Returns:
             True if successful, False otherwise
@@ -178,9 +185,92 @@ class VideoProcessor:
             
             logger.info(f"Clip duration: {duration:.3f} seconds")
             
-            # Extract clip using ffmpeg with precise timing
-            # Use -ss and -t for exact start and duration
-            # Re-encode for frame accuracy
+            # Determine extraction strategy
+            from langflix import settings
+            effective_strategy = strategy or settings.get_clip_extraction_strategy()
+            copy_threshold = settings.get_clip_copy_threshold_seconds()
+            
+            # Decide whether to attempt stream copy
+            should_try_copy = (
+                effective_strategy in ('auto', 'copy') and 
+                duration <= copy_threshold
+            )
+            
+            if should_try_copy:
+                logger.debug(f"Attempting stream copy (strategy={effective_strategy}, duration={duration:.2f}s <= {copy_threshold}s)")
+                success = self._extract_clip_copy(video_path, start_seconds, end_seconds, output_path)
+                
+                if success:
+                    logger.info(f"✅ Stream copy successful: {output_path}")
+                    return True
+                
+                if effective_strategy == 'copy':
+                    # Copy-only mode failed
+                    logger.error("Stream copy failed and strategy is 'copy' (no fallback)")
+                    return False
+                
+                # Auto mode: fallback to re-encode
+                logger.warning(f"Stream copy failed, falling back to re-encode")
+            
+            # Re-encode path (original behavior or fallback)
+            logger.debug(f"Using re-encode (strategy={effective_strategy})")
+            return self._extract_clip_encode(video_path, start_seconds, duration, output_path)
+            
+        except Exception as e:
+            logger.error(f"Error extracting clip: {e}")
+            return False
+    
+    def _extract_clip_copy(self, video_path: Path, start_seconds: float, 
+                          end_seconds: float, output_path: Path) -> bool:
+        """
+        Extract clip using stream copy (no re-encode).
+        
+        Fast but may have frame accuracy issues if start/end times 
+        don't align with keyframes.
+        
+        Args:
+            video_path: Source video path
+            start_seconds: Start time in seconds
+            end_seconds: End time in seconds
+            output_path: Output clip path
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            (
+                ffmpeg
+                .input(str(video_path), ss=start_seconds, to=end_seconds)
+                .output(str(output_path), 
+                       c='copy',  # Stream copy (no re-encode)
+                       copyts=None,  # Copy timestamps
+                       avoid_negative_ts='make_zero')
+                .overwrite_output()
+                .run(quiet=True, capture_stderr=True)
+            )
+            return True
+        except ffmpeg.Error as e:
+            stderr = e.stderr.decode('utf-8') if e.stderr else 'No error details'
+            logger.debug(f"Stream copy failed: {stderr[:200]}")
+            return False
+    
+    def _extract_clip_encode(self, video_path: Path, start_seconds: float, 
+                            duration: float, output_path: Path) -> bool:
+        """
+        Extract clip using re-encode (original behavior).
+        
+        Slower but provides frame-accurate extraction and better compatibility.
+        
+        Args:
+            video_path: Source video path
+            start_seconds: Start time in seconds
+            duration: Clip duration in seconds
+            output_path: Output clip path
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
             (
                 ffmpeg
                 .input(str(video_path), ss=start_seconds, t=duration)
@@ -194,11 +284,10 @@ class VideoProcessor:
                 .run(quiet=True)
             )
             
-            logger.info(f"Successfully extracted clip to: {output_path}")
+            logger.info(f"Successfully extracted clip (re-encode) to: {output_path}")
             return True
-            
         except Exception as e:
-            logger.error(f"Error extracting clip: {e}")
+            logger.error(f"Re-encode extraction failed: {e}")
             return False
     
     def _time_to_seconds(self, time_str: str) -> float:

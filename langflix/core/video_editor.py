@@ -1608,11 +1608,17 @@ class VideoEditor:
                 self._register_temp_file(expression_audio_path)
                 
                 # Extract audio from expression video clip
+                try:
+                    audio_input = ffmpeg.input(str(expression_video_clip_path))
+                    audio_stream = audio_input['a']
+                except (KeyError, TypeError):
+                    logger.warning(f"No audio stream found in {expression_video_clip_path}, creating silent audio")
+                    # Create silent audio as fallback
+                    audio_stream = ffmpeg.input('anullsrc=channel_layout=stereo:sample_rate=48000', f='lavfi')
+                
                 (
                     ffmpeg
-                    .input(str(expression_video_clip_path))
-                    .audio
-                    .output(str(expression_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                    .output(audio_stream, str(expression_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                     .overwrite_output()
                     .run(quiet=True)
                 )
@@ -1633,19 +1639,31 @@ class VideoEditor:
                     
                     # Create concat list for looping
                     import tempfile
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as concat_file:
-                        for _ in range(loop_count):
-                            concat_file.write(f"file '{expression_audio_path}'\n")
-                        concat_list_path = concat_file.name
-                    
-                    # Concatenate audio to loop
-                    (
-                        ffmpeg
-                        .input(concat_list_path, format='concat', safe=0)
-                        .output(str(extended_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
+                    import os
+                    concat_list_path = None
+                    try:
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as concat_file:
+                            # Write absolute paths to concat file
+                            abs_audio_path = Path(expression_audio_path).absolute()
+                            for _ in range(loop_count):
+                                concat_file.write(f"file '{abs_audio_path}'\n")
+                            concat_list_path = concat_file.name
+                        
+                        # Concatenate audio to loop using concat demuxer
+                        (
+                            ffmpeg
+                            .input(concat_list_path, format='concat', safe=0)
+                            .output(str(extended_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                            .overwrite_output()
+                            .run(quiet=True)
+                        )
+                    finally:
+                        # Clean up concat file
+                        if concat_list_path and os.path.exists(concat_list_path):
+                            try:
+                                os.unlink(concat_list_path)
+                            except Exception:
+                                pass
                     
                     # Trim to exact target_duration
                     final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"

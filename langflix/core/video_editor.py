@@ -181,23 +181,26 @@ class VideoEditor:
             # Output seeking (ss after input) is slower but more accurate - required for subtitle sync
             # See: https://trac.ffmpeg.org/wiki/Seeking
             # 
+            # CRITICAL: For subtitle sync, we must use output seeking (ss/t in output)
+            # NOT trim filter, because trim filter works on frames and may not align with subtitle timestamps
+            # The expression_slicer.py uses the same approach: -ss and -t in output (after -i)
+            # 
             # CORRECT ORDER for subtitle sync:
-            # 1. First, use trim filter to extract the clip segment (precise frame-accurate extraction)
-            # 2. Then, reset timestamps using setpts filters (required for repeated clips)
-            # This ensures accurate seeking AND proper timestamp reset
+            # 1. Input the video (no seeking at input level)
+            # 2. Apply output seeking (ss/t in output) for accurate timestamp-based extraction
+            # 3. Reset timestamps using setpts filters (required for repeated clips)
+            # 
+            # Note: setpts must be applied AFTER output seeking, not before
+            # If we apply setpts first, the output seeking won't work correctly
             input_stream = ffmpeg.input(str(context_with_subtitles))
             
-            # Step 1: Extract clip segment using trim filter for precise frame-accurate extraction
-            # trim filter: start=relative_start, end=relative_start+expression_duration
-            video_stream = ffmpeg.filter(input_stream['v'], 'trim', start=relative_start, duration=expression_duration)
-            audio_stream = ffmpeg.filter(input_stream['a'], 'atrim', start=relative_start, duration=expression_duration)
+            # Get video and audio streams (no filtering yet)
+            video_stream = input_stream['v']
+            audio_stream = input_stream['a']
             
-            # Step 2: Reset timestamps to start from 0 (required for repeated clips)
-            # This ensures the extracted clip starts at timestamp 0, not at relative_start
-            video_stream = ffmpeg.filter(video_stream, 'setpts', 'PTS-STARTPTS')
-            audio_stream = ffmpeg.filter(audio_stream, 'asetpts', 'PTS-STARTPTS')
-            
-            # Extract with trim filter and timestamp reset
+            # Extract with output seeking (ss/t in output) - this is the key for subtitle sync
+            # Output seeking decodes the entire video and seeks to exact timestamp
+            # This ensures subtitles (which are rendered into the video) are extracted at correct time
             try:
                 (
                     ffmpeg.output(
@@ -209,11 +212,43 @@ class VideoEditor:
                         ac=2,
                         ar=48000,
                         preset='fast',
+                        crf=23,
+                        ss=relative_start,  # Output seeking: apply after input for accuracy
+                        t=expression_duration  # Duration limit
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+                
+                # Now reset timestamps in the extracted clip
+                # This is required for repeated clips to start at timestamp 0
+                # We need to re-encode to reset timestamps properly
+                temp_clip_path = self.output_dir / f"temp_expr_clip_long_reset_{safe_expression}.mkv"
+                self._register_temp_file(temp_clip_path)
+                
+                reset_input = ffmpeg.input(str(expression_video_clip_path))
+                reset_video = ffmpeg.filter(reset_input['v'], 'setpts', 'PTS-STARTPTS')
+                reset_audio = ffmpeg.filter(reset_input['a'], 'asetpts', 'PTS-STARTPTS')
+                
+                (
+                    ffmpeg.output(
+                        reset_video,
+                        reset_audio,
+                        str(temp_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
                         crf=23
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
                 )
+                
+                # Replace original with timestamp-reset version
+                import shutil
+                shutil.move(str(temp_clip_path), str(expression_video_clip_path))
                 
                 # Verify file was created
                 if not expression_video_clip_path.exists():

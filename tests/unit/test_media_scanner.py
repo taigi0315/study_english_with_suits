@@ -322,6 +322,21 @@ class TestFFprobeUtils(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             run_ffprobe("/path/to/video.mkv")
 
+    @patch('langflix.media.ffmpeg_utils.subprocess.run')
+    def test_run_ffprobe_uses_config_timeout_when_not_provided(self, mock_subprocess_run):
+        """Test run_ffprobe uses configured timeout when argument not supplied."""
+        from langflix.media.ffmpeg_utils import run_ffprobe
+
+        mock_result = MagicMock()
+        mock_result.stdout = json.dumps({'streams': [], 'format': {}})
+        mock_subprocess_run.return_value = mock_result
+
+        with patch('langflix.media.ffmpeg_utils.settings.get_ffprobe_timeout_seconds', return_value=45):
+            run_ffprobe("/path/to/video.mkv")
+
+        call_kwargs = mock_subprocess_run.call_args[1]
+        self.assertEqual(call_kwargs.get('timeout'), 45)
+
 
 if __name__ == '__main__':
     unittest.main()

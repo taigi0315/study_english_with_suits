@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import ffmpeg
 
+from langflix import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,14 +47,14 @@ class AudioParams:
 
 # --------------------------- Probe helpers ---------------------------
 
-def run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]:
+def run_ffprobe(path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
     """Run ffprobe and return parsed JSON, raising on failure.
 
     We use subprocess here because ffmpeg-python's probe may hide stderr.
     
     Args:
         path: Path to video file
-        timeout: Timeout in seconds (default: 30)
+        timeout: Timeout in seconds (if None, use configuration value)
         
     Raises:
         TimeoutError: If ffprobe times out
@@ -60,6 +62,8 @@ def run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]:
         subprocess.CalledProcessError: If ffprobe command fails
         json.JSONDecodeError: If output cannot be parsed as JSON
     """
+    effective_timeout = timeout if timeout is not None else settings.get_ffprobe_timeout_seconds()
+    
     try:
         cmd = [
             "ffprobe",
@@ -74,12 +78,12 @@ def run_ffprobe(path: str, timeout: Optional[int] = 30) -> Dict[str, Any]:
             capture_output=True, 
             text=True, 
             check=True,
-            timeout=timeout
+            timeout=effective_timeout
         )
         return json.loads(completed.stdout or "{}")
     except subprocess.TimeoutExpired as e:
-        logger.error(f"FFprobe timeout for {path} after {timeout}s")
-        raise TimeoutError(f"FFprobe timeout for {path} after {timeout}s") from e
+        logger.error(f"FFprobe timeout for {path} after {effective_timeout}s")
+        raise TimeoutError(f"FFprobe timeout for {path} after {effective_timeout}s") from e
     except subprocess.CalledProcessError as e:
         stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr")
         logger.error(f"FFprobe failed for {path}: returncode={e.returncode}, stderr={stderr}")

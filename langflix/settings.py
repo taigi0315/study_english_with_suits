@@ -430,7 +430,37 @@ config = ConfigManager()
 
 def get_media_config() -> Dict[str, Any]:
     """Get media processing configuration"""
-    return _config_loader.get('expression.media', {})
+    result = _config_loader.get('expression.media', {})
+    return result if result is not None else {}
+
+
+def get_media_ffprobe_config() -> Dict[str, Any]:
+    """Get ffprobe-related media configuration"""
+    return get_media_config().get('ffprobe', {})
+
+
+def get_ffprobe_timeout_seconds() -> int:
+    """Get ffprobe timeout in seconds (minimum 1, default 30)"""
+    config_timeout = get_media_ffprobe_config().get('timeout_seconds', 30)
+    try:
+        timeout_value = int(config_timeout)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid ffprobe timeout value '%s' in configuration. "
+            "Falling back to default 30 seconds.",
+            config_timeout,
+        )
+        return 30
+
+    if timeout_value < 1:
+        logger.warning(
+            "Configured ffprobe timeout (%s) is less than 1 second. "
+            "Clamping to minimum value of 1.",
+            timeout_value,
+        )
+        return 1
+
+    return timeout_value
 
 
 def get_media_slicing_config() -> Dict[str, Any]:

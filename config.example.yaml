@@ -98,3 +98,12 @@ transitions:
   expression_to_expression:
     type: "fade"            # Options: fade, xfade, none
     duration: 0.5           # Duration in seconds
+
+# ============================================================================
+# Expression Media Settings
+# ============================================================================
+expression:
+  media:
+    ffprobe:
+      # Default timeout in seconds for ffprobe operations (minimum: 1, default: 30)
+      timeout_seconds: 30

@@ -359,7 +359,7 @@ apply_final_audio_gain("final_video.mkv", "output.mkv", gain_factor=1.25)
 
 **개선사항 (TICKET-033):**
 - 프로빙 전 파일 접근 가능성 사전 확인
-- 타임아웃 지원이 있는 개선된 `run_ffprobe()` 함수 사용
+- 구성 가능한 타임아웃을 지원하는 개선된 `run_ffprobe()` 함수 사용
 - stderr 출력을 포함한 상세한 에러 로깅 제공
 - 특정 예외 타입 처리: `CalledProcessError`, `FileNotFoundError`, `JSONDecodeError`, `PermissionError`, `TimeoutError`
 - 실패 시 빈 dict 반환 (우아한 성능 저하)
@@ -370,6 +370,10 @@ apply_final_audio_gain("final_video.mkv", "output.mkv", gain_factor=1.25)
 - 타임아웃: 네트워크 마운트 문제를 나타내는 에러 로그
 - FFprobe 에러: 디버깅을 위한 stderr 출력 로그
 - JSON 파싱 에러: 손상된 파일 또는 FFprobe 문제를 나타내는 에러 로그
+
+#### 설정
+- 기본 타임아웃은 `expression.media.ffprobe.timeout_seconds`로 구성하며 기본값은 **30초**(최소 **1초**)입니다.
+- `run_ffprobe` 호출 시 명시적으로 타임아웃을 전달하지 않으면 위 설정이 자동 적용됩니다.
 
 #### `_check_file_accessible(video_path: Path) -> Tuple[bool, Optional[str]]`
 처리 전 비디오 파일 접근 가능 여부를 확인합니다.

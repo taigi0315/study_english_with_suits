@@ -518,9 +518,35 @@ class VideoEditor:
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
+                    
+                    # Verify file was created successfully
+                    if not expression_video_clip_path.exists():
+                        logger.error(f"❌ Expression clip file not created: {expression_video_clip_path}")
+                        continue  # Skip this expression
+                    
+                    # Verify file is not empty and is valid
+                    file_size = expression_video_clip_path.stat().st_size
+                    if file_size == 0:
+                        logger.error(f"❌ Expression clip file is empty: {expression_video_clip_path}")
+                        expression_video_clip_path.unlink()  # Clean up empty file
+                        continue  # Skip this expression
+                    
+                    # Verify file is readable by ffprobe (quick validation)
+                    try:
+                        from langflix.media.ffmpeg_utils import run_ffprobe
+                        run_ffprobe(str(expression_video_clip_path), use_cache=False)
+                        logger.debug(f"✅ Expression clip validated: {expression_video_clip_path.name} ({file_size} bytes)")
+                    except Exception as probe_error:
+                        logger.error(f"❌ Expression clip file is corrupted: {expression_video_clip_path}, error: {probe_error}")
+                        expression_video_clip_path.unlink()  # Clean up corrupted file
+                        continue  # Skip this expression
+                        
                 except ffmpeg.Error as e:
                     stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
                     logger.error(f"❌ FFmpeg failed to extract expression clip for {expression.expression}: {stderr}")
+                    # Clean up partial file if it exists
+                    if expression_video_clip_path.exists():
+                        expression_video_clip_path.unlink()
                     continue  # Skip this expression
                 
                 # Step 2b: Repeat expression clip
@@ -529,7 +555,15 @@ class VideoEditor:
                 repeated_expression_path = self.output_dir / f"temp_expr_repeated_multi_{safe_group_id}_{expr_idx}.mkv"
                 self._register_temp_file(repeated_expression_path)
                 logger.info(f"Repeating expression clip {repeat_count} times")
-                repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
+                
+                try:
+                    repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
+                except Exception as repeat_error:
+                    logger.error(f"❌ Failed to repeat expression clip for {expression.expression}: {repeat_error}")
+                    # Clean up failed files
+                    if repeated_expression_path.exists():
+                        repeated_expression_path.unlink()
+                    continue  # Skip this expression
                 
                 # Step 2c: Add transition before expression (after context for first expression)
                 if transition_enabled:

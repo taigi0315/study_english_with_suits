@@ -3,6 +3,9 @@ Expression video slicing for LangFlix.
 
 This module provides functionality to slice media files for expressions
 using FFmpeg with precise timestamps from external transcription.
+
+TICKET-036: Added concurrency control with asyncio.Semaphore to prevent
+resource exhaustion during batch slicing operations.
 """
 
 from pathlib import Path
@@ -20,13 +23,19 @@ logger = logging.getLogger(__name__)
 
 
 class ExpressionMediaSlicer:
-    """Slice media files for expressions using FFmpeg"""
+    """
+    Slice media files for expressions using FFmpeg.
+    
+    TICKET-036: Implements concurrency control to prevent FFmpeg process storms
+    on resource-limited servers. Uses asyncio.Semaphore to limit concurrent operations.
+    """
     
     def __init__(
         self,
         storage_backend: StorageBackend,
         output_dir: Path,
-        quality: str = 'high'
+        quality: str = 'high',
+        max_concurrency: Optional[int] = None
     ):
         """
         Initialize expression media slicer
@@ -35,6 +44,8 @@ class ExpressionMediaSlicer:
             storage_backend: Storage backend for saving sliced videos
             output_dir: Local output directory
             quality: Video quality preset (low, medium, high, lossless)
+            max_concurrency: Maximum concurrent slicing operations 
+                           (None = use configuration default)
         """
         self.storage = storage_backend
         self.output_dir = Path(output_dir)
@@ -45,6 +56,13 @@ class ExpressionMediaSlicer:
         # Get buffer settings from configuration
         self.buffer_start = settings.get_expression_config().get('media', {}).get('slicing', {}).get('buffer_start', 0.2)
         self.buffer_end = settings.get_expression_config().get('media', {}).get('slicing', {}).get('buffer_end', 0.2)
+        
+        # TICKET-036: Concurrency control with semaphore
+        if max_concurrency is None:
+            max_concurrency = settings.get_max_concurrent_slicing()
+        self._max_concurrency = max_concurrency
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+        logger.info(f"ExpressionMediaSlicer initialized with max_concurrency={max_concurrency}")
     
     def _get_quality_settings(self, quality: str) -> Dict[str, Any]:
         """Get FFmpeg quality settings"""
@@ -161,9 +179,19 @@ class ExpressionMediaSlicer:
             
         except Exception as e:
             logger.error(f"Failed to slice expression: {e}")
+            
+            # TICKET-036: Cleanup failed/partial files
+            if 'local_output' in locals() and local_output.exists():
+                try:
+                    local_output.unlink()
+                    logger.debug(f"Cleaned up failed slice: {local_output}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {local_output}: {cleanup_error}")
+            
+            # TICKET-036: Fixed NameError - use expression_data dict instead of aligned_expression object
             raise VideoSlicingError(
                 f"Slicing failed: {str(e)}",
-                expression=aligned_expression.expression,
+                expression=expression_data.get('expression', 'unknown'),
                 file_path=media_path
             )
     
@@ -174,31 +202,49 @@ class ExpressionMediaSlicer:
         media_id: str
     ) -> List[str]:
         """
-        Slice multiple expressions from media file
+        Slice multiple expressions from media file with concurrency control.
+        
+        TICKET-036: Fixed NameError bug and added semaphore-based concurrency control
+        to prevent resource exhaustion from unlimited parallel FFmpeg processes.
         
         Args:
             media_path: Path to source media file
-            aligned_expressions: List of aligned expressions
+            expressions: List of expression dictionaries with timestamps
             media_id: Unique media identifier
             
         Returns:
-            List[str]: Paths to sliced videos
+            List[str]: Paths to sliced videos (successful only)
         """
-        tasks = []
-        for expression in aligned_expressions:
-            task = self.slice_expression(media_path, expression, media_id)
-            tasks.append(task)
+        logger.info(f"Slicing {len(expressions)} expressions with max_concurrency={self._max_concurrency}")
+        
+        # TICKET-036: Wrap each slice operation with semaphore guard
+        async def _guarded_slice(expr: dict) -> str:
+            """Slice with concurrency control"""
+            async with self._semaphore:
+                logger.debug(f"Acquired semaphore for expression: {expr.get('expression', 'unknown')[:30]}")
+                try:
+                    result = await self.slice_expression(media_path, expr, media_id)
+                    return result
+                finally:
+                    logger.debug(f"Released semaphore for expression: {expr.get('expression', 'unknown')[:30]}")
+        
+        # TICKET-036: Fixed NameError - changed aligned_expressions to expressions
+        tasks = [_guarded_slice(expression) for expression in expressions]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Handle exceptions
+        # Handle exceptions and cleanup
         successful_paths = []
+        failed_count = 0
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Failed to slice expression {i}: {result}")
+                failed_count += 1
+                # TICKET-036: Cleanup logic - already handled in slice_expression
             else:
                 successful_paths.append(result)
         
+        logger.info(f"Slicing complete: {len(successful_paths)} successful, {failed_count} failed")
         return successful_paths
     
     async def _upload_to_storage(self, local_path: Path, filename: str) -> str:

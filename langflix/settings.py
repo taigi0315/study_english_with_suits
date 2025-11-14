@@ -101,6 +101,35 @@ def get_expression_config() -> Dict[str, Any]:
     return _config_loader.get_section('expression') or {}
 
 
+def get_expression_slicing_config() -> Dict[str, Any]:
+    """Get expression slicing configuration"""
+    expr_cfg = get_expression_config()
+    media_cfg = expr_cfg.get('media', {})
+    return media_cfg.get('slicing', {})
+
+
+def get_max_concurrent_slicing() -> int:
+    """
+    Get maximum concurrent slicing operations.
+    
+    Controls how many FFmpeg processes can run simultaneously during
+    expression slicing. This prevents resource exhaustion on limited servers.
+    
+    Returns:
+        int: Maximum concurrent operations (default: CPU count // 2, min 1)
+    """
+    import os
+    slicing_cfg = get_expression_slicing_config()
+    configured = slicing_cfg.get('max_concurrent', None)
+    
+    if configured is not None:
+        return max(1, int(configured))
+    
+    # Default: half of CPU cores, minimum 1
+    cpu_count = os.cpu_count() or 2
+    return max(1, cpu_count // 2)
+
+
 def get_expression_repeat_count() -> int:
     """
     Get unified expression repeat count for all video types.

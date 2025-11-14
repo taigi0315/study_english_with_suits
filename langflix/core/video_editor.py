@@ -324,10 +324,13 @@ class VideoEditor:
                 left_duration = get_duration_seconds(str(left_side_path))
                 logger.info(f"Left side duration (context + transition + expression repeat): {left_duration:.2f}s")
             
-            # Step 3: Create educational slide with background and TTS audio
+            # Step 3: Create educational slide with expression audio (not TTS)
+            # Extract expression audio from expression_video_clip_path and use it for slide
             # Pass left_duration so slide can be extended to match
+            # Also pass expression_video_clip_path to use its audio instead of TTS
             educational_slide = self._create_educational_slide(
-                expression_video_path, expression, expression_index, target_duration=left_duration
+                expression_video_path, expression, expression_index, target_duration=left_duration,
+                use_expression_audio=True, expression_video_clip_path=str(expression_video_clip_path)
             )
             
             # Step 4: Create sequential layout (long-form): video → transition → slide
@@ -1308,17 +1311,16 @@ class VideoEditor:
                 expression_end_relative = self._time_to_seconds(expression.expression_end_time) - \
                                          self._time_to_seconds(expression.context_start_time)
                 
-                # Calculate total expression duration including repeats
-                from langflix import settings
-                repeat_count = settings.get_expression_repeat_count()
+                # Expression subtitle should only show during expression segment in context video
+                # It will be visible when context video is concatenated with expression repeat
+                # The subtitle timing is relative to context video start (0)
                 expression_duration = expression_end_relative - expression_start_relative
-                total_expression_duration = expression_duration * repeat_count
                 
-                # Generate expression subtitle SRT
+                # Generate expression subtitle SRT (only for the expression segment in context)
                 expression_subtitle_content = self.subtitle_processor.generate_expression_subtitle_srt(
                     expression,
-                    expression_start_relative,
-                    expression_start_relative + total_expression_duration  # Include all repeats
+                    expression_start_relative,  # Start when expression begins in context
+                    expression_end_relative     # End when expression ends in context (not including repeats)
                 )
                 
                 # Save expression subtitle to temp file
@@ -1327,13 +1329,14 @@ class VideoEditor:
                 self._register_temp_file(expression_subtitle_path)
                 
                 # Apply dual subtitle layers (original at bottom + expression at top)
+                # Expression subtitle will show during expression segment in context video
                 subs_overlay.apply_dual_subtitle_layers(
                     str(video_path),
                     str(temp_sub),
                     str(expression_subtitle_path),
                     str(output_path),
                     expression_start_relative,
-                    expression_start_relative + total_expression_duration
+                    expression_end_relative
                 )
             else:
                 # drawtext fallback with translation only
@@ -1544,8 +1547,17 @@ class VideoEditor:
             logger.error(f"Error creating expression clip: {e}")
             raise
     
-    def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis, expression_index: int = 0, target_duration: Optional[float] = None) -> str:
-        """Create educational slide with background image, text, and TTS audio 2x"""
+    def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis, expression_index: int = 0, target_duration: Optional[float] = None, use_expression_audio: bool = False, expression_video_clip_path: Optional[str] = None) -> str:
+        """Create educational slide with background image, text, and audio.
+        
+        Args:
+            expression_source_video: Source video path for audio extraction (if use_expression_audio=False)
+            expression: ExpressionAnalysis object
+            expression_index: Index for voice alternation
+            target_duration: Target duration for slide (extends if needed)
+            use_expression_audio: If True, use expression video clip audio instead of TTS
+            expression_video_clip_path: Path to expression video clip (required if use_expression_audio=True)
+        """
         try:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
@@ -1569,8 +1581,81 @@ class VideoEditor:
             tts_audio_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Audio timeline directory: {tts_audio_dir}")
             
+            # Check if we should use expression audio instead of TTS
+            if use_expression_audio and expression_video_clip_path:
+                logger.info("Using expression video clip audio for slide (instead of TTS)")
+                # Extract audio from expression video clip and extend to target_duration
+                expression_audio_path = self.output_dir / f"temp_expression_audio_{sanitize_for_expression_filename(expression.expression)}.wav"
+                self._register_temp_file(expression_audio_path)
+                
+                # Extract audio from expression video clip
+                (
+                    ffmpeg
+                    .input(str(expression_video_clip_path))
+                    .audio
+                    .output(str(expression_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                
+                # Get expression audio duration
+                from langflix.media.ffmpeg_utils import get_duration_seconds
+                expression_audio_duration = get_duration_seconds(str(expression_audio_path))
+                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s")
+                
+                # Extend audio to target_duration by looping
+                if target_duration and target_duration > expression_audio_duration:
+                    extended_audio_path = self.output_dir / f"temp_expression_audio_extended_{sanitize_for_expression_filename(expression.expression)}.wav"
+                    self._register_temp_file(extended_audio_path)
+                    
+                    # Calculate loop count
+                    loop_count = int(target_duration / expression_audio_duration) + 1
+                    logger.info(f"Looping expression audio {loop_count} times to match target duration {target_duration:.2f}s")
+                    
+                    # Create concat list for looping
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as concat_file:
+                        for _ in range(loop_count):
+                            concat_file.write(f"file '{expression_audio_path}'\n")
+                        concat_list_path = concat_file.name
+                    
+                    # Concatenate audio to loop
+                    (
+                        ffmpeg
+                        .input(concat_list_path, format='concat', safe=0)
+                        .output(str(extended_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                    
+                    # Trim to exact target_duration
+                    final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
+                    self._register_temp_file(final_audio_path)
+                    (
+                        ffmpeg
+                        .input(str(extended_audio_path), t=target_duration)
+                        .output(str(final_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                    
+                    audio_path = final_audio_path
+                    expression_duration = target_duration
+                else:
+                    audio_path = expression_audio_path
+                    expression_duration = expression_audio_duration
+                
+                audio_2x_path = audio_path
+                slide_duration = expression_duration + 0.5
+                
+                if target_duration is not None and target_duration > slide_duration:
+                    slide_duration = target_duration
+                    logger.info(f"Using target duration for slide: {slide_duration:.2f}s")
+                
+                logger.info(f"Using expression audio for slide: {audio_2x_path}")
+                logger.info(f"Expression audio duration: {expression_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")
             # Check if TTS is enabled and decide on audio workflow
-            if tts_enabled:
+            elif tts_enabled:
                 try:
                     from langflix.tts.factory import create_tts_client
                     

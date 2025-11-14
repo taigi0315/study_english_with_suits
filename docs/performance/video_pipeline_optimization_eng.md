@@ -147,12 +147,45 @@ Key excerpt illustrating the sequential group loop and per-group clip extraction
 | Phase | Key Tasks | Dependencies | Expected Impact |
 | --- | --- | --- | --- |
 | 0 | Instrument stages, add profiling CLI, baseline run | None | Ground truth metrics |
+| 0 ✅ | **TICKET-037: Pipeline profiling instrumentation** | None | **Baseline measurement capability** |
 | 1A | Add ffprobe cache decorator, expose cache invalidation | Phase 0 instrumentation | Reduces probe overhead by ~30-40% |
 | 1B | Update `extract_clip` to support copy/encode modes + tests | 0 | Cuts single-expression slice time when keyframes permit |
 | 1C | Fix slicer bug, add semaphore | 0 | Stabilizes batch slicing, avoids overload |
 | 2A | Implement batch trim planner + unit tests | 1B | Eliminates redundant decode passes |
 | 2B | Refactor video assembly to single filter graphs per group | 2A | Largest end-to-end speedup (~35-45%) |
 | 3 | Optional streaming outputs, HW acceleration hooks | 2B | Future-proofing |
+
+### Phase 0 Status: ✅ COMPLETE (TICKET-037)
+
+**Implemented Features:**
+- `PipelineProfiler` class for structured performance measurement
+- `profile_stage` context manager for easy stage instrumentation
+- `--profile` CLI flag for enabling profiling
+- `tools/profile_video_pipeline.py` script for dedicated profiling runs
+- JSON report generation with stage timings and metadata
+- Structured logging with `PROFILE_STAGE` events
+
+**Usage:**
+```bash
+# Enable profiling via CLI
+python -m langflix.main --subtitle "file.srt" --profile
+
+# Or use dedicated profiling script
+python tools/profile_video_pipeline.py \
+    --subtitle "file.srt" \
+    --video-dir "assets/media" \
+    --profile-output "profiles/baseline.json"
+```
+
+**Report Format:**
+- Metadata: Input files, configuration, timestamps
+- Stages: Individual stage timings with optional metadata
+- Summary: Total duration, slowest stage, averages
+
+**Next Steps:**
+- Run baseline profiling on representative episodes
+- Store baseline reports in `profiles/baseline/` directory
+- Use reports to measure improvement after Phase 1/2 optimizations
 
 ### Cross-Cutting Considerations
 - Update settings schema to hold new tuning knobs (max concurrent FFmpeg jobs, copy-threshold duration, probe cache TTL).

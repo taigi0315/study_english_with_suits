@@ -390,21 +390,24 @@ class VideoEditor:
                 group_id=group_id
             )
             logger.info(f"Context with subtitles created: {context_with_subtitles}")
-            
-            # Step 1b: For multi-expression groups, we'll add the multi-expression slide at the end
-            # Don't create context_with_multi_slide here - we'll use plain context_with_subtitles
-            # and add the multi-expression slide in the final hstack step
+
             from langflix.core.models import ExpressionGroup
             expression_group = ExpressionGroup(
                 context_start_time=expressions[0].context_start_time,
                 context_end_time=expressions[0].context_end_time,
                 expressions=expressions
             )
-            
+
+            # Prepare context video for multi-expression layout
+            # No padding needed - hstack will handle side-by-side layout automatically
+            # Just use the context video with subtitles directly
+            context_with_multi_slide = Path(context_with_subtitles)
+            logger.info(f"Using context video for multi-expression sequence: {context_with_multi_slide}")
+
             # Step 2: Build sequence segments
-            # Structure: context (plain, no slide yet) → transition → expr1 repeat → transition → expr2 repeat → ...
-            segments = [str(context_with_subtitles)]  # Start with plain context video (slide added later)
-            
+            # Structure: context (with padding) → transition → expr1 repeat → transition → expr2 repeat → ...
+            segments = [str(context_with_multi_slide)]  # Start with padded context video (slide added later)
+
             # Get transition configuration
             from langflix import settings
             transition_config = settings.get_transitions_config()

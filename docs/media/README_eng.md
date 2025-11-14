@@ -359,7 +359,7 @@ Extracts video metadata using ffprobe with comprehensive error handling.
 
 **Improvements (TICKET-033):**
 - Pre-checks file accessibility before probing
-- Uses improved `run_ffprobe()` function with timeout support
+- Uses improved `run_ffprobe()` function with configurable timeout support
 - Provides detailed error logging with stderr output
 - Handles specific exception types: `CalledProcessError`, `FileNotFoundError`, `JSONDecodeError`, `PermissionError`, `TimeoutError`
 - Returns empty dict on failure (graceful degradation)
@@ -370,6 +370,10 @@ Extracts video metadata using ffprobe with comprehensive error handling.
 - Timeout: Logs error indicating network mount issues
 - FFprobe errors: Logs stderr output for debugging
 - JSON parsing errors: Logs error indicating corrupted file or FFprobe issue
+
+#### Configuration
+- Configure default timeout via `expression.media.ffprobe.timeout_seconds` (default **30**, minimum **1** second).
+- Overrides are applied automatically unless a timeout is explicitly passed to `run_ffprobe`.
 
 #### `_check_file_accessible(video_path: Path) -> Tuple[bool, Optional[str]]`
 Checks if video file is accessible before processing.

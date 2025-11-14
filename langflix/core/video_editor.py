@@ -501,10 +501,9 @@ class VideoEditor:
                 
                 input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
                 video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
-                # Use pad filter to place original video on left half (0,0) and fill right half with black
-                # This creates 2560x720 output without resizing the original video
-                # Format: pad=width:height:x:y:color
-                video_stream = ffmpeg.filter(video_stream, 'pad', 2560, 720, 0, 0, color='black')
+                # DO NOT pad here - padding was causing resolution mismatch (2560x720 instead of 1280x720)
+                # The expression clip should maintain original resolution (1280x720)
+                # Final layout is created by hstack_keep_height() which handles side-by-side automatically
                 audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
                 
                 try:
@@ -541,15 +540,15 @@ class VideoEditor:
                 # Step 2c: Add transition before expression (after context for first expression)
                 if transition_enabled:
                     # Add transition before each expression (after context for first, between expressions for others)
-                    # IMPORTANT: Use context_with_multi_slide as source to match resolution (2560x720)
-                    # because we're concatenating with context_with_multi_slide which is side-by-side layout
+                    # Use context_with_subtitles as source to match 1280x720 resolution
+                    # (context_with_multi_slide was causing 2560x720 which is incorrect)
                     transition_video_path = self.output_dir / f"temp_transition_multi_{safe_group_id}_{expr_idx}.mkv"
                     transition_video = self._create_transition_video(
                         duration=transition_duration,
                         image_path=str(transition_image_full),
                         sound_effect_path=str(sound_effect_full),
                         output_path=transition_video_path,
-                        source_video_path=str(context_with_multi_slide),  # Use multi-slide video to match 2560x720 resolution
+                        source_video_path=str(context_with_subtitles),  # Use context video to match 1280x720 resolution
                         fps=25,
                         sound_effect_volume=sound_volume
                     )

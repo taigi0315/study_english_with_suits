@@ -36,6 +36,36 @@ def get_video_config() -> Dict[str, Any]:
     return _config_loader.get_section('video') or {}
 
 
+def get_clip_extraction_config() -> Dict[str, Any]:
+    """Get clip extraction configuration"""
+    video_cfg = get_video_config()
+    return video_cfg.get('clip_extraction', {})
+
+
+def get_clip_extraction_strategy() -> str:
+    """
+    Get clip extraction strategy.
+    
+    Returns:
+        str: 'auto' (try copy, fallback to encode), 'copy' (copy only), or 'encode' (always re-encode)
+        Default: 'auto'
+    """
+    return get_clip_extraction_config().get('strategy', 'auto')
+
+
+def get_clip_copy_threshold_seconds() -> float:
+    """
+    Get threshold for attempting stream copy (seconds).
+    
+    Clips shorter than this will attempt stream copy first (if strategy allows).
+    Longer clips will directly use re-encode for better accuracy.
+    
+    Returns:
+        float: Threshold in seconds (default: 30.0)
+    """
+    return float(get_clip_extraction_config().get('copy_threshold_seconds', 30.0))
+
+
 def get_font_config() -> Dict[str, Any]:
     """Get font configuration"""
     return _config_loader.get_section('font') or {}

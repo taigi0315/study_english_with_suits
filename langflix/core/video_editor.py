@@ -176,10 +176,13 @@ class VideoEditor:
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
             
-            # Extract with -ss for seeking, then reset timestamps
-            # Use both -ss and setpts to ensure timestamps are reset correctly
-            input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
-            # Reset PTS to start from 0 for both video and audio
+            # IMPORTANT: Use output seeking for accurate subtitle sync
+            # Input seeking (ss before input) is faster but less accurate
+            # Output seeking (ss after input) is slower but more accurate - required for subtitle sync
+            # See: https://trac.ffmpeg.org/wiki/Seeking
+            input_stream = ffmpeg.input(str(context_with_subtitles))
+            # Apply seeking and duration trimming after input (output seeking)
+            # Then reset PTS to start from 0 for both video and audio
             video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
             audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
             
@@ -196,7 +199,9 @@ class VideoEditor:
                         ac=2,
                         ar=48000,
                         preset='fast',
-                        crf=23
+                        crf=23,
+                        ss=relative_start,  # Output seeking: apply after input for accuracy
+                        t=expression_duration  # Duration limit
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
@@ -341,12 +346,13 @@ class VideoEditor:
                 logger.info(f"Left side duration (context + transition + expression repeat): {left_duration:.2f}s")
             
             # Step 3: Create educational slide with expression audio (not TTS)
-            # Extract expression audio from expression_video_clip_path and use it for slide
+            # IMPORTANT: Extract audio from original expression_video_path, not from context-extracted clip
+            # The expression_video_path contains the original expression audio that matches the expression
             # Pass left_duration so slide can be extended to match
-            # Also pass expression_video_clip_path to use its audio instead of TTS
+            # Pass expression_video_path to extract original expression audio
             educational_slide = self._create_educational_slide(
                 expression_video_path, expression, expression_index, target_duration=left_duration,
-                use_expression_audio=True, expression_video_clip_path=str(expression_video_clip_path)
+                use_expression_audio=True, expression_video_clip_path=str(expression_video_path)
             )
             
             # Step 4: Create sequential layout (long-form): video → transition → slide
@@ -1602,13 +1608,24 @@ class VideoEditor:
             
             # Check if we should use expression audio instead of TTS
             if use_expression_audio and expression_video_clip_path:
-                logger.info("Using expression video clip audio for slide (instead of TTS)")
-                # Extract audio from expression video clip and extend to target_duration
+                logger.info("Using expression audio from original video for slide (instead of TTS)")
+                # IMPORTANT: Extract audio from original expression_video_path (expression_source_video)
+                # not from context-extracted clip, to ensure audio matches the expression exactly
+                # expression_video_clip_path is actually the original expression_video_path passed from caller
                 expression_audio_path = self.output_dir / f"temp_expression_audio_{sanitize_for_expression_filename(expression.expression)}.wav"
                 self._register_temp_file(expression_audio_path)
                 
-                # Extract audio from expression video clip
+                # Extract audio from original expression video using expression timestamps
+                # Use output seeking for accurate audio extraction
+                expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
+                expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
+                expression_audio_duration = expression_end_seconds - expression_start_seconds
+                
+                logger.info(f"Extracting expression audio from original video: {expression_video_clip_path}")
+                logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time} ({expression_audio_duration:.2f}s)")
+                
                 try:
+                    # Use output seeking for accurate audio extraction
                     audio_input = ffmpeg.input(str(expression_video_clip_path))
                     audio_stream = audio_input['a']
                 except (KeyError, TypeError):
@@ -1618,7 +1635,15 @@ class VideoEditor:
                 
                 (
                     ffmpeg
-                    .output(audio_stream, str(expression_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
+                    .output(
+                        audio_stream, 
+                        str(expression_audio_path), 
+                        acodec='pcm_s16le', 
+                        ar=48000, 
+                        ac=2,
+                        ss=expression_start_seconds,  # Output seeking: apply after input for accuracy
+                        t=expression_audio_duration  # Duration limit
+                    )
                     .overwrite_output()
                     .run(quiet=True)
                 )

@@ -78,6 +78,8 @@ echo ""
 echo -e "${BLUE}🔐 YouTube 자격 증명 파일 확인 중...${NC}"
 if [ -f "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" ]; then
     echo -e "${GREEN}✅ youtube_credentials.json 발견${NC}"
+    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" 2>/dev/null || true
+    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" 2>/dev/null || true
 else
     echo -e "${YELLOW}⚠️  youtube_credentials.json 없음${NC}"
     echo "   YouTube 기능을 사용하려면 이 파일이 필요합니다"
@@ -85,8 +87,14 @@ fi
 
 if [ -f "$TRUENAS_DATA_PATH/assets/youtube_token.json" ]; then
     echo -e "${GREEN}✅ youtube_token.json 발견${NC}"
+    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
+    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
 else
     echo -e "${YELLOW}⚠️  youtube_token.json 없음 (첫 로그인 시 자동 생성됨)${NC}"
+    # 빈 파일을 미리 생성하여 권한 문제를 방지
+    sudo touch "$TRUENAS_DATA_PATH/assets/youtube_token.json"
+    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
+    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
 fi
 
 # Docker Compose 파일 확인

@@ -108,6 +108,8 @@ services:
       
       # 출력 디렉토리 (쓰기 가능)
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      # 파이프라인 기본 경로(`/app/output`)에 직접 매핑하여 결과물이 호스트에 저장되도록 보장
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       
       # Assets (읽기 전용)
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
@@ -172,6 +174,7 @@ services:
     volumes:
       - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw

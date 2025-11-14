@@ -1,4 +1,4 @@
-.PHONY: all setup clean dev dev-backend dev-frontend dev-all dev-parallel docker-up docker-down docker-logs stop-all stop-all-force restart
+.PHONY: all setup clean dev dev-backend dev-frontend dev-all dev-parallel docker-up docker-down docker-logs stop-all stop-all-force restart deploy-zip
 
 all: setup
 
@@ -200,6 +200,11 @@ test-unit:
 logs:
 	@echo "📋 Viewing LangFlix logs..."
 	tail -f langflix.log
+
+deploy-zip:
+	@echo "📦 Creating deployment bundle..."
+	@python tools/create_deploy_bundle.py $(if $(OUTPUT),--output $(OUTPUT),) $(if $(INCLUDE_DOCS),--include-docs,) $(if $(INCLUDE_MEDIA),--include-media,)
+	@echo "✅ Deployment bundle ready. Use 'OUTPUT=path.zip' to customize."
 
 status:
 	@echo "📊 Checking service status..."

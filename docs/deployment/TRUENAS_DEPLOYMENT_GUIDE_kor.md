@@ -99,6 +99,20 @@ cd langflix
 
 ---
 
+### 선택: 최소 배포 번들 생성
+
+개발 PC에서 미리 간소화된 번들을 만들어 TrueNAS로 복사하고 싶다면 다음 명령을 실행하세요.
+
+```bash
+make deploy-zip                 # dist/langflix_deploy_<timestamp>.zip 생성
+make deploy-zip OUTPUT=/tmp/langflix.zip INCLUDE_DOCS=1
+make deploy-zip INCLUDE_MEDIA=1
+```
+
+이 ZIP에는 애플리케이션 코드, Docker/Compose 리소스, 설정 템플릿, 필수 에셋만 포함되며 가상환경, 테스트, 캐시 등 개발용 파일은 제외됩니다. 대용량 `assets/media` 라이브러리는 기본적으로 제외되며, 번들에 포함해야 할 때만 `INCLUDE_MEDIA=1` 옵션을 사용하세요.
+
+---
+
 ## 5단계: 지원 디렉토리 생성 및 권한 설정
 
 Docker Compose가 볼륨 마운트를 위해 필요한 디렉토리를 미리 생성하고 **반드시 올바른 권한을 설정**해야 합니다. 이 단계를 건너뛰면 컨테이너가 시작되지 않거나 파일 접근 오류가 발생합니다.
@@ -349,6 +363,7 @@ services:
     volumes:
       - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       - ${TRUENAS_DATA_PATH}/logs:/var/log/langflix:rw
       - ${TRUENAS_DATA_PATH}/cache:/data/cache:rw
   langflix-ui:
@@ -361,6 +376,7 @@ services:
     volumes:
       - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw

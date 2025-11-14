@@ -199,6 +199,12 @@ class VideoEditor:
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
                 )
+                
+                # Verify file was created
+                if not expression_video_clip_path.exists():
+                    raise RuntimeError(f"Expression clip file was not created: {expression_video_clip_path}")
+                
+                logger.info(f"✅ Expression clip extracted: {expression_video_clip_path}")
             except ffmpeg.Error as e:
                 # Log detailed FFmpeg error for debugging
                 stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
@@ -212,6 +218,14 @@ class VideoEditor:
                     f"   Error: {stderr}"
                 )
                 raise RuntimeError(f"FFmpeg failed to extract expression clip: {stderr}") from e
+            except Exception as e:
+                logger.error(
+                    f"❌ Unexpected error extracting expression clip:\n"
+                    f"   Input: {context_with_subtitles}\n"
+                    f"   Output: {expression_video_clip_path}\n"
+                    f"   Error: {e}"
+                )
+                raise
             
             # Repeat expression clip
             from langflix import settings
@@ -1253,7 +1267,7 @@ class VideoEditor:
         """
         try:
             context_videos_dir = self.output_dir.parent / "context_videos"
-            context_videos_dir.mkdir(exist_ok=True)
+            context_videos_dir.mkdir(parents=True, exist_ok=True)
 
             safe_name = sanitize_for_expression_filename(expression.expression)
             # Use group_id for multi-expression groups to create unique filename per group

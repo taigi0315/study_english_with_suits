@@ -1333,6 +1333,9 @@ class VideoEditor:
                 expression_duration = expression_end_relative - expression_start_relative
                 
                 # Generate expression subtitle SRT (only for the expression segment in context)
+                if not self.subtitle_processor:
+                    raise RuntimeError("subtitle_processor is required for generating expression subtitles. Please pass subtitle_processor to VideoEditor.__init__()")
+                
                 expression_subtitle_content = self.subtitle_processor.generate_expression_subtitle_srt(
                     expression,
                     expression_start_relative,  # Start when expression begins in context

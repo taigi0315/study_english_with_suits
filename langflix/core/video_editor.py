@@ -375,6 +375,7 @@ class VideoEditor:
             Path to created multi-expression video
         """
         try:
+            from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_group_id = sanitize_for_expression_filename(group_id)
             if output_filename is None:
                 output_filename = f"educational_group_{safe_group_id}.mkv"
@@ -623,10 +624,8 @@ class VideoEditor:
             # Subtitle files are named: group_XX_expr_YY_expression_text.srt
             subtitle_dir = self.output_dir.parent / "subtitles"
             from langflix.subtitles import overlay as subs_overlay
-            from langflix.utils.filename_utils import sanitize_for_expression_filename
             
             # For multi-expression groups, subtitle file has group prefix
-            safe_expr_text = sanitize_for_expression_filename(subtitle_expression.expression)
             sub_path = None
             
             # Try to find subtitle file with group prefix (e.g., group_01_expr_01_...)

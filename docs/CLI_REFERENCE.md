@@ -203,25 +203,25 @@ assets/
 ```
 output/
 ├── Suits/
-    ├── S01E01/
-        ├── shared/
-        │   ├── context_videos/        # Expression clips
-        │   ├── context_slide_combined/ # Educational videos
-        │   └── short_videos/          # Batched shorts
-        └── translations/
-            └── ko/
-                ├── subtitles/
-                ├── slides/
-                ├── audio/
-                └── metadata/
+    ├── S02E01/
+        └── ko/
+            ├── videos/              # All video outputs (unified)
+            │   ├── structured_video_{expression}.mkv
+            │   ├── combined_structured_video_{episode}.mkv
+            │   ├── short_form_{expression}.mkv
+            │   └── short-form_{episode}_{batch}.mkv
+            ├── subtitles/           # Subtitle files
+            ├── context_videos/      # Context video clips
+            └── slides/              # Educational slide videos
 ```
 
 ### File Types
 
+- **Structured Videos**: Individual expression videos (context → expression → slide)
+- **Combined Structured Video**: All structured videos concatenated
+- **Short-form Videos**: 9:16 format for social media (vertical)
 - **Context Videos**: Original video clips with subtitles
-- **Educational Videos**: Combined context + slide videos
-- **Short Videos**: 9:16 format for social media
-- **Metadata**: JSON files with expression data
+- **Slides**: Educational slide videos
 
 ---
 

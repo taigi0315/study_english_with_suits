@@ -46,14 +46,24 @@ class VideoEditor:
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
-        # Set up paths for different video types
-        self.final_videos_dir = self.output_dir  # This will be long_form_videos
-        self.context_slide_combined_dir = self.output_dir.parent / "context_slide_combined"
-        self.short_videos_dir = self.output_dir.parent / "short_form_videos"  # Updated to new name
+        # Set up paths for different video types - all videos go to videos/ directory
+        # Try to find videos directory in parent structure
+        if hasattr(self.output_dir, 'parent'):
+            lang_dir = self.output_dir.parent
+            if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                self.videos_dir = lang_dir / "videos"
+            else:
+                self.videos_dir = self.output_dir.parent / "videos"
+        else:
+            self.videos_dir = Path(self.output_dir).parent / "videos"
+        
+        # All video outputs go to videos/ directory
+        self.final_videos_dir = self.videos_dir
+        self.context_slide_combined_dir = self.videos_dir
+        self.short_videos_dir = self.videos_dir
         
         # Ensure directories exist (create parent directories if needed)
-        self.context_slide_combined_dir.mkdir(parents=True, exist_ok=True)
-        self.short_videos_dir.mkdir(parents=True, exist_ok=True)
+        self.videos_dir.mkdir(parents=True, exist_ok=True)
         
         # Track short format temp files for preservation (TICKET-029)
         self.short_format_temp_files = []
@@ -135,26 +145,24 @@ class VideoEditor:
             safe_expression = sanitize_for_expression_filename(expression.expression)
             output_filename = f"structured_video_{safe_expression}.mkv"
             
-            # Use structured_videos directory from paths (created by output_manager)
-            # Fallback to creating it if not in paths
-            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
-                # Try to find structured_videos directory in parent structure
-                structured_videos_dir = self.output_dir.parent / "structured_videos"
-                if not structured_videos_dir.exists():
-                    # Try alternative: look for language directory structure
-                    lang_dir = self.output_dir.parent
-                    if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
-                        structured_videos_dir = lang_dir / "structured_videos"
-                    else:
-                        # Create in same directory as output_dir
-                        structured_videos_dir = self.output_dir.parent / "structured_videos"
-                structured_videos_dir.mkdir(parents=True, exist_ok=True)
+            # Use videos directory from paths (created by output_manager)
+            # All videos go to videos/ directory
+            if hasattr(self, 'videos_dir'):
+                videos_dir = self.videos_dir
+            elif hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find videos directory in parent structure
+                lang_dir = self.output_dir.parent
+                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                    videos_dir = lang_dir / "videos"
+                else:
+                    videos_dir = self.output_dir.parent / "videos"
+                videos_dir.mkdir(parents=True, exist_ok=True)
             else:
                 # Fallback: create in output_dir parent
-                structured_videos_dir = Path(self.output_dir).parent / "structured_videos"
-                structured_videos_dir.mkdir(parents=True, exist_ok=True)
+                videos_dir = Path(self.output_dir).parent / "videos"
+                videos_dir.mkdir(parents=True, exist_ok=True)
             
-            output_path = structured_videos_dir / output_filename
+            output_path = videos_dir / output_filename
             
             logger.info(f"Creating structured video for: {expression.expression}")
             
@@ -312,7 +320,82 @@ class VideoEditor:
                 str(structured_temp_path)
             )
             
-            # Step 6: Apply final audio gain
+            # Step 6: Add logo at right-top with 50% opacity (long-form video)
+            logger.info("Adding logo to structured video (right-top, 50% opacity)")
+            structured_with_logo_path = self.output_dir / f"temp_structured_with_logo_{safe_expression}.mkv"
+            self._register_temp_file(structured_with_logo_path)
+            
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
+            if logo_path.exists():
+                try:
+                    # Load structured video
+                    structured_input = ffmpeg.input(str(structured_temp_path))
+                    structured_video = structured_input['v']
+                    structured_audio = structured_input['a'] if 'a' in structured_input else None
+                    
+                    # Load logo and apply 80% opacity
+                    logo_input = ffmpeg.input(str(logo_path))
+                    # Scale logo to appropriate size (e.g., 150px height)
+                    logo_video = logo_input['v'].filter('scale', -1, 150)
+                    # Apply 80% opacity: convert to rgba format and use geq filter to adjust alpha
+                    logo_video = logo_video.filter('format', 'rgba')
+                    # Use geq filter to set alpha to 80% (0.8 * 255 = 204)
+                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.8*alpha(X,Y)')
+                    
+                    # Get video dimensions for positioning
+                    # Overlay at right-top: x = W - w - margin, y = margin
+                    margin = 20  # 20px margin from edges
+                    overlay_x = f'W-w-{margin}'  # Right edge minus logo width minus margin
+                    overlay_y = margin  # Top margin
+                    
+                    # Overlay logo on structured video
+                    final_video = ffmpeg.overlay(
+                        structured_video,
+                        logo_video,
+                        x=overlay_x,
+                        y=overlay_y
+                    )
+                    
+                    # Output video with logo
+                    if structured_audio:
+                        (
+                            ffmpeg.output(
+                                final_video,
+                                structured_audio,
+                                str(structured_with_logo_path),
+                                vcodec='libx264',
+                                acodec='aac',
+                                ac=2,
+                                ar=48000,
+                                preset='fast',
+                                crf=23
+                            )
+                            .overwrite_output()
+                            .run(capture_stdout=True, capture_stderr=True)
+                        )
+                    else:
+                        (
+                            ffmpeg.output(
+                                final_video,
+                                str(structured_with_logo_path),
+                                vcodec='libx264',
+                                preset='fast',
+                                crf=23
+                            )
+                            .overwrite_output()
+                            .run(capture_stdout=True, capture_stderr=True)
+                        )
+                    
+                    logger.info("Added logo to structured video (right-top, 50% opacity)")
+                    # Use video with logo for final audio gain
+                    structured_temp_path = structured_with_logo_path
+                except Exception as e:
+                    logger.warning(f"Failed to add logo to structured video: {e}, continuing without logo")
+                    # Continue with original video if logo addition fails
+            else:
+                logger.debug(f"Logo file not found: {logo_path}, continuing without logo")
+            
+            # Step 7: Apply final audio gain
             logger.info("Applying final audio gain to structured video")
             from langflix.media.ffmpeg_utils import apply_final_audio_gain
             apply_final_audio_gain(str(structured_temp_path), str(output_path), gain_factor=1.69)
@@ -483,6 +566,30 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
+            # Add logo above catchy keywords (short-form video)
+            # Logo position: top center, near top of screen
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
+            if logo_path.exists():
+                try:
+                    # Load logo image and overlay it at top center
+                    # Position: y=10 (near top of screen, almost touching top)
+                    # Scale logo to 2x current size (500px * 2 = 1000px height)
+                    logo_input = ffmpeg.input(str(logo_path))
+                    logo_video = logo_input['v'].filter('scale', -1, 1000)  # Scale to 1000px height (2x from 500px), maintain aspect ratio
+                    
+                    # Overlay logo at top center (x: center, y: 10 - near top)
+                    final_video = ffmpeg.overlay(
+                        final_video,
+                        logo_video,
+                        x='(W-w)/2',  # Center horizontally
+                        y=10  # Near top position (almost touching top of screen)
+                    )
+                    logger.info("Added logo above catchy keywords in short-form video")
+                except Exception as e:
+                    logger.warning(f"Failed to add logo to short-form video: {e}")
+            else:
+                logger.debug(f"Logo file not found: {logo_path}")
+
             # Add catchy keywords at top (outside structured video area, in top black padding)
             # Top black padding: 0-480px (y_offset=480)
             # Display catchy keywords if available
@@ -507,13 +614,13 @@ class VideoEditor:
                 # Build text with commas: "#keyword1, #keyword2, #keyword3"
                 # Render each keyword separately with its own color
                 # If total width exceeds max_width, wrap to new lines
-                font_size = 52  # Doubled from 32
+                font_size = 42
                 y_position = 350
                 line_height = font_size * 1.2  # Line spacing (20% of font size)
                 
                 # Calculate approximate character width (rough estimate: font_size * 0.6 for monospace-like)
                 char_width_estimate = font_size * 0.6
-                comma_separator = ",  "  # Comma with double space
+                comma_separator = ",   "  # Comma with double space
                 comma_width = len(comma_separator) * char_width_estimate
                 
                 # Maximum width for keywords (90% of video width, video width is 1080px)
@@ -640,12 +747,12 @@ class VideoEditor:
 
             # Add expression text (line 1) at bottom (yellow, bold, centered)
             # Position: y=1450 (bottom area, above main subtitle at bottom)
-            # Font size: 3x main subtitle size for emphasis
+            # Font size: 4x main subtitle size for emphasis (increased from 3x)
             main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
-            expression_font_size = main_font_size * 3  # Triple size for expression subtitle
+            expression_font_size = main_font_size * 3
             drawtext_args_1 = {
                 'text': escaped_expression,
-                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
+                'fontsize': expression_font_size,
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
                 'y': 1450,  # First line at bottom (above main subtitle)
@@ -665,7 +772,7 @@ class VideoEditor:
             # Add expression translation (line 2) below expression text
             drawtext_args_2 = {
                 'text': escaped_translation,
-                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
+                'fontsize': expression_font_size,
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
                 'y': 1450 + expression_font_size + 20,  # Second line below expression (dynamic gap based on font size)

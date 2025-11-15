@@ -34,17 +34,19 @@
 ### 1.2 비디오 출력 구조
 
 ```
-output/Series/Episode/translations/ko/
-├── structured_videos/                    # 새 디렉토리
+output/Series/Episode/ko/
+├── videos/                               # 통합된 비디오 디렉토리
 │   ├── structured_video_{expression_1}.mkv
 │   ├── structured_video_{expression_2}.mkv
 │   ├── ...
-│   └── combined_structured_video_{episode}.mkv  # 모두 결합
-└── short_form_videos/                    # Short-form 비디오
-    ├── short_form_{expression_1}.mkv
-    ├── short_form_{expression_2}.mkv
-    ├── ...
-    └── short-form_{episode}_{batch_01}.mkv  # 배치 비디오
+│   ├── combined_structured_video_{episode}.mkv  # 모두 결합
+│   ├── short_form_{expression_1}.mkv
+│   ├── short_form_{expression_2}.mkv
+│   ├── ...
+│   └── short-form_{episode}_{batch_01}.mkv  # 배치 비디오
+├── subtitles/
+├── context_videos/
+└── slides/
 ```
 
 ---
@@ -89,7 +91,7 @@ output/Series/Episode/translations/ko/
 2. 비디오 파일 존재 및 유효성 검증
 3. 모든 비디오 경로가 포함된 concat 파일 생성
 4. FFmpeg concat demuxer를 사용하여 연결
-5. `structured_videos/combined_structured_video_{episode}.mkv`로 출력
+5. `videos/combined_structured_video_{episode}.mkv`로 출력
 
 ---
 

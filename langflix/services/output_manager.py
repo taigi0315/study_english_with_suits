@@ -56,12 +56,9 @@ class OutputManager:
         episode_dir = self.base_output_dir / series_name / episode_name
         episode_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create translations directory (main output location)
-        translations_dir = episode_dir / "translations"
-        translations_dir.mkdir(exist_ok=True)
-        
-        # Note: Removed shared/ and metadata/ directories as they are currently unused
-        # All outputs go to translations/ directory structure
+        # Note: Removed translations/ directory - language folders go directly under episode
+        # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
+        # Removed shared/ and metadata/ directories as they are currently unused
         # If needed in future, these can be re-enabled:
         # - shared/: for language-independent intermediate files
         # - metadata/: for processing logs and LLM outputs
@@ -69,7 +66,7 @@ class OutputManager:
         # Return path mappings (simplified structure)
         paths = {
             'episode_dir': episode_dir,
-            'translations': translations_dir,
+            # Removed translations directory - language folders created directly under episode
             # Removed unused shared and metadata paths
             # 'shared': {...},
             # 'metadata': {...}
@@ -89,26 +86,21 @@ class OutputManager:
         Returns:
             Dictionary with language-specific path mappings
         """
-        # Create language directory
-        lang_dir = episode_paths['translations'] / language_code
+        # Create language directory directly under episode (no translations/ folder)
+        # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
+        lang_dir = episode_paths['episode_dir'] / language_code
         lang_dir.mkdir(exist_ok=True)
         
         # Create language subdirectories
         subtitles_dir = lang_dir / "subtitles"
         context_videos_dir = lang_dir / "context_videos"
         slides_dir = lang_dir / "slides"
-        final_videos_dir = lang_dir / "long_form_videos"  # Renamed from final_videos
-        context_slide_combined_dir = lang_dir / "context_slide_combined"
-        short_videos_dir = lang_dir / "short_form_videos"  # Renamed from short_videos
-        structured_videos_dir = lang_dir / "structured_videos"  # New directory for structured videos
+        videos_dir = lang_dir / "videos"  # Unified videos directory for all video outputs
         
         subtitles_dir.mkdir(exist_ok=True)
         context_videos_dir.mkdir(exist_ok=True)
         slides_dir.mkdir(exist_ok=True)
-        final_videos_dir.mkdir(exist_ok=True)
-        context_slide_combined_dir.mkdir(exist_ok=True)
-        short_videos_dir.mkdir(exist_ok=True)
-        structured_videos_dir.mkdir(exist_ok=True)
+        videos_dir.mkdir(exist_ok=True)
         
         # Return language-specific paths
         lang_paths = {
@@ -116,10 +108,12 @@ class OutputManager:
             'subtitles': subtitles_dir,
             'context_videos': context_videos_dir,
             'slides': slides_dir,
-            'final_videos': final_videos_dir,
-            'context_slide_combined': context_slide_combined_dir,
-            'short_videos': short_videos_dir,
-            'structured_videos': structured_videos_dir
+            'videos': videos_dir,
+            # Legacy path mappings for backward compatibility (all point to videos/)
+            'final_videos': videos_dir,
+            'context_slide_combined': videos_dir,
+            'short_videos': videos_dir,
+            'structured_videos': videos_dir
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")
@@ -146,8 +140,8 @@ class OutputManager:
         patterns = [
             # Pattern 1: "Suits - 1x01 - Pilot.720p.WEB-DL"
             r'^(.+?)\s*-\s*(\d+x\d+)\s*-\s*(.+)$',
-            # Pattern 2: "Suits.S01E01.720p.HDTV.x264"
-            r'^(.+?)\.S(\d+)E(\d+)\.(.+)$',
+            # Pattern 2: "Suits.S01E01.720p.HDTV.x264" - Extract only S01E01, ignore quality/resolution
+            r'^(.+?)\.S(\d+)E(\d+)(?:\..+)?$',
             # Pattern 3: "Suits.S01E01"
             r'^(.+?)\.S(\d+)E(\d+)$',
             # Pattern 4: "Suits_1x01_Pilot"
@@ -160,19 +154,20 @@ class OutputManager:
             match = re.match(pattern, filename)
             if match:
                 if 'S(\\d+)E(\\d+)' in pattern:
-                    # Handle S01E01 format
+                    # Handle S01E01 format - extract only season/episode, ignore quality/resolution
                     series_name = match.group(1)
                     season = match.group(2)
                     episode = match.group(3)
+                    # Use only S01E01 format, don't include quality/resolution info
                     episode_name = f"S{season}E{episode}"
-                    if len(match.groups()) > 3:
-                        episode_name += f"_{match.group(4)}"
                 else:
                     # Handle other formats
                     series_name = match.group(1)
                     episode_num = match.group(2)
                     if len(match.groups()) > 2:
                         episode_title = match.group(3)
+                        # Remove quality/resolution from episode title if present
+                        episode_title = re.sub(r'\.\d+p\..*$', '', episode_title)  # Remove .720p.HDTV.x264 etc
                         episode_name = f"{episode_num}_{episode_title}"
                     else:
                         episode_name = episode_num

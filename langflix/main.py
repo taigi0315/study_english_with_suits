@@ -777,13 +777,13 @@ class LangFlixPipeline:
                 
             logger.info("Creating short-format videos from structured videos...")
             
-            # Get structured videos
-            structured_videos_dir = self.paths['language'].get('structured_videos')
-            if not structured_videos_dir:
-                structured_videos_dir = self.paths['language']['language_dir'] / "structured_videos"
+            # Get structured videos from videos/ directory
+            videos_dir = self.paths['language'].get('videos')
+            if not videos_dir:
+                videos_dir = self.paths['language']['language_dir'] / "videos"
             
-            structured_videos_dir = Path(structured_videos_dir) if isinstance(structured_videos_dir, str) else structured_videos_dir
-            structured_videos = sorted(list(structured_videos_dir.glob("structured_video_*.mkv")))
+            videos_dir = Path(videos_dir) if isinstance(videos_dir, str) else videos_dir
+            structured_videos = sorted(list(videos_dir.glob("structured_video_*.mkv")))
             
             logger.info(f"Found {len(structured_videos)} structured videos for short video creation")
             
@@ -956,14 +956,14 @@ class LangFlixPipeline:
             original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
             combined_video_filename = f"combined_structured_video_{episode_name}_{original_filename}.mkv"
             
-            # Use structured_videos directory from paths
-            if 'structured_videos' in self.paths['language']:
-                structured_videos_dir = self.paths['language']['structured_videos']
+            # Use videos directory from paths
+            if 'videos' in self.paths['language']:
+                videos_dir = self.paths['language']['videos']
             else:
                 # Fallback: create in language directory
-                structured_videos_dir = self.paths['language']['language_dir'] / "structured_videos"
-            structured_videos_dir.mkdir(parents=True, exist_ok=True)
-            combined_video_path = structured_videos_dir / combined_video_filename
+                videos_dir = self.paths['language']['language_dir'] / "videos"
+            videos_dir.mkdir(parents=True, exist_ok=True)
+            combined_video_path = videos_dir / combined_video_filename
             
             # Create concat file
             import tempfile

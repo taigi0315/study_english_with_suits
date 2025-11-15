@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 import ffmpeg
 
 from langflix import settings
+from langflix.settings import get_expression_subtitle_styling
 
 logger = logging.getLogger(__name__)
 
@@ -242,20 +243,27 @@ def apply_dual_subtitle_layers(
     """
     context_duration = context_end_seconds - context_start_seconds
     
-    # Build force_style for expression subtitle (mid-top center, yellow, bold)
-    # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = yellow (BGR format), Bold=1
+    # Build force_style for expression subtitle (mid-top center, cyan color, same size as main subtitle)
+    # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = cyan (BGR format), Bold=1
     # MarginV controls vertical margin from alignment position
     # For mid-top center positioning: MarginV=120 places subtitle at mid-top area (~1/8 from top)
-    # This ensures expression subtitle appears at mid-top center, not mid-left
+    # FontSize matches main subtitle size (22) for consistency
+    # Get main subtitle font size from config
+    try:
+        main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
+    except Exception:
+        main_font_size = 22  # Default to 22 (24 * 0.9)
+    
+    # Cyan color: #00FFFF → RGB(0, 255, 255) → BGR: B=FF, G=FF, R=00 → &H00FFFF00
     expression_style = (
         "Alignment=8,"  # Top center (ensures horizontal centering)
-        "PrimaryColour=&H00FFFF00,"  # Yellow (BGR: 00FFFF00 = #FFFF00)
+        "PrimaryColour=&H00FFFF00,"  # Cyan (BGR: B=FF, G=FF, R=00 = #00FFFF)
         "OutlineColour=&H00000000,"  # Black outline
         "Outline=2,"
         "Bold=1,"
-        "FontSize=32,"  # Increased from 28 for better visibility
+        f"FontSize={main_font_size},"  # Same size as main subtitle (22)
         "BorderStyle=3,"
-        "MarginV=120"  # 120 pixels from top = mid-top center position (reduced from 180)
+        "MarginV=120"  # 120 pixels from top = mid-top center position
     )
     
     # Build force_style for original subtitle (bottom, white) - default behavior

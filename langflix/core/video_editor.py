@@ -501,9 +501,9 @@ class VideoEditor:
 
                 logger.info(f"Added {len(keywords)} catchy keywords to top padding")
 
-            # Add expression text at mid-top (center-top area of video, throughout entire video)
+            # Add expression text at bottom (bottom area of video, throughout entire video)
             # Video height: 1920px (1080p portrait with padding)
-            # Mid-top position: y=250-350 (approximately 1/6 from top)
+            # Bottom position: y=1750-1850 (bottom area, above main subtitle)
             # Expression + translation displayed throughout video duration
             expression_text = expression.expression
             expression_translation = expression.expression_translation
@@ -511,14 +511,20 @@ class VideoEditor:
             escaped_expression = escape_drawtext_string(expression_text)
             escaped_translation = escape_drawtext_string(expression_translation)
 
-            # Add expression text (line 1) at mid-top (yellow, bold, centered)
-            # Position: y=250 (mid-top area, approximately 1/6 from top)
+            # Add expression text (line 1) at bottom (yellow, bold, centered)
+            # Position: y=1750 (bottom area, above main subtitle at bottom)
+            # Get main subtitle font size for consistency
+            try:
+                main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
+            except Exception:
+                main_font_size = 22  # Default to 22 (24 * 0.9)
+            
             drawtext_args_1 = {
                 'text': escaped_expression,
-                'fontsize': 40,  # Large for main expression
+                'fontsize': main_font_size,  # Same size as main subtitle
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 250,  # First line at mid-top
+                'y': 1750,  # First line at bottom (above main subtitle)
                 'borderw': 2,
                 'bordercolor': 'black'
             }
@@ -535,10 +541,10 @@ class VideoEditor:
             # Add expression translation (line 2) below expression text
             drawtext_args_2 = {
                 'text': escaped_translation,
-                'fontsize': 36,  # Slightly smaller for translation
+                'fontsize': main_font_size,  # Same size as main subtitle
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 310,  # Second line below expression (60px gap)
+                'y': 1810,  # Second line below expression (60px gap)
                 'borderw': 2,
                 'bordercolor': 'black'
             }

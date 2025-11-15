@@ -1495,14 +1495,18 @@ class VideoEditor:
                             pass
                 
                 audio_2x_path = final_audio_path
-                slide_duration = final_audio_duration + 0.5
+                # Use exact audio duration (2x expression audio) - stop video when audio ends
+                # Do NOT extend with target_duration or padding - video should end when second audio repeat finishes
+                slide_duration = final_audio_duration
                 
+                # CRITICAL: When using expression audio, ignore target_duration to prevent extra playback
+                # Video should stop exactly when second expression audio repeat finishes
                 if target_duration is not None and target_duration > slide_duration:
-                    slide_duration = target_duration
-                    logger.info(f"Using target duration for slide: {slide_duration:.2f}s")
+                    logger.info(f"Ignoring target_duration ({target_duration:.2f}s) for expression audio slide - using exact audio duration ({slide_duration:.2f}s)")
+                    logger.info(f"Video will stop when second expression audio repeat finishes (no extra playback)")
                 
                 logger.info(f"Using expression audio for slide: {audio_2x_path}")
-                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")
+                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Final slide duration: {slide_duration:.2f}s (exact match, no padding)")
                 
                 # For consistency with other branches, set audio_path and expression_duration
                 audio_path = audio_2x_path
@@ -1561,12 +1565,22 @@ class VideoEditor:
             # audio_path and expression_duration are now set by one of the three branches above
             # Prepare final audio path and slide duration
             audio_2x_path = audio_path  # Unified variable for slide audio
-            slide_duration = expression_duration + 0.5  # Add small padding for slide
             
-            # If target_duration is provided, use that instead (for hstack matching)
-            if target_duration is not None and target_duration > slide_duration:
-                slide_duration = target_duration
-                logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
+            # For expression audio, slide_duration is already set exactly to audio duration (no padding)
+            # For TTS/original audio, add small padding
+            if use_expression_audio and expression_video_clip_path:
+                # Expression audio: slide_duration already set to exact audio duration (no padding, no target_duration override)
+                # Do not modify slide_duration here - it's already set correctly above
+                logger.info(f"Expression audio slide: using exact duration {slide_duration:.2f}s (no padding, no target_duration override)")
+            else:
+                # TTS or original audio: add small padding
+                slide_duration = expression_duration + 0.5  # Add small padding for slide
+                
+                # If target_duration is provided, use that instead (for hstack matching)
+                # But only for non-expression-audio cases
+                if target_duration is not None and target_duration > slide_duration:
+                    slide_duration = target_duration
+                    logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
             
             logger.info(f"Using timeline audio directly: {audio_2x_path}")
             logger.info(f"Timeline duration: {expression_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")

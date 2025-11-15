@@ -582,7 +582,7 @@ class VideoEditor:
                         final_video,
                         logo_video,
                         x='(W-w)/2',  # Center horizontally
-                        y=0  # Top position (touching top of screen)
+                        y=10  # Top position (touching top of screen)
                     )
                     logger.info("Added logo above catchy keywords in short-form video")
                 except Exception as e:
@@ -1518,10 +1518,10 @@ class VideoEditor:
             provider_config_for_audio = provider_config if provider_config else {"response_format": "wav"}
             tts_enabled = settings.is_tts_enabled() and provider and bool(provider_config)
             
-            # Create audio timeline directory (used for both TTS and original audio)
-            tts_audio_dir = self.output_dir.parent / "tts_audio"
-            tts_audio_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Audio timeline directory: {tts_audio_dir}")
+            # Use output_dir for temporary audio files (no separate tts_audio folder)
+            # Temporary audio files will be cleaned up automatically
+            tts_audio_dir = self.output_dir
+            logger.debug(f"Using output_dir for temporary audio files: {tts_audio_dir}")
             
             # Check if we should use expression audio instead of TTS
             if use_expression_audio and expression_video_clip_path:

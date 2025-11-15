@@ -172,7 +172,7 @@ transitions:
   # Context to expression transition (dedicated transition video segment)
   context_to_expression_transition:
     enabled: true
-    duration: 1.0  # 1 second transition
+    duration: 0.3  # 0.3 second transition
     image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
     image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
     sound_effect_path: "assets/sound_effect.mp3"
@@ -293,11 +293,12 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 21              # Reduced by ~12% from default 24
-      margin_v: 170              # Margin from bottom (1920 - 1750 = 170)
+      font_size: 35              # Match expression font size
+      margin_v: 50               # Close to bottom for better visibility
       text_color: 'white'
       outline_width: 2
       outline_color: 'black'
+      background_opacity: 0.5    # 50% opacity for background
 
 # ============================================================================
 # Expression-Based Learning Configuration

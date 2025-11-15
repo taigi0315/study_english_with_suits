@@ -577,6 +577,11 @@ def get_dialogue_subtitle_outline_color() -> str:
     return get_dialogue_subtitle_config().get('outline_color', 'black')
 
 
+def get_dialogue_subtitle_background_opacity() -> float:
+    """Get dialogue subtitle background opacity (default: 0.5 for 50%)"""
+    return get_dialogue_subtitle_config().get('background_opacity', 0.5)
+
+
 # ============================================================================
 # Storage Configuration Accessors
 # ============================================================================

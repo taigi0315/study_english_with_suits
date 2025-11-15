@@ -185,8 +185,7 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
 
-            # Step 1a: Extract context clip from original video (NO subtitles)
-            # This keeps structured video clean - subtitles added later in short-form
+            # Step 1a: Extract context clip from original video WITH subtitles
             self.output_dir.mkdir(parents=True, exist_ok=True)
             context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
             self._register_temp_file(context_clip_path)
@@ -194,30 +193,47 @@ class VideoEditor:
             context_end_seconds = self._time_to_seconds(expression.context_end_time)
             context_duration = context_end_seconds - context_start_seconds
 
-            logger.info(f"Extracting context clip: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
+            logger.info(f"Extracting context clip with subtitles: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
 
-            # Extract context using output seeking for accuracy
-            context_input = ffmpeg.input(str(context_video_path))
-            context_video = context_input['v']
-            context_audio = context_input['a']
+            # Find and apply subtitle file
+            subtitle_file = None
+            if subtitle_file_path and Path(subtitle_file_path).exists():
+                subtitle_file = Path(subtitle_file_path)
+                logger.info(f"Applying subtitles from: {subtitle_file}")
 
-            (
-                ffmpeg.output(
-                    context_video,
-                    context_audio,
+                # Apply subtitles using subs_overlay (extract + apply in one step)
+                subs_overlay.apply_dual_subtitle_layers(
+                    str(context_video_path),
+                    str(subtitle_file),
+                    "",  # No expression subtitle for structured video
                     str(context_clip_path),
-                    vcodec='libx264',
-                    acodec='aac',
-                    ac=2,
-                    ar=48000,
-                    preset='fast',
-                    crf=23,
-                    ss=context_start_seconds,
-                    t=context_duration
+                    context_start_seconds,
+                    context_end_seconds
                 )
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
-            )
+            else:
+                # No subtitles - extract context clip without them
+                logger.warning("No subtitle file found, extracting context without subtitles")
+                context_input = ffmpeg.input(str(context_video_path))
+                context_video = context_input['v']
+                context_audio = context_input['a']
+
+                (
+                    ffmpeg.output(
+                        context_video,
+                        context_audio,
+                        str(context_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23,
+                        ss=context_start_seconds,
+                        t=context_duration
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
 
             # Reset timestamps of context clip
             context_clip_reset_path = self.output_dir / f"temp_context_clip_reset_{safe_expression}.mkv"
@@ -316,16 +332,64 @@ class VideoEditor:
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
 
-            # Step 3: Concatenate context + expression repeat (NO transition)
+            # Step 3: Concatenate context + transition + expression repeat
             context_expr_path = self.output_dir / f"temp_context_expr_structured_{safe_expression}.mkv"
             self._register_temp_file(context_expr_path)
-            logger.info("Concatenating context + expression repeat (direct, no transition)")
-            from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
-            concat_filter_with_explicit_map(
-                str(context_clip_reset_path),
-                str(repeated_expression_path),
-                str(context_expr_path)
-            )
+
+            # Get transition configuration
+            transition_config = settings.get_transitions_config().get('context_to_expression_transition', {})
+            transition_enabled = transition_config.get('enabled', False)
+
+            if transition_enabled:
+                # Create transition video (0.3s with image and sound effect)
+                transition_duration = transition_config.get('duration', 0.3)
+                transition_image = transition_config.get('image_path_16_9', 'assets/transition_16_9.png')
+                sound_effect = transition_config.get('sound_effect_path', 'assets/sound_effect.mp3')
+
+                logger.info(f"Creating {transition_duration}s transition between context and expression")
+                transition_video = self._create_transition_video(
+                    duration=transition_duration,
+                    image_path=transition_image,
+                    sound_effect_path=sound_effect,
+                    source_video_path=str(context_clip_reset_path),
+                    aspect_ratio="16:9"
+                )
+
+                if transition_video:
+                    # Concatenate: context + transition + expression
+                    logger.info("Concatenating context + transition + expression repeat")
+                    from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                    # Note: concat_filter_with_explicit_map only handles 2 inputs, so we'll do it in two steps
+                    temp_context_transition = self.output_dir / f"temp_context_transition_{safe_expression}.mkv"
+                    self._register_temp_file(temp_context_transition)
+                    concat_filter_with_explicit_map(
+                        str(context_clip_reset_path),
+                        str(transition_video),
+                        str(temp_context_transition)
+                    )
+                    concat_filter_with_explicit_map(
+                        str(temp_context_transition),
+                        str(repeated_expression_path),
+                        str(context_expr_path)
+                    )
+                else:
+                    # Fallback to direct concatenation if transition creation failed
+                    logger.warning("Transition creation failed, concatenating directly")
+                    from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                    concat_filter_with_explicit_map(
+                        str(context_clip_reset_path),
+                        str(repeated_expression_path),
+                        str(context_expr_path)
+                    )
+            else:
+                # No transition - direct concatenation
+                logger.info("Concatenating context + expression repeat (no transition)")
+                from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                concat_filter_with_explicit_map(
+                    str(context_clip_reset_path),
+                    str(repeated_expression_path),
+                    str(context_expr_path)
+                )
             
             # Get duration for slide matching
             from langflix.media.ffmpeg_utils import get_duration_seconds
@@ -876,15 +940,24 @@ class VideoEditor:
                 dialogue_font_size = settings.get_dialogue_subtitle_font_size()
                 dialogue_margin_v = settings.get_dialogue_subtitle_margin_v()
                 dialogue_outline_width = settings.get_dialogue_subtitle_outline_width()
+                background_opacity = settings.get_dialogue_subtitle_background_opacity()
+
+                # Convert opacity (0.0-1.0) to ASS alpha value (00-FF, where 00=opaque, FF=transparent)
+                # ASS alpha = 255 * (1 - opacity)
+                alpha_value = int(255 * (1 - background_opacity))
+                # BackColour with alpha: &HAABBGGRR (AA=alpha, BB=blue, GG=green, RR=red)
+                # For black background with 50% opacity: &H80000000
+                back_colour = f"&H{alpha_value:02X}000000"
 
                 custom_bottom_style = (
                     "Alignment=2,"  # Bottom center
                     "PrimaryColour=&H00FFFFFF,"  # White (BGR format)
                     "OutlineColour=&H00000000,"  # Black outline
+                    f"BackColour={back_colour},"  # Black background with opacity
                     f"Outline={dialogue_outline_width},"
                     "Bold=0,"
                     f"FontSize={dialogue_font_size},"
-                    "BorderStyle=3,"
+                    "BorderStyle=4,"  # BorderStyle 4 = background box
                     f"MarginV={dialogue_margin_v}"  # Margin from bottom
                 )
 
@@ -3377,8 +3450,120 @@ class VideoEditor:
             logger.error(f"Error creating batched short videos: {e}")
             raise
 
-    # Note: Transition-related methods removed as per new architecture
-    # (no transitions in structured videos)
+    def _create_transition_video(
+        self,
+        duration: float,
+        image_path: str,
+        sound_effect_path: str,
+        source_video_path: str,
+        aspect_ratio: str = "16:9"
+    ) -> Path:
+        """
+        Create transition video from static image with sound effect.
+
+        Args:
+            duration: Transition duration in seconds (e.g., 0.3s)
+            image_path: Path to transition image
+            sound_effect_path: Path to sound effect MP3
+            source_video_path: Source video to match codec/resolution/params
+            aspect_ratio: "16:9" for long-form or "9:16" for short-form
+
+        Returns:
+            Path to created transition video
+        """
+        try:
+            from langflix.media.ffmpeg_utils import get_duration_seconds
+
+            # Resolve asset paths (relative to project root)
+            project_root = Path(__file__).parent.parent.parent
+            image_full_path = project_root / image_path
+            sound_full_path = project_root / sound_effect_path
+
+            if not image_full_path.exists():
+                logger.warning(f"Transition image not found: {image_full_path}, skipping transition")
+                return None
+            if not sound_full_path.exists():
+                logger.warning(f"Sound effect not found: {sound_full_path}, skipping transition")
+                return None
+
+            # Get source video resolution and params
+            probe = ffmpeg.probe(str(source_video_path))
+            video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+            audio_stream = next((s for s in probe['streams'] if s['codec_type'] == 'audio'), None)
+
+            width = int(video_stream.get('width', 1920)) if video_stream else 1920
+            height = int(video_stream.get('height', 1080)) if video_stream else 1080
+
+            # Parse frame rate safely
+            fps = 25  # default
+            if video_stream:
+                r_frame_rate = video_stream.get('r_frame_rate', '25/1')
+                try:
+                    if '/' in r_frame_rate:
+                        num, den = map(float, r_frame_rate.split('/'))
+                        fps = num / den if den != 0 else 25
+                    else:
+                        fps = float(r_frame_rate)
+                except (ValueError, ZeroDivisionError):
+                    fps = 25
+
+            sample_rate = int(audio_stream.get('sample_rate', 48000)) if audio_stream else 48000
+
+            logger.info(f"Creating transition video: {duration}s, resolution: {width}x{height}, fps: {fps}")
+
+            # Create output path
+            transition_output = self.output_dir / f"temp_transition_{duration}s_{aspect_ratio.replace(':', 'x')}.mkv"
+            self._register_temp_file(transition_output)
+
+            # Create video from static image
+            image_input = ffmpeg.input(str(image_full_path), loop=1, t=duration)
+
+            # Scale image to match source resolution and set fps
+            video_stream = (
+                image_input['v']
+                .filter('scale', width, height)
+                .filter('fps', fps=fps)
+            )
+
+            # Add sound effect - trim to exact duration
+            sound_input = ffmpeg.input(str(sound_full_path))
+            audio_stream = sound_input['a'].filter('atrim', duration=duration).filter('asetpts', 'PTS-STARTPTS')
+
+            # Get video output args
+            video_args = self._get_video_output_args()
+
+            # Create transition video with image and sound effect
+            try:
+                (
+                    ffmpeg
+                    .output(
+                        video_stream,
+                        audio_stream,
+                        str(transition_output),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
+                        preset=video_args.get('preset', 'fast'),
+                        ac=2,
+                        ar=sample_rate,
+                        crf=video_args.get('crf', 23)
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+            except ffmpeg.Error as e:
+                stderr_msg = e.stderr.decode() if e.stderr else 'No stderr'
+                logger.error(f"FFmpeg error creating transition: {stderr_msg}")
+                raise
+
+            # Verify duration
+            actual_duration = get_duration_seconds(str(transition_output))
+            logger.info(f"✅ Transition video created: {transition_output} (duration: {actual_duration:.3f}s)")
+
+            return transition_output
+
+        except Exception as e:
+            logger.error(f"Error creating transition video: {e}")
+            return None
 
     def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
         """Create a single batch video from a list of video paths"""

@@ -694,7 +694,8 @@ class LangFlixPipeline:
             try:
                 logger.info(
                     f"Processing expression {expr_idx+1}/{len(self.expressions)}: "
-                    f"'{expression.expression}'"
+                    f"'{expression.expression}' "
+                    f"(context: {expression.context_start_time}-{expression.context_end_time})"
                 )
                 
                 try:

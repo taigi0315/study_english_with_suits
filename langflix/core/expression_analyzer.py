@@ -713,14 +713,32 @@ def _remove_duplicates(expressions: List[ExpressionAnalysis]) -> List[Expression
             # Compare expressions using fuzzy matching
             similarity = fuzz.ratio(expr.expression.lower(), existing.expression.lower())
             if similarity > threshold:
-                logger.info(f"Removing duplicate: '{expr.expression}' (similar to '{existing.expression}', similarity: {similarity}%)")
+                # Also check if context is the same (exact match for timestamps)
+                context_match = (expr.context_start_time == existing.context_start_time and 
+                               expr.context_end_time == existing.context_end_time)
+                
+                if context_match:
+                    logger.warning(
+                        f"Removing duplicate: '{expr.expression}' "
+                        f"(same expression AND context as '{existing.expression}', "
+                        f"similarity: {similarity}%, context: {expr.context_start_time}-{expr.context_end_time})"
+                    )
+                else:
+                    logger.info(
+                        f"Removing duplicate expression text: '{expr.expression}' "
+                        f"(similar to '{existing.expression}', similarity: {similarity}%, "
+                        f"but different context: {expr.context_start_time}-{expr.context_end_time} vs "
+                        f"{existing.context_start_time}-{existing.context_end_time})"
+                    )
                 is_duplicate = True
                 break
         
         if not is_duplicate:
             unique.append(expr)
     
-    logger.info(f"Removed {len(expressions) - len(unique)} duplicate expressions")
+    removed_count = len(expressions) - len(unique)
+    if removed_count > 0:
+        logger.info(f"Removed {removed_count} duplicate expression(s)")
     return unique
 
 

@@ -699,11 +699,6 @@ def get_media_slicing_config() -> Dict[str, Any]:
     return _config_loader.get('expression.media.slicing', {})
 
 
-def get_media_subtitles_config() -> Dict[str, Any]:
-    """Get media subtitles configuration"""
-    return _config_loader.get('expression.media.subtitles', {})
-
-
 def get_slides_config() -> Dict[str, Any]:
     """Get slides configuration"""
     return _config_loader.get('expression.slides', {})
@@ -747,31 +742,6 @@ def get_media_slicing_preset() -> str:
 def get_media_slicing_audio_bitrate() -> str:
     """Get media slicing audio bitrate"""
     return get_media_slicing_config().get('audio_bitrate', '256k')
-
-
-def get_subtitles_style() -> str:
-    """Get subtitles style"""
-    return get_media_subtitles_config().get('style', 'expression_highlight')
-
-
-def get_subtitles_font_size() -> int:
-    """Get subtitles font size"""
-    return get_media_subtitles_config().get('font_size', 24)
-
-
-def get_subtitles_font_color() -> str:
-    """Get subtitles font color"""
-    return get_media_subtitles_config().get('font_color', '#FFFFFF')
-
-
-def get_subtitles_background_color() -> str:
-    """Get subtitles background color"""
-    return get_media_subtitles_config().get('background_color', '#000000')
-
-
-def get_subtitles_highlight_color() -> str:
-    """Get subtitles highlight color"""
-    return get_media_subtitles_config().get('highlight_color', '#FFD700')
 
 
 def get_slides_max_examples() -> int:

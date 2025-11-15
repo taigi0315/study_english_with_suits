@@ -46,7 +46,7 @@ api:
 llm:
   # Maximum characters of subtitle content per chunk
   # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
-  max_input_length: 1680
+  max_input_length: 4000
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
@@ -266,7 +266,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 42
+      font_size: 50
       y_position: 350            # Starting Y position for first line
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -276,7 +276,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 35              # Main expression font size (matches video subtitle)
+      font_size: 45              # Main expression font size (matches video subtitle)
       y_position: 1500           # Y position for expression line
       text_color: 'yellow'
       border_width: 2
@@ -290,6 +290,7 @@ short_video:
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
+      background_opacity: 0.5    # 50% opacity for background
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
@@ -402,20 +403,9 @@ expression:
       buffer_start: 0.2  # seconds before expression
       buffer_end: 0.2    # seconds after expression
       output_format: mp4
-      crf: 18           # Constant Rate Factor for quality
+      crf: 0           # Constant Rate Factor for quality
       preset: slow      # FFmpeg preset
       audio_bitrate: 256k
-    
-    # Subtitle rendering settings
-    subtitles:
-      style: expression_highlight
-      font_size: 24
-      font_color: '#FFFFFF'
-      background_color: '#000000'
-      highlight_color: '#FFD700'
-      font_family: 'Arial'
-      position: 'bottom'
-      margin_bottom: 50
   
   # Educational slide generation (Phase 4)
   slides:

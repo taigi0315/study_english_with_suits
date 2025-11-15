@@ -197,8 +197,27 @@ class VideoEditor:
 
             # Find and apply subtitle file
             subtitle_file = None
-            if subtitle_file_path and Path(subtitle_file_path).exists():
-                subtitle_file = Path(subtitle_file_path)
+            # Try to find subtitle file in subtitles directory
+            subtitles_dir = self.output_dir.parent / "subtitles"
+            if subtitles_dir.exists():
+                # Look for subtitle file matching expression pattern
+                from langflix.utils.filename_utils import sanitize_for_expression_filename
+                safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
+                subtitle_file_path = subtitles_dir / subtitle_filename
+                
+                if subtitle_file_path.exists():
+                    subtitle_file = subtitle_file_path
+                    logger.info(f"Found subtitle file: {subtitle_file}")
+                else:
+                    # Try to find any subtitle file matching the expression
+                    pattern = f"expression_*_{safe_expression_short}*.srt"
+                    matching_files = list(subtitles_dir.glob(pattern))
+                    if matching_files:
+                        subtitle_file = matching_files[0]
+                        logger.info(f"Found matching subtitle file: {subtitle_file}")
+            
+            if subtitle_file and subtitle_file.exists():
                 logger.info(f"Applying subtitles from: {subtitle_file}")
 
                 # Apply subtitles using subs_overlay (extract + apply in one step)
@@ -664,24 +683,28 @@ class VideoEditor:
             font_file = self._get_font_option()
 
             # Add logo above catchy keywords (short-form video)
-            # Logo position: top center, touching top of screen
+            # Logo position: absolute top (y=0) of black padding, above hashtags
+            # Logo should be at the very top of the 1080x1920 canvas
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
                     # Load logo image and overlay it at top center
-                    # Position: y=0 (touching top of screen)
-                    # Scale logo to 2x current size (500px * 2 = 1000px height)
+                    # Position: y=0 (absolute top of black padding, above everything)
+                    # Scale logo to 3x current size (150px * 3 = 450px height) for better visibility
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 1000)  # Scale to 1000px height (2x from 500px), maintain aspect ratio
+                    logo_video = logo_input['v'].filter('scale', -1, 450)  # Scale to 450px height (3x from 150px), maintain aspect ratio
                     
-                    # Overlay logo at top center (x: center, y: 0 - touching top)
+                    # Overlay logo at absolute top center of black padding (x: center, y: 0 - absolute top)
+                    # y=0 means absolute top of the entire 1080x1920 canvas (black padding top)
+                    # This ensures logo is above hashtags (y=350) and all other elements
                     final_video = ffmpeg.overlay(
                         final_video,
                         logo_video,
                         x='(W-w)/2',  # Center horizontally
-                        y=0  # Top position (touching top of screen)
+                        y=0,  # Absolute top position (0px from top, above all elements including hashtags)
+                        enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
                     )
-                    logger.info("Added logo above catchy keywords in short-form video")
+                    logger.info("Added logo at absolute top of short-form video (y=0, above hashtags at y=350)")
                 except Exception as e:
                     logger.warning(f"Failed to add logo to short-form video: {e}")
             else:
@@ -921,97 +944,11 @@ class VideoEditor:
                     .run(quiet=True)
                 )
             
-            # Step 6: Apply dialogue subtitles at bottom (below expression text)
-            from langflix.subtitles import overlay as subs_overlay
-            subtitle_dir = self.output_dir.parent / "subtitles"
-            subtitle_file = None
-
-            if subtitle_dir.exists():
-                # Look for expression subtitle file
-                pattern = f"expression_*_{safe_expression[:30]}*.srt"
-                matches = list(subtitle_dir.glob(pattern))
-                if matches:
-                    subtitle_file = matches[0]
-                    logger.info(f"Found subtitle file: {subtitle_file.name}")
-
-            if subtitle_file and subtitle_file.exists():
-                # Apply dialogue subtitles with configurable styling
-                # Get subtitle configuration from settings
-                dialogue_font_size = settings.get_dialogue_subtitle_font_size()
-                dialogue_margin_v = settings.get_dialogue_subtitle_margin_v()
-                dialogue_outline_width = settings.get_dialogue_subtitle_outline_width()
-                background_opacity = settings.get_dialogue_subtitle_background_opacity()
-
-                # Convert opacity (0.0-1.0) to ASS alpha value (00-FF, where 00=opaque, FF=transparent)
-                # ASS alpha = 255 * (1 - opacity)
-                alpha_value = int(255 * (1 - background_opacity))
-                # BackColour with alpha: &HAABBGGRR (AA=alpha, BB=blue, GG=green, RR=red)
-                # For black background with 50% opacity: &H80000000
-                back_colour = f"&H{alpha_value:02X}000000"
-
-                custom_bottom_style = (
-                    "Alignment=2,"  # Bottom center
-                    "PrimaryColour=&H00FFFFFF,"  # White (BGR format)
-                    "OutlineColour=&H00000000,"  # Black outline
-                    f"BackColour={back_colour},"  # Black background with opacity
-                    f"Outline={dialogue_outline_width},"
-                    "Bold=0,"
-                    f"FontSize={dialogue_font_size},"
-                    "BorderStyle=4,"  # BorderStyle 4 = background box
-                    f"MarginV={dialogue_margin_v}"  # Margin from bottom
-                )
-
-                # Apply subtitles with custom bottom positioning
-                video_input = ffmpeg.input(str(temp_with_expression_path))
-                video_with_subs = video_input['v'].filter(
-                    'subtitles',
-                    str(subtitle_file),
-                    force_style=custom_bottom_style
-                )
-
-                # Get audio stream
-                audio_stream = None
-                try:
-                    audio_stream = video_input['a']
-                except (KeyError, AttributeError):
-                    logger.debug("No audio stream in video with expression")
-
-                # Output final video with subtitles
-                if audio_stream:
-                    (
-                        ffmpeg.output(
-                            video_with_subs,
-                            audio_stream,
-                            str(output_path),
-                            vcodec='libx264',
-                            acodec='aac',
-                            ac=2,
-                            ar=48000,
-                            preset='fast',
-                            crf=23
-                        )
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                else:
-                    (
-                        ffmpeg.output(
-                            video_with_subs,
-                            str(output_path),
-                            vcodec='libx264',
-                            preset='fast',
-                            crf=23
-                        )
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-
-                logger.info(f"✅ Subtitles applied to short-form video at bottom (FontSize={dialogue_font_size})")
-            else:
-                # No subtitle file found, use video with expression text only
-                logger.warning(f"No subtitle file found for expression, using video with expression text only")
-                import shutil
-                shutil.copy(str(temp_with_expression_path), str(output_path))
+            # Step 6: Skip subtitle overlay - long-form video already contains subtitles
+            # Long-form video already has subtitles embedded, so we don't need to add them again
+            logger.info("Skipping subtitle overlay - long-form video already contains subtitles")
+            import shutil
+            shutil.copy(str(temp_with_expression_path), str(output_path))
 
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)

@@ -798,10 +798,13 @@ class LangFlixPipeline:
             for long_form_video in long_form_videos:
                 # Extract expression name from filename: long_form_video_{expression_name}.mkv
                 video_name = long_form_video.stem
+                logger.debug(f"Processing video: {long_form_video.name}, stem: {video_name}")
                 if video_name.startswith('long_form_video_'):
-                    expression_name = video_name[17:]  # Remove 'long_form_video_' prefix (17 chars)
+                    expression_name = video_name[len('long_form_video_'):]  # Remove 'long_form_video_' prefix
                     long_form_video_map[expression_name] = long_form_video
                     logger.info(f"Mapped long-form video: '{expression_name}' -> {video_name}")
+                else:
+                    logger.warning(f"Video name '{video_name}' does not start with 'long_form_video_'")
             
             logger.info(f"Long-form video mapping: {list(long_form_video_map.keys())}")
             

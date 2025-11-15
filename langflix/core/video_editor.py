@@ -256,9 +256,9 @@ class VideoEditor:
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 2: Create transition video (0.01s with image and sound effect)
+            # Step 2: Create transition video (0.2s with image and sound effect)
             transition_path = self._create_transition_video(
-                duration=0.01,
+                duration=0.2,
                 image_path="assets/transition_16_9.png",
                 sound_effect_path="assets/sound_effect.mp3",
                 source_video_path=str(context_with_subtitles)
@@ -3229,28 +3229,26 @@ class VideoEditor:
             self._register_temp_file(transition_output)
             
             # Create video from static image
-            # For very short durations, use framerate and duration filters
-            image_input = ffmpeg.input(str(image_full_path), loop=1)
+            # Use loop=1 and t=duration to create video from static image
+            image_input = ffmpeg.input(str(image_full_path), loop=1, t=duration)
             
-            # Scale image and set duration/fps
-            # Use setpts to set duration, then fps to set frame rate
+            # Scale image to match source resolution and set fps
             video_stream = (
                 image_input['v']
                 .filter('scale', width, height)
-                .filter('setpts', f'PTS-STARTPTS')
                 .filter('fps', fps=fps)
-                .filter('trim', duration=duration)
             )
             
             # Add sound effect - trim to exact duration
             sound_input = ffmpeg.input(str(sound_full_path))
-            # Trim sound effect to exact duration (0.01s)
+            # Trim sound effect to exact duration
             audio_stream = sound_input['a'].filter('atrim', duration=duration).filter('asetpts', 'PTS-STARTPTS')
             
             # Get video output args
             video_args = self._get_video_output_args()
             
             # Create transition video with image and sound effect
+            # Use shortest=1 to ensure both streams end at the same time
             try:
                 (
                     ffmpeg
@@ -3264,7 +3262,7 @@ class VideoEditor:
                         ac=2,
                         ar=sample_rate,
                         crf=video_args.get('crf', 23),
-                        t=duration  # Explicitly set output duration
+                        shortest=1  # End when shortest stream ends
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)

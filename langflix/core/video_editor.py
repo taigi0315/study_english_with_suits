@@ -681,35 +681,6 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
-            # Add logo above catchy keywords (short-form video)
-            # Logo position: absolute top (y=0) of black padding, above hashtags
-            # Logo should be at the very top of the 1080x1920 canvas
-            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
-            if logo_path.exists():
-                try:
-                    # Load logo image and overlay it at top center
-                    # Position: y=0 (absolute top of black padding, above everything)
-                    # Scale logo to 2x current size (450px * 2 = 900px height) for better visibility
-                    # Note: FFmpeg overlay uses top-left corner as reference, so y=0 keeps logo at top
-                    logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 900)  # Scale to 900px height (2x from 450px), maintain aspect ratio
-                    
-                    # Overlay logo at absolute top center of black padding (x: center, y: 0 - absolute top)
-                    # y=0 means top-left corner of logo is at absolute top of the entire 1080x1920 canvas
-                    # This ensures logo stays at top regardless of size (FFmpeg overlay uses top-left reference)
-                    final_video = ffmpeg.overlay(
-                        final_video,
-                        logo_video,
-                        x='(W-w)/2',  # Center horizontally
-                        y=0,  # Absolute top position (0px from top, logo's top edge at canvas top)
-                        enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
-                    )
-                    logger.info("Added logo at absolute top of short-form video (y=0, above hashtags at y=350)")
-                except Exception as e:
-                    logger.warning(f"Failed to add logo to short-form video: {e}")
-            else:
-                logger.debug(f"Logo file not found: {logo_path}")
-
             # Add catchy keywords at top (outside long-form video area, in top black padding)
             # Display catchy keywords if available (positioning from config)
             if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
@@ -901,6 +872,31 @@ class VideoEditor:
                     drawtext_args_2['fontfile'] = font_path
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
+            
+            # Add logo at the very end to ensure it stays at absolute top (y=0)
+            # Logo position: absolute top (y=0) of black padding, above hashtags
+            # Reverted to original size to fix positioning issue
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
+            if logo_path.exists():
+                try:
+                    # Load logo image and overlay it at top center
+                    # Reverted to original size (150px height) to fix positioning
+                    logo_input = ffmpeg.input(str(logo_path))
+                    logo_video = logo_input['v'].filter('scale', -1, 150)  # Original size: 150px height
+                    
+                    # Overlay logo at absolute top center - LAST in filter chain
+                    final_video = ffmpeg.overlay(
+                        final_video,
+                        logo_video,
+                        x='(W-w)/2',  # Center horizontally (W = canvas width, w = logo width)
+                        y=0,  # Absolute top - logo's top-left corner at y=0 (canvas top)
+                        enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
+                    )
+                    logger.info("Added logo at absolute top of short-form video (y=0, original size 150px)")
+                except Exception as e:
+                    logger.warning(f"Failed to add logo to short-form video: {e}")
+            else:
+                logger.debug(f"Logo file not found: {logo_path}")
             
             # Get audio stream
             final_audio = None

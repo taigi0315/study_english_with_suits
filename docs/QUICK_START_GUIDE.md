@@ -144,17 +144,17 @@ Key stages:
 ```
 output/
 ├── Suits/
-    ├── S01E01/
-        ├── shared/
-        │   ├── context_videos/        # Expression clips
-        │   ├── context_slide_combined/ # Educational videos
-        │   └── short_videos/          # Batched shorts
+    ├── S02E01/
         └── translations/
             └── ko/
-                ├── subtitles/
-                ├── slides/
-                ├── audio/
-                └── metadata/
+                ├── videos/              # All video outputs (unified)
+                │   ├── structured_video_{expression}.mkv
+                │   ├── combined_structured_video_{episode}.mkv
+                │   ├── short_form_{expression}.mkv
+                │   └── short-form_{episode}_{batch}.mkv
+                ├── subtitles/           # Subtitle files
+                ├── context_videos/      # Context video clips
+                └── slides/              # Educational slide videos
 ```
 
 ### Video Types

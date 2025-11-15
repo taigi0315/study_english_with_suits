@@ -35,16 +35,18 @@ This document describes the new structured video creation architecture that repl
 
 ```
 output/Series/Episode/translations/ko/
-├── structured_videos/                    # New directory
+├── videos/                               # Unified videos directory
 │   ├── structured_video_{expression_1}.mkv
 │   ├── structured_video_{expression_2}.mkv
 │   ├── ...
-│   └── combined_structured_video_{episode}.mkv  # All combined
-└── short_form_videos/                    # Short-form videos
-    ├── short_form_{expression_1}.mkv
-    ├── short_form_{expression_2}.mkv
-    ├── ...
-    └── short-form_{episode}_{batch_01}.mkv  # Batched videos
+│   ├── combined_structured_video_{episode}.mkv  # All combined
+│   ├── short_form_{expression_1}.mkv
+│   ├── short_form_{expression_2}.mkv
+│   ├── ...
+│   └── short-form_{episode}_{batch_01}.mkv  # Batched videos
+├── subtitles/
+├── context_videos/
+└── slides/
 ```
 
 ---
@@ -99,7 +101,7 @@ structured_video = self.video_editor.create_structured_video(
 2. Validate video files exist and are valid
 3. Create concat file with all video paths
 4. Concatenate using FFmpeg concat demuxer
-5. Output to `structured_videos/combined_structured_video_{episode}.mkv`
+5. Output to `videos/combined_structured_video_{episode}.mkv`
 
 **Features**:
 - Maintains 16:9 or original aspect ratio
@@ -271,27 +273,30 @@ short_video:
 
 ```
 output/Series/Episode/translations/ko/
-├── structured_videos/              # NEW: Structured videos directory
+├── videos/                         # Unified videos directory (all video outputs)
 │   ├── structured_video_{expr1}.mkv
 │   ├── structured_video_{expr2}.mkv
-│   └── combined_structured_video_{episode}.mkv
-├── short_form_videos/              # Short-form videos
+│   ├── combined_structured_video_{episode}.mkv
 │   ├── short_form_{expr1}.mkv
 │   ├── short_form_{expr2}.mkv
 │   └── short-form_{episode}_{batch}.mkv
-└── ...
+├── subtitles/                     # Subtitle files
+├── context_videos/                # Context video clips
+└── slides/                        # Educational slide videos
 ```
 
 ### 6.2 Directory Creation
 
 **File**: `langflix/services/output_manager.py`
 
-**New Directory**: `structured_videos` added to language structure
+**Unified Videos Directory**: All video outputs consolidated into `videos/` directory
 
 ```python
-structured_videos_dir = lang_dir / "structured_videos"
-structured_videos_dir.mkdir(exist_ok=True)
+videos_dir = lang_dir / "videos"
+videos_dir.mkdir(exist_ok=True)
 ```
+
+**Note**: Previous separate directories (`structured_videos/`, `short_form_videos/`, `long_form_videos/`, `context_slide_combined/`) have been consolidated into a single `videos/` directory for simpler organization.
 
 ---
 

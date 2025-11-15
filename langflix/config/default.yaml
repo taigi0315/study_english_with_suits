@@ -276,7 +276,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 45              # Main expression font size (matches video subtitle)
+      font_size: 55              # Main expression font size (increased by 10 from 45)
       y_position: 1500           # Y position for expression line
       text_color: 'yellow'
       border_width: 2
@@ -336,7 +336,7 @@ expression:
     default:
       color: '#FFFFFF'
       font_family: 'Arial'
-      font_size: 22
+      font_size: 17              # Reduced by 5 from 22 (main dialogue subtitle)
       font_weight: 'normal'
       background_color: '#000000'
       background_opacity: 0.7

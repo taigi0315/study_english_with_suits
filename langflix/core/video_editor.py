@@ -156,7 +156,6 @@ class VideoEditor:
                     videos_dir = lang_dir / "videos"
                 else:
                     videos_dir = self.output_dir.parent / "videos"
-                videos_dir.mkdir(parents=True, exist_ok=True)
             else:
                 # Fallback: create in output_dir parent
                 videos_dir = Path(self.output_dir).parent / "videos"
@@ -184,7 +183,7 @@ class VideoEditor:
                 raise ValueError(f"Expression duration must be positive, got {expression_duration:.2f}s")
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
-
+            
             # Step 1a: Extract context clip from original video WITH subtitles
             self.output_dir.mkdir(parents=True, exist_ok=True)
             context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
@@ -282,7 +281,7 @@ class VideoEditor:
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_form_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
-
+            
             input_stream = ffmpeg.input(str(context_clip_reset_path))
             video_stream = input_stream['v']
             audio_stream = input_stream['a']
@@ -350,7 +349,7 @@ class VideoEditor:
             logger.info(f"Repeating expression clip {repeat_count} times")
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
-
+            
             # Step 3: Concatenate context + transition + expression repeat
             context_expr_path = self.output_dir / f"temp_context_expr_long_form_{safe_expression}.mkv"
             self._register_temp_file(context_expr_path)
@@ -403,18 +402,18 @@ class VideoEditor:
             else:
                 # No transition - direct concatenation
                 logger.info("Concatenating context + expression repeat (no transition)")
-                from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
-                concat_filter_with_explicit_map(
+            from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+            concat_filter_with_explicit_map(
                     str(context_clip_reset_path),
-                    str(repeated_expression_path),
-                    str(context_expr_path)
-                )
+                str(repeated_expression_path),
+                str(context_expr_path)
+            )
             
             # Get duration for slide matching
             from langflix.media.ffmpeg_utils import get_duration_seconds
             context_expr_duration = get_duration_seconds(str(context_expr_path))
             logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
-
+            
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
             educational_slide = self._create_educational_slide(
@@ -690,18 +689,19 @@ class VideoEditor:
                 try:
                     # Load logo image and overlay it at top center
                     # Position: y=0 (absolute top of black padding, above everything)
-                    # Scale logo to 3x current size (150px * 3 = 450px height) for better visibility
+                    # Scale logo to 2x current size (450px * 2 = 900px height) for better visibility
+                    # Note: FFmpeg overlay uses top-left corner as reference, so y=0 keeps logo at top
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 450)  # Scale to 450px height (3x from 150px), maintain aspect ratio
+                    logo_video = logo_input['v'].filter('scale', -1, 900)  # Scale to 900px height (2x from 450px), maintain aspect ratio
                     
                     # Overlay logo at absolute top center of black padding (x: center, y: 0 - absolute top)
-                    # y=0 means absolute top of the entire 1080x1920 canvas (black padding top)
-                    # This ensures logo is above hashtags (y=350) and all other elements
+                    # y=0 means top-left corner of logo is at absolute top of the entire 1080x1920 canvas
+                    # This ensures logo stays at top regardless of size (FFmpeg overlay uses top-left reference)
                     final_video = ffmpeg.overlay(
                         final_video,
                         logo_video,
                         x='(W-w)/2',  # Center horizontally
-                        y=0,  # Absolute top position (0px from top, above all elements including hashtags)
+                        y=0,  # Absolute top position (0px from top, logo's top edge at canvas top)
                         enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
                     )
                     logger.info("Added logo at absolute top of short-form video (y=0, above hashtags at y=350)")
@@ -798,7 +798,7 @@ class VideoEditor:
                     current_x_offset = 0  # Track cumulative offset from center
                     for i, (keyword, color) in enumerate(zip(line_keywords, line_colors)):
                         escaped_keyword = escape_drawtext_string(keyword)
-                        
+
                         # Calculate x position for this keyword
                         if i == 0:
                             # First keyword: center minus half of remaining text width
@@ -828,7 +828,7 @@ class VideoEditor:
                                 keyword_args['fontfile'] = font_path
 
                         final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
-                        
+
                         # Add comma after keyword (except last in line)
                         if i < len(line_keywords) - 1:
                             # Comma position: after current keyword
@@ -949,7 +949,7 @@ class VideoEditor:
             logger.info("Skipping subtitle overlay - long-form video already contains subtitles")
             import shutil
             shutil.copy(str(temp_with_expression_path), str(output_path))
-
+            
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
             
@@ -1813,12 +1813,12 @@ class VideoEditor:
             else:
                 # TTS or original audio: add small padding
                 slide_duration = expression_duration + 0.5  # Add small padding for slide
-                
-                # If target_duration is provided, use that instead (for hstack matching)
+            
+            # If target_duration is provided, use that instead (for hstack matching)
                 # But only for non-expression-audio cases
-                if target_duration is not None and target_duration > slide_duration:
-                    slide_duration = target_duration
-                    logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
+            if target_duration is not None and target_duration > slide_duration:
+                slide_duration = target_duration
+                logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
             
             logger.info(f"Using timeline audio directly: {audio_2x_path}")
             logger.info(f"Timeline duration: {expression_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")
@@ -3477,14 +3477,14 @@ class VideoEditor:
                         video_stream,
                         audio_stream,
                         str(transition_output),
-                        vcodec=video_args.get('vcodec', 'libx264'),
-                        acodec=video_args.get('acodec', 'aac'),
+                       vcodec=video_args.get('vcodec', 'libx264'),
+                       acodec=video_args.get('acodec', 'aac'),
                         preset=video_args.get('preset', 'fast'),
                         ac=2,
                         ar=sample_rate,
                         crf=video_args.get('crf', 23)
                     )
-                    .overwrite_output()
+                .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
                 )
             except ffmpeg.Error as e:
@@ -3497,11 +3497,11 @@ class VideoEditor:
             logger.info(f"✅ Transition video created: {transition_output} (duration: {actual_duration:.3f}s)")
 
             return transition_output
-
+            
         except Exception as e:
             logger.error(f"Error creating transition video: {e}")
             return None
-
+    
     def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
         """Create a single batch video from a list of video paths"""
         try:

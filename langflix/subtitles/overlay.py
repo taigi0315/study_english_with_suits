@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 import ffmpeg
 
 from langflix import settings
+from langflix.settings import get_expression_subtitle_styling
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +213,83 @@ def apply_subtitles_with_file(input_video: Path, subtitle_file: Path, output_pat
         .run(quiet=True)
     )
     return output_path
+
+
+def apply_dual_subtitle_layers(
+    video_path: str,
+    original_subtitle_path: str,
+    expression_subtitle_path: str,
+    output_path: str,
+    context_start_seconds: float,
+    context_end_seconds: float
+) -> Path:
+    """
+    Extract context segment from source video, then apply original subtitles only.
+    Cyan expression subtitle layer has been removed per user requirements.
+    
+    Args:
+        video_path: Input video path (full source video, may be longer than context)
+        original_subtitle_path: Path to original dual-language subtitle SRT
+        expression_subtitle_path: Path to expression-only subtitle SRT (not used, kept for API compatibility)
+        output_path: Output video path (context segment with subtitles)
+        context_start_seconds: Context start time in source video (seconds)
+        context_end_seconds: Context end time in source video (seconds)
+        
+    Returns:
+        Path to output video with subtitles
+    """
+    context_duration = context_end_seconds - context_start_seconds
+    
+    # Build force_style for original subtitle (bottom, white) - default behavior
+    original_style = build_ass_force_style(is_expression=False)
+    
+    # CRITICAL: Use trim filter to extract context segment FIRST, then apply subtitles
+    # This ensures we're working with a short ~30s clip, not a 40+ minute source video
+    video_input = ffmpeg.input(str(video_path))
+    
+    # Trim video to context segment using filter (input seeking for accuracy)
+    video_trimmed = (
+        video_input['v']
+        .filter('trim', start=context_start_seconds, end=context_end_seconds)
+        .filter('setpts', 'PTS-STARTPTS')  # Reset timestamps after trim
+    )
+    
+    # Trim audio to match
+    audio_trimmed = (
+        video_input['a']
+        .filter('atrim', start=context_start_seconds, end=context_end_seconds)
+        .filter('asetpts', 'PTS-STARTPTS')  # Reset audio timestamps
+    )
+    
+    # Apply subtitle layer (original at bottom only - cyan expression subtitle removed)
+    video_with_subtitles = video_trimmed.filter(
+        'subtitles',
+        original_subtitle_path,
+        force_style=original_style
+    )
+    
+    # Output with audio
+    output_args = {
+        'vcodec': 'libx264',
+        'acodec': 'aac',
+        'ac': 2,
+        'ar': 48000,
+    }
+    
+    (
+        ffmpeg
+        .output(
+            video_with_subtitles,
+            audio_trimmed,
+            str(output_path),
+            **output_args
+        )
+        .overwrite_output()
+        .run(quiet=True)
+    )
+    
+    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied subtitle layer: original (bottom)")
+    return Path(output_path)
 
 
 def drawtext_fallback_single_line(input_video: Path, text: str, output_path: Path) -> Path:

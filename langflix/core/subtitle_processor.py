@@ -635,6 +635,60 @@ class SubtitleProcessor:
             # Fallback for simpler formats if needed, or raise
             h, m, s = map(int, time_str.split(':'))
             return timedelta(hours=h, minutes=m, seconds=s)
+    
+    def _seconds_to_srt_time(self, seconds: float) -> str:
+        """
+        Convert seconds to SRT time format (HH:MM:SS,mmm).
+        
+        Args:
+            seconds: Time in seconds as float
+            
+        Returns:
+            SRT formatted time string
+        """
+        total_seconds = int(seconds)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        secs = total_seconds % 60
+        milliseconds = int((seconds - total_seconds) * 1000)
+        
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+    
+    def generate_expression_subtitle_srt(
+        self,
+        expression: ExpressionAnalysis,
+        expression_start_relative: float,
+        expression_end_relative: float
+    ) -> str:
+        """
+        Generate SRT file with expression text and translation, positioned at top.
+
+        TICKET-040: Creates expression-only subtitle for top overlay with dual language.
+
+        Args:
+            expression: ExpressionAnalysis object
+            expression_start_relative: Expression start time relative to context (seconds)
+            expression_end_relative: Expression end time relative to context (seconds)
+
+        Returns:
+            SRT formatted string with expression text and translation
+        """
+        srt_lines = []
+
+        # Single subtitle entry for expression
+        srt_lines.append("1")
+
+        # Format times
+        start_time_str = self._seconds_to_srt_time(expression_start_relative)
+        end_time_str = self._seconds_to_srt_time(expression_end_relative)
+        srt_lines.append(f"{start_time_str} --> {end_time_str}")
+
+        # Expression text (original) + translation (both lines)
+        srt_lines.append(expression.expression)
+        srt_lines.append(expression.expression_translation)
+        srt_lines.append("")
+
+        return "\n".join(srt_lines)
 
 
 def create_subtitle_file_for_expression(expression: ExpressionAnalysis, 

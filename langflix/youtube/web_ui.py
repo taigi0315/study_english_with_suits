@@ -1683,6 +1683,9 @@ class VideoManagementUI:
                 
                 # Prepare files for upload
                 files = {}
+                # Get short_form_max_duration from request (default: 180)
+                short_form_max_duration = data.get('short_form_max_duration', 180.0)
+                
                 form_data = {
                     "language_code": data['language_code'],
                     "show_name": "Suits",  # Extract from path or use default
@@ -1690,7 +1693,8 @@ class VideoManagementUI:
                     "max_expressions": 50,
                     "language_level": data['language_level'],
                     "test_mode": test_mode,
-                    "no_shorts": False
+                    "no_shorts": False,
+                    "short_form_max_duration": short_form_max_duration
                 }
                 
                 # Add video file if it exists

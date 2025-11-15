@@ -652,6 +652,98 @@ def vstack_keep_width(top_path: str, bottom_path: str, out_path: Path | str) -> 
     )
 
 
+def center_video_with_letterbox(
+    input_path: str,
+    target_width: int,
+    target_height: int,
+    out_path: Path | str
+) -> None:
+    """
+    Center video in target frame with letterboxing (black bars top/bottom).
+    
+    Maintains original video aspect ratio by adding black bars.
+    For short-form: target is 1080x1920 (9:16), video is centered vertically.
+    
+    Args:
+        input_path: Input video path
+        target_width: Target frame width (e.g., 1080)
+        target_height: Target frame height (e.g., 1920)
+        out_path: Output video path
+    """
+    input_vp = get_video_params(input_path)
+    input_ap = get_audio_params(input_path)
+    video_in = ffmpeg.input(input_path)
+    
+    video_width = input_vp.width or target_width
+    video_height = input_vp.height or target_height
+    
+    # Calculate aspect ratio
+    aspect_ratio = video_width / video_height if video_height > 0 else 16 / 9
+    
+    # Calculate scaled dimensions to fit within target while maintaining aspect ratio
+    # Scale to fit width first, then check if height fits
+    scaled_width = target_width
+    scaled_height = int(target_width / aspect_ratio)
+    
+    # If scaled height exceeds target, scale to fit height instead
+    if scaled_height > target_height:
+        scaled_height = target_height
+        scaled_width = int(target_height * aspect_ratio)
+    
+    # Center calculation
+    x_offset = (target_width - scaled_width) // 2
+    y_offset = (target_height - scaled_height) // 2
+    
+    logger.info(
+        f"Centering video: {video_width}x{video_height} -> {scaled_width}x{scaled_height} "
+        f"in {target_width}x{target_height} frame (offset: {x_offset}, {y_offset})"
+    )
+    
+    # FFmpeg filter chain: scale -> pad
+    video_stream = ffmpeg.filter(video_in['v'], 'scale', scaled_width, scaled_height)
+    video_stream = ffmpeg.filter(
+        video_stream,
+        'pad',
+        target_width,
+        target_height,
+        x_offset,
+        y_offset,
+        color='black'
+    )
+    
+    # Reset timestamps for proper concatenation
+    video_stream = ffmpeg.filter(video_stream, 'setpts', 'PTS-STARTPTS')
+    
+    # Use audio from input if available
+    audio_stream = None
+    if input_ap.codec:
+        try:
+            audio_stream = ffmpeg.filter(video_in['a'], 'asetpts', 'PTS-STARTPTS')
+        except (KeyError, AttributeError):
+            logger.debug(f"No audio stream in {input_path}")
+            audio_stream = None
+    
+    # Output with explicit stream mapping
+    if audio_stream:
+        output_with_explicit_streams(
+            video_stream,
+            audio_stream,
+            out_path,
+            **make_video_encode_args_from_source(input_path),
+            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
+        )
+    else:
+        # No audio - output video only
+        (
+            ffmpeg
+            .output(video_stream, str(out_path),
+                   **make_video_encode_args_from_source(input_path))
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        ensure_dir(Path(out_path))
+
+
 def hstack_keep_height(left_path: str, right_path: str, out_path: Path | str) -> None:
     """Stack two videos horizontally keeping source heights; widths scale proportionally.
     

@@ -1354,10 +1354,16 @@
                     
                     <div style="margin-bottom: 20px;">
                         <h3 style="color: #34495e; margin-bottom: 10px;">Options</h3>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 15px;">
                             <input type="checkbox" id="testModeCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
                             <span style="font-weight: 500;">Test Mode (Process only first chunk for testing)</span>
                         </label>
+                        <div style="margin-top: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
+                            <input type="number" id="shortFormMaxDuration" value="180" min="60" max="300" step="10" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">Videos exceeding this duration will be dropped from batching (default: 180)</small>
+                        </div>
                     </div>
                     
                     <div style="margin-bottom: 15px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 3px solid #3498db;">
@@ -1394,6 +1400,7 @@
             const languageCode = document.getElementById('languageSelect').value;
             const languageLevel = document.getElementById('levelSelect').value;
             const testMode = document.getElementById('testModeCheckbox').checked;
+            const shortFormMaxDuration = parseFloat(document.getElementById('shortFormMaxDuration').value) || 180;
             
             // Disable create button
             const createButton = document.getElementById('createButton');
@@ -1403,7 +1410,7 @@
             // Check if multiple videos selected (batch mode)
             if (selectedMedia.length > 1) {
                 // Batch processing
-                await startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, createButton);
+                await startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, shortFormMaxDuration, createButton);
             } else {
                 // Single video processing (backward compatible)
                 const media = selectedMedia[0];
@@ -1423,7 +1430,8 @@
                         subtitle_path: subtitlePath,
                         language_code: languageCode,
                         language_level: languageLevel,
-                        test_mode: testMode
+                        test_mode: testMode,
+                        short_form_max_duration: shortFormMaxDuration
                     })
                 });
                 
@@ -1448,7 +1456,7 @@
             }
         }
 
-        async function startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, createButton) {
+        async function startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, shortFormMaxDuration, createButton) {
             try {
                 // Collect all selected videos
                 const videos = Array.from(selectedMedia).map(checkbox => ({
@@ -1476,7 +1484,8 @@
                         videos: videos,
                         language_code: languageCode,
                         language_level: languageLevel,
-                        test_mode: testMode
+                        test_mode: testMode,
+                        short_form_max_duration: shortFormMaxDuration
                     })
                 });
                 

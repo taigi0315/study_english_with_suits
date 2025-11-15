@@ -193,25 +193,6 @@ def get_parallel_llm_timeout() -> float:
     return parallel_config.get('timeout_per_chunk', 300)
 
 
-def get_max_expressions_per_context() -> int:
-    """
-    Get maximum expressions allowed per context time range.
-    
-    Valid range: 1-3 (default: 3)
-    Values outside this range will be clamped to valid range.
-    """
-    expression_llm = get_expression_llm()
-    max_expressions = expression_llm.get('max_expressions_per_context', 3)
-    
-    # Validate and clamp to valid range (1-3)
-    if max_expressions < 1:
-        logger.warning(f"max_expressions_per_context ({max_expressions}) is less than 1, using 1")
-        return 1
-    elif max_expressions > 3:
-        logger.warning(f"max_expressions_per_context ({max_expressions}) is greater than 3, using 3")
-        return 3
-    
-    return max_expressions
 
 
 def get_allow_multiple_expressions() -> bool:
@@ -398,6 +379,11 @@ def get_short_video_target_duration() -> float:
 def get_short_video_resolution() -> str:
     """Get short video resolution"""
     return get_short_video_config().get('resolution', '1080x1920')
+
+
+def get_short_video_max_duration() -> float:
+    """Get maximum duration for short video batches (seconds)"""
+    return float(get_short_video_config().get('max_duration', 180.0))
 
 
 def get_short_video_expression_repeat_count() -> int:

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
 from langflix import settings
 from langflix.utils.prompts import get_prompt_for_chunk
-from .models import ExpressionAnalysisResponse, ExpressionAnalysis, ExpressionGroup
+from .models import ExpressionAnalysisResponse, ExpressionAnalysis
 from .cache_manager import get_cache_manager
 from .error_handler import (
     retry_on_error,
@@ -250,6 +250,15 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                     # Validate and filter expressions
                     validated_expressions = _validate_and_filter_expressions(expressions)
                     
+                    # Remove duplicates using fuzzy matching
+                    validated_expressions = _remove_duplicates(validated_expressions)
+                    
+                    # Log expressions for debugging duplicate detection
+                    if len(validated_expressions) < len(expressions):
+                        logger.info(f"After deduplication: {len(validated_expressions)} unique expressions from {len(expressions)} total")
+                    else:
+                        logger.info(f"All {len(validated_expressions)} expressions are unique")
+                    
                     logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
                     return validated_expressions
                 except Exception as validation_error:
@@ -284,6 +293,15 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 
                 # Validate and filter expressions
                 validated_expressions = _validate_and_filter_expressions(expressions)
+                
+                # Remove duplicates using fuzzy matching
+                validated_expressions = _remove_duplicates(validated_expressions)
+                
+                # Log expressions for debugging duplicate detection
+                if len(validated_expressions) < len(expressions):
+                    logger.info(f"After deduplication: {len(validated_expressions)} unique expressions from {len(expressions)} total")
+                else:
+                    logger.info(f"All {len(validated_expressions)} expressions are unique")
                 
                 # Cache the result
                 cache_data = [expr.dict() for expr in validated_expressions]
@@ -695,14 +713,32 @@ def _remove_duplicates(expressions: List[ExpressionAnalysis]) -> List[Expression
             # Compare expressions using fuzzy matching
             similarity = fuzz.ratio(expr.expression.lower(), existing.expression.lower())
             if similarity > threshold:
-                logger.info(f"Removing duplicate: '{expr.expression}' (similar to '{existing.expression}', similarity: {similarity}%)")
+                # Also check if context is the same (exact match for timestamps)
+                context_match = (expr.context_start_time == existing.context_start_time and 
+                               expr.context_end_time == existing.context_end_time)
+                
+                if context_match:
+                    logger.warning(
+                        f"Removing duplicate: '{expr.expression}' "
+                        f"(same expression AND context as '{existing.expression}', "
+                        f"similarity: {similarity}%, context: {expr.context_start_time}-{expr.context_end_time})"
+                    )
+                else:
+                    logger.info(
+                        f"Removing duplicate expression text: '{expr.expression}' "
+                        f"(similar to '{existing.expression}', similarity: {similarity}%, "
+                        f"but different context: {expr.context_start_time}-{expr.context_end_time} vs "
+                        f"{existing.context_start_time}-{existing.context_end_time})"
+                    )
                 is_duplicate = True
                 break
         
         if not is_duplicate:
             unique.append(expr)
     
-    logger.info(f"Removed {len(expressions) - len(unique)} duplicate expressions")
+    removed_count = len(expressions) - len(unique)
+    if removed_count > 0:
+        logger.info(f"Removed {removed_count} duplicate expression(s)")
     return unique
 
 
@@ -744,73 +780,6 @@ def calculate_expression_score(
     )
     
     return round(score, 2)
-
-
-def group_expressions_by_context(expressions: List[ExpressionAnalysis]) -> List[ExpressionGroup]:
-    """
-    Group expressions that share the same context time range.
-    
-    Expressions with matching context_start_time and context_end_time are grouped together.
-    This enables efficient video processing by sharing a single context clip across
-    multiple expressions from the same dialogue segment.
-    
-    Args:
-        expressions: List of ExpressionAnalysis objects to group
-        
-    Returns:
-        List of ExpressionGroup objects, each containing expressions that share
-        the same context time range. Single expressions automatically become groups of 1.
-        
-    Example:
-        >>> expr1 = ExpressionAnalysis(..., context_start_time="00:01:00", context_end_time="00:01:30", ...)
-        >>> expr2 = ExpressionAnalysis(..., context_start_time="00:01:00", context_end_time="00:01:30", ...)
-        >>> expr3 = ExpressionAnalysis(..., context_start_time="00:02:00", context_end_time="00:02:30", ...)
-        >>> groups = group_expressions_by_context([expr1, expr2, expr3])
-        >>> len(groups)  # 2 groups: [expr1, expr2] and [expr3]
-        2
-        >>> len(groups[0].expressions)  # First group has 2 expressions
-        2
-        >>> len(groups[1].expressions)  # Second group has 1 expression
-        1
-    """
-    if not expressions:
-        return []
-    
-    # Dictionary to store groups by context key
-    groups_dict: Dict[str, List[ExpressionAnalysis]] = {}
-    
-    for expr in expressions:
-        # Create unique key from context times
-        context_key = f"{expr.context_start_time}_{expr.context_end_time}"
-        
-        if context_key in groups_dict:
-            groups_dict[context_key].append(expr)
-        else:
-            groups_dict[context_key] = [expr]
-    
-    # Convert to ExpressionGroup objects
-    expression_groups = []
-    for context_key, expr_list in groups_dict.items():
-        # Extract context times from first expression (all have same context)
-        first_expr = expr_list[0]
-        group = ExpressionGroup(
-            context_start_time=first_expr.context_start_time,
-            context_end_time=first_expr.context_end_time,
-            expressions=expr_list
-        )
-        expression_groups.append(group)
-    
-    # Log grouping statistics
-    single_expr_groups = sum(1 for g in expression_groups if len(g.expressions) == 1)
-    multi_expr_groups = sum(1 for g in expression_groups if len(g.expressions) > 1)
-    
-    if multi_expr_groups > 0:
-        logger.info(
-            f"Grouped {len(expressions)} expressions into {len(expression_groups)} groups: "
-            f"{single_expr_groups} single-expression groups, {multi_expr_groups} multi-expression groups"
-        )
-    
-    return expression_groups
 
 
 def rank_expressions(

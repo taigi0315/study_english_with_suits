@@ -1,8 +1,10 @@
 # ADR-006: Short Video Architecture
 
 **Date:** 2025-10-20  
-**Status:** Accepted  
-**Deciders:** Development Team  
+**Status:** Superseded (See `docs/core/structured_video_creation_eng.md` for current architecture)  
+**Deciders:** Development Team
+
+**⚠️ NOTE**: This ADR describes the OLD short video architecture. The current architecture uses structured videos as the base, with short-form videos created from structured videos. See `docs/core/structured_video_creation_eng.md` for details.  
 
 ## Context
 

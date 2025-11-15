@@ -100,6 +100,7 @@ class OutputManager:
         final_videos_dir = lang_dir / "long_form_videos"  # Renamed from final_videos
         context_slide_combined_dir = lang_dir / "context_slide_combined"
         short_videos_dir = lang_dir / "short_form_videos"  # Renamed from short_videos
+        structured_videos_dir = lang_dir / "structured_videos"  # New directory for structured videos
         
         subtitles_dir.mkdir(exist_ok=True)
         context_videos_dir.mkdir(exist_ok=True)
@@ -107,6 +108,7 @@ class OutputManager:
         final_videos_dir.mkdir(exist_ok=True)
         context_slide_combined_dir.mkdir(exist_ok=True)
         short_videos_dir.mkdir(exist_ok=True)
+        structured_videos_dir.mkdir(exist_ok=True)
         
         # Return language-specific paths
         lang_paths = {
@@ -116,7 +118,8 @@ class OutputManager:
             'slides': slides_dir,
             'final_videos': final_videos_dir,
             'context_slide_combined': context_slide_combined_dir,
-            'short_videos': short_videos_dir
+            'short_videos': short_videos_dir,
+            'structured_videos': structured_videos_dir
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")

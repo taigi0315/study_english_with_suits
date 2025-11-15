@@ -5,12 +5,12 @@ Here is a segment of dialogue from the TV show "{show_name}":
 ---
 
 **YOUR MISSION:**
-Find the best expression(s) that English learners would be EXCITED to learn - expressions they'd actually use and remember.
+Find the best expression that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 
-**IMPORTANT:** You can extract MULTIPLE expressions from the SAME context if they are all valuable and teachable.
-If you find multiple excellent expressions in one dialogue segment, include ALL of them.
-However, only extract multiple expressions from one context if ALL expressions are valuable, reusable, and clearly teachable.
-If unsure, extract only the BEST single expression.
+**IMPORTANT:** You can extract ONLY ONE expression from each context.
+If you find multiple excellent expressions in one dialogue segment, choose ONLY THE BEST ONE.
+Even if multiple expressions are valuable, reusable, and clearly teachable, you must select only the single most valuable expression.
+Quality over quantity: One excellent expression is better than multiple good ones.
 
 **LANGUAGE LEVEL:** {level_description}
 
@@ -153,11 +153,11 @@ When all extracted clips are played in chronological order, learners should be a
    - Overlaps are NOT OK (story repeats itself)
 
 3. **WHEN EXPRESSIONS ARE CLOSE TOGETHER:**
-   If two good expressions appear within context:
-   Choose only the BEST expression**
-   - If creating separate clips would feel awkward or break story flow
+   If multiple good expressions appear within the same context:
+   **You MUST choose only the BEST single expression**
    - Select the single most valuable expression
-   - Skip the other one, even if it's good
+   - Skip all others, even if they're good
+   - This is a strict requirement: ONE expression per context only
 
 4. **CONTEXT BOUNDARIES MUST NOT OVERLAP:**
    - **CRITICAL:** Different contexts (different `context_start_time`/`context_end_time`) must NEVER overlap
@@ -166,7 +166,7 @@ When all extracted clips are played in chronological order, learners should be a
    - Verify that each context's start time is ≥ previous context's end time
    - **Rule:** Context A ends at X, Context B must start at X or later (X < Context B start)
    - If you find ANY overlap between different contexts, adjust or remove one of them
-   - **Remember:** Multiple expressions can share the SAME context (same context times), but DIFFERENT contexts must not overlap
+   - **Remember:** Each context must have exactly ONE expression. Different contexts must not overlap.
 
 **VERIFICATION CHECKLIST:**
 Before submitting your JSON output, verify:
@@ -273,11 +273,11 @@ For short videos (≤ 60 seconds total):
 - If no suitable context ≤ 40 seconds exists, use the best available context but note it may not fit short video format
 
 **EXPRESSION COUNT:**
-- Find 1 or more expressions per context
-- Do NOT force yourself to find multiple expressions
-- Quality over quantity: Only select expressions that are truly valuable
-- If you find 1 excellent expression, that's better than forcing multiple mediocre ones
-- The goal is to find the BEST expressions, not necessarily the maximum number
+- **STRICT RULE: Find exactly 1 expression per context**
+- You MUST select only ONE expression per context, even if multiple good expressions exist
+- Quality over quantity: Select the single most valuable expression
+- If you find multiple excellent expressions, choose the BEST one and skip the others
+- The goal is to find the BEST single expression per context
 
 ---
 
@@ -350,7 +350,7 @@ For short videos (≤ 60 seconds total):
    - Ensure the expression appears naturally in the middle
    - Verify learners can follow what's happening
 
-**STEP 4:** Select the TOP expression(s) only. Quality over quantity.
+**STEP 4:** Select the TOP expression only (exactly 1 per context). Quality over quantity.
 
 ---
 
@@ -413,7 +413,7 @@ For short videos (≤ 60 seconds total):
 - ✓ Context is 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) and tells a complete mini-story
 - ✓ Learners can follow what's happening without knowing the show
 - ✓ Context has beginning (setup), middle (expression), end (reaction)
-- ✓ 1 or more expressions total (minimum 1)
+- ✓ Exactly 1 expression per context (strict requirement)
 - ✓ expression_dialogue is a COMPLETE, FULL sentence (NEVER cut in middle)
 - ✓ expression is expanded with context, not just bare phrase
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items

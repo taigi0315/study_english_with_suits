@@ -34,7 +34,7 @@ This document describes the new structured video creation architecture that repl
 ### 1.2 Video Output Structure
 
 ```
-output/Series/Episode/translations/ko/
+output/Series/Episode/ko/
 ├── videos/                               # Unified videos directory
 │   ├── structured_video_{expression_1}.mkv
 │   ├── structured_video_{expression_2}.mkv
@@ -272,7 +272,7 @@ short_video:
 ### 6.1 Output Directories
 
 ```
-output/Series/Episode/translations/ko/
+output/Series/Episode/ko/
 ├── videos/                         # Unified videos directory (all video outputs)
 │   ├── structured_video_{expr1}.mkv
 │   ├── structured_video_{expr2}.mkv

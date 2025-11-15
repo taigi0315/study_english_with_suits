@@ -204,16 +204,15 @@ assets/
 output/
 ├── Suits/
     ├── S02E01/
-        └── translations/
-            └── ko/
-                ├── videos/              # All video outputs (unified)
-                │   ├── structured_video_{expression}.mkv
-                │   ├── combined_structured_video_{episode}.mkv
-                │   ├── short_form_{expression}.mkv
-                │   └── short-form_{episode}_{batch}.mkv
-                ├── subtitles/           # Subtitle files
-                ├── context_videos/      # Context video clips
-                └── slides/              # Educational slide videos
+        └── ko/
+            ├── videos/              # All video outputs (unified)
+            │   ├── structured_video_{expression}.mkv
+            │   ├── combined_structured_video_{episode}.mkv
+            │   ├── short_form_{expression}.mkv
+            │   └── short-form_{episode}_{batch}.mkv
+            ├── subtitles/           # Subtitle files
+            ├── context_videos/      # Context video clips
+            └── slides/              # Educational slide videos
 ```
 
 ### File Types

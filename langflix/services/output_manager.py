@@ -56,12 +56,9 @@ class OutputManager:
         episode_dir = self.base_output_dir / series_name / episode_name
         episode_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create translations directory (main output location)
-        translations_dir = episode_dir / "translations"
-        translations_dir.mkdir(exist_ok=True)
-        
-        # Note: Removed shared/ and metadata/ directories as they are currently unused
-        # All outputs go to translations/ directory structure
+        # Note: Removed translations/ directory - language folders go directly under episode
+        # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
+        # Removed shared/ and metadata/ directories as they are currently unused
         # If needed in future, these can be re-enabled:
         # - shared/: for language-independent intermediate files
         # - metadata/: for processing logs and LLM outputs
@@ -69,7 +66,7 @@ class OutputManager:
         # Return path mappings (simplified structure)
         paths = {
             'episode_dir': episode_dir,
-            'translations': translations_dir,
+            # Removed translations directory - language folders created directly under episode
             # Removed unused shared and metadata paths
             # 'shared': {...},
             # 'metadata': {...}
@@ -89,8 +86,9 @@ class OutputManager:
         Returns:
             Dictionary with language-specific path mappings
         """
-        # Create language directory
-        lang_dir = episode_paths['translations'] / language_code
+        # Create language directory directly under episode (no translations/ folder)
+        # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
+        lang_dir = episode_paths['episode_dir'] / language_code
         lang_dir.mkdir(exist_ok=True)
         
         # Create language subdirectories

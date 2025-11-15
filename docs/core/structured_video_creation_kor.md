@@ -34,7 +34,7 @@
 ### 1.2 비디오 출력 구조
 
 ```
-output/Series/Episode/translations/ko/
+output/Series/Episode/ko/
 ├── videos/                               # 통합된 비디오 디렉토리
 │   ├── structured_video_{expression_1}.mkv
 │   ├── structured_video_{expression_2}.mkv

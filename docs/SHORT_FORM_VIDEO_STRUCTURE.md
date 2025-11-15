@@ -203,14 +203,13 @@ force_style=Alignment=2,FontSize=32,MarginV=100
 output/
 ├── Series/
 │   └── Episode/
-│       └── translations/
-│           └── {language}/
-│               └── videos/                                     # Unified videos directory
-│                   ├── short_form_{expression_name_1}.mkv      # Single 9:16 video
-│                   ├── short_form_{expression_name_2}.mkv      # Single 9:16 video
-│                   ├── short-form_{episode}_{batch_001}.mkv   # Batched short-form videos (≤180s)
-│                   ├── structured_video_{expression_1}.mkv    # Structured videos
-│                   └── combined_structured_video_{episode}.mkv # Combined structured video
+│       └── {language}/
+│           └── videos/                                     # Unified videos directory
+│               ├── short_form_{expression_name_1}.mkv      # Single 9:16 video
+│               ├── short_form_{expression_name_2}.mkv      # Single 9:16 video
+│               ├── short-form_{episode}_{batch_001}.mkv   # Batched short-form videos (≤180s)
+│               ├── structured_video_{expression_1}.mkv    # Structured videos
+│               └── combined_structured_video_{episode}.mkv # Combined structured video
 ```
 
 ---

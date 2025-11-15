@@ -488,83 +488,128 @@ class VideoEditor:
                     keyword_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
                 
                 # Build text with commas: "#keyword1, #keyword2, #keyword3"
-                # Render each keyword separately with its own color in one line
-                font_size = 64  # Doubled from 32
-                y_position = 300  # Moved down by 200 (from 100 to 300)
-                
-                # Build full line text for width calculation
-                full_line = ", ".join(formatted_keywords)
+                # Render each keyword separately with its own color
+                # If total width exceeds max_width, wrap to new lines
+                font_size = 48  # Doubled from 32
+                y_position = 350
+                line_height = font_size * 1.2  # Line spacing (20% of font size)
                 
                 # Calculate approximate character width (rough estimate: font_size * 0.6 for monospace-like)
                 char_width_estimate = font_size * 0.6
+                comma_separator = ",  "  # Comma with double space
+                comma_width = len(comma_separator) * char_width_estimate
                 
-                # Calculate starting x position: center the entire line
-                # First keyword starts at: center - (half of remaining text width)
-                remaining_after_first = ", ".join(formatted_keywords[1:]) if len(formatted_keywords) > 1 else ""
-                remaining_width = len(remaining_after_first) * char_width_estimate if remaining_after_first else 0
+                # Maximum width for keywords (90% of video width, video width is 1080px)
+                max_width = 1080 * 0.9  # ~972px
                 
-                # Add each keyword with its own color, positioned sequentially
-                current_x_offset = 0  # Track cumulative offset from center
-                for i, (keyword, color) in enumerate(zip(formatted_keywords, keyword_colors)):
-                    escaped_keyword = escape_drawtext_string(keyword)
+                # Group keywords into lines based on width
+                keyword_lines = []  # List of lists, each inner list is a line of keyword indices
+                current_line = []
+                current_line_width = 0
+                
+                for i, keyword in enumerate(formatted_keywords):
+                    keyword_width = len(keyword) * char_width_estimate
                     
-                    # Calculate x position for this keyword
-                    if i == 0:
-                        # First keyword: center minus half of remaining text width
-                        x_expr = f"(w-text_w)/2-{remaining_width:.0f}"
+                    # Check if adding this keyword would exceed max width
+                    # Account for comma if not first keyword in line
+                    needed_width = keyword_width
+                    if current_line:  # Not first keyword in line
+                        needed_width += comma_width
+                    
+                    if current_line_width + needed_width > max_width and current_line:
+                        # Start new line
+                        keyword_lines.append(current_line)
+                        current_line = [i]
+                        current_line_width = keyword_width
                     else:
-                        # Subsequent keywords: after previous keyword + comma
-                        # Calculate width of previous keyword and comma
-                        prev_keyword = formatted_keywords[i-1]
-                        prev_keyword_width = len(prev_keyword) * char_width_estimate
-                        comma_width = len(", ") * char_width_estimate
-                        current_x_offset += prev_keyword_width + comma_width
-                        x_expr = f"(w-text_w)/2-{remaining_width:.0f}+{current_x_offset:.0f}"
+                        # Add to current line
+                        if current_line:  # Not first keyword
+                            current_line_width += comma_width
+                        current_line.append(i)
+                        current_line_width += keyword_width
+                
+                # Add last line if not empty
+                if current_line:
+                    keyword_lines.append(current_line)
+                
+                # Render keywords line by line
+                for line_idx, line_keyword_indices in enumerate(keyword_lines):
+                    line_y = y_position + (line_idx * line_height)
                     
-                    keyword_args = {
-                        'text': escaped_keyword,
-                        'fontsize': font_size,
-                        'fontcolor': color,  # Random color per keyword
-                        'x': x_expr,
-                        'y': y_position,
-                        'borderw': 2,
-                        'bordercolor': 'black'
-                    }
-
-                    # Add fontfile if available
-                    if font_file:
-                        font_path = font_file.replace('fontfile=', '').replace(':', '')
-                        if font_path:
-                            keyword_args['fontfile'] = font_path
-
-                    final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+                    # Get keywords and colors for this line
+                    line_keywords = [formatted_keywords[i] for i in line_keyword_indices]
+                    line_colors = [keyword_colors[i] for i in line_keyword_indices]
                     
-                    # Add comma after keyword (except last)
-                    if i < len(formatted_keywords) - 1:
-                        # Comma position: after current keyword
-                        keyword_width = len(keyword) * char_width_estimate
-                        comma_x_offset = current_x_offset + keyword_width
-                        if i == 0:
-                            comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{keyword_width:.0f}"
-                        else:
-                            comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{comma_x_offset:.0f}"
+                    # Calculate total width of this line for centering
+                    line_text = comma_separator.join(line_keywords)
+                    line_width = len(line_text) * char_width_estimate
+                    
+                    # Calculate starting x position: center the entire line
+                    # First keyword starts at: center - (half of remaining text width)
+                    remaining_after_first = comma_separator.join(line_keywords[1:]) if len(line_keywords) > 1 else ""
+                    remaining_width = len(remaining_after_first) * char_width_estimate if remaining_after_first else 0
+                    
+                    # Add each keyword with its own color, positioned sequentially
+                    current_x_offset = 0  # Track cumulative offset from center
+                    for i, (keyword, color) in enumerate(zip(line_keywords, line_colors)):
+                        escaped_keyword = escape_drawtext_string(keyword)
                         
-                        comma_args = {
-                            'text': ', ',
+                        # Calculate x position for this keyword
+                        if i == 0:
+                            # First keyword: center minus half of remaining text width
+                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}"
+                        else:
+                            # Subsequent keywords: after previous keyword + comma
+                            # Calculate width of previous keyword and comma
+                            prev_keyword = line_keywords[i-1]
+                            prev_keyword_width = len(prev_keyword) * char_width_estimate
+                            current_x_offset += prev_keyword_width + comma_width
+                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}+{current_x_offset:.0f}"
+                        
+                        keyword_args = {
+                            'text': escaped_keyword,
                             'fontsize': font_size,
-                            'fontcolor': 'white',  # Comma in white
-                            'x': comma_x,
-                            'y': y_position,
+                            'fontcolor': color,  # Random color per keyword
+                            'x': x_expr,
+                            'y': line_y,
                             'borderw': 2,
                             'bordercolor': 'black'
                         }
+
+                        # Add fontfile if available
                         if font_file:
                             font_path = font_file.replace('fontfile=', '').replace(':', '')
                             if font_path:
-                                comma_args['fontfile'] = font_path
-                        final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
+                                keyword_args['fontfile'] = font_path
 
-                logger.info(f"Added {len(keywords)} catchy keywords in one line with # prefix, each with random color")
+                        final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+                        
+                        # Add comma after keyword (except last in line)
+                        if i < len(line_keywords) - 1:
+                            # Comma position: after current keyword
+                            keyword_width = len(keyword) * char_width_estimate
+                            comma_x_offset = current_x_offset + keyword_width
+                            if i == 0:
+                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{keyword_width:.0f}"
+                            else:
+                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{comma_x_offset:.0f}"
+                            
+                            comma_args = {
+                                'text': ', ',
+                                'fontsize': font_size,
+                                'fontcolor': 'white',  # Comma in white
+                                'x': comma_x,
+                                'y': line_y,
+                                'borderw': 2,
+                                'bordercolor': 'black'
+                            }
+                            if font_file:
+                                font_path = font_file.replace('fontfile=', '').replace(':', '')
+                                if font_path:
+                                    comma_args['fontfile'] = font_path
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
+
+                logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
             # Video height: 1920px (1080p portrait with padding)

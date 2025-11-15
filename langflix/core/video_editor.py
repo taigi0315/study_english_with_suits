@@ -470,23 +470,63 @@ class VideoEditor:
             # Top black padding: 0-480px (y_offset=480)
             # Display catchy keywords if available
             if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
-                # Display up to 3 keywords in top padding
-                keywords = expression.catchy_keywords[:3]  # Max 3 keywords
-                y_positions = [100, 200, 300]  # Y positions for each keyword
-
-                for idx, keyword in enumerate(keywords):
-                    if idx >= 3:  # Safety check
-                        break
-
+                import random
+                
+                # Get all keywords (no limit, display all in one line)
+                keywords = expression.catchy_keywords
+                
+                # Format keywords: add "#" prefix to each
+                formatted_keywords = [f"#{keyword}" for keyword in keywords]
+                
+                # Generate random color for each keyword (deterministic based on keyword text)
+                keyword_colors = []
+                for keyword in formatted_keywords:
+                    random.seed(hash(keyword) % (2**32))  # Deterministic but varied per keyword
+                    r = random.randint(100, 255)
+                    g = random.randint(100, 255)
+                    b = random.randint(100, 255)
+                    keyword_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
+                
+                # Build text with commas: "#keyword1, #keyword2, #keyword3"
+                # Render each keyword separately with its own color in one line
+                font_size = 64  # Doubled from 32
+                y_position = 300  # Moved down by 200 (from 100 to 300)
+                
+                # Build full line text for width calculation
+                full_line = ", ".join(formatted_keywords)
+                
+                # Calculate approximate character width (rough estimate: font_size * 0.6 for monospace-like)
+                char_width_estimate = font_size * 0.6
+                
+                # Calculate starting x position: center the entire line
+                # First keyword starts at: center - (half of remaining text width)
+                remaining_after_first = ", ".join(formatted_keywords[1:]) if len(formatted_keywords) > 1 else ""
+                remaining_width = len(remaining_after_first) * char_width_estimate if remaining_after_first else 0
+                
+                # Add each keyword with its own color, positioned sequentially
+                current_x_offset = 0  # Track cumulative offset from center
+                for i, (keyword, color) in enumerate(zip(formatted_keywords, keyword_colors)):
                     escaped_keyword = escape_drawtext_string(keyword)
-
-                    # Add keyword text (white, bold, centered)
+                    
+                    # Calculate x position for this keyword
+                    if i == 0:
+                        # First keyword: center minus half of remaining text width
+                        x_expr = f"(w-text_w)/2-{remaining_width:.0f}"
+                    else:
+                        # Subsequent keywords: after previous keyword + comma
+                        # Calculate width of previous keyword and comma
+                        prev_keyword = formatted_keywords[i-1]
+                        prev_keyword_width = len(prev_keyword) * char_width_estimate
+                        comma_width = len(", ") * char_width_estimate
+                        current_x_offset += prev_keyword_width + comma_width
+                        x_expr = f"(w-text_w)/2-{remaining_width:.0f}+{current_x_offset:.0f}"
+                    
                     keyword_args = {
                         'text': escaped_keyword,
-                        'fontsize': 32,
-                        'fontcolor': 'white',
-                        'x': '(w-text_w)/2',  # Center horizontally
-                        'y': y_positions[idx],
+                        'fontsize': font_size,
+                        'fontcolor': color,  # Random color per keyword
+                        'x': x_expr,
+                        'y': y_position,
                         'borderw': 2,
                         'bordercolor': 'black'
                     }
@@ -498,8 +538,33 @@ class VideoEditor:
                             keyword_args['fontfile'] = font_path
 
                     final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+                    
+                    # Add comma after keyword (except last)
+                    if i < len(formatted_keywords) - 1:
+                        # Comma position: after current keyword
+                        keyword_width = len(keyword) * char_width_estimate
+                        comma_x_offset = current_x_offset + keyword_width
+                        if i == 0:
+                            comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{keyword_width:.0f}"
+                        else:
+                            comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{comma_x_offset:.0f}"
+                        
+                        comma_args = {
+                            'text': ', ',
+                            'fontsize': font_size,
+                            'fontcolor': 'white',  # Comma in white
+                            'x': comma_x,
+                            'y': y_position,
+                            'borderw': 2,
+                            'bordercolor': 'black'
+                        }
+                        if font_file:
+                            font_path = font_file.replace('fontfile=', '').replace(':', '')
+                            if font_path:
+                                comma_args['fontfile'] = font_path
+                        final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
 
-                logger.info(f"Added {len(keywords)} catchy keywords to top padding")
+                logger.info(f"Added {len(keywords)} catchy keywords in one line with # prefix, each with random color")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
             # Video height: 1920px (1080p portrait with padding)
@@ -512,19 +577,16 @@ class VideoEditor:
             escaped_translation = escape_drawtext_string(expression_translation)
 
             # Add expression text (line 1) at bottom (yellow, bold, centered)
-            # Position: y=1750 (bottom area, above main subtitle at bottom)
-            # Get main subtitle font size for consistency
-            try:
-                main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
-            except Exception:
-                main_font_size = 22  # Default to 22 (24 * 0.9)
-            
+            # Position: y=1450 (bottom area, above main subtitle at bottom)
+            # Font size: 3x main subtitle size for emphasis
+            main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
+            expression_font_size = main_font_size * 3  # Triple size for expression subtitle
             drawtext_args_1 = {
                 'text': escaped_expression,
-                'fontsize': main_font_size,  # Same size as main subtitle
+                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1750,  # First line at bottom (above main subtitle)
+                'y': 1450,  # First line at bottom (above main subtitle)
                 'borderw': 2,
                 'bordercolor': 'black'
             }
@@ -541,10 +603,10 @@ class VideoEditor:
             # Add expression translation (line 2) below expression text
             drawtext_args_2 = {
                 'text': escaped_translation,
-                'fontsize': main_font_size,  # Same size as main subtitle
+                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1810,  # Second line below expression (60px gap)
+                'y': 1450 + expression_font_size + 20,  # Second line below expression (dynamic gap based on font size)
                 'borderw': 2,
                 'bordercolor': 'black'
             }

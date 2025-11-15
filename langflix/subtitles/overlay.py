@@ -224,47 +224,21 @@ def apply_dual_subtitle_layers(
     context_end_seconds: float
 ) -> Path:
     """
-    Extract context segment from source video, then apply two subtitle layers:
-    - Original subtitles at bottom (existing behavior)
-    - Expression subtitle at top (yellow, bold) during expression segments only
-    
-    TICKET-040: Dual subtitle layer support for expression highlighting.
+    Extract context segment from source video, then apply original subtitles only.
+    Cyan expression subtitle layer has been removed per user requirements.
     
     Args:
         video_path: Input video path (full source video, may be longer than context)
         original_subtitle_path: Path to original dual-language subtitle SRT
-        expression_subtitle_path: Path to expression-only subtitle SRT  
-        output_path: Output video path (context segment with dual subtitles)
+        expression_subtitle_path: Path to expression-only subtitle SRT (not used, kept for API compatibility)
+        output_path: Output video path (context segment with subtitles)
         context_start_seconds: Context start time in source video (seconds)
         context_end_seconds: Context end time in source video (seconds)
         
     Returns:
-        Path to output video with dual subtitles
+        Path to output video with subtitles
     """
     context_duration = context_end_seconds - context_start_seconds
-    
-    # Build force_style for expression subtitle (mid-top center, cyan color, same size as main subtitle)
-    # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = cyan (BGR format), Bold=1
-    # MarginV controls vertical margin from alignment position
-    # For mid-top center positioning: MarginV=120 places subtitle at mid-top area (~1/8 from top)
-    # FontSize matches main subtitle size (22) for consistency
-    # Get main subtitle font size from config
-    try:
-        main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
-    except Exception:
-        main_font_size = 22  # Default to 22 (24 * 0.9)
-    
-    # Cyan color: #00FFFF → RGB(0, 255, 255) → BGR: B=FF, G=FF, R=00 → &H00FFFF00
-    expression_style = (
-        "Alignment=8,"  # Top center (ensures horizontal centering)
-        "PrimaryColour=&H00FFFF00,"  # Cyan (BGR: B=FF, G=FF, R=00 = #00FFFF)
-        "OutlineColour=&H00000000,"  # Black outline
-        "Outline=2,"
-        "Bold=1,"
-        f"FontSize={main_font_size},"  # Same size as main subtitle (22)
-        "BorderStyle=3,"
-        "MarginV=120"  # 120 pixels from top = mid-top center position
-    )
     
     # Build force_style for original subtitle (bottom, white) - default behavior
     original_style = build_ass_force_style(is_expression=False)
@@ -287,18 +261,11 @@ def apply_dual_subtitle_layers(
         .filter('asetpts', 'PTS-STARTPTS')  # Reset audio timestamps
     )
     
-    # Apply first subtitle layer (original at bottom)
-    video_with_original = video_trimmed.filter(
+    # Apply subtitle layer (original at bottom only - cyan expression subtitle removed)
+    video_with_subtitles = video_trimmed.filter(
         'subtitles',
         original_subtitle_path,
         force_style=original_style
-    )
-    
-    # Apply second subtitle layer (expression at top) on top of first
-    video_with_both = video_with_original.filter(
-        'subtitles',
-        expression_subtitle_path,
-        force_style=expression_style
     )
     
     # Output with audio
@@ -312,7 +279,7 @@ def apply_dual_subtitle_layers(
     (
         ffmpeg
         .output(
-            video_with_both,
+            video_with_subtitles,
             audio_trimmed,
             str(output_path),
             **output_args
@@ -321,7 +288,7 @@ def apply_dual_subtitle_layers(
         .run(quiet=True)
     )
     
-    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied dual subtitle layers: original (bottom) + expression (top, yellow)")
+    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied subtitle layer: original (bottom)")
     return Path(output_path)
 
 

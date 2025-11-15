@@ -113,7 +113,7 @@ class OutputManager:
             'final_videos': videos_dir,
             'context_slide_combined': videos_dir,
             'short_videos': videos_dir,
-            'structured_videos': videos_dir
+            'long_form_videos': videos_dir
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")

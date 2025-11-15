@@ -414,15 +414,15 @@ def get_short_video_dimensions() -> tuple[int, int]:
     return (width, height)
 
 
-def get_structured_video_height() -> int:
+def get_long_form_video_height() -> int:
     """
-    Get structured video height in short-form layout.
+    Get long-form video height in short-form layout.
 
     Returns:
         int: Height in pixels (default: 960)
     """
     layout = get_short_video_layout_config()
-    return layout.get('structured_video_height', 960)
+    return layout.get('long_form_video_height', 960)
 
 
 def get_short_video_padding_heights() -> tuple[int, int]:

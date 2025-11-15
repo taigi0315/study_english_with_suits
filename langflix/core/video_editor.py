@@ -112,13 +112,13 @@ class VideoEditor:
     
     @handle_error_decorator(
         ErrorContext(
-            operation="create_structured_video",
+            operation="create_long_form_video",
             component="core.video_editor"
         ),
         retry=False,
         fallback=False
     )
-    def create_structured_video(
+    def create_long_form_video(
         self,
         expression: ExpressionAnalysis,
         context_video_path: str,
@@ -126,7 +126,7 @@ class VideoEditor:
         expression_index: int = 0
     ) -> str:
         """
-        Create structured video with unified layout:
+        Create long-form video with unified layout:
         - context video → expression repeat (2회) → slide (expression audio 2회)
         - No transition (direct concatenation)
         - Maintains original aspect ratio (16:9 or other)
@@ -138,12 +138,12 @@ class VideoEditor:
             expression_index: Index of expression (for voice alternation)
             
         Returns:
-            Path to created structured video
+            Path to created long-form video
         """
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"structured_video_{safe_expression}.mkv"
+            output_filename = f"long_form_video_{safe_expression}.mkv"
             
             # Use videos directory from paths (created by output_manager)
             # All videos go to videos/ directory
@@ -164,7 +164,7 @@ class VideoEditor:
             
             output_path = videos_dir / output_filename
             
-            logger.info(f"Creating structured video for: {expression.expression}")
+            logger.info(f"Creating long-form video for: {expression.expression}")
             
             # Step 1: Extract expression video clip from context and repeat it (2회)
             context_start_seconds = self._time_to_seconds(expression.context_start_time)
@@ -205,7 +205,7 @@ class VideoEditor:
                 subs_overlay.apply_dual_subtitle_layers(
                     str(context_video_path),
                     str(subtitle_file),
-                    "",  # No expression subtitle for structured video
+                    "",  # No expression subtitle for long-form video
                     str(context_clip_path),
                     context_start_seconds,
                     context_end_seconds
@@ -260,7 +260,7 @@ class VideoEditor:
             )
 
             # Step 1b: Extract expression video clip from context clip
-            expression_video_clip_path = self.output_dir / f"temp_expr_clip_structured_{safe_expression}.mkv"
+            expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_form_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
 
@@ -289,7 +289,7 @@ class VideoEditor:
                 )
                 
                 # Reset timestamps
-                temp_clip_path = self.output_dir / f"temp_expr_clip_structured_reset_{safe_expression}.mkv"
+                temp_clip_path = self.output_dir / f"temp_expr_clip_long_form_reset_{safe_expression}.mkv"
                 self._register_temp_file(temp_clip_path)
                 
                 reset_input = ffmpeg.input(str(expression_video_clip_path))
@@ -326,14 +326,14 @@ class VideoEditor:
             
             # Step 2: Repeat expression clip 2 times
             repeat_count = 2
-            repeated_expression_path = self.output_dir / f"temp_expr_repeated_structured_{safe_expression}.mkv"
+            repeated_expression_path = self.output_dir / f"temp_expr_repeated_long_form_{safe_expression}.mkv"
             self._register_temp_file(repeated_expression_path)
             logger.info(f"Repeating expression clip {repeat_count} times")
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
 
             # Step 3: Concatenate context + transition + expression repeat
-            context_expr_path = self.output_dir / f"temp_context_expr_structured_{safe_expression}.mkv"
+            context_expr_path = self.output_dir / f"temp_context_expr_long_form_{safe_expression}.mkv"
             self._register_temp_file(context_expr_path)
 
             # Get transition configuration
@@ -409,27 +409,27 @@ class VideoEditor:
             
             # Step 5: Concatenate context+expression → slide (direct, no transition)
             logger.info("Concatenating context+expression → slide (direct, no transition)")
-            structured_temp_path = self.output_dir / f"temp_structured_{safe_expression}.mkv"
-            self._register_temp_file(structured_temp_path)
+            long_form_temp_path = self.output_dir / f"temp_long_form_{safe_expression}.mkv"
+            self._register_temp_file(long_form_temp_path)
 
             concat_filter_with_explicit_map(
                 str(context_expr_path),
                 str(educational_slide),
-                str(structured_temp_path)
+                str(long_form_temp_path)
             )
             
             # Step 6: Add logo at right-top with 50% opacity (long-form video)
-            logger.info("Adding logo to structured video (right-top, 50% opacity)")
-            structured_with_logo_path = self.output_dir / f"temp_structured_with_logo_{safe_expression}.mkv"
-            self._register_temp_file(structured_with_logo_path)
+            logger.info("Adding logo to long-form video (right-top, 50% opacity)")
+            long_form_with_logo_path = self.output_dir / f"temp_long_form_with_logo_{safe_expression}.mkv"
+            self._register_temp_file(long_form_with_logo_path)
             
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
-                    # Load structured video
-                    structured_input = ffmpeg.input(str(structured_temp_path))
-                    structured_video = structured_input['v']
-                    structured_audio = structured_input['a'] if 'a' in structured_input else None
+                    # Load long-form video
+                    long_form_input = ffmpeg.input(str(long_form_temp_path))
+                    long_form_video = long_form_input['v']
+                    long_form_audio = long_form_input['a'] if 'a' in long_form_input else None
                     
                     # Load logo and apply 80% opacity
                     logo_input = ffmpeg.input(str(logo_path))
@@ -446,21 +446,21 @@ class VideoEditor:
                     overlay_x = f'W-w-{margin}'  # Right edge minus logo width minus margin
                     overlay_y = margin  # Top margin
                     
-                    # Overlay logo on structured video
+                    # Overlay logo on long-form video
                     final_video = ffmpeg.overlay(
-                        structured_video,
+                        long_form_video,
                         logo_video,
                         x=overlay_x,
                         y=overlay_y
                     )
                     
                     # Output video with logo
-                    if structured_audio:
+                    if long_form_audio:
                         (
                             ffmpeg.output(
                                 final_video,
-                                structured_audio,
-                                str(structured_with_logo_path),
+                                long_form_audio,
+                                str(long_form_with_logo_path),
                                 vcodec='libx264',
                                 acodec='aac',
                                 ac=2,
@@ -475,7 +475,7 @@ class VideoEditor:
                         (
                             ffmpeg.output(
                                 final_video,
-                                str(structured_with_logo_path),
+                                str(long_form_with_logo_path),
                                 vcodec='libx264',
                                 preset='fast',
                                 crf=23
@@ -484,49 +484,49 @@ class VideoEditor:
                             .run(capture_stdout=True, capture_stderr=True)
                         )
                     
-                    logger.info("Added logo to structured video (right-top, 50% opacity)")
+                    logger.info("Added logo to long-form video (right-top, 50% opacity)")
                     # Use video with logo for final audio gain
-                    structured_temp_path = structured_with_logo_path
+                    long_form_temp_path = long_form_with_logo_path
                 except Exception as e:
-                    logger.warning(f"Failed to add logo to structured video: {e}, continuing without logo")
+                    logger.warning(f"Failed to add logo to long-form video: {e}, continuing without logo")
                     # Continue with original video if logo addition fails
             else:
                 logger.debug(f"Logo file not found: {logo_path}, continuing without logo")
             
             # Step 7: Apply final audio gain
-            logger.info("Applying final audio gain to structured video")
+            logger.info("Applying final audio gain to long-form video")
             from langflix.media.ffmpeg_utils import apply_final_audio_gain
-            apply_final_audio_gain(str(structured_temp_path), str(output_path), gain_factor=1.69)
+            apply_final_audio_gain(str(long_form_temp_path), str(output_path), gain_factor=1.69)
             
-            logger.info(f"✅ Structured video created: {output_path}")
+            logger.info(f"✅ Long-form video created: {output_path}")
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating structured video: {e}")
+            logger.error(f"Error creating long-form video: {e}")
             raise
 
     @handle_error_decorator(
         ErrorContext(
-            operation="create_short_form_from_structured",
+            operation="create_short_form_from_long_form",
             component="core.video_editor"
         ),
         retry=False,
         fallback=False
     )
-    def create_short_form_from_structured(
+    def create_short_form_from_long_form(
         self,
-        structured_video_path: str,
+        long_form_video_path: str,
         expression: ExpressionAnalysis,
         expression_index: int = 0
     ) -> str:
         """
-        Create short-form video (9:16) from structured video with special layout:
-        - Structured video: centered, height 960px, left/right cropped (no stretch)
-        - Expression text: displayed at top (outside structured video, black screen)
-        - Subtitles: displayed at bottom (outside structured video, black screen)
+        Create short-form video (9:16) from long-form video with special layout:
+        - Long-form video: centered, height 960px, left/right cropped (no stretch)
+        - Expression text: displayed at top (outside long-form video, black screen)
+        - Subtitles: displayed at bottom (outside long-form video, black screen)
         
         Args:
-            structured_video_path: Path to structured video (16:9 or original ratio)
+            long_form_video_path: Path to long-form video (16:9 or original ratio)
             expression: ExpressionAnalysis object
             expression_index: Index of expression (for voice alternation)
             
@@ -543,23 +543,23 @@ class VideoEditor:
             short_videos_dir.mkdir(parents=True, exist_ok=True)
             output_path = short_videos_dir / output_filename
             
-            logger.info(f"Creating short-form video from structured video: {expression.expression}")
+            logger.info(f"Creating short-form video from long-form video: {expression.expression}")
 
             # Get layout configuration from settings
             target_width, target_height = settings.get_short_video_dimensions()
-            structured_video_height = settings.get_structured_video_height()
+            long_form_video_height = settings.get_long_form_video_height()
             
-            # Step 1: Scale structured video to height 960px, maintain aspect ratio, crop left/right
+            # Step 1: Scale long-form video to height 960px, maintain aspect ratio, crop left/right
             # This ensures no stretching - video is cropped if needed
             from langflix.media.ffmpeg_utils import get_video_params
-            structured_vp = get_video_params(structured_video_path)
-            structured_width = structured_vp.width or target_width
-            structured_height = structured_vp.height or target_height
+            long_form_vp = get_video_params(long_form_video_path)
+            long_form_width = long_form_vp.width or target_width
+            long_form_height = long_form_vp.height or target_height
             
             # Calculate scale to fit height 960px
-            scale_factor = structured_video_height / structured_height
-            scaled_width = int(structured_width * scale_factor)
-            scaled_height = structured_video_height
+            scale_factor = long_form_video_height / long_form_height
+            scaled_width = int(long_form_width * scale_factor)
+            scaled_height = long_form_video_height
             
             # If scaled width exceeds target width, crop from center
             crop_x = 0
@@ -568,16 +568,16 @@ class VideoEditor:
                 scaled_width = target_width
             
             logger.info(
-                f"Scaling structured video: {structured_width}x{structured_height} -> "
+                f"Scaling long-form video: {long_form_width}x{long_form_height} -> "
                 f"{scaled_width}x{scaled_height} (crop_x={crop_x})"
             )
             
-            # Step 2: Create scaled and cropped structured video
-            structured_scaled_path = self.output_dir / f"temp_structured_scaled_{safe_expression}.mkv"
-            self._register_temp_file(structured_scaled_path)
+            # Step 2: Create scaled and cropped long-form video
+            long_form_scaled_path = self.output_dir / f"temp_long_form_scaled_{safe_expression}.mkv"
+            self._register_temp_file(long_form_scaled_path)
             
-            structured_input = ffmpeg.input(str(structured_video_path))
-            video_stream = structured_input['v']
+            long_form_input = ffmpeg.input(str(long_form_video_path))
+            video_stream = long_form_input['v']
             
             # Scale to height 960px
             video_stream = ffmpeg.filter(video_stream, 'scale', -1, scaled_height)
@@ -596,17 +596,17 @@ class VideoEditor:
             # Get audio stream
             audio_stream = None
             try:
-                audio_stream = structured_input['a']
+                audio_stream = long_form_input['a']
             except (KeyError, AttributeError):
-                logger.debug("No audio stream in structured video")
+                logger.debug("No audio stream in long-form video")
             
-            # Output scaled structured video
+            # Output scaled long-form video
             if audio_stream:
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
-                        str(structured_scaled_path),
+                        str(long_form_scaled_path),
                         vcodec='libx264',
                         acodec='aac',
                         ac=2,
@@ -621,7 +621,7 @@ class VideoEditor:
                 (
                     ffmpeg.output(
                         video_stream,
-                        str(structured_scaled_path),
+                        str(long_form_scaled_path),
                         vcodec='libx264',
                         preset='fast',
                         crf=23
@@ -631,17 +631,17 @@ class VideoEditor:
                 )
             
             # Step 3: Create 1080x1920 black background
-            # Calculate y_offset to center structured video vertically
+            # Calculate y_offset to center long-form video vertically
             y_offset = (target_height - scaled_height) // 2  # Center vertically
             
-            logger.info(f"Centering structured video at y_offset={y_offset}")
+            logger.info(f"Centering long-form video at y_offset={y_offset}")
             
             # Step 4: Create final layout with expression text at top and subtitles at bottom
-            # Use pad filter to create black background and place structured video in center
-            final_input = ffmpeg.input(str(structured_scaled_path))
+            # Use pad filter to create black background and place long-form video in center
+            final_input = ffmpeg.input(str(long_form_scaled_path))
             final_video = final_input['v']
             
-            # Pad to create black background with structured video centered
+            # Pad to create black background with long-form video centered
             final_video = ffmpeg.filter(
                 final_video,
                 'pad',
@@ -687,7 +687,7 @@ class VideoEditor:
             else:
                 logger.debug(f"Logo file not found: {logo_path}")
 
-            # Add catchy keywords at top (outside structured video area, in top black padding)
+            # Add catchy keywords at top (outside long-form video area, in top black padding)
             # Display catchy keywords if available (positioning from config)
             if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
                 import random
@@ -884,9 +884,9 @@ class VideoEditor:
             try:
                 final_audio = final_input['a']
             except (KeyError, AttributeError):
-                logger.debug("No audio stream in scaled structured video")
+                logger.debug("No audio stream in scaled long-form video")
             
-            # Step 5: Apply subtitles at bottom (outside structured video area)
+            # Step 5: Apply subtitles at bottom (outside long-form video area)
             # Subtitles will be applied using subtitle overlay (ASS format)
             # For now, output video with expression text, then apply subtitles
             temp_with_expression_path = self.output_dir / f"temp_short_with_expression_{safe_expression}.mkv"
@@ -1017,7 +1017,7 @@ class VideoEditor:
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating short-form video from structured video: {e}")
+            logger.error(f"Error creating short-form video from long-form video: {e}")
             raise
     
     def _get_font_option(self) -> str:

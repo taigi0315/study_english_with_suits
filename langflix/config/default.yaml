@@ -258,7 +258,7 @@ short_video:
     target_height: 1920
 
     # Structured video height in middle section
-    structured_video_height: 960  # Half of target height
+    long_form_video_height: 960  # Half of target height
 
     # Padding areas
     top_padding_height: 480      # Top black padding (0-480px)

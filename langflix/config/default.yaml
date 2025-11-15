@@ -235,21 +235,69 @@ tts:
 short_video:
   # Enable short video generation
   enabled: true
-  
+
   # Video resolution (width x height) - 9:16 format for social media
   resolution: "1080x1920"
-  
+
   # Target duration for each batch (seconds)
   target_duration: 120
-  
+
   # Allow variance (+/- seconds)
   duration_variance: 10
-  
+
   # Maximum duration for short-form video batches (seconds)
   # Videos exceeding this duration will be dropped from batching
   max_duration: 180
-  
+
   # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
+
+  # Layout configuration for short-form videos (9:16 portrait format)
+  layout:
+    # Video dimensions
+    target_width: 1080
+    target_height: 1920
+
+    # Structured video height in middle section
+    structured_video_height: 960  # Half of target height
+
+    # Padding areas
+    top_padding_height: 480      # Top black padding (0-480px)
+    bottom_padding_height: 480   # Bottom black padding (1440-1920px)
+
+    # Catchy keywords (top padding area)
+    keywords:
+      font_size: 42
+      y_position: 350            # Starting Y position for first line
+      line_height_factor: 1.2    # Line spacing as multiple of font size
+      max_width_percent: 0.9     # Maximum width as percentage of video width
+      text_color: 'white'
+      border_width: 2
+      border_color: 'black'
+
+    # Expression text (bottom padding area)
+    expression:
+      font_size: 35              # Main expression font size (matches video subtitle)
+      y_position: 1500           # Y position for expression line
+      text_color: 'yellow'
+      border_width: 2
+      border_color: 'black'
+
+    # Expression translation (bottom padding area)
+    translation:
+      font_size: 32              # Translation font size (slightly smaller)
+      y_position: 1560           # Y position for translation line
+      gap_from_expression: 60    # Gap between expression and translation
+      text_color: 'yellow'
+      border_width: 2
+      border_color: 'black'
+
+    # Dialogue subtitles (bottom padding area, below expression)
+    dialogue_subtitle:
+      font_size: 21              # Reduced by ~12% from default 24
+      margin_v: 170              # Margin from bottom (1920 - 1750 = 170)
+      text_color: 'white'
+      outline_width: 2
+      outline_color: 'black'
 
 # ============================================================================
 # Expression-Based Learning Configuration

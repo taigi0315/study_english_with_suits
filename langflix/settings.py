@@ -389,11 +389,192 @@ def get_short_video_max_duration() -> float:
 def get_short_video_expression_repeat_count() -> int:
     """
     Get number of times to repeat expression video in short videos.
-    
+
     DEPRECATED: Use get_expression_repeat_count() instead.
     This function now returns the unified expression repeat count.
     """
     return get_expression_repeat_count()
+
+
+def get_short_video_layout_config() -> Dict[str, Any]:
+    """Get short-form video layout configuration"""
+    return get_short_video_config().get('layout', {})
+
+
+def get_short_video_dimensions() -> tuple[int, int]:
+    """
+    Get short-form video dimensions (width, height).
+
+    Returns:
+        tuple: (width, height) in pixels (default: 1080x1920)
+    """
+    layout = get_short_video_layout_config()
+    width = layout.get('target_width', 1080)
+    height = layout.get('target_height', 1920)
+    return (width, height)
+
+
+def get_structured_video_height() -> int:
+    """
+    Get structured video height in short-form layout.
+
+    Returns:
+        int: Height in pixels (default: 960)
+    """
+    layout = get_short_video_layout_config()
+    return layout.get('structured_video_height', 960)
+
+
+def get_short_video_padding_heights() -> tuple[int, int]:
+    """
+    Get top and bottom padding heights for short-form video.
+
+    Returns:
+        tuple: (top_padding, bottom_padding) in pixels (default: 480, 480)
+    """
+    layout = get_short_video_layout_config()
+    top = layout.get('top_padding_height', 480)
+    bottom = layout.get('bottom_padding_height', 480)
+    return (top, bottom)
+
+
+def get_keywords_config() -> Dict[str, Any]:
+    """Get catchy keywords display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('keywords', {})
+
+
+def get_keywords_font_size() -> int:
+    """Get keywords font size (default: 42)"""
+    return get_keywords_config().get('font_size', 42)
+
+
+def get_keywords_y_position() -> int:
+    """Get keywords starting Y position (default: 350)"""
+    return get_keywords_config().get('y_position', 350)
+
+
+def get_keywords_line_height_factor() -> float:
+    """Get keywords line height as multiple of font size (default: 1.2)"""
+    return get_keywords_config().get('line_height_factor', 1.2)
+
+
+def get_keywords_max_width_percent() -> float:
+    """Get keywords maximum width as percentage of video width (default: 0.9)"""
+    return get_keywords_config().get('max_width_percent', 0.9)
+
+
+def get_keywords_text_color() -> str:
+    """Get keywords text color (default: 'white')"""
+    return get_keywords_config().get('text_color', 'white')
+
+
+def get_keywords_border_width() -> int:
+    """Get keywords border width (default: 2)"""
+    return get_keywords_config().get('border_width', 2)
+
+
+def get_keywords_border_color() -> str:
+    """Get keywords border color (default: 'black')"""
+    return get_keywords_config().get('border_color', 'black')
+
+
+def get_expression_text_config() -> Dict[str, Any]:
+    """Get expression text display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('expression', {})
+
+
+def get_expression_font_size() -> int:
+    """Get expression font size (default: 35)"""
+    return get_expression_text_config().get('font_size', 35)
+
+
+def get_expression_y_position() -> int:
+    """Get expression Y position (default: 1500)"""
+    return get_expression_text_config().get('y_position', 1500)
+
+
+def get_expression_text_color() -> str:
+    """Get expression text color (default: 'yellow')"""
+    return get_expression_text_config().get('text_color', 'yellow')
+
+
+def get_expression_border_width() -> int:
+    """Get expression border width (default: 2)"""
+    return get_expression_text_config().get('border_width', 2)
+
+
+def get_expression_border_color() -> str:
+    """Get expression border color (default: 'black')"""
+    return get_expression_text_config().get('border_color', 'black')
+
+
+def get_translation_text_config() -> Dict[str, Any]:
+    """Get translation text display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('translation', {})
+
+
+def get_translation_font_size() -> int:
+    """Get translation font size (default: 32)"""
+    return get_translation_text_config().get('font_size', 32)
+
+
+def get_translation_y_position() -> int:
+    """Get translation Y position (default: 1560)"""
+    return get_translation_text_config().get('y_position', 1560)
+
+
+def get_translation_gap_from_expression() -> int:
+    """Get gap between expression and translation (default: 60)"""
+    return get_translation_text_config().get('gap_from_expression', 60)
+
+
+def get_translation_text_color() -> str:
+    """Get translation text color (default: 'yellow')"""
+    return get_translation_text_config().get('text_color', 'yellow')
+
+
+def get_translation_border_width() -> int:
+    """Get translation border width (default: 2)"""
+    return get_translation_text_config().get('border_width', 2)
+
+
+def get_translation_border_color() -> str:
+    """Get translation border color (default: 'black')"""
+    return get_translation_text_config().get('border_color', 'black')
+
+
+def get_dialogue_subtitle_config() -> Dict[str, Any]:
+    """Get dialogue subtitle display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('dialogue_subtitle', {})
+
+
+def get_dialogue_subtitle_font_size() -> int:
+    """Get dialogue subtitle font size (default: 21)"""
+    return get_dialogue_subtitle_config().get('font_size', 21)
+
+
+def get_dialogue_subtitle_margin_v() -> int:
+    """Get dialogue subtitle margin from bottom (default: 170)"""
+    return get_dialogue_subtitle_config().get('margin_v', 170)
+
+
+def get_dialogue_subtitle_text_color() -> str:
+    """Get dialogue subtitle text color (default: 'white')"""
+    return get_dialogue_subtitle_config().get('text_color', 'white')
+
+
+def get_dialogue_subtitle_outline_width() -> int:
+    """Get dialogue subtitle outline width (default: 2)"""
+    return get_dialogue_subtitle_config().get('outline_width', 2)
+
+
+def get_dialogue_subtitle_outline_color() -> str:
+    """Get dialogue subtitle outline color (default: 'black')"""
+    return get_dialogue_subtitle_config().get('outline_color', 'black')
 
 
 # ============================================================================

@@ -3248,7 +3248,8 @@ class VideoEditor:
             video_args = self._get_video_output_args()
             
             # Create transition video with image and sound effect
-            # Use shortest=1 to ensure both streams end at the same time
+            # Both video and audio are already trimmed to exact duration (0.2s)
+            # No need for shortest flag since both streams have same duration
             try:
                 (
                     ffmpeg
@@ -3261,8 +3262,7 @@ class VideoEditor:
                         preset=video_args.get('preset', 'fast'),
                         ac=2,
                         ar=sample_rate,
-                        crf=video_args.get('crf', 23),
-                        shortest=1  # End when shortest stream ends
+                        crf=video_args.get('crf', 23)
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)

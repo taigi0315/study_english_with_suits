@@ -400,6 +400,11 @@ def get_short_video_resolution() -> str:
     return get_short_video_config().get('resolution', '1080x1920')
 
 
+def get_short_video_max_duration() -> float:
+    """Get maximum duration for short video batches (seconds)"""
+    return float(get_short_video_config().get('max_duration', 180.0))
+
+
 def get_short_video_expression_repeat_count() -> int:
     """
     Get number of times to repeat expression video in short videos.

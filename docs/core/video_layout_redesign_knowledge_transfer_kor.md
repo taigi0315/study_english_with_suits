@@ -556,3 +556,4 @@ ffmpeg -i output.mkv -map 0:s:0 output.srt
 **문서 버전**: 1.0  
 **상태**: 활성 개발 중
 
+

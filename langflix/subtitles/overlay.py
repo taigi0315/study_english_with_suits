@@ -219,52 +219,67 @@ def apply_dual_subtitle_layers(
     original_subtitle_path: str,
     expression_subtitle_path: str,
     output_path: str,
-    expression_start_relative: float,
-    expression_end_relative: float
+    context_start_seconds: float,
+    context_end_seconds: float
 ) -> Path:
     """
-    Apply two subtitle layers:
+    Extract context segment from source video, then apply two subtitle layers:
     - Original subtitles at bottom (existing behavior)
     - Expression subtitle at top (yellow, bold) during expression segments only
     
     TICKET-040: Dual subtitle layer support for expression highlighting.
     
     Args:
-        video_path: Input video path
+        video_path: Input video path (full source video, may be longer than context)
         original_subtitle_path: Path to original dual-language subtitle SRT
-        expression_subtitle_path: Path to expression-only subtitle SRT
-        output_path: Output video path
-        expression_start_relative: Expression start time relative to context (seconds)
-        expression_end_relative: Expression end time relative to context (seconds)
+        expression_subtitle_path: Path to expression-only subtitle SRT  
+        output_path: Output video path (context segment with dual subtitles)
+        context_start_seconds: Context start time in source video (seconds)
+        context_end_seconds: Context end time in source video (seconds)
         
     Returns:
         Path to output video with dual subtitles
     """
-    # Build force_style for expression subtitle (top, yellow, bold)
+    context_duration = context_end_seconds - context_start_seconds
+    
+    # Build force_style for expression subtitle (mid-top center, yellow, bold)
     # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = yellow (BGR format), Bold=1
-    # MarginV controls vertical margin from alignment position (positive = down, negative = up)
-    # For top center, MarginV=50 means 50 pixels from top edge
+    # MarginV controls vertical margin from alignment position
+    # For mid-top center positioning: MarginV=180 places subtitle ~1/4 from top (mid-top area)
     expression_style = (
         "Alignment=8,"  # Top center
         "PrimaryColour=&H00FFFF00,"  # Yellow (BGR: 00FFFF00 = #FFFF00)
         "OutlineColour=&H00000000,"  # Black outline
         "Outline=2,"
         "Bold=1,"
-        "FontSize=28,"
+        "FontSize=32,"  # Increased from 28 for better visibility
         "BorderStyle=3,"
-        "MarginV=50"  # 50 pixels from top edge for proper top-center positioning
+        "MarginV=180"  # 180 pixels from top = mid-top center position
     )
     
     # Build force_style for original subtitle (bottom, white) - default behavior
     original_style = build_ass_force_style(is_expression=False)
     
-    # Apply subtitles using filter chain
-    # FFmpeg allows chaining multiple subtitles filters using comma separator
-    # First: original subtitles at bottom, Second: expression subtitles at top
+    # CRITICAL: Use trim filter to extract context segment FIRST, then apply subtitles
+    # This ensures we're working with a short ~30s clip, not a 40+ minute source video
     video_input = ffmpeg.input(str(video_path))
     
+    # Trim video to context segment using filter (input seeking for accuracy)
+    video_trimmed = (
+        video_input['v']
+        .filter('trim', start=context_start_seconds, end=context_end_seconds)
+        .filter('setpts', 'PTS-STARTPTS')  # Reset timestamps after trim
+    )
+    
+    # Trim audio to match
+    audio_trimmed = (
+        video_input['a']
+        .filter('atrim', start=context_start_seconds, end=context_end_seconds)
+        .filter('asetpts', 'PTS-STARTPTS')  # Reset audio timestamps
+    )
+    
     # Apply first subtitle layer (original at bottom)
-    video_with_original = video_input['v'].filter(
+    video_with_original = video_trimmed.filter(
         'subtitles',
         original_subtitle_path,
         force_style=original_style
@@ -277,49 +292,27 @@ def apply_dual_subtitle_layers(
         force_style=expression_style
     )
     
-    # Get audio stream safely (try-except for cases where audio might not exist)
-    try:
-        audio_stream = video_input['a']
-    except (KeyError, TypeError):
-        audio_stream = None
-    
-    # Output with audio (if available)
+    # Output with audio
     output_args = {
         'vcodec': 'libx264',
+        'acodec': 'aac',
+        'ac': 2,
+        'ar': 48000,
     }
     
-    if audio_stream:
-        output_args.update({
-            'acodec': 'aac',
-            'ac': 2,
-            'ar': 48000,
-        })
-        # Output with video and audio
-        (
-            ffmpeg
-            .output(
-                video_with_both,
-                audio_stream,
-                str(output_path),
-                **output_args
-            )
-            .overwrite_output()
-            .run(quiet=True)
+    (
+        ffmpeg
+        .output(
+            video_with_both,
+            audio_trimmed,
+            str(output_path),
+            **output_args
         )
-    else:
-        # Output video only (no audio)
-        (
-            ffmpeg
-            .output(
-                video_with_both,
-                str(output_path),
-                **output_args
-            )
-            .overwrite_output()
-            .run(quiet=True)
-        )
+        .overwrite_output()
+        .run(quiet=True)
+    )
     
-    logger.info(f"Applied dual subtitle layers: original (bottom) + expression (top, yellow)")
+    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied dual subtitle layers: original (bottom) + expression (top, yellow)")
     return Path(output_path)
 
 

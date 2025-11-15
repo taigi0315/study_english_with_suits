@@ -10,7 +10,7 @@ app:
   show_name: "Suits"
   
   # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt_v4.txt"
+  template_file: "expression_analysis_prompt_v5.txt"
 
 # ============================================================================
 # Database Configuration
@@ -244,6 +244,10 @@ short_video:
   
   # Allow variance (+/- seconds)
   duration_variance: 10
+  
+  # Maximum duration for short-form video batches (seconds)
+  # Videos exceeding this duration will be dropped from batching
+  max_duration: 180
   
   # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
 

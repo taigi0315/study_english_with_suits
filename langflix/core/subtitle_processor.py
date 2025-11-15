@@ -661,32 +661,33 @@ class SubtitleProcessor:
         expression_end_relative: float
     ) -> str:
         """
-        Generate SRT file with expression text only, positioned at top.
-        
-        TICKET-040: Creates expression-only subtitle for top overlay.
-        
+        Generate SRT file with expression text and translation, positioned at top.
+
+        TICKET-040: Creates expression-only subtitle for top overlay with dual language.
+
         Args:
             expression: ExpressionAnalysis object
             expression_start_relative: Expression start time relative to context (seconds)
             expression_end_relative: Expression end time relative to context (seconds)
-            
+
         Returns:
-            SRT formatted string with expression text
+            SRT formatted string with expression text and translation
         """
         srt_lines = []
-        
+
         # Single subtitle entry for expression
         srt_lines.append("1")
-        
+
         # Format times
         start_time_str = self._seconds_to_srt_time(expression_start_relative)
         end_time_str = self._seconds_to_srt_time(expression_end_relative)
         srt_lines.append(f"{start_time_str} --> {end_time_str}")
-        
-        # Expression text (not dialogue)
+
+        # Expression text (original) + translation (both lines)
         srt_lines.append(expression.expression)
+        srt_lines.append(expression.expression_translation)
         srt_lines.append("")
-        
+
         return "\n".join(srt_lines)
 
 

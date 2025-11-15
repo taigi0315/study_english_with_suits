@@ -59,7 +59,11 @@ class ExpressionAnalysis(BaseModel):
         default=None,
         description="Type of scene: humor, drama, tension, emotional, witty, confrontation, etc."
     )
-    
+    catchy_keywords: Optional[List[str]] = Field(
+        default=None,
+        description="2-3 short, punchy phrases (3-6 words each) that hook viewers"
+    )
+
     # New fields for expression-based learning
     difficulty: Optional[int] = Field(
         default=5,
@@ -165,56 +169,3 @@ class ExpressionAnalysisResponse(BaseModel):
             }
         }
     }
-
-
-class ExpressionGroup(BaseModel):
-    """
-    Groups multiple expressions that share the same context time range.
-    
-    This enables efficient video processing by sharing a single context clip
-    across multiple expressions from the same dialogue segment.
-    """
-    context_start_time: str = Field(
-        description="Shared context start time (all expressions in group share this)",
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
-    )
-    context_end_time: str = Field(
-        description="Shared context end time (all expressions in group share this)",
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
-    )
-    expressions: List[ExpressionAnalysis] = Field(
-        description="List of expressions that share this context time range",
-        min_length=1
-    )
-    
-    @field_validator('expressions')
-    @classmethod
-    def validate_single_context(cls, v: List[ExpressionAnalysis]) -> List[ExpressionAnalysis]:
-        """Validate all expressions in group share same context times"""
-        if not v:
-            return v
-        
-        first_context_start = v[0].context_start_time
-        first_context_end = v[0].context_end_time
-        
-        for expr in v[1:]:
-            if expr.context_start_time != first_context_start or expr.context_end_time != first_context_end:
-                raise ValueError(
-                    f"All expressions in group must share same context times. "
-                    f"Expected {first_context_start}-{first_context_end}, "
-                    f"got {expr.context_start_time}-{expr.context_end_time}"
-                )
-        
-        return v
-    
-    def __len__(self) -> int:
-        """Return number of expressions in group"""
-        return len(self.expressions)
-    
-    def __iter__(self):
-        """Allow iteration over expressions"""
-        return iter(self.expressions)
-    
-    def __getitem__(self, index: int) -> ExpressionAnalysis:
-        """Allow indexing expressions"""
-        return self.expressions[index]

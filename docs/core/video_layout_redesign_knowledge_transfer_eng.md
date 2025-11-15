@@ -2,7 +2,7 @@
 
 **Date**: 2025-01-XX  
 **Branch**: `feature/TICKET-038-039-040-video-layout-redesign`  
-**Status**: In Progress (Subtitle sync issues being resolved)
+**Status**: Completed (See `structured_video_creation_eng.md` for latest architecture)
 
 ---
 
@@ -14,6 +14,14 @@ This document provides comprehensive knowledge transfer for the video layout red
 - **TICKET-040**: Dual subtitle layers (original at bottom + expression at top)
 
 **Current Status**: Core functionality implemented, but subtitle synchronization issues persist and require ongoing attention.
+
+**⚠️ IMPORTANT**: This document describes the OLD architecture. For the NEW structured video creation architecture, see:
+- **`docs/core/structured_video_creation_eng.md`** - Complete documentation of new architecture
+- **Key Changes**: 
+  - No more long-form/short-form distinction
+  - Structured videos created for each expression (1:1 mapping)
+  - Short-form videos created from structured videos
+  - ExpressionGroup removed, individual expression processing
 
 ---
 

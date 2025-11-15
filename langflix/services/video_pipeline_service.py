@@ -43,6 +43,7 @@ class VideoPipelineService:
         language_level: str = "intermediate",
         test_mode: bool = False,
         no_shorts: bool = False,
+        short_form_max_duration: float = 180.0,
         progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> Dict[str, Any]:
         """
@@ -100,7 +101,8 @@ class VideoPipelineService:
                 language_level=language_level,
                 save_llm_output=False,
                 test_mode=test_mode,
-                no_shorts=no_shorts
+                no_shorts=no_shorts,
+                short_form_max_duration=short_form_max_duration
             )
             
             if progress_callback:

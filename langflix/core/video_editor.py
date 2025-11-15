@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
-from .models import ExpressionAnalysis, ExpressionGroup
+from .models import ExpressionAnalysis
 from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
@@ -99,54 +99,70 @@ class VideoEditor:
             logger.warning(f"TTS text too long ({len(combined_text)} chars), will truncate in TTS generation")
         
         return expression
-        
+    
     @handle_error_decorator(
         ErrorContext(
-            operation="create_educational_sequence",
+            operation="create_structured_video",
             component="core.video_editor"
         ),
-        retry=False,  # Video processing shouldn't auto-retry
+        retry=False,
         fallback=False
     )
-    def create_educational_sequence(self, expression: ExpressionAnalysis, 
-                                  context_video_path: str, 
-                                  expression_video_path: str, 
-                                  expression_index: int = 0,
-                                  skip_context: bool = False,
-                                  group_id: Optional[str] = None) -> str:
+    def create_structured_video(
+        self,
+        expression: ExpressionAnalysis,
+        context_video_path: str,
+        expression_video_path: str,
+        expression_index: int = 0
+    ) -> str:
         """
-        Create educational video sequence with long-form sequential layout:
-        - Full-screen video: context video → expression repeat (with subtitles)
-        - Transition: 1-second transition video (if enabled)
-        - Full-screen slide: educational slide (background + text + audio 3x)
-        - Sequential layout: video → transition → slide (TICKET-038)
+        Create structured video with unified layout:
+        - context video → expression repeat (2회) → slide (expression audio 2회)
+        - No transition (direct concatenation)
+        - Maintains original aspect ratio (16:9 or other)
         
         Args:
             expression: ExpressionAnalysis object
             context_video_path: Path to context video (used for extracting expression clip)
             expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
-            skip_context: If True, skip context video and only show expression repeat (for multi-expression groups)
-            group_id: Optional group ID for multi-expression groups (reuses group-specific subtitle file)
             
         Returns:
-            Path to created educational video
+            Path to created structured video
         """
         try:
-            # Create output filename - save to context_slide_combined directory
+            from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"educational_{safe_expression}.mkv"
-            output_path = self.context_slide_combined_dir / output_filename
+            output_filename = f"structured_video_{safe_expression}.mkv"
             
-            logger.info(f"Creating educational sequence for: {expression.expression} (skip_context={skip_context})")
+            # Use structured_videos directory from paths (created by output_manager)
+            # Fallback to creating it if not in paths
+            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find structured_videos directory in parent structure
+                structured_videos_dir = self.output_dir.parent / "structured_videos"
+                if not structured_videos_dir.exists():
+                    # Try alternative: look for language directory structure
+                    lang_dir = self.output_dir.parent
+                    if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                        structured_videos_dir = lang_dir / "structured_videos"
+                    else:
+                        # Create in same directory as output_dir
+                        structured_videos_dir = self.output_dir.parent / "structured_videos"
+                structured_videos_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                # Fallback: create in output_dir parent
+                structured_videos_dir = Path(self.output_dir).parent / "structured_videos"
+                structured_videos_dir.mkdir(parents=True, exist_ok=True)
             
-            # Step 1: Extract expression video clip from context and repeat it
-            # Calculate relative timestamps within context video
+            output_path = structured_videos_dir / output_filename
+            
+            logger.info(f"Creating structured video for: {expression.expression}")
+            
+            # Step 1: Extract expression video clip from context and repeat it (2회)
             context_start_seconds = self._time_to_seconds(expression.context_start_time)
             expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
             expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
             
-            # Ensure expression times are within context range
             if expression_start_seconds < context_start_seconds:
                 logger.warning(f"Expression start time {expression.expression_start_time} is before context start {expression.context_start_time}")
                 expression_start_seconds = context_start_seconds
@@ -155,53 +171,29 @@ class VideoEditor:
             relative_end = expression_end_seconds - context_start_seconds
             expression_duration = relative_end - relative_start
             
-            # Ensure non-negative duration
             if expression_duration <= 0:
                 logger.error(f"Invalid expression duration: {expression_duration:.2f}s")
                 raise ValueError(f"Expression duration must be positive, got {expression_duration:.2f}s")
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Get context video with subtitles (needed for extracting expression clip with subtitles)
-            # For multi-expression groups, use group_id to reuse group-specific subtitle file
+            # Get context video with subtitles
             context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression, group_id=group_id
+                context_video_path, expression, group_id=None
             )
             
-            # Extract expression video clip with audio and subtitles from context
-            # Reset timestamps to start from 0 to prevent delay in repeated clips
-            # Ensure output directory exists
+            # Extract expression video clip with output seeking for accurate subtitle sync
             self.output_dir.mkdir(parents=True, exist_ok=True)
-            expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
+            expression_video_clip_path = self.output_dir / f"temp_expr_clip_structured_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
             
-            # IMPORTANT: Use output seeking for accurate subtitle sync
-            # Input seeking (ss before input) is faster but less accurate
-            # Output seeking (ss after input) is slower but more accurate - required for subtitle sync
-            # See: https://trac.ffmpeg.org/wiki/Seeking
-            # 
-            # CRITICAL: For subtitle sync, we must use output seeking (ss/t in output)
-            # NOT trim filter, because trim filter works on frames and may not align with subtitle timestamps
-            # The expression_slicer.py uses the same approach: -ss and -t in output (after -i)
-            # 
-            # CORRECT ORDER for subtitle sync:
-            # 1. Input the video (no seeking at input level)
-            # 2. Apply output seeking (ss/t in output) for accurate timestamp-based extraction
-            # 3. Reset timestamps using setpts filters (required for repeated clips)
-            # 
-            # Note: setpts must be applied AFTER output seeking, not before
-            # If we apply setpts first, the output seeking won't work correctly
             input_stream = ffmpeg.input(str(context_with_subtitles))
-            
-            # Get video and audio streams (no filtering yet)
             video_stream = input_stream['v']
             audio_stream = input_stream['a']
             
-            # Extract with output seeking (ss/t in output) - this is the key for subtitle sync
-            # Output seeking decodes the entire video and seeks to exact timestamp
-            # This ensures subtitles (which are rendered into the video) are extracted at correct time
             try:
+                # Extract with output seeking
                 (
                     ffmpeg.output(
                         video_stream,
@@ -213,17 +205,15 @@ class VideoEditor:
                         ar=48000,
                         preset='fast',
                         crf=23,
-                        ss=relative_start,  # Output seeking: apply after input for accuracy
-                        t=expression_duration  # Duration limit
+                        ss=relative_start,
+                        t=expression_duration
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Now reset timestamps in the extracted clip
-                # This is required for repeated clips to start at timestamp 0
-                # We need to re-encode to reset timestamps properly
-                temp_clip_path = self.output_dir / f"temp_expr_clip_long_reset_{safe_expression}.mkv"
+                # Reset timestamps
+                temp_clip_path = self.output_dir / f"temp_expr_clip_structured_reset_{safe_expression}.mkv"
                 self._register_temp_file(temp_clip_path)
                 
                 reset_input = ffmpeg.input(str(expression_video_clip_path))
@@ -246,632 +236,450 @@ class VideoEditor:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 
-                # Replace original with timestamp-reset version
                 import shutil
                 shutil.move(str(temp_clip_path), str(expression_video_clip_path))
                 
-                # Verify file was created
                 if not expression_video_clip_path.exists():
                     raise RuntimeError(f"Expression clip file was not created: {expression_video_clip_path}")
                 
                 logger.info(f"✅ Expression clip extracted: {expression_video_clip_path}")
             except ffmpeg.Error as e:
-                # Log detailed FFmpeg error for debugging
                 stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
-                logger.error(
-                    f"❌ FFmpeg failed to extract expression clip:\n"
-                    f"   Input: {context_with_subtitles}\n"
-                    f"   Relative start: {relative_start:.2f}s\n"
-                    f"   Duration: {expression_duration:.2f}s\n"
-                    f"   Expression: {expression.expression}\n"
-                    f"   Output: {expression_video_clip_path}\n"
-                    f"   Error: {stderr}"
-                )
+                logger.error(f"❌ FFmpeg failed to extract expression clip: {stderr}")
                 raise RuntimeError(f"FFmpeg failed to extract expression clip: {stderr}") from e
-            except Exception as e:
-                logger.error(
-                    f"❌ Unexpected error extracting expression clip:\n"
-                    f"   Input: {context_with_subtitles}\n"
-                    f"   Output: {expression_video_clip_path}\n"
-                    f"   Error: {e}"
-                )
-                raise
             
-            # Repeat expression clip
-            from langflix import settings
-            repeat_count = settings.get_expression_repeat_count()
-            # Use shared name for long/short reuse
-            repeated_expression_path = self.output_dir / f"temp_expr_repeated_{safe_expression}.mkv"
+            # Repeat expression clip 2 times
+            repeat_count = 2
+            repeated_expression_path = self.output_dir / f"temp_expr_repeated_structured_{safe_expression}.mkv"
             self._register_temp_file(repeated_expression_path)
             logger.info(f"Repeating expression clip {repeat_count} times")
+            from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 2: Create left side based on skip_context flag
-            if skip_context:
-                # Multi-expression group: Only expression repeat (no context)
-                logger.info("Skipping context video - using expression repeat only (multi-expression group)")
-                left_side_path = repeated_expression_path
-                left_duration = get_duration_seconds(str(left_side_path))
-                logger.info(f"Left side duration (expression repeat only): {left_duration:.2f}s")
-            else:
-                # Single-expression group: Context + expression repeat
-                logger.info("Including context video before expression repeat (single-expression group)")
-                left_side_path = self.output_dir / f"temp_left_side_long_{safe_expression}.mkv"
-                self._register_temp_file(left_side_path)
-                
-                # Check if transition is enabled
-                from langflix import settings
-                transition_config = settings.get_transitions_config()
-                context_to_expr_transition = transition_config.get('context_to_expression_transition', {})
-                
-                if context_to_expr_transition.get('enabled', False):
-                    # Create transition video between context and expression
-                    transition_image_path = context_to_expr_transition.get('image_path_16_9', 'assets/transition_16_9.png')
-                    sound_effect_path = context_to_expr_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
-                    transition_duration = context_to_expr_transition.get('duration', 1.0)
-                    sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
-                    
-                    # Find asset files using multiple possible paths (similar to _get_background_config)
-                    import os
-                    transition_image_full = None
-                    sound_effect_full = None
-                    
-                    # Try multiple possible paths for transition image
-                    image_paths = [
-                        Path(transition_image_path),
-                        Path(".").absolute() / transition_image_path,
-                        Path(os.getcwd()) / transition_image_path,
-                        Path(__file__).parent.parent.parent / transition_image_path,
-                        self.output_dir.parent.parent.parent.parent / transition_image_path,
-                    ]
-                    for path in image_paths:
-                        if path.exists():
-                            transition_image_full = path.absolute()
-                            logger.info(f"Found transition image: {transition_image_full}")
-                            break
-                    
-                    # Try multiple possible paths for sound effect
-                    sound_paths = [
-                        Path(sound_effect_path),
-                        Path(".").absolute() / sound_effect_path,
-                        Path(os.getcwd()) / sound_effect_path,
-                        Path(__file__).parent.parent.parent / sound_effect_path,
-                        self.output_dir.parent.parent.parent.parent / sound_effect_path,
-                    ]
-                    for path in sound_paths:
-                        if path.exists():
-                            sound_effect_full = path.absolute()
-                            logger.info(f"Found sound effect: {sound_effect_full}")
-                            break
-                    
-                    if not transition_image_full or not sound_effect_full:
-                        logger.warning(
-                            f"Transition assets missing (image: {transition_image_full is not None}, "
-                            f"sound: {sound_effect_full is not None}), skipping transition"
-                        )
-                        # Fall back to direct concatenation
-                        concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
-                    else:
-                        # Create transition video
-                        transition_video_path = self.output_dir / f"temp_transition_long_{safe_expression}.mkv"
-                        transition_video = self._create_transition_video(
-                            duration=transition_duration,
-                            image_path=str(transition_image_full),
-                            sound_effect_path=str(sound_effect_full),
-                            output_path=transition_video_path,
-                            source_video_path=str(context_with_subtitles),
-                            fps=25,
-                            sound_effect_volume=sound_volume
-                        )
-                        
-                        # Concatenate: context → transition → expression_repeat
-                        # First: context + transition
-                        temp_context_transition = self.output_dir / f"temp_context_transition_long_{safe_expression}.mkv"
-                        self._register_temp_file(temp_context_transition)
-                        concat_filter_with_explicit_map(
-                            str(context_with_subtitles),
-                            str(transition_video),
-                            str(temp_context_transition)
-                        )
-                        
-                        # Then: (context + transition) + expression_repeat
-                        concat_filter_with_explicit_map(
-                            str(temp_context_transition),
-                            str(repeated_expression_path),
-                            str(left_side_path)
-                        )
-                else:
-                    # Original flow without transition
-                    concat_filter_with_explicit_map(str(context_with_subtitles), str(repeated_expression_path), str(left_side_path))
-                
-                # Get total left side duration for matching
-                left_duration = get_duration_seconds(str(left_side_path))
-                logger.info(f"Left side duration (context + transition + expression repeat): {left_duration:.2f}s")
-            
-            # Step 3: Create educational slide with expression audio (not TTS)
-            # IMPORTANT: Extract audio from original expression_video_path, not from context-extracted clip
-            # The expression_video_path contains the original expression audio that matches the expression
-            # Pass left_duration so slide can be extended to match
-            # Pass expression_video_path to extract original expression audio
-            educational_slide = self._create_educational_slide(
-                expression_video_path, expression, expression_index, target_duration=left_duration,
-                use_expression_audio=True, expression_video_clip_path=str(expression_video_path)
+            # Step 2: Concatenate context + expression repeat (no transition)
+            context_expr_path = self.output_dir / f"temp_context_expr_structured_{safe_expression}.mkv"
+            self._register_temp_file(context_expr_path)
+            logger.info("Concatenating context + expression repeat (no transition)")
+            from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+            concat_filter_with_explicit_map(
+                str(context_with_subtitles),
+                str(repeated_expression_path),
+                str(context_expr_path)
             )
             
-            # Step 4: Create sequential layout (long-form): video → transition → slide
-            # TICKET-038: Changed from side-by-side (hstack) to sequential full-screen layout
-            logger.info("Creating long-form sequential layout (video → transition → slide)")
+            # Get duration for slide matching
+            from langflix.media.ffmpeg_utils import get_duration_seconds
+            context_expr_duration = get_duration_seconds(str(context_expr_path))
+            logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
             
-            # Get transition configuration
-            from langflix import settings
-            transition_config = settings.get_transitions_config()
-            context_to_slide_transition = transition_config.get('context_to_slide_transition', {})
+            # Step 3: Create educational slide with expression audio (2회 반복)
+            # Extract expression audio and repeat it 2 times
+            educational_slide = self._create_educational_slide(
+                expression_video_path,
+                expression,
+                expression_index,
+                target_duration=context_expr_duration,
+                use_expression_audio=True,
+                expression_video_clip_path=str(expression_video_path)
+            )
             
-            # Default to enabled if not specified
-            transition_enabled = context_to_slide_transition.get('enabled', True)
+            # Step 4: Concatenate context+expression → slide (no transition)
+            logger.info("Concatenating context+expression → slide (direct, no transition)")
+            structured_temp_path = self.output_dir / f"temp_structured_{safe_expression}.mkv"
+            self._register_temp_file(structured_temp_path)
+
+            # Direct concatenation without transitions (as per new architecture)
+            concat_filter_with_explicit_map(
+                str(context_expr_path),
+                str(educational_slide),
+                str(structured_temp_path)
+            )
             
-            if transition_enabled:
-                # Create transition video between video segment and slide
-                transition_image_path = context_to_slide_transition.get('image_path_16_9', 'assets/transition_16_9.png')
-                sound_effect_path = context_to_slide_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
-                transition_duration = context_to_slide_transition.get('duration', 1.0)
-                sound_volume = context_to_slide_transition.get('sound_effect_volume', 0.5)
-                
-                # Find transition assets using multiple possible paths
-                import os
-                transition_image_full = None
-                sound_effect_full = None
-                
-                # Try multiple possible paths for transition image
-                image_paths = [
-                    Path(transition_image_path),
-                    Path(".").absolute() / transition_image_path,
-                    Path(os.getcwd()) / transition_image_path,
-                    Path(__file__).parent.parent.parent / transition_image_path,
-                    self.output_dir.parent.parent.parent.parent / transition_image_path,
-                ]
-                for path in image_paths:
-                    if path.exists():
-                        transition_image_full = path.absolute()
-                        logger.info(f"Found transition image: {transition_image_full}")
-                        break
-                
-                # Try multiple possible paths for sound effect
-                sound_paths = [
-                    Path(sound_effect_path),
-                    Path(".").absolute() / sound_effect_path,
-                    Path(os.getcwd()) / sound_effect_path,
-                    Path(__file__).parent.parent.parent / sound_effect_path,
-                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
-                ]
-                for path in sound_paths:
-                    if path.exists():
-                        sound_effect_full = path.absolute()
-                        logger.info(f"Found sound effect: {sound_effect_full}")
-                        break
-                
-                if transition_image_full and sound_effect_full:
-                    # Create transition video matching left_side_path resolution
-                    transition_video_path = self.output_dir / f"temp_transition_video_slide_{safe_expression}.mkv"
-                    self._register_temp_file(transition_video_path)
-                    transition_video = self._create_transition_video(
-                        duration=transition_duration,
-                        image_path=str(transition_image_full),
-                        sound_effect_path=str(sound_effect_full),
-                        output_path=transition_video_path,
-                        source_video_path=str(left_side_path),  # Match video segment resolution
-                        fps=25,
-                        sound_effect_volume=sound_volume
-                    )
-                    
-                    # Concatenate sequentially: left_side_path → transition → educational_slide
-                    # First: video + transition
-                    temp_video_transition = self.output_dir / f"temp_video_transition_{safe_expression}.mkv"
-                    self._register_temp_file(temp_video_transition)
-                    concat_filter_with_explicit_map(
-                        str(left_side_path),
-                        str(transition_video),
-                        str(temp_video_transition)
-                    )
-                    
-                    # Then: (video + transition) + slide
-                    sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
-                    self._register_temp_file(sequential_temp_path)
-                    concat_filter_with_explicit_map(
-                        str(temp_video_transition),
-                        str(educational_slide),
-                        str(sequential_temp_path)
-                    )
-                    
-                    temp_output_path = sequential_temp_path
-                else:
-                    logger.warning(
-                        f"Transition assets missing (image: {transition_image_full is not None}, "
-                        f"sound: {sound_effect_full is not None}), using direct concatenation"
-                    )
-                    # Fall back to direct concatenation without transition
-                    sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
-                    self._register_temp_file(sequential_temp_path)
-                    concat_filter_with_explicit_map(
-                        str(left_side_path),
-                        str(educational_slide),
-                        str(sequential_temp_path)
-                    )
-                    temp_output_path = sequential_temp_path
-            else:
-                # Transition disabled: direct concatenation
-                logger.info("Transition disabled, using direct concatenation")
-                sequential_temp_path = self.output_dir / f"temp_sequential_long_{safe_expression}.mkv"
-                self._register_temp_file(sequential_temp_path)
-                concat_filter_with_explicit_map(
-                    str(left_side_path),
-                    str(educational_slide),
-                    str(sequential_temp_path)
-                )
-                temp_output_path = sequential_temp_path
+            # Step 5: Apply final audio gain
+            logger.info("Applying final audio gain to structured video")
+            from langflix.media.ffmpeg_utils import apply_final_audio_gain
+            apply_final_audio_gain(str(structured_temp_path), str(output_path), gain_factor=1.69)
             
-            # Step 5: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
-            logger.info("Applying final audio gain (+69%) to long-form output")
-            apply_final_audio_gain(str(temp_output_path), str(output_path), gain_factor=1.69)
-            
-            logger.info(f"Educational sequence created: {output_path}")
+            logger.info(f"✅ Structured video created: {output_path}")
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating educational sequence: {e}")
+            logger.error(f"Error creating structured video: {e}")
             raise
-    
-    def create_multi_expression_sequence(
+
+    @handle_error_decorator(
+        ErrorContext(
+            operation="create_short_form_from_structured",
+            component="core.video_editor"
+        ),
+        retry=False,
+        fallback=False
+    )
+    def create_short_form_from_structured(
         self,
-        expressions: List[ExpressionAnalysis],
-        context_video_path: str,
-        expression_source_videos: List[str],
-        expression_indices: List[int],
-        group_id: str,
-        output_filename: Optional[str] = None
+        structured_video_path: str,
+        expression: ExpressionAnalysis,
+        expression_index: int = 0
     ) -> str:
         """
-        Create multi-expression video sequence with structure:
-        context (with subtitles) → transition → expr1 (repeat) → transition → expr2 (repeat) → ...
-        
-        Each expression is sliced from the same context_with_subtitles to ensure subtitle sync.
+        Create short-form video (9:16) from structured video with special layout:
+        - Structured video: centered, height 960px, left/right cropped (no stretch)
+        - Expression text: displayed at top (outside structured video, black screen)
+        - Subtitles: displayed at bottom (outside structured video, black screen)
         
         Args:
-            expressions: List of ExpressionAnalysis objects for the group
-            context_video_path: Path to context video (will add subtitles)
-            expression_source_videos: List of expression source video paths (for audio extraction)
-            expression_indices: List of expression indices (for voice alternation)
-            group_id: Group ID for unique filename and subtitle file reuse
-            output_filename: Optional custom output filename (default: educational_group_{group_id}.mkv)
+            structured_video_path: Path to structured video (16:9 or original ratio)
+            expression: ExpressionAnalysis object
+            expression_index: Index of expression (for voice alternation)
             
         Returns:
-            Path to created multi-expression video
+            Path to created short-form video
         """
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
-            safe_group_id = sanitize_for_expression_filename(group_id)
-            if output_filename is None:
-                output_filename = f"educational_group_{safe_group_id}.mkv"
-            output_path = self.context_slide_combined_dir / output_filename
+            safe_expression = sanitize_for_expression_filename(expression.expression)
+            output_filename = f"short_form_{safe_expression}.mkv"
             
-            logger.info(f"Creating multi-expression sequence for group {group_id} ({len(expressions)} expressions)")
+            # Use short_videos directory
+            short_videos_dir = self.short_videos_dir
+            short_videos_dir.mkdir(parents=True, exist_ok=True)
+            output_path = short_videos_dir / output_filename
             
-            # Step 1: Prepare context video WITHOUT subtitles first
-            # Subtitles will be applied to the final concatenated video to ensure they appear throughout
-            # Using context video directly (subtitles applied later after concatenation)
-            context_without_subtitles = Path(context_video_path)
-            logger.info(f"Using context video (subtitles will be applied later): {context_without_subtitles}")
-
-            from langflix.core.models import ExpressionGroup
-            expression_group = ExpressionGroup(
-                context_start_time=expressions[0].context_start_time,
-                context_end_time=expressions[0].context_end_time,
-                expressions=expressions
+            logger.info(f"Creating short-form video from structured video: {expression.expression}")
+            
+            # Target resolution: 1080x1920 (9:16)
+            target_width = 1080
+            target_height = 1920
+            structured_video_height = 960  # Half of target height
+            
+            # Step 1: Scale structured video to height 960px, maintain aspect ratio, crop left/right
+            # This ensures no stretching - video is cropped if needed
+            from langflix.media.ffmpeg_utils import get_video_params
+            structured_vp = get_video_params(structured_video_path)
+            structured_width = structured_vp.width or target_width
+            structured_height = structured_vp.height or target_height
+            
+            # Calculate scale to fit height 960px
+            scale_factor = structured_video_height / structured_height
+            scaled_width = int(structured_width * scale_factor)
+            scaled_height = structured_video_height
+            
+            # If scaled width exceeds target width, crop from center
+            crop_x = 0
+            if scaled_width > target_width:
+                crop_x = (scaled_width - target_width) // 2
+                scaled_width = target_width
+            
+            logger.info(
+                f"Scaling structured video: {structured_width}x{structured_height} -> "
+                f"{scaled_width}x{scaled_height} (crop_x={crop_x})"
             )
-
-            # Store subtitle info for later application
-            subtitle_expression = expressions[0]  # Use first expression for subtitle context
-
-            # Step 2: Build sequence segments
-            # Structure: context → transition → expr1 repeat → transition → expr2 repeat → ...
-            segments = [str(context_without_subtitles)]  # Start with context video (subtitles applied later)
-
-            # Get transition configuration
-            from langflix import settings
-            transition_config = settings.get_transitions_config()
-            context_to_expr_transition = transition_config.get('context_to_expression_transition', {})
-            transition_enabled = context_to_expr_transition.get('enabled', False)
             
-            # Find transition assets if enabled
-            transition_image_full = None
-            sound_effect_full = None
-            transition_duration = 1.0
-            sound_volume = 0.5
+            # Step 2: Create scaled and cropped structured video
+            structured_scaled_path = self.output_dir / f"temp_structured_scaled_{safe_expression}.mkv"
+            self._register_temp_file(structured_scaled_path)
             
-            if transition_enabled:
-                transition_image_path = context_to_expr_transition.get('image_path_16_9', 'assets/transition_16_9.png')
-                sound_effect_path = context_to_expr_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
-                transition_duration = context_to_expr_transition.get('duration', 1.0)
-                sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
-                
-                import os
-                # Try multiple possible paths for transition image
-                image_paths = [
-                    Path(transition_image_path),
-                    Path(".").absolute() / transition_image_path,
-                    Path(os.getcwd()) / transition_image_path,
-                    Path(__file__).parent.parent.parent / transition_image_path,
-                    self.output_dir.parent.parent.parent.parent / transition_image_path,
-                ]
-                for path in image_paths:
-                    if path.exists():
-                        transition_image_full = path.absolute()
-                        logger.info(f"Found transition image: {transition_image_full}")
-                        break
-                
-                # Try multiple possible paths for sound effect
-                sound_paths = [
-                    Path(sound_effect_path),
-                    Path(".").absolute() / sound_effect_path,
-                    Path(os.getcwd()) / sound_effect_path,
-                    Path(__file__).parent.parent.parent / sound_effect_path,
-                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
-                ]
-                for path in sound_paths:
-                    if path.exists():
-                        sound_effect_full = path.absolute()
-                        logger.info(f"Found sound effect: {sound_effect_full}")
-                        break
-                
-                if not transition_image_full or not sound_effect_full:
-                    logger.warning(
-                        f"Transition assets missing (image: {transition_image_full is not None}, "
-                        f"sound: {sound_effect_full is not None}), skipping transitions"
-                    )
-                    transition_enabled = False
+            structured_input = ffmpeg.input(str(structured_video_path))
+            video_stream = structured_input['v']
             
-            # Process each expression
-            for expr_idx, (expression, expr_source_video, expr_index) in enumerate(
-                zip(expressions, expression_source_videos, expression_indices)
-            ):
-                safe_expression = sanitize_for_expression_filename(expression.expression)
-                
-                # Step 2a: Extract expression clip from context_with_subtitles
-                context_start_seconds = self._time_to_seconds(expression.context_start_time)
-                expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
-                expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
-                
-                # Ensure expression times are within context range
-                if expression_start_seconds < context_start_seconds:
-                    logger.warning(
-                        f"Expression start time {expression.expression_start_time} is before context start {expression.context_start_time}"
-                    )
-                    expression_start_seconds = context_start_seconds
-                
-                relative_start = expression_start_seconds - context_start_seconds
-                relative_end = expression_end_seconds - context_start_seconds
-                expression_duration = relative_end - relative_start
-                
-                if expression_duration <= 0:
-                    logger.error(f"Invalid expression duration for {expression.expression}: {expression_duration:.2f}s")
-                    continue  # Skip this expression
-                
-                logger.info(
-                    f"Processing expression {expr_idx+1}/{len(expressions)}: {expression.expression} "
-                    f"({relative_start:.2f}s - {relative_end:.2f}s, duration: {expression_duration:.2f}s)"
+            # Scale to height 960px
+            video_stream = ffmpeg.filter(video_stream, 'scale', -1, scaled_height)
+            
+            # Crop from center if width exceeds target
+            if crop_x > 0:
+                video_stream = ffmpeg.filter(
+                    video_stream,
+                    'crop',
+                    target_width,
+                    scaled_height,
+                    crop_x,
+                    0
                 )
-                
-                # Extract expression clip from context video (WITHOUT subtitles)
-                # Subtitles will be applied to the final concatenated video
-                expression_video_clip_path = self.output_dir / f"temp_expr_clip_multi_{safe_group_id}_{expr_idx}.mkv"
-                self._register_temp_file(expression_video_clip_path)
-                
-                input_stream = ffmpeg.input(str(context_without_subtitles), ss=relative_start, t=expression_duration)
-                video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
-                # DO NOT pad here - padding was causing resolution mismatch (2560x720 instead of 1280x720)
-                # The expression clip should maintain original resolution (1280x720)
-                # Final layout is created by hstack_keep_height() which handles side-by-side automatically
-                audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
-                
-                try:
-                    # Get encoding settings from config (optimized for speed)
-                    video_args = self._get_video_output_args()
-                    (
-                        ffmpeg.output(
-                            video_stream,
-                            audio_stream,
-                            str(expression_video_clip_path),
-                            vcodec=video_args.get('vcodec', 'libx264'),
-                            acodec=video_args.get('acodec', 'aac'),
-                            ac=2,
-                            ar=48000,
-                            preset=video_args.get('preset', 'veryfast'),
-                            crf=video_args.get('crf', 25)
-                        )
-                        .overwrite_output()
-                        .run(capture_stdout=True, capture_stderr=True)
-                    )
-                    
-                    # Verify file was created successfully
-                    if not expression_video_clip_path.exists():
-                        logger.error(f"❌ Expression clip file not created: {expression_video_clip_path}")
-                        continue  # Skip this expression
-                    
-                    # Verify file is not empty and is valid
-                    file_size = expression_video_clip_path.stat().st_size
-                    if file_size == 0:
-                        logger.error(f"❌ Expression clip file is empty: {expression_video_clip_path}")
-                        expression_video_clip_path.unlink()  # Clean up empty file
-                        continue  # Skip this expression
-                    
-                    # Verify file is readable by ffprobe (quick validation)
-                    try:
-                        from langflix.media.ffmpeg_utils import run_ffprobe
-                        run_ffprobe(str(expression_video_clip_path), use_cache=False)
-                        logger.debug(f"✅ Expression clip validated: {expression_video_clip_path.name} ({file_size} bytes)")
-                    except Exception as probe_error:
-                        logger.error(f"❌ Expression clip file is corrupted: {expression_video_clip_path}, error: {probe_error}")
-                        expression_video_clip_path.unlink()  # Clean up corrupted file
-                        continue  # Skip this expression
-                        
-                except ffmpeg.Error as e:
-                    stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
-                    logger.error(f"❌ FFmpeg failed to extract expression clip for {expression.expression}: {stderr}")
-                    # Clean up partial file if it exists
-                    if expression_video_clip_path.exists():
-                        expression_video_clip_path.unlink()
-                    continue  # Skip this expression
-                
-                # Step 2b: Repeat expression clip
-                from langflix import settings
-                repeat_count = settings.get_expression_repeat_count()
-                repeated_expression_path = self.output_dir / f"temp_expr_repeated_multi_{safe_group_id}_{expr_idx}.mkv"
-                self._register_temp_file(repeated_expression_path)
-                logger.info(f"Repeating expression clip {repeat_count} times")
-                
-                try:
-                    repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
-                except Exception as repeat_error:
-                    logger.error(f"❌ Failed to repeat expression clip for {expression.expression}: {repeat_error}")
-                    # Clean up failed files
-                    if repeated_expression_path.exists():
-                        repeated_expression_path.unlink()
-                    continue  # Skip this expression
-                
-                # Step 2c: Add transition before expression (after context for first expression)
-                if transition_enabled:
-                    # Add transition before each expression (after context for first, between expressions for others)
-                    # Use context video (without subtitles) as source to match 1280x720 resolution
-                    transition_video_path = self.output_dir / f"temp_transition_multi_{safe_group_id}_{expr_idx}.mkv"
-                    transition_video = self._create_transition_video(
-                        duration=transition_duration,
-                        image_path=str(transition_image_full),
-                        sound_effect_path=str(sound_effect_full),
-                        output_path=transition_video_path,
-                        source_video_path=str(context_without_subtitles),  # Use context video to match 1280x720 resolution
-                        fps=25,
-                        sound_effect_volume=sound_volume
-                    )
-                    segments.append(transition_video)
-                    logger.info(f"Added transition before expression {expr_idx+1}")
-                
-                # Add expression repeat
-                segments.append(str(repeated_expression_path))
             
-            # Step 3: Concatenate all segments efficiently
-            # Instead of concatenating one-by-one (which re-encodes everything each time),
-            # create a concat list file and use demuxer concat (much faster)
-            logger.info(f"Concatenating {len(segments)} segments into multi-expression sequence")
-            
-            # Create concat list file for demuxer concat (faster than sequential filter concat)
-            concat_list_path = self.output_dir / f"temp_concat_list_multi_{safe_group_id}.txt"
-            self._register_temp_file(concat_list_path)
-            
-            with open(concat_list_path, 'w') as f:
-                for segment in segments:
-                    # Escape single quotes in path for concat demuxer
-                    escaped_path = str(segment).replace("'", "'\\''")
-                    f.write(f"file '{escaped_path}'\n")
-            
-            # Use demuxer concat if all segments have uniform parameters (much faster)
-            # Otherwise fall back to filter concat
-            temp_concat_path = self.output_dir / f"temp_concat_multi_{safe_group_id}_all.mkv"
-            self._register_temp_file(temp_concat_path)
-            
+            # Get audio stream
+            audio_stream = None
             try:
-                from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
-                logger.info("Using demuxer concat for faster concatenation (all segments uniform)")
-                concat_demuxer_if_uniform(str(concat_list_path), str(temp_concat_path))
-                current_path = temp_concat_path
-            except Exception as e:
-                logger.warning(f"Demuxer concat failed, falling back to filter concat: {e}")
-                # Fallback: concatenate all segments at once (much faster than sequential)
-                from langflix.media.ffmpeg_utils import concat_filter_multiple
-                logger.info(f"Using filter concat to concatenate {len(segments)} segments in single pass")
-                try:
-                    concat_filter_multiple([str(s) for s in segments], str(temp_concat_path))
-                    current_path = temp_concat_path
-                except Exception as filter_error:
-                    logger.warning(f"Single-pass filter concat failed, falling back to sequential: {filter_error}")
-                    # Last resort: concatenate sequentially (slowest but most compatible)
-                    # This is the original working method
-                    current_path = segments[0]
-                    for i in range(1, len(segments)):
-                        logger.info(f"Concatenating segment {i+1}/{len(segments)}...")
-                        next_segment = segments[i]
-                        temp_concat_path_fallback = self.output_dir / f"temp_concat_multi_{safe_group_id}_{i}.mkv"
-                        self._register_temp_file(temp_concat_path_fallback)
-                        from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
-                        concat_filter_with_explicit_map(current_path, next_segment, temp_concat_path_fallback)
-                        current_path = temp_concat_path_fallback
+                audio_stream = structured_input['a']
+            except (KeyError, AttributeError):
+                logger.debug("No audio stream in structured video")
             
-            # Step 4: Create multi-expression slide (not individual educational slide)
-            # For multi-expression groups, use the multi-expression slide showing all expressions
-            left_duration = get_duration_seconds(str(current_path))
-            logger.info(f"Creating multi-expression slide for {len(expressions)} expressions (duration: {left_duration:.2f}s)")
-            multi_expression_slide = self._create_multi_expression_slide(
-                expression_group, duration=left_duration
+            # Output scaled structured video
+            if audio_stream:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        audio_stream,
+                        str(structured_scaled_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            else:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        str(structured_scaled_path),
+                        vcodec='libx264',
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            
+            # Step 3: Create 1080x1920 black background
+            # Calculate y_offset to center structured video vertically
+            y_offset = (target_height - scaled_height) // 2  # Center vertically
+            
+            logger.info(f"Centering structured video at y_offset={y_offset}")
+            
+            # Step 4: Create final layout with expression text at top and subtitles at bottom
+            # Use pad filter to create black background and place structured video in center
+            final_input = ffmpeg.input(str(structured_scaled_path))
+            final_video = final_input['v']
+            
+            # Pad to create black background with structured video centered
+            final_video = ffmpeg.filter(
+                final_video,
+                'pad',
+                target_width,
+                target_height,
+                0,  # x offset (centered horizontally)
+                y_offset,  # y offset (centered vertically)
+                color='black'
             )
+
+            # Escape text for drawtext (helper function used for all text)
+            def escape_drawtext_string(text):
+                escaped = text.replace("\\", "\\\\")
+                escaped = escaped.replace(":", "\\:")
+                escaped = escaped.replace("'", "\\'")
+                escaped = escaped.replace("[", "\\[")
+                escaped = escaped.replace("]", "\\]")
+                return escaped
+
+            font_file = self._get_font_option()
+
+            # Add catchy keywords at top (outside structured video area, in top black padding)
+            # Top black padding: 0-480px (y_offset=480)
+            # Display catchy keywords if available
+            if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
+                # Display up to 3 keywords in top padding
+                keywords = expression.catchy_keywords[:3]  # Max 3 keywords
+                y_positions = [100, 200, 300]  # Y positions for each keyword
+
+                for idx, keyword in enumerate(keywords):
+                    if idx >= 3:  # Safety check
+                        break
+
+                    escaped_keyword = escape_drawtext_string(keyword)
+
+                    # Add keyword text (white, bold, centered)
+                    keyword_args = {
+                        'text': escaped_keyword,
+                        'fontsize': 32,
+                        'fontcolor': 'white',
+                        'x': '(w-text_w)/2',  # Center horizontally
+                        'y': y_positions[idx],
+                        'borderw': 2,
+                        'bordercolor': 'black'
+                    }
+
+                    # Add fontfile if available
+                    if font_file:
+                        font_path = font_file.replace('fontfile=', '').replace(':', '')
+                        if font_path:
+                            keyword_args['fontfile'] = font_path
+
+                    final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+
+                logger.info(f"Added {len(keywords)} catchy keywords to top padding")
+
+            # Add expression text at bottom (outside structured video area, throughout entire video)
+            # Bottom black padding: 1440-1920px (480px height)
+            # Expression + translation displayed throughout video duration
+            expression_text = expression.expression
+            expression_translation = expression.expression_translation
+
+            escaped_expression = escape_drawtext_string(expression_text)
+            escaped_translation = escape_drawtext_string(expression_translation)
+
+            # Add expression text (line 1) at bottom padding (yellow, bold, centered)
+            # Position: y=1500 (top area of bottom padding: 1440 + 60)
+            drawtext_args_1 = {
+                'text': escaped_expression,
+                'fontsize': 40,  # Large for main expression
+                'fontcolor': 'yellow',
+                'x': '(w-text_w)/2',  # Center horizontally
+                'y': 1500,  # First line in bottom padding
+                'borderw': 2,
+                'bordercolor': 'black'
+            }
+
+            # Add fontfile if available
+            if font_file:
+                # Extract font path from "fontfile=path:" format
+                font_path = font_file.replace('fontfile=', '').replace(':', '')
+                if font_path:
+                    drawtext_args_1['fontfile'] = font_path
+
+            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_1)
+
+            # Add expression translation (line 2) below expression text
+            drawtext_args_2 = {
+                'text': escaped_translation,
+                'fontsize': 36,  # Slightly smaller for translation
+                'fontcolor': 'yellow',
+                'x': '(w-text_w)/2',  # Center horizontally
+                'y': 1560,  # Second line below expression (60px gap)
+                'borderw': 2,
+                'bordercolor': 'black'
+            }
+
+            if font_file:
+                font_path = font_file.replace('fontfile=', '').replace(':', '')
+                if font_path:
+                    drawtext_args_2['fontfile'] = font_path
+
+            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
             
-            # Step 5: Use hstack to create side-by-side layout (long-form)
-            # Left: context → transition → expr1 repeat → transition → expr2 repeat → ...
-            # Right: multi-expression slide (showing all expressions in the group)
-            logger.info("Creating long-form side-by-side layout with hstack")
-            hstack_temp_path = self.output_dir / f"temp_hstack_multi_{safe_group_id}.mkv"
-            self._register_temp_file(hstack_temp_path)
-            hstack_keep_height(str(current_path), str(multi_expression_slide), str(hstack_temp_path))
+            # Get audio stream
+            final_audio = None
+            try:
+                final_audio = final_input['a']
+            except (KeyError, AttributeError):
+                logger.debug("No audio stream in scaled structured video")
             
-            # Step 5.5: Apply subtitles to the final hstacked video
-            # This ensures subtitles appear throughout the entire video, not just the context portion
-            logger.info("Applying subtitles to multi-expression sequence")
-            hstack_with_subs_path = self.output_dir / f"temp_hstack_subs_multi_{safe_group_id}.mkv"
-            self._register_temp_file(hstack_with_subs_path)
+            # Step 5: Apply subtitles at bottom (outside structured video area)
+            # Subtitles will be applied using subtitle overlay (ASS format)
+            # For now, output video with expression text, then apply subtitles
+            temp_with_expression_path = self.output_dir / f"temp_short_with_expression_{safe_expression}.mkv"
+            self._register_temp_file(temp_with_expression_path)
             
-            # Find subtitle file for multi-expression group
-            # Subtitle files are named: group_XX_expr_YY_expression_text.srt
-            subtitle_dir = self.output_dir.parent / "subtitles"
+            if final_audio:
+                (
+                    ffmpeg.output(
+                        final_video,
+                        final_audio,
+                        str(temp_with_expression_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            else:
+                (
+                    ffmpeg.output(
+                        final_video,
+                        str(temp_with_expression_path),
+                        vcodec='libx264',
+                        preset='fast',
+                        crf=23
+                    )
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            
+            # Step 6: Apply subtitles at bottom using subtitle overlay
+            # Find subtitle file for this expression
             from langflix.subtitles import overlay as subs_overlay
+            subtitle_dir = self.output_dir.parent / "subtitles"
+            subtitle_file = None
             
-            # For multi-expression groups, subtitle file has group prefix
-            sub_path = None
-            
-            # Try to find subtitle file with group prefix (e.g., group_01_expr_01_...)
             if subtitle_dir.exists():
-                # Pattern: group_XX_expr_01_expression_text.srt (first expression)
-                pattern = f"{group_id}_expr_01_*.srt"
+                # Look for expression subtitle file
+                pattern = f"expression_*_{safe_expression[:30]}*.srt"
                 matches = list(subtitle_dir.glob(pattern))
                 if matches:
-                    sub_path = matches[0]
-                    logger.info(f"Found subtitle file with group prefix: {sub_path.name}")
+                    subtitle_file = matches[0]
+                    logger.info(f"Found subtitle file: {subtitle_file.name}")
+            
+            if subtitle_file and subtitle_file.exists():
+                # Apply dialogue subtitles at bottom of black padding (below expression)
+                # Bottom black padding: 1440-1920px (480px area)
+                # Expression is at y=1500-1620, so dialogue should be below at y=1750
+                # MarginV from bottom: 1920 - 1750 = 170
+                # Alignment=2 = bottom center
+                custom_bottom_style = (
+                    "Alignment=2,"  # Bottom center
+                    "PrimaryColour=&H00FFFFFF,"  # White (BGR format)
+                    "OutlineColour=&H00000000,"  # Black outline
+                    "Outline=2,"
+                    "Bold=0,"
+                    "FontSize=24,"  # Smaller for dialogue subtitle
+                    "BorderStyle=3,"
+                    "MarginV=170"  # 170px from bottom = below expression text
+                )
+                
+                # Apply subtitles with custom bottom positioning
+                video_input = ffmpeg.input(str(temp_with_expression_path))
+                video_with_subs = video_input['v'].filter(
+                    'subtitles',
+                    str(subtitle_file),
+                    force_style=custom_bottom_style
+                )
+                
+                # Get audio stream
+                audio_stream = None
+                try:
+                    audio_stream = video_input['a']
+                except (KeyError, AttributeError):
+                    logger.debug("No audio stream in video with expression")
+                
+                # Output final video with subtitles
+                if audio_stream:
+                    (
+                        ffmpeg.output(
+                            video_with_subs,
+                            audio_stream,
+                            str(output_path),
+                            vcodec='libx264',
+                            acodec='aac',
+                            ac=2,
+                            ar=48000,
+                            preset='fast',
+                            crf=23
+                        )
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
                 else:
-                    # Fallback: try without group prefix
-                    sub_path = subs_overlay.find_subtitle_file(subtitle_dir, subtitle_expression.expression)
-            
-            if sub_path and Path(sub_path).exists():
-                import tempfile
-                temp_dir = Path(tempfile.gettempdir())
-                temp_sub_name = f"temp_dual_lang_multi_{safe_group_id}.srt"
-                temp_sub = temp_dir / temp_sub_name
-                self._register_temp_file(temp_sub)
-                subs_overlay.create_dual_language_copy(Path(sub_path), temp_sub)
-                subs_overlay.apply_subtitles_with_file(Path(hstack_temp_path), temp_sub, hstack_with_subs_path, is_expression=False)
-                logger.info(f"✅ Subtitles applied to multi-expression video from: {sub_path.name}")
+                    (
+                        ffmpeg.output(
+                            video_with_subs,
+                            str(output_path),
+                            vcodec='libx264',
+                            preset='fast',
+                            crf=23
+                        )
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                
+                logger.info(f"✅ Subtitles applied to short-form video at bottom (100px from edge)")
             else:
-                # No subtitle file found, use hstack output as-is
-                logger.warning(f"No subtitle file found for group {group_id}, proceeding without subtitles")
-                hstack_with_subs_path = hstack_temp_path
+                # No subtitle file found, use video with expression text only
+                logger.warning(f"No subtitle file found for expression, using video with expression text only")
+                import shutil
+                shutil.copy(str(temp_with_expression_path), str(output_path))
             
-            # Step 6: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
-            logger.info("Applying final audio gain (+69%) to multi-expression output")
-            apply_final_audio_gain(str(hstack_with_subs_path), str(output_path), gain_factor=1.69)
-            
-            logger.info(f"✅ Multi-expression sequence created: {output_path}")
+            logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating multi-expression sequence: {e}", exc_info=True)
+            logger.error(f"Error creating short-form video from structured video: {e}")
             raise
-    
     
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext"""
@@ -935,103 +743,6 @@ class VideoEditor:
     def _register_temp_file(self, file_path: Path) -> None:
         """Register a temporary file for cleanup later"""
         self.temp_manager.register_file(file_path)
-    
-    def _create_transition_video(
-        self,
-        duration: float,
-        image_path: str,
-        sound_effect_path: str,
-        output_path: Path,
-        source_video_path: str,
-        fps: int = 25,
-        sound_effect_volume: float = 0.5
-    ) -> str:
-        """
-        Create transition video from static image with sound effect.
-        
-        This creates a 1-second transition video that matches the source video's
-        codec, resolution, and frame rate to ensure proper concatenation.
-        
-        Args:
-            duration: Transition duration in seconds (typically 1.0)
-            image_path: Path to transition image (PNG file)
-            sound_effect_path: Path to sound effect MP3 file
-            output_path: Output video path
-            source_video_path: Source video to match codec/resolution/params
-            fps: Output frame rate (default: 25)
-            sound_effect_volume: Volume level for sound effect (0.0-1.0, default: 0.5)
-            
-        Returns:
-            Path to created transition video as string
-        """
-        try:
-            from langflix.media.ffmpeg_utils import get_video_params, get_audio_params, make_video_encode_args_from_source, make_audio_encode_args
-            
-            logger.info(f"Creating transition video: {output_path} (duration: {duration}s)")
-            
-            # Get video params from source to ensure matching
-            source_vp = get_video_params(source_video_path)
-            source_ap = get_audio_params(source_video_path)
-            
-            width = source_vp.width or 1920
-            height = source_vp.height or 1080
-            
-            logger.info(f"Transition video params: {width}x{height}, fps={fps}, codec={source_vp.codec}")
-            
-            # Create video from static image
-            # FFmpeg: -loop 1 loops the input, -framerate sets frame rate, -t sets duration
-            # This creates a video from the static image for the specified duration
-            image_input = ffmpeg.input(str(image_path), loop=1, framerate=fps, t=duration)
-            
-            # Scale image to match source resolution and ensure correct fps
-            video_stream = ffmpeg.filter(image_input['v'], 'scale', width, height)
-            video_stream = ffmpeg.filter(video_stream, 'fps', fps=fps)
-            # Reset timestamps to start from 0 for proper concatenation
-            video_stream = ffmpeg.filter(video_stream, 'setpts', 'PTS-STARTPTS')
-            
-            # Add sound effect, loop if needed to match duration
-            sound_input = ffmpeg.input(str(sound_effect_path), stream_loop=-1)
-            # Trim sound effect to match duration and apply volume (volume filter uses multiplier, not dB)
-            sound_stream = ffmpeg.filter(sound_input['a'], 'atrim', duration=duration)
-            # Volume filter: value is multiplier (0.0 = silence, 1.0 = original, 2.0 = double)
-            sound_stream = ffmpeg.filter(sound_stream, 'volume', volume=sound_effect_volume)
-            
-            # Create silent audio if source has audio, mix sound effect
-            if source_ap.sample_rate:
-                # Generate silent audio to match source audio params
-                silent_audio = ffmpeg.input(
-                    f'anullsrc=r={source_ap.sample_rate}:cl=stereo',
-                    f='lavfi',
-                    t=duration
-                )
-                # Mix sound effect with silent audio
-                audio_stream = ffmpeg.filter([silent_audio['a'], sound_stream], 'amix', inputs=2, duration='first')
-            else:
-                # No audio in source, just use sound effect
-                audio_stream = sound_stream
-            
-            # Output with same codec params as source
-            # CRITICAL: Use same codec/resolution to allow proper concatenation
-            output_args = make_video_encode_args_from_source(source_video_path)
-            output_args.update(make_audio_encode_args(normalize=True))
-            
-            # Register temp file for cleanup
-            self._register_temp_file(output_path)
-            
-            # Create transition video
-            (
-                ffmpeg
-                .output(video_stream, audio_stream, str(output_path), **output_args)
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            
-            logger.info(f"✅ Transition video created: {output_path}")
-            return str(output_path)
-            
-        except Exception as e:
-            logger.error(f"❌ Error creating transition video: {e}", exc_info=True)
-            raise
     
     def _get_subtitle_style_config(self) -> Dict[str, Any]:
         """Get subtitle styling configuration from expression settings"""
@@ -1397,14 +1108,15 @@ class VideoEditor:
                 self._register_temp_file(expression_subtitle_path)
                 
                 # Apply dual subtitle layers (original at bottom + expression at top)
-                # Expression subtitle will show during expression segment in context video
+                # Pass absolute context times (not relative) - the function will extract context segment
+                context_end_seconds = self._time_to_seconds(expression.context_end_time)
                 subs_overlay.apply_dual_subtitle_layers(
                     str(video_path),
                     str(temp_sub),
                     str(expression_subtitle_path),
                     str(output_path),
-                    expression_start_relative,
-                    expression_end_relative
+                    context_start_seconds,  # Absolute start in source video
+                    context_end_seconds     # Absolute end in source video
                 )
             else:
                 # drawtext fallback with translation only
@@ -1704,69 +1416,60 @@ class VideoEditor:
                 expression_audio_duration = get_duration_seconds(str(expression_audio_path))
                 logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s")
                 
-                # Extend audio to target_duration by looping
-                if target_duration and target_duration > expression_audio_duration:
-                    extended_audio_path = self.output_dir / f"temp_expression_audio_extended_{sanitize_for_expression_filename(expression.expression)}.wav"
-                    self._register_temp_file(extended_audio_path)
+                # Loop only 2 times: expression audio plays twice during slide (as designed)
+                # CRITICAL: DO NOT extend to match full target_duration - only 2x repeat
+                final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
+                self._register_temp_file(final_audio_path)
+                
+                loop_count = 2
+                logger.info(f"Looping expression audio {loop_count} times (2x repeat as designed)")
+                
+                # Create concat list for looping
+                import tempfile
+                import os
+                concat_list_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as concat_file:
+                        # Write absolute paths to concat file
+                        abs_audio_path = Path(expression_audio_path).absolute()
+                        for _ in range(loop_count):
+                            concat_file.write(f"file '{abs_audio_path}'\n")
+                        concat_list_path = concat_file.name
                     
-                    # Calculate loop count
-                    loop_count = int(target_duration / expression_audio_duration) + 1
-                    logger.info(f"Looping expression audio {loop_count} times to match target duration {target_duration:.2f}s")
-                    
-                    # Create concat list for looping
-                    import tempfile
-                    import os
-                    concat_list_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as concat_file:
-                            # Write absolute paths to concat file
-                            abs_audio_path = Path(expression_audio_path).absolute()
-                            for _ in range(loop_count):
-                                concat_file.write(f"file '{abs_audio_path}'\n")
-                            concat_list_path = concat_file.name
-                        
-                        # Concatenate audio to loop using concat demuxer
-                        (
-                            ffmpeg
-                            .input(concat_list_path, format='concat', safe=0)
-                            .output(str(extended_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
-                    finally:
-                        # Clean up concat file
-                        if concat_list_path and os.path.exists(concat_list_path):
-                            try:
-                                os.unlink(concat_list_path)
-                            except Exception:
-                                pass
-                    
-                    # Trim to exact target_duration
-                    final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
-                    self._register_temp_file(final_audio_path)
+                    # Concatenate audio to loop using concat demuxer
                     (
                         ffmpeg
-                        .input(str(extended_audio_path), t=target_duration)
+                        .input(concat_list_path, format='concat', safe=0)
                         .output(str(final_audio_path), acodec='pcm_s16le', ar=48000, ac=2)
                         .overwrite_output()
                         .run(quiet=True)
                     )
                     
-                    audio_path = final_audio_path
-                    expression_duration = target_duration
-                else:
-                    audio_path = expression_audio_path
-                    expression_duration = expression_audio_duration
+                    # Get final audio duration (should be ~2x expression audio duration)
+                    final_audio_duration = get_duration_seconds(str(final_audio_path))
+                    logger.info(f"✅ Audio looped 2x: final duration {final_audio_duration:.2f}s")
+                finally:
+                    # Clean up concat file
+                    if concat_list_path and os.path.exists(concat_list_path):
+                        try:
+                            os.unlink(concat_list_path)
+                        except Exception:
+                            pass
                 
-                audio_2x_path = audio_path
-                slide_duration = expression_duration + 0.5
+                audio_2x_path = final_audio_path
+                slide_duration = final_audio_duration + 0.5
                 
                 if target_duration is not None and target_duration > slide_duration:
                     slide_duration = target_duration
                     logger.info(f"Using target duration for slide: {slide_duration:.2f}s")
                 
                 logger.info(f"Using expression audio for slide: {audio_2x_path}")
-                logger.info(f"Expression audio duration: {expression_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")
+                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")
+                
+                # For consistency with other branches, set audio_path and expression_duration
+                audio_path = audio_2x_path
+                expression_duration = slide_duration
+                
             # Check if TTS is enabled and decide on audio workflow
             elif tts_enabled:
                 try:
@@ -1817,8 +1520,9 @@ class VideoEditor:
                     expression, expression_source_video, tts_audio_dir, expression_index, provider_config_for_audio
                 )
             
-            # Use the timeline audio directly (no need for 2x conversion since timeline is already complete)
-            audio_2x_path = audio_path  # The timeline already includes 2 TTS segments with pauses
+            # audio_path and expression_duration are now set by one of the three branches above
+            # Prepare final audio path and slide duration
+            audio_2x_path = audio_path  # Unified variable for slide audio
             slide_duration = expression_duration + 0.5  # Add small padding for slide
             
             # If target_duration is provided, use that instead (for hstack matching)
@@ -2047,15 +1751,20 @@ class VideoEditor:
                 logger.info(f"Creating slide with video duration: {slide_duration}s, audio file: {audio_2x_path} (40% volume boost)")
                 
                 # Create the slide with both video and boosted audio directly
+                # CRITICAL: Trim audio to match slide duration to prevent infinite looping
                 try:
                     video_args = self._get_video_output_args()
+                    
+                    # Trim audio to exact slide_duration to prevent infinite looping
+                    trimmed_audio = audio_input['a'].filter('atrim', duration=slide_duration).filter('asetpts', 'PTS-STARTPTS')
+                    boosted_audio = trimmed_audio.filter('volume', '1.25')
+                    
                     (
                         ffmpeg
                         .output(video_input['v'], boosted_audio, str(output_path),
                                vf=f"scale=1280:720,{video_filter}",
                                vcodec=video_args.get('vcodec', 'libx264'),
                                acodec=video_args.get('acodec', 'aac'),
-                               t=slide_duration,
                                preset=video_args.get('preset', 'veryfast'),
                                crf=video_args.get('crf', 25))
                         .overwrite_output()
@@ -2090,15 +1799,16 @@ class VideoEditor:
                         video_input = ffmpeg.input(background_input, f=input_type, t=slide_duration)
                     
                     audio_input = ffmpeg.input(str(audio_2x_path))
+                    # Trim audio to exact slide_duration to prevent infinite looping
+                    trimmed_audio = audio_input['a'].filter('atrim', duration=slide_duration).filter('asetpts', 'PTS-STARTPTS')
                     
                     video_args = self._get_video_output_args()
                     (
                         ffmpeg
-                        .output(video_input['v'], audio_input['a'], str(output_path),
+                        .output(video_input['v'], trimmed_audio, str(output_path),
                                vf="scale=1280:720",
                                vcodec=video_args.get('vcodec', 'libx264'),
                                acodec=video_args.get('acodec', 'aac'),
-                               t=slide_duration,
                                preset=video_args.get('preset', 'veryfast'),
                                crf=video_args.get('crf', 25))
                         .overwrite_output()
@@ -2435,275 +2145,11 @@ class VideoEditor:
                         raise
             
             return str(output_path)
-            
+
         except Exception as e:
             logger.error(f"Error creating silent educational slide: {e}")
             raise
-    
-    def _create_multi_expression_slide(self, expression_group: ExpressionGroup, duration: float) -> str:
-        """
-        Create educational slide with multiple expressions for context video.
-        
-        This slide displays all expressions from a group that share the same context.
-        It shows each expression with its translation and similar expressions in a
-        compact, organized layout.
-        
-        Args:
-            expression_group: ExpressionGroup containing expressions that share the same context
-            duration: Duration for the slide video
-            
-        Returns:
-            Path to the created slide video file
-        """
-        try:
-            output_path = self.output_dir / f"temp_multi_slide_group_{len(expression_group.expressions)}_exprs.mkv"
-            self._register_temp_file(output_path)
-            
-            # Get background configuration
-            background_input, input_type = self._get_background_config()
-            
-            logger.info(f"Creating multi-expression slide for group with {len(expression_group.expressions)} expressions")
-            logger.info(f"Context: {expression_group.context_start_time} - {expression_group.context_end_time}")
-            
-            # Clean text helper functions (reused from _create_educational_slide)
-            def clean_text_for_slide(text):
-                """Clean text for slide display, removing special characters"""
-                if not isinstance(text, str):
-                    text = str(text)
-                
-                cleaned = text.replace("'", "").replace('"', "").replace(":", "").replace(",", "")
-                cleaned = cleaned.replace("\\", "").replace("[", "").replace("]", "")
-                cleaned = cleaned.replace("{", "").replace("}", "").replace("(", "").replace(")", "")
-                cleaned = cleaned.replace("\n", " ").replace("\t", " ")
-                cleaned = "".join(c for c in cleaned if c.isprintable() and c not in "@#$%^&*+=|<>")
-                cleaned = " ".join(cleaned.split())
-                return cleaned[:80] if cleaned else "Expression"  # Shorter limit for multi-expression layout
-            
-            def escape_drawtext_string(text):
-                """Escape text for FFmpeg drawtext filter"""
-                # FFmpeg drawtext requires escaping of special characters
-                escaped = text.replace("\\", "\\\\")  # Escape backslash first
-                escaped = escaped.replace(":", "\\:")
-                escaped = escaped.replace("'", "\\'")
-                escaped = escaped.replace("[", "\\[")
-                escaped = escaped.replace("]", "\\]")
-                escaped = escaped.replace("=", "\\=")
-                escaped = escaped.replace(",", "\\,")
-                return escaped
-            
-            # Get font sizes
-            try:
-                expr_font_size = settings.get_font_size('expression')
-                if not isinstance(expr_font_size, (int, float)):
-                    expr_font_size = 42  # Smaller for multi-expression layout
-            except:
-                expr_font_size = 42
-                
-            try:
-                trans_font_size = settings.get_font_size('expression_trans')
-                if not isinstance(trans_font_size, (int, float)):
-                    trans_font_size = 36  # Smaller for multi-expression layout
-            except:
-                trans_font_size = 36
-            
-            try:
-                similar_font_size = settings.get_font_size('similar')
-                if not isinstance(similar_font_size, (int, float)):
-                    similar_font_size = 24  # Smaller for multi-expression layout
-            except:
-                similar_font_size = 24
-            
-            # Get font file option
-            font_file_option = ""
-            try:
-                font_file = settings.get_font_file()
-                if font_file and Path(font_file).exists():
-                    font_file_option = f"fontfile={font_file}:"
-            except:
-                pass
-            
-            drawtext_filters = []
-            
-            # Layout: Display expressions vertically, one below another
-            # Each expression gets: Expression (yellow) | Translation (yellow) | Similar expressions (white)
-            base_y = 180  # Start from top
-            expression_spacing = 220  # Space between each expression block
-            
-            for expr_idx, expression in enumerate(expression_group.expressions):
-                # Ensure backward compatibility
-                expression = self._ensure_expression_dialogue(expression)
-                
-                # Clean and escape text
-                expr_text_raw = clean_text_for_slide(expression.expression)
-                trans_text_raw = clean_text_for_slide(expression.expression_translation)
-                
-                expr_text = escape_drawtext_string(expr_text_raw)
-                trans_text = escape_drawtext_string(trans_text_raw)
-                
-                # Calculate Y position for this expression block
-                y_pos_expr = base_y + (expr_idx * expression_spacing)
-                y_pos_trans = y_pos_expr + 50
-                y_pos_similar = y_pos_trans + 40
-                
-                # 1. Expression text (yellow, highlighted)
-                if expr_text:
-                    drawtext_filters.append(
-                        f"drawtext=text='{expr_idx + 1}. {expr_text}':fontsize={expr_font_size}:fontcolor=yellow:"
-                        f"{font_file_option}"
-                        f"x=(w-text_w)/2:y={y_pos_expr}:"
-                        f"borderw=3:bordercolor=black"
-                    )
-                
-                # 2. Translation (yellow, highlighted)
-                if trans_text:
-                    drawtext_filters.append(
-                        f"drawtext=text='{trans_text}':fontsize={trans_font_size}:fontcolor=yellow:"
-                        f"{font_file_option}"
-                        f"x=(w-text_w)/2:y={y_pos_trans}:"
-                        f"borderw=2:bordercolor=black"
-                    )
-                
-                # 3. Similar expressions (white, smaller, bottom of each expression block)
-                if hasattr(expression, 'similar_expressions') and expression.similar_expressions:
-                    safe_similar = []
-                    raw_similar = expression.similar_expressions
-                    if isinstance(raw_similar, list):
-                        for item in raw_similar[:1]:  # Limit to 1 per expression for compact layout
-                            if isinstance(item, str):
-                                safe_similar.append(clean_text_for_slide(item))
-                            elif isinstance(item, dict):
-                                text = item.get('text') or item.get('expression') or item.get('value') or str(item)
-                                if text:
-                                    safe_similar.append(clean_text_for_slide(str(text)))
-                            else:
-                                safe_similar.append(clean_text_for_slide(str(item)))
-                    
-                    if safe_similar:
-                        similar_text_escaped = escape_drawtext_string(f"Similar: {safe_similar[0]}")
-                        drawtext_filters.append(
-                            f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
-                            f"{font_file_option}"
-                            f"x=(w-text_w)/2:y={y_pos_similar}:"
-                            f"borderw=1:bordercolor=black"
-                        )
-            
-            # Combine all text filters
-            video_filter = ",".join(drawtext_filters)
-            
-            # Validate that we have filters
-            if not drawtext_filters:
-                logger.error("No drawtext filters created - cannot create multi-expression slide")
-                raise ValueError("No drawtext filters created - cannot create multi-expression slide")
-            
-            logger.info(f"Creating multi-expression slide with {len(expression_group.expressions)} expressions...")
-            logger.debug(f"Video filter: scale=1280:720,{video_filter[:200]}...")  # Log first 200 chars for debugging
-            
-            # Create video input based on background type
-            if input_type == "image2":
-                video_input = ffmpeg.input(background_input, loop=1, t=duration, f=input_type)
-            else:
-                video_input = ffmpeg.input(background_input, f=input_type, t=duration)
-            
-            # Create silent slide (no audio - context video will have its own audio)
-            try:
-                video_args = self._get_video_output_args()
-                (
-                    ffmpeg
-                    .output(video_input['v'], str(output_path),
-                           vf=f"scale=1280:720,{video_filter}",
-                           vcodec=video_args.get('vcodec', 'libx264'),
-                           preset=video_args.get('preset', 'veryfast'),
-                           crf=video_args.get('crf', 25),
-                           t=duration)
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
-            except ffmpeg.Error as e:
-                # Log FFmpeg error details
-                stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
-                stdout = e.stdout.decode('utf-8') if e.stdout else ""
-                logger.error(f"FFmpeg error creating multi-expression slide:")
-                logger.error(f"STDERR: {stderr}")
-                if stdout:
-                    logger.error(f"STDOUT: {stdout}")
-                logger.error(f"Video filter used: scale=1280:720,{video_filter[:500]}")  # Log first 500 chars
-                raise
-            
-            logger.info(f"Successfully created multi-expression slide: {output_path}")
-            
-            # Move to slides directory
-            slides_dir = self.output_dir.parent / "slides"
-            slides_dir.mkdir(exist_ok=True)
-            final_slide_path = slides_dir / f"multi_slide_group_{len(expression_group.expressions)}_exprs.mkv"
-            
-            try:
-                import shutil
-                shutil.copy2(str(output_path), str(final_slide_path))
-                logger.info(f"Successfully copied multi-expression slide to: {final_slide_path}")
-            except Exception as copy_error:
-                logger.error(f"Error copying multi-expression slide: {copy_error}")
-                final_slide_path = output_path
-            
-            return str(final_slide_path)
-            
-        except Exception as e:
-            logger.error(f"Error creating multi-expression slide: {e}")
-            raise
-    
-    def create_context_video_with_multi_slide(self, 
-                                             context_video_path: str,
-                                             expression_group: ExpressionGroup) -> str:
-        """
-        Create context video with multi-expression slide (left: context video, right: multi-expression slide).
-        
-        This is used for multi-expression groups where multiple expressions share the same context.
-        The context video is displayed on the left, and a slide showing all expressions
-        in the group is displayed on the right.
-        
-        Args:
-            context_video_path: Path to the context video clip
-            expression_group: ExpressionGroup containing expressions that share this context
-            
-        Returns:
-            Path to the created context video with multi-expression slide
-        """
-        try:
-            from langflix.media.ffmpeg_utils import get_duration_seconds, hstack_keep_height, apply_final_audio_gain
-            
-            # Create output filename
-            safe_name = f"group_{len(expression_group.expressions)}_exprs"
-            output_filename = f"context_multi_slide_{safe_name}.mkv"
-            output_path = self.context_slide_combined_dir / output_filename
-            
-            logger.info(f"Creating context video with multi-expression slide for {len(expression_group.expressions)} expressions")
-            logger.info(f"Context: {expression_group.context_start_time} - {expression_group.context_end_time}")
-            
-            # Get context video duration
-            context_duration = get_duration_seconds(context_video_path)
-            logger.info(f"Context video duration: {context_duration:.2f}s")
-            
-            # Create multi-expression slide with matching duration
-            multi_slide_path = self._create_multi_expression_slide(expression_group, context_duration)
-            
-            # Use hstack to create side-by-side layout
-            # Left: context video, Right: multi-expression slide
-            logger.info("Creating side-by-side layout: context video (left) + multi-expression slide (right)")
-            hstack_temp_path = self.output_dir / f"temp_context_multi_hstack_{safe_name}.mkv"
-            self._register_temp_file(hstack_temp_path)
-            
-            hstack_keep_height(context_video_path, multi_slide_path, str(hstack_temp_path))
-            
-            # Apply final audio gain (+69%) (30% increase from current 30% = 1.30 * 1.30)
-            logger.info("Applying final audio gain (+69%) to context video with multi-slide")
-            apply_final_audio_gain(str(hstack_temp_path), str(output_path), gain_factor=1.69)
-            
-            logger.info(f"Context video with multi-expression slide created: {output_path}")
-            return str(output_path)
-            
-        except Exception as e:
-            logger.error(f"Error creating context video with multi-expression slide: {e}")
-            raise
-    
+
     def _time_to_seconds(self, time_str: str) -> float:
         """Convert time string to seconds"""
         try:
@@ -3602,341 +3048,6 @@ class VideoEditor:
         retry=False,  # Video processing shouldn't auto-retry
         fallback=False
     )
-    def create_short_format_video(self, context_video_path: str, expression: ExpressionAnalysis, 
-                                  expression_index: int = 0, subtitle_file_path: str = None) -> Tuple[str, float]:
-        """
-        Create vertical short-format video (9:16) with centered video and letterbox, then transition to slide.
-        Sequential layout: video (centered, letterboxed) → transition → slide (full-screen) (TICKET-039)
-        Video maintains original aspect ratio with black bars top/bottom.
-        
-        Args:
-            context_video_path: Path to context video with subtitles
-            expression: ExpressionAnalysis object
-            expression_index: Index of expression (for voice alternation)
-            
-        Returns:
-            Tuple of (output_path, duration)
-        """
-        try:
-            # Create output filename
-            safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"short_{safe_expression}.mkv"
-            output_path = self.context_slide_combined_dir / output_filename
-            
-            logger.info(f"Creating short-format video for: {expression.expression}")
-            
-            # Ensure backward compatibility for expression_dialogue fields
-            expression = self._ensure_expression_dialogue(expression)
-            
-            # Step 1: Create context video with dual-language subtitles (same as long-form)
-            # Note: We create this for concatenation later, but extract expression clip from original
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression
-            )
-            
-            # Step 2: Extract expression video clip from context and repeat it (same as long-form)
-            # Calculate relative timestamps within context video
-            context_start_seconds = self._time_to_seconds(expression.context_start_time)
-            expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
-            expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
-            
-            relative_start = expression_start_seconds - context_start_seconds
-            relative_end = expression_end_seconds - context_start_seconds
-            expression_duration = relative_end - relative_start
-            
-            logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
-            
-            # Extract expression video clip with audio and subtitles from context (same as long-form)
-            # Reset timestamps to start from 0 to prevent delay in repeated clips
-            # Ensure output directory exists
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_{safe_expression}.mkv"
-            self._register_temp_file(expression_video_clip_path)
-            
-            if not expression_video_clip_path.exists():
-                logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
-                # Extract with -ss for seeking, then reset timestamps (same as long-form)
-                # Use both -ss and setpts to ensure timestamps are reset correctly
-                input_stream = ffmpeg.input(str(context_with_subtitles), ss=relative_start, t=expression_duration)
-                # Reset PTS to start from 0 for both video and audio (same as long-form)
-                video_stream = ffmpeg.filter(input_stream['v'], 'setpts', 'PTS-STARTPTS')
-                audio_stream = ffmpeg.filter(input_stream['a'], 'asetpts', 'PTS-STARTPTS')
-                
-                # Extract with timestamp reset (same as long-form)
-                video_args = self._get_video_output_args()
-                (
-                    ffmpeg.output(
-                        video_stream,
-                        audio_stream,
-                        str(expression_video_clip_path),
-                        vcodec=video_args.get('vcodec', 'libx264'),
-                        acodec=video_args.get('acodec', 'aac'),
-                        ac=2,
-                        ar=48000,
-                        preset=video_args.get('preset', 'veryfast'),
-                        crf=video_args.get('crf', 25)
-                    )
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
-            else:
-                logger.info(f"Reusing expression clip from long-form: {expression_video_clip_path}")
-            
-            # Repeat expression clip (same as long-form, using shared filename)
-            from langflix import settings
-            repeat_count = settings.get_expression_repeat_count()
-            repeated_expression_path = self.output_dir / f"temp_expr_repeated_{safe_expression}.mkv"
-            self._register_temp_file(repeated_expression_path)
-            
-            if not repeated_expression_path.exists():
-                logger.info(f"Repeating expression clip {repeat_count} times")
-                repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
-            else:
-                logger.info(f"Reusing repeated expression from long-form: {repeated_expression_path}")
-            
-            # Step 3: Concatenate context + repeated expression (same as long-form)
-            concatenated_video_path = self.output_dir / f"temp_concatenated_av_{safe_expression}.mkv"
-            self._register_temp_file(concatenated_video_path)
-            
-            # Check if transition is enabled
-            from langflix import settings
-            transition_config = settings.get_transitions_config()
-            context_to_expr_transition = transition_config.get('context_to_expression_transition', {})
-            
-            if context_to_expr_transition.get('enabled', False):
-                # Create transition video between context and expression
-                transition_image_path = context_to_expr_transition.get('image_path_9_16', 'assets/transition_9_16.png')
-                sound_effect_path = context_to_expr_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
-                transition_duration = context_to_expr_transition.get('duration', 1.0)
-                sound_volume = context_to_expr_transition.get('sound_effect_volume', 0.5)
-                
-                # Find asset files using multiple possible paths (similar to _get_background_config)
-                import os
-                transition_image_full = None
-                sound_effect_full = None
-                
-                # Try multiple possible paths for transition image
-                image_paths = [
-                    Path(transition_image_path),
-                    Path(".").absolute() / transition_image_path,
-                    Path(os.getcwd()) / transition_image_path,
-                    Path(__file__).parent.parent.parent / transition_image_path,
-                    self.output_dir.parent.parent.parent.parent / transition_image_path,
-                ]
-                for path in image_paths:
-                    if path.exists():
-                        transition_image_full = path.absolute()
-                        logger.info(f"Found transition image: {transition_image_full}")
-                        break
-                
-                # Try multiple possible paths for sound effect
-                sound_paths = [
-                    Path(sound_effect_path),
-                    Path(".").absolute() / sound_effect_path,
-                    Path(os.getcwd()) / sound_effect_path,
-                    Path(__file__).parent.parent.parent / sound_effect_path,
-                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
-                ]
-                for path in sound_paths:
-                    if path.exists():
-                        sound_effect_full = path.absolute()
-                        logger.info(f"Found sound effect: {sound_effect_full}")
-                        break
-                
-                if not transition_image_full or not sound_effect_full:
-                    logger.warning(
-                        f"Transition assets missing (image: {transition_image_full is not None}, "
-                        f"sound: {sound_effect_full is not None}), skipping transition"
-                    )
-                    # Fall back to direct concatenation
-                    logger.info("Concatenating context + expression repeat (transition disabled)")
-                    concat_filter_with_explicit_map(
-                        str(context_with_subtitles),
-                        str(repeated_expression_path),
-                        str(concatenated_video_path)
-                    )
-                else:
-                    # Create transition video
-                    transition_video_path = self.output_dir / f"temp_transition_short_{safe_expression}.mkv"
-                    transition_video = self._create_transition_video(
-                        duration=transition_duration,
-                        image_path=str(transition_image_full),
-                        sound_effect_path=str(sound_effect_full),
-                        output_path=transition_video_path,
-                        source_video_path=str(context_with_subtitles),
-                        fps=25,
-                        sound_effect_volume=sound_volume
-                    )
-                    
-                    # Concatenate: context → transition → expression_repeat
-                    # First: context + transition
-                    temp_context_transition = self.output_dir / f"temp_context_transition_short_{safe_expression}.mkv"
-                    self._register_temp_file(temp_context_transition)
-                    concat_filter_with_explicit_map(
-                        str(context_with_subtitles),
-                        str(transition_video),
-                        str(temp_context_transition)
-                    )
-                    
-                    # Then: (context + transition) + expression_repeat
-                    logger.info("Concatenating context + transition + expression repeat (short-form)")
-                    concat_filter_with_explicit_map(
-                        str(temp_context_transition),
-                        str(repeated_expression_path),
-                        str(concatenated_video_path)
-                    )
-            else:
-                # Original flow without transition
-                logger.info("Concatenating context + expression repeat (transition disabled)")
-                concat_filter_with_explicit_map(
-                    str(context_with_subtitles),
-                    str(repeated_expression_path),
-                    str(concatenated_video_path)
-                )
-            
-            # Step 4: Get total duration from concatenated video (same approach as long-form uses left_duration)
-            total_duration = get_duration_seconds(str(concatenated_video_path))
-            logger.info(f"Total concatenated video duration: {total_duration:.2f}s")
-            
-            # Step 5: Create silent slide with total duration (same approach as long-form uses left_duration)
-            slide_path = self._create_educational_slide_silent(expression, total_duration)
-            
-            # Step 6: Center video with letterbox (short-form)
-            # TICKET-039: Changed from top-bottom (vstack) to centered video with letterbox
-            logger.info("Creating short-form centered video with letterbox")
-            letterboxed_video_path = self.output_dir / f"temp_letterboxed_short_{safe_expression}.mkv"
-            self._register_temp_file(letterboxed_video_path)
-            # Track for preservation (TICKET-029) - this is the complete individual expression video
-            self.short_format_temp_files.append(letterboxed_video_path)
-            
-            # Center video in 9:16 frame (1080x1920) with letterbox
-            from langflix.media.ffmpeg_utils import center_video_with_letterbox
-            center_video_with_letterbox(
-                str(concatenated_video_path),
-                target_width=1080,
-                target_height=1920,
-                out_path=str(letterboxed_video_path)
-            )
-            
-            # Step 7: Create transition video between letterboxed video and slide
-            # Get transition configuration
-            transition_config = settings.get_transitions_config()
-            context_to_slide_transition = transition_config.get('context_to_slide_transition', {})
-            
-            # Default to enabled if not specified
-            transition_enabled = context_to_slide_transition.get('enabled', True)
-            
-            if transition_enabled:
-                # Create transition video (9:16 format for short-form)
-                transition_image_path = context_to_slide_transition.get('image_path_9_16', 'assets/transition_9_16.png')
-                sound_effect_path = context_to_slide_transition.get('sound_effect_path', 'assets/sound_effect.mp3')
-                transition_duration = context_to_slide_transition.get('duration', 1.0)
-                sound_volume = context_to_slide_transition.get('sound_effect_volume', 0.5)
-                
-                # Find transition assets using multiple possible paths
-                import os
-                transition_image_full = None
-                sound_effect_full = None
-                
-                # Try multiple possible paths for transition image
-                image_paths = [
-                    Path(transition_image_path),
-                    Path(".").absolute() / transition_image_path,
-                    Path(os.getcwd()) / transition_image_path,
-                    Path(__file__).parent.parent.parent / transition_image_path,
-                    self.output_dir.parent.parent.parent.parent / transition_image_path,
-                ]
-                for path in image_paths:
-                    if path.exists():
-                        transition_image_full = path.absolute()
-                        logger.info(f"Found transition image: {transition_image_full}")
-                        break
-                
-                # Try multiple possible paths for sound effect
-                sound_paths = [
-                    Path(sound_effect_path),
-                    Path(".").absolute() / sound_effect_path,
-                    Path(os.getcwd()) / sound_effect_path,
-                    Path(__file__).parent.parent.parent / sound_effect_path,
-                    self.output_dir.parent.parent.parent.parent / sound_effect_path,
-                ]
-                for path in sound_paths:
-                    if path.exists():
-                        sound_effect_full = path.absolute()
-                        logger.info(f"Found sound effect: {sound_effect_full}")
-                        break
-                
-                if transition_image_full and sound_effect_full:
-                    # Create transition video matching letterboxed video resolution (1080x1920)
-                    transition_video_path = self.output_dir / f"temp_transition_short_slide_{safe_expression}.mkv"
-                    self._register_temp_file(transition_video_path)
-                    transition_video = self._create_transition_video(
-                        duration=transition_duration,
-                        image_path=str(transition_image_full),
-                        sound_effect_path=str(sound_effect_full),
-                        output_path=transition_video_path,
-                        source_video_path=str(letterboxed_video_path),  # Match letterboxed video resolution
-                        fps=25,
-                        sound_effect_volume=sound_volume
-                    )
-                    
-                    # Concatenate sequentially: letterboxed_video → transition → slide
-                    # First: video + transition
-                    temp_video_transition = self.output_dir / f"temp_video_transition_short_{safe_expression}.mkv"
-                    self._register_temp_file(temp_video_transition)
-                    concat_filter_with_explicit_map(
-                        str(letterboxed_video_path),
-                        str(transition_video),
-                        str(temp_video_transition)
-                    )
-                    
-                    # Then: (video + transition) + slide
-                    sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
-                    self._register_temp_file(sequential_temp_path)
-                    concat_filter_with_explicit_map(
-                        str(temp_video_transition),
-                        str(slide_path),
-                        str(sequential_temp_path)
-                    )
-                    temp_output_path = sequential_temp_path
-                else:
-                    logger.warning(
-                        f"Transition assets missing (image: {transition_image_full is not None}, "
-                        f"sound: {sound_effect_full is not None}), using direct concatenation"
-                    )
-                    # Fall back to direct concatenation without transition
-                    sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
-                    self._register_temp_file(sequential_temp_path)
-                    concat_filter_with_explicit_map(
-                        str(letterboxed_video_path),
-                        str(slide_path),
-                        str(sequential_temp_path)
-                    )
-                    temp_output_path = sequential_temp_path
-            else:
-                # Transition disabled: direct concatenation
-                logger.info("Transition disabled, using direct concatenation")
-                sequential_temp_path = self.output_dir / f"temp_sequential_short_{safe_expression}.mkv"
-                self._register_temp_file(sequential_temp_path)
-                concat_filter_with_explicit_map(
-                    str(letterboxed_video_path),
-                    str(slide_path),
-                    str(sequential_temp_path)
-                )
-                temp_output_path = sequential_temp_path
-            
-            # Step 8: Apply final audio gain (+69%) as separate pass (30% increase from current 30% = 1.30 * 1.30)
-            logger.info("Applying final audio gain (+69%) to short-form output")
-            logger.info(f"Video duration: {total_duration:.2f}s")
-            apply_final_audio_gain(str(temp_output_path), str(output_path), gain_factor=1.69)
-            
-            logger.info(f"✅ Short-format video created: {output_path} (duration: {total_duration:.2f}s)")
-            return str(output_path), total_duration
-            
-        except Exception as e:
-            logger.error(f"Error creating short-format video: {e}")
-            raise
-
     def create_batched_short_videos(self, short_format_videos: List[Tuple[str, float]], 
                                     target_duration: float = 120.0) -> List[str]:
         """

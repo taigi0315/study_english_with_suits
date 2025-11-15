@@ -3228,11 +3228,19 @@ class VideoEditor:
             transition_output = self.output_dir / f"temp_transition_{duration}s.mkv"
             self._register_temp_file(transition_output)
             
-            # Create video from static image (loop for duration)
-            image_input = ffmpeg.input(str(image_full_path), loop=1, t=duration, f='image2')
+            # Create video from static image
+            # For very short durations, use framerate and duration filters
+            image_input = ffmpeg.input(str(image_full_path), loop=1)
             
-            # Scale image to match source resolution
-            video_stream = image_input['v'].filter('scale', width, height).filter('fps', fps=fps)
+            # Scale image and set duration/fps
+            # Use setpts to set duration, then fps to set frame rate
+            video_stream = (
+                image_input['v']
+                .filter('scale', width, height)
+                .filter('setpts', f'PTS-STARTPTS')
+                .filter('fps', fps=fps)
+                .filter('trim', duration=duration)
+            )
             
             # Add sound effect - trim to exact duration
             sound_input = ffmpeg.input(str(sound_full_path))
@@ -3243,22 +3251,28 @@ class VideoEditor:
             video_args = self._get_video_output_args()
             
             # Create transition video with image and sound effect
-            (
-                ffmpeg
-                .output(
-                    video_stream,
-                    audio_stream,
-                    str(transition_output),
-                    vcodec=video_args.get('vcodec', 'libx264'),
-                    acodec=video_args.get('acodec', 'aac'),
-                    preset=video_args.get('preset', 'fast'),
-                    ac=2,
-                    ar=sample_rate,
-                    crf=video_args.get('crf', 23)
+            try:
+                (
+                    ffmpeg
+                    .output(
+                        video_stream,
+                        audio_stream,
+                        str(transition_output),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
+                        preset=video_args.get('preset', 'fast'),
+                        ac=2,
+                        ar=sample_rate,
+                        crf=video_args.get('crf', 23),
+                        t=duration  # Explicitly set output duration
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            except ffmpeg.Error as e:
+                stderr_msg = e.stderr.decode() if e.stderr else 'No stderr'
+                logger.error(f"FFmpeg error creating transition: {stderr_msg}")
+                raise
             
             # Verify duration
             actual_duration = get_duration_seconds(str(transition_output))

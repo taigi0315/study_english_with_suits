@@ -640,12 +640,12 @@ class VideoEditor:
 
             # Add expression text (line 1) at bottom (yellow, bold, centered)
             # Position: y=1450 (bottom area, above main subtitle at bottom)
-            # Font size: 3x main subtitle size for emphasis
+            # Font size: 4x main subtitle size for emphasis (increased from 3x)
             main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
-            expression_font_size = main_font_size * 3  # Triple size for expression subtitle
+            expression_font_size = main_font_size * 4  # 4x size for expression subtitle (increased from 3x)
             drawtext_args_1 = {
                 'text': escaped_expression,
-                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
+                'fontsize': expression_font_size,  # 4x size (4x main subtitle)
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
                 'y': 1450,  # First line at bottom (above main subtitle)
@@ -665,7 +665,7 @@ class VideoEditor:
             # Add expression translation (line 2) below expression text
             drawtext_args_2 = {
                 'text': escaped_translation,
-                'fontsize': expression_font_size,  # Triple size (3x main subtitle)
+                'fontsize': expression_font_size,  # 4x size (4x main subtitle)
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
                 'y': 1450 + expression_font_size + 20,  # Second line below expression (dynamic gap based on font size)

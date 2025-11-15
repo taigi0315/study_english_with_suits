@@ -146,8 +146,8 @@ class OutputManager:
         patterns = [
             # Pattern 1: "Suits - 1x01 - Pilot.720p.WEB-DL"
             r'^(.+?)\s*-\s*(\d+x\d+)\s*-\s*(.+)$',
-            # Pattern 2: "Suits.S01E01.720p.HDTV.x264"
-            r'^(.+?)\.S(\d+)E(\d+)\.(.+)$',
+            # Pattern 2: "Suits.S01E01.720p.HDTV.x264" - Extract only S01E01, ignore quality/resolution
+            r'^(.+?)\.S(\d+)E(\d+)(?:\..+)?$',
             # Pattern 3: "Suits.S01E01"
             r'^(.+?)\.S(\d+)E(\d+)$',
             # Pattern 4: "Suits_1x01_Pilot"
@@ -160,19 +160,20 @@ class OutputManager:
             match = re.match(pattern, filename)
             if match:
                 if 'S(\\d+)E(\\d+)' in pattern:
-                    # Handle S01E01 format
+                    # Handle S01E01 format - extract only season/episode, ignore quality/resolution
                     series_name = match.group(1)
                     season = match.group(2)
                     episode = match.group(3)
+                    # Use only S01E01 format, don't include quality/resolution info
                     episode_name = f"S{season}E{episode}"
-                    if len(match.groups()) > 3:
-                        episode_name += f"_{match.group(4)}"
                 else:
                     # Handle other formats
                     series_name = match.group(1)
                     episode_num = match.group(2)
                     if len(match.groups()) > 2:
                         episode_title = match.group(3)
+                        # Remove quality/resolution from episode title if present
+                        episode_title = re.sub(r'\.\d+p\..*$', '', episode_title)  # Remove .720p.HDTV.x264 etc
                         episode_name = f"{episode_num}_{episode_title}"
                     else:
                         episode_name = episode_num

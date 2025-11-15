@@ -567,22 +567,22 @@ class VideoEditor:
             font_file = self._get_font_option()
 
             # Add logo above catchy keywords (short-form video)
-            # Logo position: top center, near top of screen
+            # Logo position: top center, touching top of screen
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
                     # Load logo image and overlay it at top center
-                    # Position: y=10 (near top of screen, almost touching top)
+                    # Position: y=0 (touching top of screen)
                     # Scale logo to 2x current size (500px * 2 = 1000px height)
                     logo_input = ffmpeg.input(str(logo_path))
                     logo_video = logo_input['v'].filter('scale', -1, 1000)  # Scale to 1000px height (2x from 500px), maintain aspect ratio
                     
-                    # Overlay logo at top center (x: center, y: 10 - near top)
+                    # Overlay logo at top center (x: center, y: 0 - touching top)
                     final_video = ffmpeg.overlay(
                         final_video,
                         logo_video,
                         x='(W-w)/2',  # Center horizontally
-                        y=10  # Near top position (almost touching top of screen)
+                        y=0  # Top position (touching top of screen)
                     )
                     logger.info("Added logo above catchy keywords in short-form video")
                 except Exception as e:

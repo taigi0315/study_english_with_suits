@@ -250,6 +250,15 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                     # Validate and filter expressions
                     validated_expressions = _validate_and_filter_expressions(expressions)
                     
+                    # Remove duplicates using fuzzy matching
+                    validated_expressions = _remove_duplicates(validated_expressions)
+                    
+                    # Log expressions for debugging duplicate detection
+                    if len(validated_expressions) < len(expressions):
+                        logger.info(f"After deduplication: {len(validated_expressions)} unique expressions from {len(expressions)} total")
+                    else:
+                        logger.info(f"All {len(validated_expressions)} expressions are unique")
+                    
                     logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
                     return validated_expressions
                 except Exception as validation_error:
@@ -284,6 +293,15 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 
                 # Validate and filter expressions
                 validated_expressions = _validate_and_filter_expressions(expressions)
+                
+                # Remove duplicates using fuzzy matching
+                validated_expressions = _remove_duplicates(validated_expressions)
+                
+                # Log expressions for debugging duplicate detection
+                if len(validated_expressions) < len(expressions):
+                    logger.info(f"After deduplication: {len(validated_expressions)} unique expressions from {len(expressions)} total")
+                else:
+                    logger.info(f"All {len(validated_expressions)} expressions are unique")
                 
                 # Cache the result
                 cache_data = [expr.dict() for expr in validated_expressions]

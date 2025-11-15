@@ -256,9 +256,9 @@ class VideoEditor:
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 2: Create transition video (0.2s with image and sound effect)
+            # Step 2: Create transition video (0.5s with image and sound effect)
             transition_path = self._create_transition_video(
-                duration=0.2,
+                duration=0.5,
                 image_path="assets/transition_16_9.png",
                 sound_effect_path="assets/sound_effect.mp3",
                 source_video_path=str(context_with_subtitles)

@@ -43,12 +43,6 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     # Get expression limits from configuration
     min_expressions = settings.get_min_expressions_per_chunk()
     max_expressions = settings.get_max_expressions_per_chunk()
-    max_expressions_per_context = settings.get_max_expressions_per_context()
-    
-    # Validate max_expressions_per_context range (1-3)
-    if not (1 <= max_expressions_per_context <= 3):
-        logger.warning(f"max_expressions_per_context ({max_expressions_per_context}) is outside valid range (1-3), using default 3")
-        max_expressions_per_context = 3
     
     # Get show name from configuration
     show_name = settings.get_show_name()
@@ -73,7 +67,6 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         min_expressions=min_expressions,
         max_expressions=max_expressions,
         target_language=target_language,
-        show_name=show_name,
-        max_expressions_per_context=max_expressions_per_context
+        show_name=show_name
     )
     return prompt

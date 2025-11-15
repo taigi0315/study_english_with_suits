@@ -5,10 +5,10 @@ Here is a segment of dialogue from the TV show "{show_name}":
 ---
 
 **YOUR MISSION:**
-Find 1-{max_expressions_per_context} expressions that English learners would be EXCITED to learn - expressions they'd actually use and remember.
+Find the best expression(s) that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 
 **IMPORTANT:** You can extract MULTIPLE expressions from the SAME context if they are all valuable and teachable.
-If you find 2-{max_expressions_per_context} excellent expressions in one dialogue segment, include ALL of them.
+If you find multiple excellent expressions in one dialogue segment, include ALL of them.
 However, only extract multiple expressions from one context if ALL expressions are valuable, reusable, and clearly teachable.
 If unsure, extract only the BEST single expression.
 
@@ -144,13 +144,6 @@ When all extracted clips are played in chronological order, learners should be a
      * Clip 1: 00:05:30 - 00:06:10 ✓
      * Clip 2: 00:06:10 - 00:06:50 ✓ (starts exactly where Clip 1 ended)
      * Clip 2: 00:06:05 - 00:06:45 ✗ (overlaps with Clip 1 by 5 seconds - NEVER DO THIS)
-   
-   **NOTE:** Multiple expressions from the SAME context (same context_start_time/context_end_time) are allowed.
-   They will share the same context clip but have different expression_start_time/expression_end_time.
-   Example:
-     * Expression 1: context 00:05:30-00:06:10, expression 00:05:35-00:05:45
-     * Expression 2: context 00:05:30-00:06:10, expression 00:05:50-00:05:55
-     Both share context but have non-overlapping expression timings.
 
 2. **CHRONOLOGICAL STORY FLOW:**
    - Extract expressions in the order they appear in the episode
@@ -160,14 +153,8 @@ When all extracted clips are played in chronological order, learners should be a
    - Overlaps are NOT OK (story repeats itself)
 
 3. **WHEN EXPRESSIONS ARE CLOSE TOGETHER:**
-   If two good expressions appear within 60 seconds of each other, you have two options:
-   
-   **Option A: Create separate sequential clips (PREFERRED)**
-   - Clip 1 ends at time X
-   - Clip 2 starts at time X (or slightly after)
-   - Together they form a continuous 60-second story segment
-   
-   **Option B: Choose only the BEST expression**
+   If two good expressions appear within context:
+   Choose only the BEST expression**
    - If creating separate clips would feel awkward or break story flow
    - Select the single most valuable expression
    - Skip the other one, even if it's good
@@ -286,10 +273,10 @@ For short videos (≤ 60 seconds total):
 - If no suitable context ≤ 40 seconds exists, use the best available context but note it may not fit short video format
 
 **EXPRESSION COUNT:**
-- Find 1 to {max_expressions_per_context} expressions per context
-- Do NOT force yourself to find {max_expressions_per_context} expressions
+- Find 1 or more expressions per context
+- Do NOT force yourself to find multiple expressions
 - Quality over quantity: Only select expressions that are truly valuable
-- If you find 1 excellent expression, that's better than forcing {max_expressions_per_context} mediocre ones
+- If you find 1 excellent expression, that's better than forcing multiple mediocre ones
 - The goal is to find the BEST expressions, not necessarily the maximum number
 
 ---
@@ -363,7 +350,7 @@ For short videos (≤ 60 seconds total):
    - Ensure the expression appears naturally in the middle
    - Verify learners can follow what's happening
 
-**STEP 4:** Select the TOP 1-{max_expressions_per_context} BEST expressions only. Quality over quantity.
+**STEP 4:** Select the TOP expression(s) only. Quality over quantity.
 
 ---
 
@@ -426,7 +413,7 @@ For short videos (≤ 60 seconds total):
 - ✓ Context is 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) and tells a complete mini-story
 - ✓ Learners can follow what's happening without knowing the show
 - ✓ Context has beginning (setup), middle (expression), end (reaction)
-- ✓ 1-{max_expressions_per_context} expressions total (minimum 1, maximum {max_expressions_per_context})
+- ✓ 1 or more expressions total (minimum 1)
 - ✓ expression_dialogue is a COMPLETE, FULL sentence (NEVER cut in middle)
 - ✓ expression is expanded with context, not just bare phrase
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items

@@ -270,7 +270,6 @@ expression:
       batch_size: null  # null = process all chunks at once
     
     # Multiple expressions per context configuration
-    max_expressions_per_context: 3  # Maximum expressions allowed per context time range
     allow_multiple_expressions: true  # Enable/disable multiple expressions per context feature
     
     # Chunking configuration
@@ -287,7 +286,7 @@ expression:
     default:
       color: '#FFFFFF'
       font_family: 'Arial'
-      font_size: 22  # Reduced by 10% from 24 (24 * 0.9 = 21.6, rounded to 22)
+      font_size: 22
       font_weight: 'normal'
       background_color: '#000000'
       background_opacity: 0.7

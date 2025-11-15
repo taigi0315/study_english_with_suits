@@ -245,16 +245,17 @@ def apply_dual_subtitle_layers(
     # Build force_style for expression subtitle (mid-top center, yellow, bold)
     # Alignment=8 = top center, PrimaryColour=&H00FFFF00 = yellow (BGR format), Bold=1
     # MarginV controls vertical margin from alignment position
-    # For mid-top center positioning: MarginV=180 places subtitle ~1/4 from top (mid-top area)
+    # For mid-top center positioning: MarginV=120 places subtitle at mid-top area (~1/8 from top)
+    # This ensures expression subtitle appears at mid-top center, not mid-left
     expression_style = (
-        "Alignment=8,"  # Top center
+        "Alignment=8,"  # Top center (ensures horizontal centering)
         "PrimaryColour=&H00FFFF00,"  # Yellow (BGR: 00FFFF00 = #FFFF00)
         "OutlineColour=&H00000000,"  # Black outline
         "Outline=2,"
         "Bold=1,"
         "FontSize=32,"  # Increased from 28 for better visibility
         "BorderStyle=3,"
-        "MarginV=180"  # 180 pixels from top = mid-top center position
+        "MarginV=120"  # 120 pixels from top = mid-top center position (reduced from 180)
     )
     
     # Build force_style for original subtitle (bottom, white) - default behavior

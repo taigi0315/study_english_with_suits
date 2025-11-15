@@ -501,8 +501,9 @@ class VideoEditor:
 
                 logger.info(f"Added {len(keywords)} catchy keywords to top padding")
 
-            # Add expression text at bottom (outside structured video area, throughout entire video)
-            # Bottom black padding: 1440-1920px (480px height)
+            # Add expression text at mid-top (center-top area of video, throughout entire video)
+            # Video height: 1920px (1080p portrait with padding)
+            # Mid-top position: y=250-350 (approximately 1/6 from top)
             # Expression + translation displayed throughout video duration
             expression_text = expression.expression
             expression_translation = expression.expression_translation
@@ -510,14 +511,14 @@ class VideoEditor:
             escaped_expression = escape_drawtext_string(expression_text)
             escaped_translation = escape_drawtext_string(expression_translation)
 
-            # Add expression text (line 1) at bottom padding (yellow, bold, centered)
-            # Position: y=1500 (top area of bottom padding: 1440 + 60)
+            # Add expression text (line 1) at mid-top (yellow, bold, centered)
+            # Position: y=250 (mid-top area, approximately 1/6 from top)
             drawtext_args_1 = {
                 'text': escaped_expression,
                 'fontsize': 40,  # Large for main expression
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1500,  # First line in bottom padding
+                'y': 250,  # First line at mid-top
                 'borderw': 2,
                 'bordercolor': 'black'
             }
@@ -537,7 +538,7 @@ class VideoEditor:
                 'fontsize': 36,  # Slightly smaller for translation
                 'fontcolor': 'yellow',
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1560,  # Second line below expression (60px gap)
+                'y': 310,  # Second line below expression (60px gap)
                 'borderw': 2,
                 'bordercolor': 'black'
             }
@@ -591,88 +592,12 @@ class VideoEditor:
                     .run(quiet=True)
                 )
             
-            # Step 6: Apply subtitles at bottom using subtitle overlay
-            # Find subtitle file for this expression
-            from langflix.subtitles import overlay as subs_overlay
-            subtitle_dir = self.output_dir.parent / "subtitles"
-            subtitle_file = None
-            
-            if subtitle_dir.exists():
-                # Look for expression subtitle file
-                pattern = f"expression_*_{safe_expression[:30]}*.srt"
-                matches = list(subtitle_dir.glob(pattern))
-                if matches:
-                    subtitle_file = matches[0]
-                    logger.info(f"Found subtitle file: {subtitle_file.name}")
-            
-            if subtitle_file and subtitle_file.exists():
-                # Apply dialogue subtitles at bottom of black padding (below expression)
-                # Bottom black padding: 1440-1920px (480px area)
-                # Expression is at y=1500-1620, so dialogue should be below at y=1750
-                # MarginV from bottom: 1920 - 1750 = 170
-                # Alignment=2 = bottom center
-                custom_bottom_style = (
-                    "Alignment=2,"  # Bottom center
-                    "PrimaryColour=&H00FFFFFF,"  # White (BGR format)
-                    "OutlineColour=&H00000000,"  # Black outline
-                    "Outline=2,"
-                    "Bold=0,"
-                    "FontSize=24,"  # Smaller for dialogue subtitle
-                    "BorderStyle=3,"
-                    "MarginV=170"  # 170px from bottom = below expression text
-                )
-                
-                # Apply subtitles with custom bottom positioning
-                video_input = ffmpeg.input(str(temp_with_expression_path))
-                video_with_subs = video_input['v'].filter(
-                    'subtitles',
-                    str(subtitle_file),
-                    force_style=custom_bottom_style
-                )
-                
-                # Get audio stream
-                audio_stream = None
-                try:
-                    audio_stream = video_input['a']
-                except (KeyError, AttributeError):
-                    logger.debug("No audio stream in video with expression")
-                
-                # Output final video with subtitles
-                if audio_stream:
-                    (
-                        ffmpeg.output(
-                            video_with_subs,
-                            audio_stream,
-                            str(output_path),
-                            vcodec='libx264',
-                            acodec='aac',
-                            ac=2,
-                            ar=48000,
-                            preset='fast',
-                            crf=23
-                        )
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                else:
-                    (
-                        ffmpeg.output(
-                            video_with_subs,
-                            str(output_path),
-                            vcodec='libx264',
-                            preset='fast',
-                            crf=23
-                        )
-                        .overwrite_output()
-                        .run(quiet=True)
-                    )
-                
-                logger.info(f"✅ Subtitles applied to short-form video at bottom (100px from edge)")
-            else:
-                # No subtitle file found, use video with expression text only
-                logger.warning(f"No subtitle file found for expression, using video with expression text only")
-                import shutil
-                shutil.copy(str(temp_with_expression_path), str(output_path))
+            # Step 6: Skip subtitle overlay - structured video already has subtitles embedded
+            # Structured videos are created with subtitles already applied, so we don't need
+            # to add additional subtitle layers to avoid duplicate subtitles in short-form videos
+            logger.info(f"✅ Skipping subtitle overlay - structured video already contains subtitles")
+            import shutil
+            shutil.copy(str(temp_with_expression_path), str(output_path))
             
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)

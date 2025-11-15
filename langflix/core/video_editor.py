@@ -507,7 +507,7 @@ class VideoEditor:
                 # Build text with commas: "#keyword1, #keyword2, #keyword3"
                 # Render each keyword separately with its own color
                 # If total width exceeds max_width, wrap to new lines
-                font_size = 48  # Doubled from 32
+                font_size = 52  # Doubled from 32
                 y_position = 350
                 line_height = font_size * 1.2  # Line spacing (20% of font size)
                 

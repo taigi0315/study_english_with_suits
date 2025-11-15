@@ -566,25 +566,27 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
-            # Add logo above catchy keywords (short-form video)
-            # Logo position: top center, touching top of screen
+            # Add logo at very top of screen (short-form video)
+            # Logo position: top center, touching top of screen (y=0)
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
                     # Load logo image and overlay it at top center
-                    # Position: y=0 (touching top of screen)
+                    # Position: y=0 (touching top of screen, absolute top)
                     # Scale logo to 2x current size (500px * 2 = 1000px height)
                     logo_input = ffmpeg.input(str(logo_path))
                     logo_video = logo_input['v'].filter('scale', -1, 1000)  # Scale to 1000px height (2x from 500px), maintain aspect ratio
                     
-                    # Overlay logo at top center (x: center, y: 0 - touching top)
+                    # Overlay logo at top center (x: center, y: 0 - absolute top)
+                    # Use enable='between(t,0,999999)' to ensure logo appears throughout video
                     final_video = ffmpeg.overlay(
                         final_video,
                         logo_video,
                         x='(W-w)/2',  # Center horizontally
-                        y=10  # Top position (touching top of screen)
+                        y=0,  # Absolute top position (touching top of screen)
+                        enable='between(t,0,999999)'  # Show throughout entire video
                     )
-                    logger.info("Added logo above catchy keywords in short-form video")
+                    logger.info("Added logo at top of screen (y=0) in short-form video")
                 except Exception as e:
                     logger.warning(f"Failed to add logo to short-form video: {e}")
             else:

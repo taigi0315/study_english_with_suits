@@ -325,14 +325,14 @@ class VideoEditor:
                     structured_video = structured_input['v']
                     structured_audio = structured_input['a'] if 'a' in structured_input else None
                     
-                    # Load logo and apply 50% opacity
+                    # Load logo and apply 80% opacity
                     logo_input = ffmpeg.input(str(logo_path))
                     # Scale logo to appropriate size (e.g., 150px height)
                     logo_video = logo_input['v'].filter('scale', -1, 150)
-                    # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
+                    # Apply 80% opacity: convert to rgba format and use geq filter to adjust alpha
                     logo_video = logo_video.filter('format', 'rgba')
-                    # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5)
-                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
+                    # Use geq filter to set alpha to 80% (0.8 * 255 = 204)
+                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.8*alpha(X,Y)')
                     
                     # Get video dimensions for positioning
                     # Overlay at right-top: x = W - w - margin, y = margin
@@ -565,9 +565,9 @@ class VideoEditor:
                 try:
                     # Load logo image and overlay it at top center
                     # Position: y=100 (above catchy keywords at y=350)
-                    # Scale logo to appropriate size (e.g., 200px height)
+                    # Scale logo to 2.5x size (200px * 2.5 = 500px height)
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 200)  # Scale to 200px height, maintain aspect ratio
+                    logo_video = logo_input['v'].filter('scale', -1, 500)  # Scale to 500px height (2.5x), maintain aspect ratio
                     
                     # Overlay logo at top center (x: center, y: 100)
                     final_video = ffmpeg.overlay(

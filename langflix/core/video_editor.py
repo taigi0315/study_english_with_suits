@@ -46,14 +46,24 @@ class VideoEditor:
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
-        # Set up paths for different video types
-        self.final_videos_dir = self.output_dir  # This will be long_form_videos
-        self.context_slide_combined_dir = self.output_dir.parent / "context_slide_combined"
-        self.short_videos_dir = self.output_dir.parent / "short_form_videos"  # Updated to new name
+        # Set up paths for different video types - all videos go to videos/ directory
+        # Try to find videos directory in parent structure
+        if hasattr(self.output_dir, 'parent'):
+            lang_dir = self.output_dir.parent
+            if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                self.videos_dir = lang_dir / "videos"
+            else:
+                self.videos_dir = self.output_dir.parent / "videos"
+        else:
+            self.videos_dir = Path(self.output_dir).parent / "videos"
+        
+        # All video outputs go to videos/ directory
+        self.final_videos_dir = self.videos_dir
+        self.context_slide_combined_dir = self.videos_dir
+        self.short_videos_dir = self.videos_dir
         
         # Ensure directories exist (create parent directories if needed)
-        self.context_slide_combined_dir.mkdir(parents=True, exist_ok=True)
-        self.short_videos_dir.mkdir(parents=True, exist_ok=True)
+        self.videos_dir.mkdir(parents=True, exist_ok=True)
         
         # Track short format temp files for preservation (TICKET-029)
         self.short_format_temp_files = []
@@ -135,26 +145,24 @@ class VideoEditor:
             safe_expression = sanitize_for_expression_filename(expression.expression)
             output_filename = f"structured_video_{safe_expression}.mkv"
             
-            # Use structured_videos directory from paths (created by output_manager)
-            # Fallback to creating it if not in paths
-            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
-                # Try to find structured_videos directory in parent structure
-                structured_videos_dir = self.output_dir.parent / "structured_videos"
-                if not structured_videos_dir.exists():
-                    # Try alternative: look for language directory structure
-                    lang_dir = self.output_dir.parent
-                    if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
-                        structured_videos_dir = lang_dir / "structured_videos"
-                    else:
-                        # Create in same directory as output_dir
-                        structured_videos_dir = self.output_dir.parent / "structured_videos"
-                structured_videos_dir.mkdir(parents=True, exist_ok=True)
+            # Use videos directory from paths (created by output_manager)
+            # All videos go to videos/ directory
+            if hasattr(self, 'videos_dir'):
+                videos_dir = self.videos_dir
+            elif hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find videos directory in parent structure
+                lang_dir = self.output_dir.parent
+                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                    videos_dir = lang_dir / "videos"
+                else:
+                    videos_dir = self.output_dir.parent / "videos"
+                videos_dir.mkdir(parents=True, exist_ok=True)
             else:
                 # Fallback: create in output_dir parent
-                structured_videos_dir = Path(self.output_dir).parent / "structured_videos"
-                structured_videos_dir.mkdir(parents=True, exist_ok=True)
+                videos_dir = Path(self.output_dir).parent / "videos"
+                videos_dir.mkdir(parents=True, exist_ok=True)
             
-            output_path = structured_videos_dir / output_filename
+            output_path = videos_dir / output_filename
             
             logger.info(f"Creating structured video for: {expression.expression}")
             

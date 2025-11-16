@@ -266,7 +266,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 60
+      font_size: 40
       y_position: 250            # Starting Y position for first line
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -381,17 +381,6 @@ expression:
         height_percent: 25
         position: 'bottom'
         padding: 5
-  
-  # LLM configuration for expression extraction
-  llm:
-    provider: gemini
-    model: gemini-2.5-flash
-    api_key: ${GEMINI_API_KEY}
-    temperature: 0.7
-    max_tokens: 2000
-    chunk_size: 50
-    overlap: 5
-    max_expressions_per_chunk: 5  # Maximum expressions to extract per chunk
   
   # ASR configuration (removed - using external transcription)
   

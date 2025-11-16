@@ -2440,28 +2440,6 @@ class VideoEditor:
             logger.error(f"Error creating silent educational slide: {e}")
             raise
 
-    def _time_to_seconds(self, time_str: str) -> float:
-        """Convert time string to seconds"""
-        try:
-            # Handle format like "00:01:25,657" or "00:01:25.657"
-            time_str = time_str.replace(',', '.')
-            parts = time_str.split(':')
-            
-            if len(parts) == 3:
-                hours = float(parts[0])
-                minutes = float(parts[1])
-                seconds = float(parts[2])
-                return hours * 3600 + minutes * 60 + seconds
-            elif len(parts) == 2:
-                minutes = float(parts[0])
-                seconds = float(parts[1])
-                return minutes * 60 + seconds
-            else:
-                return float(parts[0])
-        except Exception as e:
-            logger.warning(f"Could not parse time {time_str}: {e}")
-            return 0.0
-    
     def _concatenate_sequence(self, video_paths: List[str], output_path: str) -> str:
         """Concatenate video sequence with smooth transitions"""
         try:

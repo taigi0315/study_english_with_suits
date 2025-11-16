@@ -90,46 +90,29 @@ async def process_video_task(job_id: str, video_file: Any, subtitle_file: Any, *
         processed_expressions = []
         for i, expression in enumerate(expressions[:max_expressions]):
             logger.info(f"Processing expression {i+1}/{min(len(expressions), max_expressions)}: {expression.expression}")
-            
+
             try:
-                # Create context video
-                context_video_path = video_processor.create_context_video(
-                    video_path=temp_video_path,
-                    start_time=expression.start_time,
-                    end_time=expression.end_time,
-                    output_path=str(output_manager.get_context_video_path(show_name, episode_name, i+1))
-                )
-                
-                # Create educational slide
-                educational_slide_path = video_editor.create_educational_slide(
+                # Create long-form educational video
+                # (includes context video, expression repetition, and educational slide)
+                long_form_video_path = video_editor.create_long_form_video(
                     expression=expression,
-                    output_path=str(output_manager.get_educational_slide_path(show_name, episode_name, i+1))
+                    context_video_path=temp_video_path,  # Pass original video
+                    expression_video_path=temp_video_path,  # Pass original video for audio
+                    expression_index=i  # For voice alternation
                 )
-                
-                # Create context video with subtitles
-                context_with_subs_path = video_editor.create_context_video_with_subtitles(
-                    context_video_path=context_video_path,
-                    expression=expression,
-                    output_path=str(output_manager.get_context_with_subs_path(show_name, episode_name, i+1))
-                )
-                
-                # Create final educational video
-                final_video_path = video_editor.create_final_educational_video(
-                    context_video_path=context_with_subs_path,
-                    educational_slide_path=educational_slide_path,
-                    output_path=str(output_manager.get_final_video_path(show_name, episode_name, i+1))
-                )
-                
+
+                logger.info(f"Created long-form video: {long_form_video_path}")
+
                 processed_expressions.append({
                     "expression": expression.expression,
-                    "translation": expression.translation,
-                    "context": expression.context,
+                    "translation": expression.expression_translation,
+                    "dialogues": expression.dialogues,
                     "similar_expressions": expression.similar_expressions,
-                    "video_path": final_video_path
+                    "video_path": long_form_video_path
                 })
-                
+
             except Exception as e:
-                logger.error(f"Error processing expression {i+1}: {e}")
+                logger.error(f"Error processing expression {i+1}: {e}", exc_info=True)
                 continue
         
         # Clean up temporary files

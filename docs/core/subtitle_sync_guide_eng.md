@@ -217,3 +217,4 @@ To verify subtitle synchronization:
 When in doubt, prefer accuracy over speed. Subtitle sync issues are harder to debug than slower processing times.
 
 
+

@@ -30,17 +30,6 @@ database:
   echo: false
 
 # ============================================================================
-# API Configuration
-# ============================================================================
-api:
-  host: "0.0.0.0"
-  port: 8000
-  workers: 1
-  reload: false  # Set to true for development
-  log_level: "info"
-  cors_origins: ["*"]  # Configure appropriately for production
-
-# ============================================================================
 # LLM (Language Learning Model) Settings
 # ============================================================================
 llm:
@@ -95,31 +84,13 @@ language_levels:
 # Video Processing Settings
 # ============================================================================
 video:
-  # Video codec for encoding
-  codec: "libx264"
-  
-  # Audio codec
-  audio_codec: "aac"
-  
   # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
   # Optimized for speed: veryfast is ~2-3x faster than fast with minimal quality loss
   preset: "veryfast"
-  
+
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
   # Optimized for speed: 25 provides good quality while encoding much faster than 23
   crf: 0
-  
-  # Output resolution
-  resolution: "1280x720"
-  
-  # Frames per second
-  fps: 30
-  
-  # Video bitrate
-  bitrate: "2000k"
-  
-  # Audio bitrate
-  audio_bitrate: "128k"
 
 # ============================================================================
 # Font Configuration
@@ -130,25 +101,16 @@ font:
     expression_dialogue: 42      # Full dialogue line containing expression (increased from 40)
     expression: 48               # Main expression/phrase (emphasized, larger) (increased from 58)
     expression_dialogue_trans: 42  # Translation of dialogue line (increased from 36)
-    expression_trans: 48         # Translation of expression (emphasized) (increased from 48)    
+    expression_trans: 48         # Translation of expression (emphasized) (increased from 48)
     similar: 42                  # Similar expressions text (increased from 32)
-  
-  # Automatically detect platform-specific fonts
-  auto_detect: true
 
 # ============================================================================
 # Processing Settings
 # ============================================================================
 processing:
-  # Maximum characters per subtitle chunk for LLM processing
-  chunk_size: 8000
-  
   # Expression count limits per chunk
   min_expressions_per_chunk: 1
   max_expressions_per_chunk: 3
-  
-  # Automatically cleanup temporary files after processing
-  temp_file_cleanup: true
 
 # ============================================================================
 # Video Transition Settings
@@ -156,19 +118,7 @@ processing:
 transitions:
   # Enable smooth transitions between video segments
   enabled: true
-  
-  # Transition from context video to educational slide
-  context_to_slide:
-    type: "xfade"           # Options: xfade, fade, none
-    effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
-    duration: 0.3           # Duration in seconds
-  
-  # Transition from context video to expression repetition (within same expression)
-  context_to_expression:
-    type: "none"            # Options: xfade, fade, none (disabled due to A-V sync issues)
-    effect: "fade"          # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
-    duration: 0.5           # Duration in seconds (increased for smooth transition)
-  
+
   # Context to expression transition (dedicated transition video segment)
   context_to_expression_transition:
     enabled: true
@@ -177,7 +127,7 @@ transitions:
     image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
     sound_effect_path: "assets/sound_effect.mp3"
     sound_effect_volume: 0.5  # Volume level (0.0-1.0)
-  
+
   # Transition from video segment to educational slide (long-form and short-form sequential layout)
   context_to_slide_transition:
     enabled: true
@@ -186,12 +136,6 @@ transitions:
     image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
     sound_effect_path: "assets/sound_effect.mp3"
     sound_effect_volume: 0.5  # Volume level (0.0-1.0)
-  
-  # Transition between different expressions
-  expression_to_expression:
-    type: "xfade"            # Options: fade, xfade, none
-    effect: "slideleft"
-    duration: 0.3           # Duration in seconds
 
 # ============================================================================
 # Text-to-Speech (TTS) Settings
@@ -202,9 +146,7 @@ tts:
   
   # TTS provider (lemonfox, google, aws, etc.)
   provider: "google"
-  
-  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
-  
+
   # Gemini TTS Configuration (Google GenAI library)
   google:
     # api_key: "set via GEMINI_API_KEY environment variable"
@@ -249,8 +191,6 @@ short_video:
   # Videos exceeding this duration will be dropped from batching
   max_duration: 180
 
-  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
-
   # Layout configuration for short-form videos (9:16 portrait format)
   layout:
     # Video dimensions
@@ -266,7 +206,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 60
+      font_size: 40
       y_position: 250            # Starting Y position for first line
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -318,14 +258,9 @@ expression:
       max_workers: null  # null = auto-detect (min(cpu_count(), 5))
       timeout_per_chunk: 300  # seconds (5 minutes per chunk)
       batch_size: null  # null = process all chunks at once
-    
+
     # Multiple expressions per context configuration
     allow_multiple_expressions: true  # Enable/disable multiple expressions per context feature
-    
-    # Chunking configuration
-    min_expressions_per_chunk: 1
-    max_expressions_per_chunk: 3
-    max_llm_input_length: 5000
   
   # Educational video generation mode
   # Options: "separate" (one video per expression) or "combined" (one video per group - Phase 2)
@@ -351,48 +286,6 @@ expression:
       animation: 'fade_in'
       duration_ms: 300
   
-  # Video playback configuration
-  playback:
-    expression_repeat_count: 2
-    context_play_count: 1
-    repeat_delay_ms: 200
-    transition_effect: 'fade'
-    transition_duration_ms: 150
-  
-  # Layout configuration for different video formats
-  layout:
-    landscape:
-      resolution: [1920, 1080]
-      expression_video:
-        width_percent: 50
-        position: 'left'
-        padding: 10
-      educational_slide:
-        width_percent: 50
-        position: 'right'
-        padding: 10
-    portrait:
-      resolution: [1080, 1920]
-      context_video:
-        height_percent: 75
-        position: 'top'
-        padding: 5
-      educational_slide:
-        height_percent: 25
-        position: 'bottom'
-        padding: 5
-  
-  # LLM configuration for expression extraction
-  llm:
-    provider: gemini
-    model: gemini-2.5-flash
-    api_key: ${GEMINI_API_KEY}
-    temperature: 0.7
-    max_tokens: 2000
-    chunk_size: 50
-    overlap: 5
-    max_expressions_per_chunk: 5  # Maximum expressions to extract per chunk
-  
   # ASR configuration (removed - using external transcription)
   
   # Media processing configuration (Phase 4)
@@ -407,133 +300,3 @@ expression:
       preset: slow      # FFmpeg preset
       audio_bitrate: 256k
   
-  # Educational slide generation (Phase 4)
-  slides:
-    # Slide templates configuration
-    templates:
-      expression:
-        background_color: '#1a1a1a'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 48
-        title_font_size: 72
-        layout:
-          title_position: [960, 200]
-          subtitle_position: [960, 300]
-          content_position: [960, 500]
-          alignment: 'center'
-        margins:
-          top: 100
-          bottom: 100
-          left: 100
-          right: 100
-        spacing:
-          line: 20
-          paragraph: 40
-      
-      usage:
-        background_color: '#2d2d2d'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 36
-        title_font_size: 56
-        layout:
-          title_position: [960, 150]
-          content_position: [960, 400]
-          alignment: 'left'
-        margins:
-          top: 80
-          bottom: 80
-          left: 150
-          right: 150
-        spacing:
-          line: 15
-          paragraph: 30
-      
-      cultural:
-        background_color: '#1e3a5f'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 32
-        title_font_size: 48
-        layout:
-          title_position: [960, 200]
-          content_position: [960, 400]
-          alignment: 'center'
-        margins:
-          top: 100
-          bottom: 100
-          left: 120
-          right: 120
-        spacing:
-          line: 18
-          paragraph: 36
-      
-      grammar:
-        background_color: '#3d1a1a'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 34
-        title_font_size: 52
-        layout:
-          title_position: [960, 180]
-          content_position: [960, 420]
-          alignment: 'left'
-        margins:
-          top: 90
-          bottom: 90
-          left: 130
-          right: 130
-        spacing:
-          line: 16
-          paragraph: 32
-      
-      pronunciation:
-        background_color: '#1a3d1a'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 42
-        title_font_size: 64
-        layout:
-          title_position: [960, 250]
-          content_position: [960, 450]
-          alignment: 'center'
-        margins:
-          top: 120
-          bottom: 120
-          left: 100
-          right: 100
-        spacing:
-          line: 22
-          paragraph: 44
-      
-      similar:
-        background_color: '#3d3d1a'
-        text_color: '#ffffff'
-        font_family: 'DejaVu Sans'
-        font_size: 38
-        title_font_size: 58
-        layout:
-          title_position: [960, 180]
-          content_position: [960, 400]
-          alignment: 'center'
-        margins:
-          top: 100
-          bottom: 100
-          left: 110
-          right: 110
-        spacing:
-          line: 20
-          paragraph: 40
-    
-    # Slide generation settings
-    generation:
-      max_examples: 4
-      max_similar_expressions: 5
-      include_cultural_notes: true
-      include_grammar_notes: true
-      include_pronunciation: true
-      slide_size: [1920, 1080]  # width, height
-      output_format: 'PNG'
-      quality: 95
-

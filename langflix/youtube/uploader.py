@@ -678,6 +678,45 @@ class YouTubeUploader:
             logger.error(f"Failed to list videos: {e}")
             return []
     
+    def list_scheduled_videos(self, max_results: int = 50) -> List[Dict[str, Any]]:
+        """
+        List videos with a future scheduled publish time (publishAt).
+        Note: We first search for my videos, then fetch status to inspect publishAt.
+        """
+        if not self.authenticated:
+            if not self.authenticate():
+                return []
+        
+        try:
+            # Step 1: fetch recent videos (search provides IDs)
+            search = self.service.search().list(
+                part='id',
+                forMine=True,
+                type='video',
+                order='date',
+                maxResults=max_results
+            ).execute()
+            ids = [item['id']['videoId'] for item in search.get('items', []) if item.get('id', {}).get('videoId')]
+            if not ids:
+                return []
+            
+            # Step 2: fetch full video info with status (contains publishAt)
+            response = self.service.videos().list(
+                part='snippet,status,contentDetails',
+                id=','.join(ids)
+            ).execute()
+            
+            # Keep items that have a future publishAt
+            items = []
+            for item in response.get('items', []):
+                publish_at = item.get('status', {}).get('publishAt')
+                if publish_at:
+                    items.append(item)
+            return items
+        except Exception as e:
+            logger.error(f"Failed to list scheduled videos: {e}")
+            return []
+    
     def get_upload_status(self, video_id: str) -> Optional[str]:
         """Get upload status of a video"""
         video_info = self.get_video_info(video_id)

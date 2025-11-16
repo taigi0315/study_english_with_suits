@@ -266,24 +266,28 @@ python -m langflix.main --subtitle "path/to/file.srt" --dry-run
 ### Key Configuration Sections
 
 **LLM Settings** (`llm` in config.yaml):
-- `max_input_length`: Characters per chunk (default: 2000)
-- `target_language`: Translation language (default: "Spanish")
+- `max_input_length`: Characters per chunk (default: 4000)
+- `target_language`: Translation language (default: "Korean")
 - `default_language_level`: beginner/intermediate/advanced/mixed
 - `temperature`, `top_p`, `top_k`: Gemini API parameters
 
 **Video Processing** (`video`):
-- `codec`, `preset`, `crf`: Encoding parameters
-- `resolution`: Output resolution (default: "1920x1080")
-- `clip_extraction.strategy`: auto/copy/encode
+- `preset`: FFmpeg encoding preset (default: "veryfast")
+- `crf`: Constant Rate Factor for quality (default: 0)
 
 **Expression Limits** (`processing`):
-- `min_expressions_per_chunk`: Minimum expressions to extract
-- `max_expressions_per_chunk`: Maximum expressions per chunk
+- `min_expressions_per_chunk`: Minimum expressions to extract (default: 1)
+- `max_expressions_per_chunk`: Maximum expressions per chunk (default: 3)
 
 **Transitions** (`transitions`):
 - `enabled`: Enable/disable smooth transitions
-- `context_to_slide`: Transition between context and educational slide
-- `expression_to_expression`: Transition between different expressions
+- `context_to_expression_transition`: Transition video with image/sound effects
+- `context_to_slide_transition`: Slide transition with image/sound effects
+
+**Expression** (`expression`):
+- `repeat_count`: Global repeat count for TTS and videos (default: 3)
+- `llm.parallel_processing`: Settings for parallel LLM processing
+- `llm.allow_multiple_expressions`: Enable multiple expressions per context
 
 ### Environment Variable Overrides
 

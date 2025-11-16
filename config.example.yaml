@@ -1,139 +1,311 @@
-# LangFlix Configuration Example
-# Copy this file to config.yaml and customize as needed
-# All settings are optional - defaults will be used if not specified
+# LangFlix Default Configuration
+# This file contains all default settings for the LangFlix application
+# To customize these settings, copy this file to config.yaml at the project root
+
+# ============================================================================
+# Application Settings
+# ============================================================================
+app:
+  # Name of the TV show for prompting
+  show_name: "Suits"
+  
+  # Template file for expression analysis prompt
+  template_file: "expression_analysis_prompt_v5.txt"
+
+# ============================================================================
+# Database Configuration
+# ============================================================================
+database:
+  # Enable database integration (CLI defaults to false, API requires true)
+  enabled: false
+  
+  # Database connection URL
+  url: "postgresql://user:password@localhost:5432/langflix"
+  
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  
+  # SQL logging (set to true for debugging)
+  echo: false
 
 # ============================================================================
 # LLM (Language Learning Model) Settings
 # ============================================================================
 llm:
-  # Maximum characters to include in a single prompt (default: 2000)
-  max_input_length: 2000
+  # Maximum characters of subtitle content per chunk
+  # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
+  max_input_length: 4000
   
-  # Language proficiency level for expression extraction (default: intermediate)
+  # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"
   
-  # Target language for translations (default: Korean)
-  target_language: "Spanish"
+  # Target language for translations
+  target_language: "Korean"
   
   # API retry configuration
   max_retries: 3
-  retry_backoff_seconds: [3, 6, 12]
+  retry_backoff_seconds: [3, 6, 12]  # Wait times between retries
   
   # Generation configuration
   temperature: 0.1
   top_p: 0.8
   top_k: 40
+  
+  # Expression ranking configuration (Phase 2)
+  ranking:
+    difficulty_weight: 0.4           # Weight for difficulty level (0-1)
+    frequency_weight: 0.3             # Weight for expression frequency (0-1)
+    educational_value_weight: 0.3     # Weight for educational value (0-1)
+    fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
+
+# ============================================================================
+# Language Proficiency Levels
+# ============================================================================
+language_levels:
+  beginner:
+    description: "A1-A2 level. Focus on basic everyday expressions, simple phrasal verbs, and common conversational phrases used in daily life. Avoid complex idioms or advanced vocabulary."
+    examples: "Let's go, I'm sorry, How are you, Can you help me, What's up"
+  
+  intermediate:
+    description: "B1-B2 level. Focus on commonly used idiomatic expressions, standard phrasal verbs, and colloquial phrases that appear frequently in casual and professional contexts."
+    examples: "Get the ball rolling, Call it a day, Piece of cake, Break the ice, On the same page"
+  
+  advanced:
+    description: "C1-C2 level. Focus on sophisticated idioms, nuanced expressions, professional jargon, and complex colloquialisms that native speakers use in various contexts."
+    examples: "Read between the lines, Cut to the chase, Play devil's advocate, Bite off more than you can chew"
+  
+  mixed:
+    description: "All levels. Extract valuable expressions regardless of difficulty level, but prioritize practical, commonly-used phrases that appear in authentic conversations."
+    examples: "Any useful expression from basic to advanced"
 
 # ============================================================================
 # Video Processing Settings
 # ============================================================================
 video:
-  # Video codec for encoding (default: libx264)
-  codec: "libx264"
-  
-  # Audio codec (default: aac)
-  audio_codec: "aac"
-  
-  # Encoding preset (default: fast)
-  # Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
-  preset: "fast"
-  
-  # Constant Rate Factor - quality (0-51, lower = better quality, default: 23)
-  crf: 23
-  
-  # Output resolution (default: 1280x720)
-  resolution: "1920x1080"
-  
-  # Frames per second (default: 30)
-  fps: 30
-  
-  # Video bitrate (default: 2000k)
-  bitrate: "3000k"
-  
-  # Audio bitrate (default: 128k)
-  audio_bitrate: "192k"
-  
-  # Clip extraction settings (TICKET-035)
-  clip_extraction:
-    # Strategy for clip extraction: 'auto', 'copy', or 'encode'
-    # - 'auto': Try stream copy first, fallback to re-encode on failure (recommended, fastest)
-    # - 'copy': Stream copy only, fail if not possible (fastest, may fail on some clips)
-    # - 'encode': Always re-encode (slowest, most accurate, most compatible)
-    # Default: 'auto'
-    strategy: "auto"
-    
-    # Threshold in seconds for attempting stream copy
-    # Clips shorter than this will attempt stream copy (if strategy allows)
-    # Longer clips use re-encode directly for better frame accuracy
-    # Default: 30.0
-    copy_threshold_seconds: 30.0
+  # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+  # Optimized for speed: veryfast is ~2-3x faster than fast with minimal quality loss
+  preset: "veryfast"
+
+  # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
+  # Optimized for speed: 25 provides good quality while encoding much faster than 23
+  crf: 0
 
 # ============================================================================
 # Font Configuration
 # ============================================================================
 font:
   sizes:
-    # Font sizes for different text types (defaults in comments)
-    default: 32      # Default: 32
-    expression: 48   # Default: 48
-    translation: 40  # Default: 40
-    similar: 32      # Default: 32
-  
-  # Automatically detect platform-specific fonts (default: true)
-  auto_detect: true
+    default: 36                  # Default font size (increased from 32)
+    expression_dialogue: 42      # Full dialogue line containing expression (increased from 40)
+    expression: 48               # Main expression/phrase (emphasized, larger) (increased from 58)
+    expression_dialogue_trans: 42  # Translation of dialogue line (increased from 36)
+    expression_trans: 48         # Translation of expression (emphasized) (increased from 48)
+    similar: 42                  # Similar expressions text (increased from 32)
 
 # ============================================================================
 # Processing Settings
 # ============================================================================
 processing:
-  # Maximum characters per subtitle chunk for LLM processing (default: 2000)
-  chunk_size: 2000
-  
-  # Maximum expressions to extract per chunk (default: 5)
-  max_expressions_per_chunk: 5
-  
-  # Automatically cleanup temporary files after processing (default: true)
-  temp_file_cleanup: true
+  # Expression count limits per chunk
+  min_expressions_per_chunk: 1
+  max_expressions_per_chunk: 3
 
 # ============================================================================
 # Video Transition Settings
 # ============================================================================
 transitions:
-  # Enable smooth transitions between video segments (default: true)
+  # Enable smooth transitions between video segments
   enabled: true
-  
-  # Transition from context video to educational slide
-  context_to_slide:
-    type: "xfade"           # Options: xfade, fade, none
-    effect: "slideup"       # xfade effects: fade, wipeleft, wiperight, slideup, slidedown, etc.
-    duration: 0.5           # Duration in seconds
-  
-  # Transition between different expressions
-  expression_to_expression:
-    type: "fade"            # Options: fade, xfade, none
-    duration: 0.5           # Duration in seconds
+
+  # Context to expression transition (dedicated transition video segment)
+  context_to_expression_transition:
+    enabled: true
+    duration: 0.3  # 0.3 second transition
+    image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
+    image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
+    sound_effect_path: "assets/sound_effect.mp3"
+    sound_effect_volume: 0.5  # Volume level (0.0-1.0)
+
+  # Transition from video segment to educational slide (long-form and short-form sequential layout)
+  context_to_slide_transition:
+    enabled: true
+    duration: 1.0  # 1 second transition
+    image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
+    image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
+    sound_effect_path: "assets/sound_effect.mp3"
+    sound_effect_volume: 0.5  # Volume level (0.0-1.0)
 
 # ============================================================================
-# Expression Media Settings
+# Text-to-Speech (TTS) Settings
+# ============================================================================
+tts:
+  # Enable TTS for expression audio
+  enabled: true
+  
+  # TTS provider (lemonfox, google, aws, etc.)
+  provider: "google"
+  
+  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
+  
+  # Gemini TTS Configuration (Google GenAI library)
+  google:
+    # api_key: "set via GEMINI_API_KEY environment variable"
+    language_code: "en-us"  # Original language (English) for audio generation
+    model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model for high-quality synthesis
+    response_format: "wav"  # Audio format (WAV for new API)
+    # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
+    speaking_rate: "high" 
+    # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%" or semitones like "-2st"
+    pitch: "-2st"  # SSML pitch: one semitone lower for more natural sound
+    # Voice selection for TTS generation (uses Gemini voices from https://ai.google.dev/gemini-api/docs/speech-generation#voices)
+    alternate_voices: ["Despina", "Puck"]  # Available Gemini voices
+  
+  # LemonFox TTS Configuration (fallback)
+  lemonfox:
+    # api_key: "set via LEMONFOX_API_KEY environment variable"
+    voice: "sarah"
+    response_format: "mp3"  # mp3 format as requested
+  # 
+  # aws:
+  #   region: "us-east-1"
+  #   voice_id: "Joanna"
+  #   engine: "neural"
+
+# ============================================================================
+# Short Video Settings
+# ============================================================================
+short_video:
+  # Enable short video generation
+  enabled: true
+
+  # Video resolution (width x height) - 9:16 format for social media
+  resolution: "1080x1920"
+
+  # Target duration for each batch (seconds)
+  target_duration: 120
+
+  # Allow variance (+/- seconds)
+  duration_variance: 10
+
+  # Maximum duration for short-form video batches (seconds)
+  # Videos exceeding this duration will be dropped from batching
+  max_duration: 180
+
+  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
+
+  # Layout configuration for short-form videos (9:16 portrait format)
+  layout:
+    # Video dimensions
+    target_width: 1080
+    target_height: 1920
+
+    # Structured video height in middle section
+    long_form_video_height: 960  # Half of target height
+
+    # Padding areas
+    top_padding_height: 480      # Top black padding (0-480px)
+    bottom_padding_height: 480   # Bottom black padding (1440-1920px)
+
+    # Catchy keywords (top padding area)
+    keywords:
+      font_size: 40
+      y_position: 250            # Starting Y position for first line
+      line_height_factor: 1.2    # Line spacing as multiple of font size
+      max_width_percent: 0.9     # Maximum width as percentage of video width
+      text_color: 'white'
+      border_width: 2
+      border_color: 'black'
+
+    # Expression text (bottom padding area)
+    expression:
+      font_size: 65              # Main expression font size (increased by 10 from 45)
+      y_position: 1500           # Y position for expression line
+      text_color: 'yellow'
+      border_width: 2
+      border_color: 'black'
+
+    # Expression translation (bottom padding area)
+    translation:
+      font_size: 65              # Translation font size (slightly smaller)
+      y_position: 1600           # Y position for translation line
+      gap_from_expression: 60    # Gap between expression and translation
+      text_color: 'yellow'
+      border_width: 2
+      border_color: 'black'
+      background_opacity: 0.5    # 50% opacity for background
+
+    # Dialogue subtitles (bottom padding area, below expression)
+    dialogue_subtitle:
+      font_size: 35              # Match expression font size
+      margin_v: 50               # Close to bottom for better visibility
+      text_color: 'white'
+      outline_width: 2
+      outline_color: 'black'
+      background_opacity: 0.5    # 50% opacity for background
+
+# ============================================================================
+# Expression-Based Learning Configuration
 # ============================================================================
 expression:
-  media:
-    ffprobe:
-      # Default timeout in seconds for ffprobe operations (minimum: 1, default: 30)
-      timeout_seconds: 30
+  # Global expression repeat count for TTS, original audio, and short videos
+  # This unified setting controls how many times expressions are repeated
+  # for educational purposes across all video types (educational videos, short videos)
+  repeat_count: 3
+  
+  # LLM processing configuration
+  llm:
+    # Parallel processing configuration for expression analysis
+    parallel_processing:
+      enabled: true  # Enable parallel processing for multiple chunks
+      max_workers: null  # null = auto-detect (min(cpu_count(), 5))
+      timeout_per_chunk: 300  # seconds (5 minutes per chunk)
+      batch_size: null  # null = process all chunks at once
     
-    # Video slicing settings (TICKET-036)
+    # Multiple expressions per context configuration
+    allow_multiple_expressions: true  # Enable/disable multiple expressions per context feature
+    
+    # Chunking configuration
+    min_expressions_per_chunk: 1
+    max_expressions_per_chunk: 3
+    max_llm_input_length: 5000
+  
+  # Educational video generation mode
+  # Options: "separate" (one video per expression) or "combined" (one video per group - Phase 2)
+  educational_video_mode: "separate"  # Default: separate mode (backward compatible)
+  
+  # Subtitle styling configuration
+  subtitle_styling:
+    default:
+      color: '#FFFFFF'
+      font_family: 'Arial'
+      font_size: 17              # Reduced by 5 from 22 (main dialogue subtitle)
+      font_weight: 'normal'
+      background_color: '#000000'
+      background_opacity: 0.7
+      position: 'bottom'
+      margin_bottom: 50
+    expression_highlight:
+      color: '#FFD700'
+      font_weight: 'bold'
+      font_size: 28
+      background_color: '#1A1A1A'
+      background_opacity: 0.85
+      animation: 'fade_in'
+      duration_ms: 300
+  
+  # ASR configuration (removed - using external transcription)
+  
+  # Media processing configuration (Phase 4)
+  media:
+    # Video slicing settings
     slicing:
-      # Maximum concurrent FFmpeg processes for expression slicing
-      # Controls resource usage during batch slicing operations
-      # - null or omitted: Auto-detect (CPU count / 2, minimum 1)
-      # - explicit number: Use specified limit (minimum 1)
-      # Default: auto (CPU count / 2)
-      max_concurrent: null
-      
-      # Buffer time before expression start (seconds)
-      buffer_start: 0.2
-      
-      # Buffer time after expression end (seconds)
-      buffer_end: 0.2
+      quality: high  # low, medium, high, lossless
+      buffer_start: 0.2  # seconds before expression
+      buffer_end: 0.2    # seconds after expression
+      output_format: mp4
+      crf: 0           # Constant Rate Factor for quality
+      preset: slow      # FFmpeg preset
+      audio_bitrate: 256k
+  

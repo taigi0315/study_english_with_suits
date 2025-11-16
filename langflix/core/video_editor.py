@@ -40,8 +40,7 @@ class VideoEditor:
         # Use centralized temp file manager instead of local tracking
         from langflix.utils.temp_file_manager import get_temp_manager
         self.temp_manager = get_temp_manager()
-        self._tts_cache = {}  # Legacy cache for backward compatibility
-        self.cache_manager = get_cache_manager()  # Advanced cache manager
+        self.cache_manager = get_cache_manager()  # Cache manager for TTS and other data
         self.language_code = language_code
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
@@ -1051,12 +1050,6 @@ class VideoEditor:
         # ASS uses BGR format
         return f"&H{b:02x}{g:02x}{r:02x}"
     
-    def _get_tts_cache_key(self, text: str, expression_index: int) -> str:
-        """Generate cache key for TTS audio"""
-        # Normalize text to ensure consistent cache keys
-        normalized_text = text.strip()
-        return f"{normalized_text}_{expression_index}"
-    
     def _get_cached_tts(self, text: str, expression_index: int) -> Optional[Tuple[str, float]]:
         """Get cached TTS audio if available (enhanced with advanced cache)"""
         # Try advanced cache first
@@ -1069,28 +1062,13 @@ class VideoEditor:
             if tts_path and Path(tts_path).exists():
                 logger.info(f"✅ Using advanced cached TTS for: '{text}' (duration: {duration:.2f}s)")
                 return tts_path, duration
-        
-        # Fallback to legacy cache
-        legacy_cache_key = self._get_tts_cache_key(text, expression_index)
-        logger.info(f"Checking legacy cache for key: '{legacy_cache_key}' (text: '{text}', index: {expression_index})")
-        logger.info(f"Current legacy cache keys: {list(self._tts_cache.keys())}")
-        
-        if legacy_cache_key in self._tts_cache:
-            cached_path, duration = self._tts_cache[legacy_cache_key]
-            if Path(cached_path).exists():
-                logger.info(f"✅ Using legacy cached TTS for: '{text}' (duration: {duration:.2f}s)")
-                return cached_path, duration
-            else:
-                # Remove invalid cache entry
-                logger.warning(f"❌ Cached file not found, removing from cache: {cached_path}")
-                del self._tts_cache[legacy_cache_key]
-        else:
-            logger.info(f"❌ No cache found for key: '{legacy_cache_key}'")
+
+        # No cache found
         return None
     
     def _cache_tts(self, text: str, expression_index: int, tts_path: str, duration: float) -> None:
-        """Cache TTS audio for reuse (enhanced with advanced cache)"""
-        # Cache in advanced cache manager
+        """Cache TTS audio for reuse"""
+        # Cache in cache manager
         cache_key = self.cache_manager.get_tts_key(text, "default", "en", expression_index)
         cache_data = {
             'path': tts_path,
@@ -1099,11 +1077,7 @@ class VideoEditor:
             'expression_index': expression_index
         }
         self.cache_manager.set(cache_key, cache_data, ttl=86400, persist_to_disk=True)  # 24 hours
-        
-        # Also cache in legacy cache for backward compatibility
-        legacy_cache_key = self._get_tts_cache_key(text, expression_index)
-        self._tts_cache[legacy_cache_key] = (tts_path, duration)
-        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s) with key: '{legacy_cache_key}'")
+        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s)")
     
     @retry_on_error(max_attempts=2, delay=1.0)
     def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:

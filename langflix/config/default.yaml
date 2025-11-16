@@ -146,9 +146,7 @@ tts:
   
   # TTS provider (lemonfox, google, aws, etc.)
   provider: "google"
-  
-  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
-  
+
   # Gemini TTS Configuration (Google GenAI library)
   google:
     # api_key: "set via GEMINI_API_KEY environment variable"
@@ -192,8 +190,6 @@ short_video:
   # Maximum duration for short-form video batches (seconds)
   # Videos exceeding this duration will be dropped from batching
   max_duration: 180
-
-  # NOTE: Use expression.repeat_count for repeat count (removed from here to avoid duplication)
 
   # Layout configuration for short-form videos (9:16 portrait format)
   layout:
@@ -262,14 +258,9 @@ expression:
       max_workers: null  # null = auto-detect (min(cpu_count(), 5))
       timeout_per_chunk: 300  # seconds (5 minutes per chunk)
       batch_size: null  # null = process all chunks at once
-    
+
     # Multiple expressions per context configuration
     allow_multiple_expressions: true  # Enable/disable multiple expressions per context feature
-    
-    # Chunking configuration
-    min_expressions_per_chunk: 1
-    max_expressions_per_chunk: 3
-    max_llm_input_length: 5000
   
   # Educational video generation mode
   # Options: "separate" (one video per expression) or "combined" (one video per group - Phase 2)

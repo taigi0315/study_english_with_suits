@@ -61,22 +61,26 @@ output/Series/Episode/ko/
 
 **Purpose**: Create a structured video for a single expression following the pattern:
 ```
-[Context Video] → [Expression Video (2x)] → [Educational Slide (Expression Audio 2x)]
+[Context Video] → [Transition (optional)] → [Expression Video (repeat_count)] → [Educational Slide (Expression Audio × repeat_count)]
 ```
 
 **Process**:
 1. Extract expression clip from context video
-2. Repeat expression clip 2 times
-3. Concatenate: context → expression (2x)
-4. Create educational slide with expression audio (2x)
+2. Repeat expression clip based on `expression.repeat_count` setting (default: 3)
+3. Concatenate: context → [transition (if enabled)] → expression (repeat_count)
+4. Create educational slide with expression audio (repeat_count times)
 5. Concatenate: context+expression → slide
 6. Apply final audio gain
 
 **Key Features**:
-- **No transitions**: Structured videos do not include transition effects
+- **Optional transitions**: Transition video can be added between context and expression (configurable in `default.yaml`)
+  - Transition duration: 0.3s (configurable)
+  - Uses transition image and sound effect
+  - Controlled by `transitions.context_to_expression_transition.enabled`
 - **16:9 or original ratio**: Maintains original video aspect ratio
 - **Expression audio**: Uses original expression audio from video, not TTS
-- **2x repetition**: Expression video and audio both repeat 2 times
+- **Repeat count**: Expression video and audio repeat based on `expression.repeat_count` setting (default: 3)
+- **Exact duration**: Educational slide duration exactly matches `expression_audio_duration × repeat_count` (no padding or target_duration override)
 
 **Code Example**:
 ```python
@@ -329,7 +333,10 @@ videos_dir.mkdir(exist_ok=True)
 
 **Structured Videos**:
 - Expression audio extracted from original video using output seeking
-- Audio repeated 2 times to match video repetition
+- Audio repeated based on `expression.repeat_count` setting (default: 3) to match video repetition
+- Educational slide duration: Exactly `expression_audio_duration × repeat_count` (no padding)
+  - `target_duration` is ignored for expression audio slides to prevent hanging
+  - Video stops exactly when all audio repeats finish
 - Final audio gain applied (+69%)
 
 **Short-form Videos**:

@@ -61,22 +61,26 @@ output/Series/Episode/ko/
 
 **목적**: 다음 패턴을 따르는 단일 expression에 대한 구조화된 비디오 생성:
 ```
-[Context Video] → [Expression Video (2x)] → [Educational Slide (Expression Audio 2x)]
+[Context Video] → [Transition (선택사항)] → [Expression Video (repeat_count)] → [Educational Slide (Expression Audio × repeat_count)]
 ```
 
 **프로세스**:
 1. 컨텍스트 비디오에서 expression 클립 추출
-2. Expression 클립을 2번 반복
-3. 연결: context → expression (2x)
-4. Expression 오디오(2x)로 교육 슬라이드 생성
+2. `expression.repeat_count` 설정값에 따라 expression 클립 반복 (기본값: 3)
+3. 연결: context → [transition (활성화된 경우)] → expression (repeat_count)
+4. Expression 오디오(repeat_count 회)로 교육 슬라이드 생성
 5. 연결: context+expression → slide
 6. 최종 오디오 게인 적용
 
 **주요 특징**:
-- **전환 효과 없음**: 구조화된 비디오는 전환 효과를 포함하지 않음
+- **선택적 전환 효과**: 컨텍스트와 expression 사이에 전환 비디오 추가 가능 (`default.yaml`에서 설정)
+  - 전환 지속 시간: 0.3초 (설정 가능)
+  - 전환 이미지 및 사운드 효과 사용
+  - `transitions.context_to_expression_transition.enabled`로 제어
 - **16:9 또는 원본 비율**: 원본 비디오 종횡비 유지
 - **Expression 오디오**: TTS가 아닌 비디오의 원본 expression 오디오 사용
-- **2x 반복**: Expression 비디오와 오디오 모두 2번 반복
+- **반복 횟수**: Expression 비디오와 오디오는 `expression.repeat_count` 설정값에 따라 반복 (기본값: 3)
+- **정확한 지속 시간**: 교육 슬라이드는 정확히 `expression_audio_duration × repeat_count`만큼 표시 (패딩 없음, target_duration 무시)
 
 ### 2.2 결합된 구조화된 비디오
 

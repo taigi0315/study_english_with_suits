@@ -112,13 +112,13 @@ class VideoEditor:
     
     @handle_error_decorator(
         ErrorContext(
-            operation="create_structured_video",
+            operation="create_long_form_video",
             component="core.video_editor"
         ),
         retry=False,
         fallback=False
     )
-    def create_structured_video(
+    def create_long_form_video(
         self,
         expression: ExpressionAnalysis,
         context_video_path: str,
@@ -126,7 +126,7 @@ class VideoEditor:
         expression_index: int = 0
     ) -> str:
         """
-        Create structured video with unified layout:
+        Create long-form video with unified layout:
         - context video → expression repeat (2회) → slide (expression audio 2회)
         - No transition (direct concatenation)
         - Maintains original aspect ratio (16:9 or other)
@@ -138,12 +138,12 @@ class VideoEditor:
             expression_index: Index of expression (for voice alternation)
             
         Returns:
-            Path to created structured video
+            Path to created long-form video
         """
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"structured_video_{safe_expression}.mkv"
+            output_filename = f"long_form_video_{safe_expression}.mkv"
             
             # Use videos directory from paths (created by output_manager)
             # All videos go to videos/ directory
@@ -156,7 +156,6 @@ class VideoEditor:
                     videos_dir = lang_dir / "videos"
                 else:
                     videos_dir = self.output_dir.parent / "videos"
-                videos_dir.mkdir(parents=True, exist_ok=True)
             else:
                 # Fallback: create in output_dir parent
                 videos_dir = Path(self.output_dir).parent / "videos"
@@ -164,7 +163,7 @@ class VideoEditor:
             
             output_path = videos_dir / output_filename
             
-            logger.info(f"Creating structured video for: {expression.expression}")
+            logger.info(f"Creating long-form video for: {expression.expression}")
             
             # Step 1: Extract expression video clip from context and repeat it (2회)
             context_start_seconds = self._time_to_seconds(expression.context_start_time)
@@ -185,18 +184,105 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Get context video with subtitles
-            context_with_subtitles = self._add_subtitles_to_context(
-                context_video_path, expression, group_id=None
-            )
-            
-            # Extract expression video clip with output seeking for accurate subtitle sync
+            # Step 1a: Extract context clip from original video WITH subtitles
             self.output_dir.mkdir(parents=True, exist_ok=True)
-            expression_video_clip_path = self.output_dir / f"temp_expr_clip_structured_{safe_expression}.mkv"
+            context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
+            self._register_temp_file(context_clip_path)
+
+            context_end_seconds = self._time_to_seconds(expression.context_end_time)
+            context_duration = context_end_seconds - context_start_seconds
+
+            logger.info(f"Extracting context clip with subtitles: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
+
+            # Find and apply subtitle file
+            subtitle_file = None
+            # Try to find subtitle file in subtitles directory
+            subtitles_dir = self.output_dir.parent / "subtitles"
+            if subtitles_dir.exists():
+                # Look for subtitle file matching expression pattern
+                from langflix.utils.filename_utils import sanitize_for_expression_filename
+                safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
+                subtitle_file_path = subtitles_dir / subtitle_filename
+                
+                if subtitle_file_path.exists():
+                    subtitle_file = subtitle_file_path
+                    logger.info(f"Found subtitle file: {subtitle_file}")
+                else:
+                    # Try to find any subtitle file matching the expression
+                    pattern = f"expression_*_{safe_expression_short}*.srt"
+                    matching_files = list(subtitles_dir.glob(pattern))
+                    if matching_files:
+                        subtitle_file = matching_files[0]
+                        logger.info(f"Found matching subtitle file: {subtitle_file}")
+            
+            if subtitle_file and subtitle_file.exists():
+                logger.info(f"Applying subtitles from: {subtitle_file}")
+
+                # Apply subtitles using subs_overlay (extract + apply in one step)
+                subs_overlay.apply_dual_subtitle_layers(
+                    str(context_video_path),
+                    str(subtitle_file),
+                    "",  # No expression subtitle for long-form video
+                    str(context_clip_path),
+                    context_start_seconds,
+                    context_end_seconds
+                )
+            else:
+                # No subtitles - extract context clip without them
+                logger.warning("No subtitle file found, extracting context without subtitles")
+                context_input = ffmpeg.input(str(context_video_path))
+                context_video = context_input['v']
+                context_audio = context_input['a']
+
+                (
+                    ffmpeg.output(
+                        context_video,
+                        context_audio,
+                        str(context_clip_path),
+                        vcodec='libx264',
+                        acodec='aac',
+                        ac=2,
+                        ar=48000,
+                        preset='fast',
+                        crf=23,
+                        ss=context_start_seconds,
+                        t=context_duration
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+
+            # Reset timestamps of context clip
+            context_clip_reset_path = self.output_dir / f"temp_context_clip_reset_{safe_expression}.mkv"
+            self._register_temp_file(context_clip_reset_path)
+
+            reset_input = ffmpeg.input(str(context_clip_path))
+            reset_video = ffmpeg.filter(reset_input['v'], 'setpts', 'PTS-STARTPTS')
+            reset_audio = ffmpeg.filter(reset_input['a'], 'asetpts', 'PTS-STARTPTS')
+
+            (
+                ffmpeg.output(
+                    reset_video,
+                    reset_audio,
+                    str(context_clip_reset_path),
+                    vcodec='libx264',
+                    acodec='aac',
+                    ac=2,
+                    ar=48000,
+                    preset='fast',
+                    crf=23
+                )
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+
+            # Step 1b: Extract expression video clip from context clip
+            expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_form_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
             logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
             
-            input_stream = ffmpeg.input(str(context_with_subtitles))
+            input_stream = ffmpeg.input(str(context_clip_reset_path))
             video_stream = input_stream['v']
             audio_stream = input_stream['a']
             
@@ -221,7 +307,7 @@ class VideoEditor:
                 )
                 
                 # Reset timestamps
-                temp_clip_path = self.output_dir / f"temp_expr_clip_structured_reset_{safe_expression}.mkv"
+                temp_clip_path = self.output_dir / f"temp_expr_clip_long_form_reset_{safe_expression}.mkv"
                 self._register_temp_file(temp_clip_path)
                 
                 reset_input = ffmpeg.input(str(expression_video_clip_path))
@@ -256,46 +342,77 @@ class VideoEditor:
                 logger.error(f"❌ FFmpeg failed to extract expression clip: {stderr}")
                 raise RuntimeError(f"FFmpeg failed to extract expression clip: {stderr}") from e
             
-            # Repeat expression clip 2 times
+            # Step 2: Repeat expression clip 2 times
             repeat_count = 2
-            repeated_expression_path = self.output_dir / f"temp_expr_repeated_structured_{safe_expression}.mkv"
+            repeated_expression_path = self.output_dir / f"temp_expr_repeated_long_form_{safe_expression}.mkv"
             self._register_temp_file(repeated_expression_path)
             logger.info(f"Repeating expression clip {repeat_count} times")
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
             
-            # Step 2: Create transition video (0.5s with image and sound effect)
-            transition_path = self._create_transition_video(
-                duration=0.5,
-                image_path="assets/transition_16_9.png",
-                sound_effect_path="assets/sound_effect.mp3",
-                source_video_path=str(context_with_subtitles)
-            )
-            
             # Step 3: Concatenate context + transition + expression repeat
-            context_expr_path = self.output_dir / f"temp_context_expr_structured_{safe_expression}.mkv"
+            context_expr_path = self.output_dir / f"temp_context_expr_long_form_{safe_expression}.mkv"
             self._register_temp_file(context_expr_path)
-            logger.info("Concatenating context + transition + expression repeat")
-            from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
-            # First concatenate context + transition
-            context_transition_path = self.output_dir / f"temp_context_transition_{safe_expression}.mkv"
-            self._register_temp_file(context_transition_path)
-            concat_filter_with_explicit_map(
-                str(context_with_subtitles),
-                str(transition_path),
-                str(context_transition_path)
-            )
-            # Then concatenate context+transition + expression
-            concat_filter_with_explicit_map(
-                str(context_transition_path),
-                str(repeated_expression_path),
-                str(context_expr_path)
-            )
+
+            # Get transition configuration
+            transition_config = settings.get_transitions_config().get('context_to_expression_transition', {})
+            transition_enabled = transition_config.get('enabled', False)
+
+            if transition_enabled:
+                # Create transition video (0.3s with image and sound effect)
+                transition_duration = transition_config.get('duration', 0.3)
+                transition_image = transition_config.get('image_path_16_9', 'assets/transition_16_9.png')
+                sound_effect = transition_config.get('sound_effect_path', 'assets/sound_effect.mp3')
+
+                logger.info(f"Creating {transition_duration}s transition between context and expression")
+                transition_video = self._create_transition_video(
+                    duration=transition_duration,
+                    image_path=transition_image,
+                    sound_effect_path=sound_effect,
+                    source_video_path=str(context_clip_reset_path),
+                    aspect_ratio="16:9"
+                )
+
+                if transition_video:
+                    # Concatenate: context + transition + expression
+                    logger.info("Concatenating context + transition + expression repeat")
+                    from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                    # Note: concat_filter_with_explicit_map only handles 2 inputs, so we'll do it in two steps
+                    temp_context_transition = self.output_dir / f"temp_context_transition_{safe_expression}.mkv"
+                    self._register_temp_file(temp_context_transition)
+                    concat_filter_with_explicit_map(
+                        str(context_clip_reset_path),
+                        str(transition_video),
+                        str(temp_context_transition)
+                    )
+                    concat_filter_with_explicit_map(
+                        str(temp_context_transition),
+                        str(repeated_expression_path),
+                        str(context_expr_path)
+                    )
+                else:
+                    # Fallback to direct concatenation if transition creation failed
+                    logger.warning("Transition creation failed, concatenating directly")
+                    from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                    concat_filter_with_explicit_map(
+                        str(context_clip_reset_path),
+                        str(repeated_expression_path),
+                        str(context_expr_path)
+                    )
+            else:
+                # No transition - direct concatenation
+                logger.info("Concatenating context + expression repeat (no transition)")
+                from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                concat_filter_with_explicit_map(
+                    str(context_clip_reset_path),
+                    str(repeated_expression_path),
+                    str(context_expr_path)
+                )
             
             # Get duration for slide matching
             from langflix.media.ffmpeg_utils import get_duration_seconds
             context_expr_duration = get_duration_seconds(str(context_expr_path))
-            logger.info(f"Context + transition + expression duration: {context_expr_duration:.2f}s")
+            logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
             
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
@@ -308,30 +425,29 @@ class VideoEditor:
                 expression_video_clip_path=str(expression_video_path)
             )
             
-            # Step 5: Concatenate context+transition+expression → slide (no transition)
-            logger.info("Concatenating context+transition+expression → slide (direct, no transition)")
-            structured_temp_path = self.output_dir / f"temp_structured_{safe_expression}.mkv"
-            self._register_temp_file(structured_temp_path)
+            # Step 5: Concatenate context+expression → slide (direct, no transition)
+            logger.info("Concatenating context+expression → slide (direct, no transition)")
+            long_form_temp_path = self.output_dir / f"temp_long_form_{safe_expression}.mkv"
+            self._register_temp_file(long_form_temp_path)
 
-            # Direct concatenation without transitions (as per new architecture)
             concat_filter_with_explicit_map(
                 str(context_expr_path),
                 str(educational_slide),
-                str(structured_temp_path)
+                str(long_form_temp_path)
             )
             
             # Step 6: Add logo at right-top with 50% opacity (long-form video)
-            logger.info("Adding logo to structured video (right-top, 50% opacity)")
-            structured_with_logo_path = self.output_dir / f"temp_structured_with_logo_{safe_expression}.mkv"
-            self._register_temp_file(structured_with_logo_path)
+            logger.info("Adding logo to long-form video (right-top, 50% opacity)")
+            long_form_with_logo_path = self.output_dir / f"temp_long_form_with_logo_{safe_expression}.mkv"
+            self._register_temp_file(long_form_with_logo_path)
             
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
-                    # Load structured video
-                    structured_input = ffmpeg.input(str(structured_temp_path))
-                    structured_video = structured_input['v']
-                    structured_audio = structured_input['a'] if 'a' in structured_input else None
+                    # Load long-form video
+                    long_form_input = ffmpeg.input(str(long_form_temp_path))
+                    long_form_video = long_form_input['v']
+                    long_form_audio = long_form_input['a'] if 'a' in long_form_input else None
                     
                     # Load logo and apply 80% opacity
                     logo_input = ffmpeg.input(str(logo_path))
@@ -348,21 +464,21 @@ class VideoEditor:
                     overlay_x = f'W-w-{margin}'  # Right edge minus logo width minus margin
                     overlay_y = margin  # Top margin
                     
-                    # Overlay logo on structured video
+                    # Overlay logo on long-form video
                     final_video = ffmpeg.overlay(
-                        structured_video,
+                        long_form_video,
                         logo_video,
                         x=overlay_x,
                         y=overlay_y
                     )
                     
                     # Output video with logo
-                    if structured_audio:
+                    if long_form_audio:
                         (
                             ffmpeg.output(
                                 final_video,
-                                structured_audio,
-                                str(structured_with_logo_path),
+                                long_form_audio,
+                                str(long_form_with_logo_path),
                                 vcodec='libx264',
                                 acodec='aac',
                                 ac=2,
@@ -377,7 +493,7 @@ class VideoEditor:
                         (
                             ffmpeg.output(
                                 final_video,
-                                str(structured_with_logo_path),
+                                str(long_form_with_logo_path),
                                 vcodec='libx264',
                                 preset='fast',
                                 crf=23
@@ -386,49 +502,49 @@ class VideoEditor:
                             .run(capture_stdout=True, capture_stderr=True)
                         )
                     
-                    logger.info("Added logo to structured video (right-top, 50% opacity)")
+                    logger.info("Added logo to long-form video (right-top, 50% opacity)")
                     # Use video with logo for final audio gain
-                    structured_temp_path = structured_with_logo_path
+                    long_form_temp_path = long_form_with_logo_path
                 except Exception as e:
-                    logger.warning(f"Failed to add logo to structured video: {e}, continuing without logo")
+                    logger.warning(f"Failed to add logo to long-form video: {e}, continuing without logo")
                     # Continue with original video if logo addition fails
             else:
                 logger.debug(f"Logo file not found: {logo_path}, continuing without logo")
             
             # Step 7: Apply final audio gain
-            logger.info("Applying final audio gain to structured video")
+            logger.info("Applying final audio gain to long-form video")
             from langflix.media.ffmpeg_utils import apply_final_audio_gain
-            apply_final_audio_gain(str(structured_temp_path), str(output_path), gain_factor=1.69)
+            apply_final_audio_gain(str(long_form_temp_path), str(output_path), gain_factor=1.69)
             
-            logger.info(f"✅ Structured video created: {output_path}")
+            logger.info(f"✅ Long-form video created: {output_path}")
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating structured video: {e}")
+            logger.error(f"Error creating long-form video: {e}")
             raise
 
     @handle_error_decorator(
         ErrorContext(
-            operation="create_short_form_from_structured",
+            operation="create_short_form_from_long_form",
             component="core.video_editor"
         ),
         retry=False,
         fallback=False
     )
-    def create_short_form_from_structured(
+    def create_short_form_from_long_form(
         self,
-        structured_video_path: str,
+        long_form_video_path: str,
         expression: ExpressionAnalysis,
         expression_index: int = 0
     ) -> str:
         """
-        Create short-form video (9:16) from structured video with special layout:
-        - Structured video: centered, height 960px, left/right cropped (no stretch)
-        - Expression text: displayed at top (outside structured video, black screen)
-        - Subtitles: displayed at bottom (outside structured video, black screen)
+        Create short-form video (9:16) from long-form video with special layout:
+        - Long-form video: centered, height 960px, left/right cropped (no stretch)
+        - Expression text: displayed at top (outside long-form video, black screen)
+        - Subtitles: displayed at bottom (outside long-form video, black screen)
         
         Args:
-            structured_video_path: Path to structured video (16:9 or original ratio)
+            long_form_video_path: Path to long-form video (16:9 or original ratio)
             expression: ExpressionAnalysis object
             expression_index: Index of expression (for voice alternation)
             
@@ -445,24 +561,23 @@ class VideoEditor:
             short_videos_dir.mkdir(parents=True, exist_ok=True)
             output_path = short_videos_dir / output_filename
             
-            logger.info(f"Creating short-form video from structured video: {expression.expression}")
+            logger.info(f"Creating short-form video from long-form video: {expression.expression}")
+
+            # Get layout configuration from settings
+            target_width, target_height = settings.get_short_video_dimensions()
+            long_form_video_height = settings.get_long_form_video_height()
             
-            # Target resolution: 1080x1920 (9:16)
-            target_width = 1080
-            target_height = 1920
-            structured_video_height = 960  # Half of target height
-            
-            # Step 1: Scale structured video to height 960px, maintain aspect ratio, crop left/right
+            # Step 1: Scale long-form video to height 960px, maintain aspect ratio, crop left/right
             # This ensures no stretching - video is cropped if needed
             from langflix.media.ffmpeg_utils import get_video_params
-            structured_vp = get_video_params(structured_video_path)
-            structured_width = structured_vp.width or target_width
-            structured_height = structured_vp.height or target_height
+            long_form_vp = get_video_params(long_form_video_path)
+            long_form_width = long_form_vp.width or target_width
+            long_form_height = long_form_vp.height or target_height
             
             # Calculate scale to fit height 960px
-            scale_factor = structured_video_height / structured_height
-            scaled_width = int(structured_width * scale_factor)
-            scaled_height = structured_video_height
+            scale_factor = long_form_video_height / long_form_height
+            scaled_width = int(long_form_width * scale_factor)
+            scaled_height = long_form_video_height
             
             # If scaled width exceeds target width, crop from center
             crop_x = 0
@@ -471,16 +586,16 @@ class VideoEditor:
                 scaled_width = target_width
             
             logger.info(
-                f"Scaling structured video: {structured_width}x{structured_height} -> "
+                f"Scaling long-form video: {long_form_width}x{long_form_height} -> "
                 f"{scaled_width}x{scaled_height} (crop_x={crop_x})"
             )
             
-            # Step 2: Create scaled and cropped structured video
-            structured_scaled_path = self.output_dir / f"temp_structured_scaled_{safe_expression}.mkv"
-            self._register_temp_file(structured_scaled_path)
+            # Step 2: Create scaled and cropped long-form video
+            long_form_scaled_path = self.output_dir / f"temp_long_form_scaled_{safe_expression}.mkv"
+            self._register_temp_file(long_form_scaled_path)
             
-            structured_input = ffmpeg.input(str(structured_video_path))
-            video_stream = structured_input['v']
+            long_form_input = ffmpeg.input(str(long_form_video_path))
+            video_stream = long_form_input['v']
             
             # Scale to height 960px
             video_stream = ffmpeg.filter(video_stream, 'scale', -1, scaled_height)
@@ -499,17 +614,17 @@ class VideoEditor:
             # Get audio stream
             audio_stream = None
             try:
-                audio_stream = structured_input['a']
+                audio_stream = long_form_input['a']
             except (KeyError, AttributeError):
-                logger.debug("No audio stream in structured video")
+                logger.debug("No audio stream in long-form video")
             
-            # Output scaled structured video
+            # Output scaled long-form video
             if audio_stream:
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
-                        str(structured_scaled_path),
+                        str(long_form_scaled_path),
                         vcodec='libx264',
                         acodec='aac',
                         ac=2,
@@ -524,7 +639,7 @@ class VideoEditor:
                 (
                     ffmpeg.output(
                         video_stream,
-                        str(structured_scaled_path),
+                        str(long_form_scaled_path),
                         vcodec='libx264',
                         preset='fast',
                         crf=23
@@ -534,17 +649,17 @@ class VideoEditor:
                 )
             
             # Step 3: Create 1080x1920 black background
-            # Calculate y_offset to center structured video vertically
+            # Calculate y_offset to center long-form video vertically
             y_offset = (target_height - scaled_height) // 2  # Center vertically
             
-            logger.info(f"Centering structured video at y_offset={y_offset}")
+            logger.info(f"Centering long-form video at y_offset={y_offset}")
             
             # Step 4: Create final layout with expression text at top and subtitles at bottom
-            # Use pad filter to create black background and place structured video in center
-            final_input = ffmpeg.input(str(structured_scaled_path))
+            # Use pad filter to create black background and place long-form video in center
+            final_input = ffmpeg.input(str(long_form_scaled_path))
             final_video = final_input['v']
             
-            # Pad to create black background with structured video centered
+            # Pad to create black background with long-form video centered
             final_video = ffmpeg.filter(
                 final_video,
                 'pad',
@@ -566,33 +681,8 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
-            # Add logo above catchy keywords (short-form video)
-            # Logo position: top center, touching top of screen
-            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
-            if logo_path.exists():
-                try:
-                    # Load logo image and overlay it at top center
-                    # Position: y=0 (touching top of screen)
-                    # Scale logo to 2x current size (500px * 2 = 1000px height)
-                    logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 1000)  # Scale to 1000px height (2x from 500px), maintain aspect ratio
-                    
-                    # Overlay logo at top center (x: center, y: 0 - touching top)
-                    final_video = ffmpeg.overlay(
-                        final_video,
-                        logo_video,
-                        x='(W-w)/2',  # Center horizontally
-                        y=0  # Top position (touching top of screen)
-                    )
-                    logger.info("Added logo above catchy keywords in short-form video")
-                except Exception as e:
-                    logger.warning(f"Failed to add logo to short-form video: {e}")
-            else:
-                logger.debug(f"Logo file not found: {logo_path}")
-
-            # Add catchy keywords at top (outside structured video area, in top black padding)
-            # Top black padding: 0-480px (y_offset=480)
-            # Display catchy keywords if available
+            # Add catchy keywords at top (outside long-form video area, in top black padding)
+            # Display catchy keywords if available (positioning from config)
             if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
                 import random
                 
@@ -614,17 +704,19 @@ class VideoEditor:
                 # Build text with commas: "#keyword1, #keyword2, #keyword3"
                 # Render each keyword separately with its own color
                 # If total width exceeds max_width, wrap to new lines
-                font_size = 42
-                y_position = 350
-                line_height = font_size * 1.2  # Line spacing (20% of font size)
-                
+                font_size = settings.get_keywords_font_size()
+                y_position = settings.get_keywords_y_position()
+                line_height_factor = settings.get_keywords_line_height_factor()
+                line_height = font_size * line_height_factor  # Line spacing
+
                 # Calculate approximate character width (rough estimate: font_size * 0.6 for monospace-like)
                 char_width_estimate = font_size * 0.6
                 comma_separator = ",   "  # Comma with double space
                 comma_width = len(comma_separator) * char_width_estimate
-                
-                # Maximum width for keywords (90% of video width, video width is 1080px)
-                max_width = 1080 * 0.9  # ~972px
+
+                # Maximum width for keywords (configurable percentage of video width)
+                max_width_percent = settings.get_keywords_max_width_percent()
+                max_width = target_width * max_width_percent
                 
                 # Group keywords into lines based on width
                 keyword_lines = []  # List of lists, each inner list is a line of keyword indices
@@ -677,7 +769,7 @@ class VideoEditor:
                     current_x_offset = 0  # Track cumulative offset from center
                     for i, (keyword, color) in enumerate(zip(line_keywords, line_colors)):
                         escaped_keyword = escape_drawtext_string(keyword)
-                        
+
                         # Calculate x position for this keyword
                         if i == 0:
                             # First keyword: center minus half of remaining text width
@@ -696,8 +788,8 @@ class VideoEditor:
                             'fontcolor': color,  # Random color per keyword
                             'x': x_expr,
                             'y': line_y,
-                            'borderw': 2,
-                            'bordercolor': 'black'
+                            'borderw': settings.get_keywords_border_width(),
+                            'bordercolor': settings.get_keywords_border_color()
                         }
 
                         # Add fontfile if available
@@ -707,7 +799,7 @@ class VideoEditor:
                                 keyword_args['fontfile'] = font_path
 
                         final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
-                        
+
                         # Add comma after keyword (except last in line)
                         if i < len(line_keywords) - 1:
                             # Comma position: after current keyword
@@ -721,11 +813,11 @@ class VideoEditor:
                             comma_args = {
                                 'text': ', ',
                                 'fontsize': font_size,
-                                'fontcolor': 'white',  # Comma in white
+                                'fontcolor': settings.get_keywords_text_color(),  # Comma color from config
                                 'x': comma_x,
                                 'y': line_y,
-                                'borderw': 2,
-                                'bordercolor': 'black'
+                                'borderw': settings.get_keywords_border_width(),
+                                'bordercolor': settings.get_keywords_border_color()
                             }
                             if font_file:
                                 font_path = font_file.replace('fontfile=', '').replace(':', '')
@@ -736,28 +828,22 @@ class VideoEditor:
                 logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
-            # Video height: 1920px (1080p portrait with padding)
-            # Bottom position: y=1750-1850 (bottom area, above main subtitle)
-            # Expression + translation displayed throughout video duration
+            # Expression + translation displayed throughout video duration (positioning from config)
             expression_text = expression.expression
             expression_translation = expression.expression_translation
 
             escaped_expression = escape_drawtext_string(expression_text)
             escaped_translation = escape_drawtext_string(expression_translation)
 
-            # Add expression text (line 1) at bottom (yellow, bold, centered)
-            # Position: y=1450 (bottom area, above main subtitle at bottom)
-            # Font size: 4x main subtitle size for emphasis (increased from 3x)
-            main_font_size = int(get_expression_subtitle_styling().get("default", {}).get("font_size", 22))
-            expression_font_size = main_font_size * 3
+            # Add expression text at bottom (configurable styling)
             drawtext_args_1 = {
                 'text': escaped_expression,
-                'fontsize': expression_font_size,
-                'fontcolor': 'yellow',
+                'fontsize': settings.get_expression_font_size(),
+                'fontcolor': settings.get_expression_text_color(),
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1450,  # First line at bottom (above main subtitle)
-                'borderw': 2,
-                'bordercolor': 'black'
+                'y': settings.get_expression_y_position(),
+                'borderw': settings.get_expression_border_width(),
+                'bordercolor': settings.get_expression_border_color()
             }
 
             # Add fontfile if available
@@ -772,12 +858,12 @@ class VideoEditor:
             # Add expression translation (line 2) below expression text
             drawtext_args_2 = {
                 'text': escaped_translation,
-                'fontsize': expression_font_size,
-                'fontcolor': 'yellow',
+                'fontsize': settings.get_translation_font_size(),
+                'fontcolor': settings.get_translation_text_color(),
                 'x': '(w-text_w)/2',  # Center horizontally
-                'y': 1450 + expression_font_size + 20,  # Second line below expression (dynamic gap based on font size)
-                'borderw': 2,
-                'bordercolor': 'black'
+                'y': settings.get_translation_y_position(),
+                'borderw': settings.get_translation_border_width(),
+                'bordercolor': settings.get_translation_border_color()
             }
 
             if font_file:
@@ -787,14 +873,39 @@ class VideoEditor:
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
             
+            # Add logo at the very end to ensure it stays at absolute top (y=0)
+            # Logo position: absolute top (y=0) of black padding, above hashtags
+            # Reverted to original size to fix positioning issue
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
+            if logo_path.exists():
+                try:
+                    # Load logo image and overlay it at top center
+                    # Reverted to original size (150px height) to fix positioning
+                    logo_input = ffmpeg.input(str(logo_path))
+                    logo_video = logo_input['v'].filter('scale', -1, 150)  # Original size: 150px height
+                    
+                    # Overlay logo at absolute top center - LAST in filter chain
+                    final_video = ffmpeg.overlay(
+                        final_video,
+                        logo_video,
+                        x='(W-w)/2',  # Center horizontally (W = canvas width, w = logo width)
+                        y=0,  # Absolute top - logo's top-left corner at y=0 (canvas top)
+                        enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
+                    )
+                    logger.info("Added logo at absolute top of short-form video (y=0, original size 150px)")
+                except Exception as e:
+                    logger.warning(f"Failed to add logo to short-form video: {e}")
+            else:
+                logger.debug(f"Logo file not found: {logo_path}")
+            
             # Get audio stream
             final_audio = None
             try:
                 final_audio = final_input['a']
             except (KeyError, AttributeError):
-                logger.debug("No audio stream in scaled structured video")
+                logger.debug("No audio stream in scaled long-form video")
             
-            # Step 5: Apply subtitles at bottom (outside structured video area)
+            # Step 5: Apply subtitles at bottom (outside long-form video area)
             # Subtitles will be applied using subtitle overlay (ASS format)
             # For now, output video with expression text, then apply subtitles
             temp_with_expression_path = self.output_dir / f"temp_short_with_expression_{safe_expression}.mkv"
@@ -829,10 +940,9 @@ class VideoEditor:
                     .run(quiet=True)
                 )
             
-            # Step 6: Skip subtitle overlay - structured video already has subtitles embedded
-            # Structured videos are created with subtitles already applied, so we don't need
-            # to add additional subtitle layers to avoid duplicate subtitles in short-form videos
-            logger.info(f"✅ Skipping subtitle overlay - structured video already contains subtitles")
+            # Step 6: Skip subtitle overlay - long-form video already contains subtitles
+            # Long-form video already has subtitles embedded, so we don't need to add them again
+            logger.info("Skipping subtitle overlay - long-form video already contains subtitles")
             import shutil
             shutil.copy(str(temp_with_expression_path), str(output_path))
             
@@ -840,7 +950,7 @@ class VideoEditor:
             return str(output_path)
             
         except Exception as e:
-            logger.error(f"Error creating short-form video from structured video: {e}")
+            logger.error(f"Error creating short-form video from long-form video: {e}")
             raise
     
     def _get_font_option(self) -> str:
@@ -1578,13 +1688,16 @@ class VideoEditor:
                 expression_audio_duration = get_duration_seconds(str(expression_audio_path))
                 logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s")
                 
-                # Loop only 2 times: expression audio plays twice during slide (as designed)
-                # CRITICAL: DO NOT extend to match full target_duration - only 2x repeat
+                # Loop expression audio based on repeat_count setting
+                # CRITICAL: DO NOT extend to match full target_duration - only repeat_count times
                 final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
                 self._register_temp_file(final_audio_path)
                 
-                loop_count = 2
-                logger.info(f"Looping expression audio {loop_count} times (2x repeat as designed)")
+                # Get repeat count from settings (default: 3, but educational slides use 2)
+                # For educational slides, use expression repeat_count from settings
+                from langflix import settings
+                loop_count = settings.get_expression_repeat_count()
+                logger.info(f"Looping expression audio {loop_count} times (repeat_count from settings)")
                 
                 # Create concat list for looping
                 import tempfile
@@ -1607,9 +1720,9 @@ class VideoEditor:
                         .run(quiet=True)
                     )
                     
-                    # Get final audio duration (should be ~2x expression audio duration)
+                    # Get final audio duration (should be expression audio duration * repeat_count)
                     final_audio_duration = get_duration_seconds(str(final_audio_path))
-                    logger.info(f"✅ Audio looped 2x: final duration {final_audio_duration:.2f}s")
+                    logger.info(f"✅ Audio looped {loop_count}x: final duration {final_audio_duration:.2f}s (expression audio: {expression_audio_duration:.2f}s)")
                 finally:
                     # Clean up concat file
                     if concat_list_path and os.path.exists(concat_list_path):
@@ -1619,18 +1732,18 @@ class VideoEditor:
                             pass
                 
                 audio_2x_path = final_audio_path
-                # Use exact audio duration (2x expression audio) - stop video when audio ends
-                # Do NOT extend with target_duration or padding - video should end when second audio repeat finishes
+                # Use exact audio duration (expression audio * repeat_count) - stop video when audio ends
+                # Do NOT extend with target_duration or padding - video should end when all audio repeats finish
                 slide_duration = final_audio_duration
                 
                 # CRITICAL: When using expression audio, ignore target_duration to prevent extra playback
-                # Video should stop exactly when second expression audio repeat finishes
+                # Video should stop exactly when all expression audio repeats finish
                 if target_duration is not None and target_duration > slide_duration:
                     logger.info(f"Ignoring target_duration ({target_duration:.2f}s) for expression audio slide - using exact audio duration ({slide_duration:.2f}s)")
-                    logger.info(f"Video will stop when second expression audio repeat finishes (no extra playback)")
+                    logger.info(f"Video will stop when all {loop_count} expression audio repeats finish (no extra playback)")
                 
                 logger.info(f"Using expression audio for slide: {audio_2x_path}")
-                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Final slide duration: {slide_duration:.2f}s (exact match, no padding)")
+                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Repeat count: {loop_count}, Final slide duration: {slide_duration:.2f}s (exact match, no padding)")
                 
                 # For consistency with other branches, set audio_path and expression_duration
                 audio_path = audio_2x_path
@@ -1695,6 +1808,7 @@ class VideoEditor:
             if use_expression_audio and expression_video_clip_path:
                 # Expression audio: slide_duration already set to exact audio duration (no padding, no target_duration override)
                 # Do not modify slide_duration here - it's already set correctly above
+                # CRITICAL: Do NOT override with target_duration for expression audio
                 logger.info(f"Expression audio slide: using exact duration {slide_duration:.2f}s (no padding, no target_duration override)")
             else:
                 # TTS or original audio: add small padding
@@ -3278,43 +3392,46 @@ class VideoEditor:
         duration: float,
         image_path: str,
         sound_effect_path: str,
-        source_video_path: str
+        source_video_path: str,
+        aspect_ratio: str = "16:9"
     ) -> Path:
         """
         Create transition video from static image with sound effect.
-        
+
         Args:
-            duration: Transition duration in seconds (0.01s)
-            image_path: Path to transition image (transition_16_9.png)
-            sound_effect_path: Path to sound effect MP3 (sound_effect.mp3)
+            duration: Transition duration in seconds (e.g., 0.3s)
+            image_path: Path to transition image
+            sound_effect_path: Path to sound effect MP3
             source_video_path: Source video to match codec/resolution/params
-            
+            aspect_ratio: "16:9" for long-form or "9:16" for short-form
+
         Returns:
             Path to created transition video
         """
         try:
             from langflix.media.ffmpeg_utils import get_duration_seconds
-            import subprocess
-            
+
             # Resolve asset paths (relative to project root)
             project_root = Path(__file__).parent.parent.parent
             image_full_path = project_root / image_path
             sound_full_path = project_root / sound_effect_path
-            
+
             if not image_full_path.exists():
-                raise FileNotFoundError(f"Transition image not found: {image_full_path}")
+                logger.warning(f"Transition image not found: {image_full_path}, skipping transition")
+                return None
             if not sound_full_path.exists():
-                raise FileNotFoundError(f"Sound effect not found: {sound_full_path}")
-            
+                logger.warning(f"Sound effect not found: {sound_full_path}, skipping transition")
+                return None
+
             # Get source video resolution and params
             probe = ffmpeg.probe(str(source_video_path))
             video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
             audio_stream = next((s for s in probe['streams'] if s['codec_type'] == 'audio'), None)
-            
+
             width = int(video_stream.get('width', 1920)) if video_stream else 1920
             height = int(video_stream.get('height', 1080)) if video_stream else 1080
-            
-            # Parse frame rate safely (format: "25/1" or "29.97/1")
+
+            # Parse frame rate safely
             fps = 25  # default
             if video_stream:
                 r_frame_rate = video_stream.get('r_frame_rate', '25/1')
@@ -3326,37 +3443,33 @@ class VideoEditor:
                         fps = float(r_frame_rate)
                 except (ValueError, ZeroDivisionError):
                     fps = 25
-            
+
             sample_rate = int(audio_stream.get('sample_rate', 48000)) if audio_stream else 48000
-            
+
             logger.info(f"Creating transition video: {duration}s, resolution: {width}x{height}, fps: {fps}")
-            
+
             # Create output path
-            transition_output = self.output_dir / f"temp_transition_{duration}s.mkv"
+            transition_output = self.output_dir / f"temp_transition_{duration}s_{aspect_ratio.replace(':', 'x')}.mkv"
             self._register_temp_file(transition_output)
-            
+
             # Create video from static image
-            # Use loop=1 and t=duration to create video from static image
             image_input = ffmpeg.input(str(image_full_path), loop=1, t=duration)
-            
+
             # Scale image to match source resolution and set fps
             video_stream = (
                 image_input['v']
                 .filter('scale', width, height)
                 .filter('fps', fps=fps)
             )
-            
+
             # Add sound effect - trim to exact duration
             sound_input = ffmpeg.input(str(sound_full_path))
-            # Trim sound effect to exact duration
             audio_stream = sound_input['a'].filter('atrim', duration=duration).filter('asetpts', 'PTS-STARTPTS')
-            
+
             # Get video output args
             video_args = self._get_video_output_args()
-            
+
             # Create transition video with image and sound effect
-            # Both video and audio are already trimmed to exact duration (0.2s)
-            # No need for shortest flag since both streams have same duration
             try:
                 (
                     ffmpeg
@@ -3364,78 +3477,30 @@ class VideoEditor:
                         video_stream,
                         audio_stream,
                         str(transition_output),
-                        vcodec=video_args.get('vcodec', 'libx264'),
-                        acodec=video_args.get('acodec', 'aac'),
+                       vcodec=video_args.get('vcodec', 'libx264'),
+                       acodec=video_args.get('acodec', 'aac'),
                         preset=video_args.get('preset', 'fast'),
                         ac=2,
                         ar=sample_rate,
                         crf=video_args.get('crf', 23)
                     )
-                    .overwrite_output()
+                .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)
                 )
             except ffmpeg.Error as e:
                 stderr_msg = e.stderr.decode() if e.stderr else 'No stderr'
                 logger.error(f"FFmpeg error creating transition: {stderr_msg}")
                 raise
-            
+
             # Verify duration
             actual_duration = get_duration_seconds(str(transition_output))
             logger.info(f"✅ Transition video created: {transition_output} (duration: {actual_duration:.3f}s)")
-            
+
             return transition_output
             
         except Exception as e:
             logger.error(f"Error creating transition video: {e}")
-            raise
-    
-    def _apply_context_to_expression_transition(
-        self, context_path: str, expression_path: str, output_path: str, 
-        transition_effect: str, transition_duration: float
-    ) -> None:
-        """Apply xfade transition between context and expression video for short-form."""
-        try:
-            # Get video durations
-            context_duration = get_duration_seconds(context_path)
-            logger.info(f"Context duration: {context_duration:.2f}s")
-            
-            # Create inputs
-            context_input = ffmpeg.input(context_path)
-            expr_input = ffmpeg.input(expression_path)
-            
-            # Normalize frame rates for compatibility
-            v0 = ffmpeg.filter(context_input['v'], 'fps', fps=25)
-            v1 = ffmpeg.filter(expr_input['v'], 'fps', fps=25)
-            
-            # Apply xfade transition - offset is context duration minus transition duration
-            transition_offset = max(0, context_duration - transition_duration)
-            
-            video_out = ffmpeg.filter([v0, v1], 'xfade',
-                                     transition=transition_effect,
-                                     duration=transition_duration,
-                                     offset=transition_offset)
-            
-            # Concatenate audio streams separately for proper sequencing
-            audio_out = ffmpeg.filter([context_input['a'], expr_input['a']], 'concat', n=2, v=0, a=1)
-            
-            # Combine video with transition and audio concatenation
-            video_args = self._get_video_output_args()
-            (
-                ffmpeg
-                .output(video_out, audio_out, str(output_path),
-                       vcodec=video_args.get('vcodec', 'libx264'),
-                       acodec=video_args.get('acodec', 'aac'),
-                       preset=video_args.get('preset', 'veryfast'),
-                       ac=2, ar=48000, crf=video_args.get('crf', 25))
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            
-            logger.info(f"✅ Applied {transition_effect} transition ({transition_duration}s)")
-            
-        except Exception as e:
-            logger.error(f"Error applying transition: {e}")
-            raise
+            return None
     
     def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
         """Create a single batch video from a list of video paths"""

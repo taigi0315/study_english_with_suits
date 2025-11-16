@@ -639,7 +639,7 @@ class LangFlixPipeline:
         
         # Process each expression individually (no grouping)
         # SIMPLIFIED: Only create subtitle files here
-        # Context video extraction is handled by create_structured_video for efficiency
+        # Context video extraction is handled by create_long_form_video for efficiency
         for expr_idx, expression in enumerate(self.expressions):
             try:
                 logger.info(
@@ -675,18 +675,18 @@ class LangFlixPipeline:
                 continue
     
     def _create_educational_videos(self):
-        """Create structured videos for each expression (1:1 context-expression mapping)"""
-        logger.info(f"Creating structured videos for {len(self.expressions)} expressions...")
+        """Create long-form videos for each expression (1:1 context-expression mapping)"""
+        logger.info(f"Creating long-form videos for {len(self.expressions)} expressions...")
         
-        # Get original video file for passing directly to create_structured_video
+        # Get original video file for passing directly to create_long_form_video
         original_video = self.video_processor.find_video_file(str(self.subtitle_file))
         if not original_video:
-            logger.error("No original video file found, cannot create structured videos")
+            logger.error("No original video file found, cannot create long-form videos")
             raise RuntimeError("Original video file not found")
         
         logger.info(f"Using original video file: {original_video}")
         
-        structured_videos = []
+        long_form_videos = []
         
         # Iterate over expressions individually (1:1 mapping)
         # SIMPLIFIED: Pass original video directly instead of pre-extracted context clips
@@ -699,21 +699,21 @@ class LangFlixPipeline:
                 )
                 
                 try:
-                    # Create structured video for this expression
-                    # create_structured_video will extract the context clip internally
-                    structured_video = self.video_editor.create_structured_video(
+                    # Create long-form video for this expression
+                    # create_long_form_video will extract the context clip internally
+                    long_form_video = self.video_editor.create_long_form_video(
                         expression,
-                        str(original_video),  # Original video - extraction happens in create_structured_video
+                        str(original_video),  # Original video - extraction happens in create_long_form_video
                         str(original_video),  # Original video for expression audio
                         expression_index=expr_idx  # Expression index for voice alternation
                     )
                     
-                    structured_videos.append(structured_video)
-                    logger.info(f"✅ Structured video created for expression: {structured_video}")
+                    long_form_videos.append(long_form_video)
+                    logger.info(f"✅ Long-form video created for expression: {long_form_video}")
                     
                 except Exception as e:
                     logger.error(
-                        f"Error creating structured video for expression {expr_idx+1}: {e}",
+                        f"Error creating long-form video for expression {expr_idx+1}: {e}",
                         exc_info=True
                     )
                     continue
@@ -722,9 +722,9 @@ class LangFlixPipeline:
                 logger.error(f"Error processing expression {expr_idx+1}: {e}")
                 continue
         
-        if not structured_videos:
+        if not long_form_videos:
             logger.error(
-                f"❌ Cannot create structured videos: No structured videos were created\n"
+                f"❌ Cannot create long-form videos: No long-form videos were created\n"
                 f"   Reasons this might happen:\n"
                 f"   1. No expressions were found/parsed from LLM response\n"
                 f"   2. All expressions failed validation (check log for 'Dropping expression' messages)\n"
@@ -732,13 +732,13 @@ class LangFlixPipeline:
                 f"   Expression count: {len(self.expressions)}"
             )
             raise RuntimeError(
-                f"Cannot create structured videos: {len(structured_videos)} structured videos created "
+                f"Cannot create long-form videos: {len(long_form_videos)} long-form videos created "
                 f"(expected at least 1). Check logs above for expression parsing/validation errors."
             )
         
-        # Create combined structured video
-        logger.info(f"Creating combined structured video from {len(structured_videos)} structured videos...")
-        self._create_combined_structured_video(structured_videos)
+        # Create combined long-form video
+        logger.info(f"Creating combined long-form video from {len(long_form_videos)} long-form videos...")
+        self._create_combined_long_form_video(long_form_videos)
         
         # Clean up all temporary files created by VideoEditor
         # For long form, clean up everything (preserve_short_format=False) (TICKET-029)
@@ -767,7 +767,7 @@ class LangFlixPipeline:
                 logger.warning(f"Failed to cleanup VideoEditor temporary files: {e}")
     
     def _create_short_videos(self, short_form_max_duration: float = 180.0):
-        """Create short-format videos from structured videos."""
+        """Create short-format videos from long-form videos."""
         try:
             # Check if short video generation is enabled
             from langflix import settings
@@ -775,49 +775,52 @@ class LangFlixPipeline:
                 logger.info("Short video generation is disabled in configuration")
                 return
                 
-            logger.info("Creating short-format videos from structured videos...")
+            logger.info("Creating short-format videos from long-form videos...")
             
-            # Get structured videos from videos/ directory
+            # Get long-form videos from videos/ directory
             videos_dir = self.paths['language'].get('videos')
             if not videos_dir:
                 videos_dir = self.paths['language']['language_dir'] / "videos"
             
             videos_dir = Path(videos_dir) if isinstance(videos_dir, str) else videos_dir
-            structured_videos = sorted(list(videos_dir.glob("structured_video_*.mkv")))
+            long_form_videos = sorted(list(videos_dir.glob("long_form_video_*.mkv")))
             
-            logger.info(f"Found {len(structured_videos)} structured videos for short video creation")
+            logger.info(f"Found {len(long_form_videos)} long-form videos for short video creation")
             
-            if not structured_videos:
-                logger.warning("No structured videos found for short video creation")
+            if not long_form_videos:
+                logger.warning("No long-form videos found for short video creation")
                 return
             
             short_format_videos = []
             
-            # Create a mapping from expression names to structured videos
-            structured_video_map = {}
-            for structured_video in structured_videos:
-                # Extract expression name from filename: structured_video_{expression_name}.mkv
-                video_name = structured_video.stem
-                if video_name.startswith('structured_video_'):
-                    expression_name = video_name[17:]  # Remove 'structured_video_' prefix (17 chars)
-                    structured_video_map[expression_name] = structured_video
-                    logger.info(f"Mapped structured video: '{expression_name}' -> {video_name}")
+            # Create a mapping from expression names to long-form videos
+            long_form_video_map = {}
+            for long_form_video in long_form_videos:
+                # Extract expression name from filename: long_form_video_{expression_name}.mkv
+                video_name = long_form_video.stem
+                logger.debug(f"Processing video: {long_form_video.name}, stem: {video_name}")
+                if video_name.startswith('long_form_video_'):
+                    expression_name = video_name[len('long_form_video_'):]  # Remove 'long_form_video_' prefix
+                    long_form_video_map[expression_name] = long_form_video
+                    logger.info(f"Mapped long-form video: '{expression_name}' -> {video_name}")
+                else:
+                    logger.warning(f"Video name '{video_name}' does not start with 'long_form_video_'")
             
-            logger.info(f"Structured video mapping: {list(structured_video_map.keys())}")
+            logger.info(f"Long-form video mapping: {list(long_form_video_map.keys())}")
             
             for i, expression in enumerate(self.expressions):
                 # Sanitize expression name to match filename format
                 safe_expression_name = sanitize_for_expression_filename(expression.expression)
-                logger.info(f"Looking for structured video: structured_video_{safe_expression_name}.mkv")
+                logger.info(f"Looking for long-form video: long_form_video_{safe_expression_name}.mkv")
                 
-                if safe_expression_name in structured_video_map:
-                    structured_video = structured_video_map[safe_expression_name]
+                if safe_expression_name in long_form_video_map:
+                    long_form_video = long_form_video_map[safe_expression_name]
                     logger.info(f"Creating short format video {i+1}/{len(self.expressions)}: {expression.expression}")
-                    logger.info(f"Using structured video: {structured_video.name}")
+                    logger.info(f"Using long-form video: {long_form_video.name}")
                     
                     try:
-                        output_path = self.video_editor.create_short_form_from_structured(
-                            str(structured_video),
+                        output_path = self.video_editor.create_short_form_from_long_form(
+                            str(long_form_video),
                             expression,
                             expression_index=i
                         )
@@ -832,7 +835,7 @@ class LangFlixPipeline:
                         logger.error(f"Error creating short format video for expression {i+1}: {e}")
                         continue
                 else:
-                    logger.warning(f"No structured video found for expression '{expression.expression}' (sanitized: '{safe_expression_name}')")
+                    logger.warning(f"No long-form video found for expression '{expression.expression}' (sanitized: '{safe_expression_name}')")
                     continue
             
             if short_format_videos:
@@ -929,32 +932,32 @@ class LangFlixPipeline:
             logger.error(f"Error creating batched short videos: {e}")
             raise
     
-    def _create_combined_structured_video(self, structured_videos: List[str]):
-        """Create combined structured video from all structured videos"""
+    def _create_combined_long_form_video(self, long_form_videos: List[str]):
+        """Create combined long-form video from all long-form videos"""
         try:
-            if not structured_videos:
-                logger.warning("No structured videos provided for combination")
+            if not long_form_videos:
+                logger.warning("No long-form videos provided for combination")
                 return
             
-            logger.info(f"Combining {len(structured_videos)} structured videos into one...")
+            logger.info(f"Combining {len(long_form_videos)} long-form videos into one...")
             
             # Validate that all video files exist
             valid_videos = []
-            for video_path in structured_videos:
+            for video_path in long_form_videos:
                 if Path(video_path).exists() and Path(video_path).stat().st_size > 1000:
                     valid_videos.append(video_path)
-                    logger.info(f"Valid structured video: {Path(video_path).name}")
+                    logger.info(f"Valid long-form video: {Path(video_path).name}")
                 else:
-                    logger.warning(f"Skipping invalid structured video: {video_path}")
+                    logger.warning(f"Skipping invalid long-form video: {video_path}")
             
             if not valid_videos:
-                logger.error("No valid structured videos found for combination")
+                logger.error("No valid long-form videos found for combination")
                 return
             
             # Create output path for combined video
             episode_name = self.paths.get('episode_name', 'Unknown_Episode')
             original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
-            combined_video_filename = f"combined_structured_video_{episode_name}_{original_filename}.mkv"
+            combined_video_filename = f"combined_long_form_video_{episode_name}_{original_filename}.mkv"
             
             # Use videos directory from paths
             if 'videos' in self.paths['language']:
@@ -988,7 +991,7 @@ class LangFlixPipeline:
                     .run(quiet=True)
                 )
                 
-                logger.info(f"✅ Combined structured video created: {combined_video_path}")
+                logger.info(f"✅ Combined long-form video created: {combined_video_path}")
             finally:
                 # Clean up concat file
                 import os
@@ -996,7 +999,7 @@ class LangFlixPipeline:
                     os.unlink(concat_file.name)
             
         except Exception as e:
-            logger.error(f"Error creating combined structured video: {e}", exc_info=True)
+            logger.error(f"Error creating combined long-form video: {e}", exc_info=True)
     
     def _create_final_video(self, educational_videos: List[str]):
         """Create final concatenated educational video with fade transitions"""

@@ -107,7 +107,7 @@ video:
   
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
   # Optimized for speed: 25 provides good quality while encoding much faster than 23
-  crf: 25
+  crf: 0
   
   # Output resolution
   resolution: "1280x720"
@@ -266,8 +266,8 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 50
-      y_position: 350            # Starting Y position for first line
+      font_size: 60
+      y_position: 250            # Starting Y position for first line
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -276,7 +276,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 55              # Main expression font size (increased by 10 from 45)
+      font_size: 65              # Main expression font size (increased by 10 from 45)
       y_position: 1500           # Y position for expression line
       text_color: 'yellow'
       border_width: 2
@@ -284,8 +284,8 @@ short_video:
 
     # Expression translation (bottom padding area)
     translation:
-      font_size: 32              # Translation font size (slightly smaller)
-      y_position: 1560           # Y position for translation line
+      font_size: 65              # Translation font size (slightly smaller)
+      y_position: 1600           # Y position for translation line
       gap_from_expression: 60    # Gap between expression and translation
       text_color: 'yellow'
       border_width: 2

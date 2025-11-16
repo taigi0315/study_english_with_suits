@@ -402,12 +402,12 @@ class VideoEditor:
             else:
                 # No transition - direct concatenation
                 logger.info("Concatenating context + expression repeat (no transition)")
-            from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
-            concat_filter_with_explicit_map(
+                from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map
+                concat_filter_with_explicit_map(
                     str(context_clip_reset_path),
-                str(repeated_expression_path),
-                str(context_expr_path)
-            )
+                    str(repeated_expression_path),
+                    str(context_expr_path)
+                )
             
             # Get duration for slide matching
             from langflix.media.ffmpeg_utils import get_duration_seconds
@@ -1688,13 +1688,16 @@ class VideoEditor:
                 expression_audio_duration = get_duration_seconds(str(expression_audio_path))
                 logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s")
                 
-                # Loop only 2 times: expression audio plays twice during slide (as designed)
-                # CRITICAL: DO NOT extend to match full target_duration - only 2x repeat
+                # Loop expression audio based on repeat_count setting
+                # CRITICAL: DO NOT extend to match full target_duration - only repeat_count times
                 final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
                 self._register_temp_file(final_audio_path)
                 
-                loop_count = 2
-                logger.info(f"Looping expression audio {loop_count} times (2x repeat as designed)")
+                # Get repeat count from settings (default: 3, but educational slides use 2)
+                # For educational slides, use expression repeat_count from settings
+                from langflix import settings
+                loop_count = settings.get_expression_repeat_count()
+                logger.info(f"Looping expression audio {loop_count} times (repeat_count from settings)")
                 
                 # Create concat list for looping
                 import tempfile
@@ -1717,9 +1720,9 @@ class VideoEditor:
                         .run(quiet=True)
                     )
                     
-                    # Get final audio duration (should be ~2x expression audio duration)
+                    # Get final audio duration (should be expression audio duration * repeat_count)
                     final_audio_duration = get_duration_seconds(str(final_audio_path))
-                    logger.info(f"✅ Audio looped 2x: final duration {final_audio_duration:.2f}s")
+                    logger.info(f"✅ Audio looped {loop_count}x: final duration {final_audio_duration:.2f}s (expression audio: {expression_audio_duration:.2f}s)")
                 finally:
                     # Clean up concat file
                     if concat_list_path and os.path.exists(concat_list_path):
@@ -1729,18 +1732,18 @@ class VideoEditor:
                             pass
                 
                 audio_2x_path = final_audio_path
-                # Use exact audio duration (2x expression audio) - stop video when audio ends
-                # Do NOT extend with target_duration or padding - video should end when second audio repeat finishes
+                # Use exact audio duration (expression audio * repeat_count) - stop video when audio ends
+                # Do NOT extend with target_duration or padding - video should end when all audio repeats finish
                 slide_duration = final_audio_duration
                 
                 # CRITICAL: When using expression audio, ignore target_duration to prevent extra playback
-                # Video should stop exactly when second expression audio repeat finishes
+                # Video should stop exactly when all expression audio repeats finish
                 if target_duration is not None and target_duration > slide_duration:
                     logger.info(f"Ignoring target_duration ({target_duration:.2f}s) for expression audio slide - using exact audio duration ({slide_duration:.2f}s)")
-                    logger.info(f"Video will stop when second expression audio repeat finishes (no extra playback)")
+                    logger.info(f"Video will stop when all {loop_count} expression audio repeats finish (no extra playback)")
                 
                 logger.info(f"Using expression audio for slide: {audio_2x_path}")
-                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Final slide duration: {slide_duration:.2f}s (exact match, no padding)")
+                logger.info(f"Expression audio duration: {expression_audio_duration:.2f}s, Repeat count: {loop_count}, Final slide duration: {slide_duration:.2f}s (exact match, no padding)")
                 
                 # For consistency with other branches, set audio_path and expression_duration
                 audio_path = audio_2x_path
@@ -1805,16 +1808,17 @@ class VideoEditor:
             if use_expression_audio and expression_video_clip_path:
                 # Expression audio: slide_duration already set to exact audio duration (no padding, no target_duration override)
                 # Do not modify slide_duration here - it's already set correctly above
+                # CRITICAL: Do NOT override with target_duration for expression audio
                 logger.info(f"Expression audio slide: using exact duration {slide_duration:.2f}s (no padding, no target_duration override)")
             else:
                 # TTS or original audio: add small padding
                 slide_duration = expression_duration + 0.5  # Add small padding for slide
-            
-            # If target_duration is provided, use that instead (for hstack matching)
+                
+                # If target_duration is provided, use that instead (for hstack matching)
                 # But only for non-expression-audio cases
-            if target_duration is not None and target_duration > slide_duration:
-                slide_duration = target_duration
-                logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
+                if target_duration is not None and target_duration > slide_duration:
+                    slide_duration = target_duration
+                    logger.info(f"Using target duration for hstack: {slide_duration:.2f}s (audio: {expression_duration:.2f}s)")
             
             logger.info(f"Using timeline audio directly: {audio_2x_path}")
             logger.info(f"Timeline duration: {expression_duration:.2f}s, Final slide duration: {slide_duration:.2f}s")

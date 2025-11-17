@@ -12,6 +12,7 @@ from langflix.youtube.video_manager import VideoFileManager, VideoMetadata
 from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouTubeUploadManager
 from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
 from langflix.youtube.schedule_manager import YouTubeScheduleManager, ScheduleConfig
+from langflix.youtube.last_schedule import YouTubeLastScheduleService
 from langflix.db.models import YouTubeAccount, YouTubeQuotaUsage
 from langflix.db.session import db_manager
 import logging
@@ -122,6 +123,14 @@ class VideoManagementUI:
         except Exception as e:
             logger.warning(f"Failed to initialize schedule manager: {e}")
             self.schedule_manager = None
+        
+        # Initialize YouTube-based lightweight scheduler
+        try:
+            self.yt_scheduler = YouTubeLastScheduleService()
+            logger.info("YouTube-based scheduler initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize YouTube scheduler: {e}")
+            self.yt_scheduler = None
         
         # Initialize media scanner
         from langflix.media.media_scanner import MediaScanner
@@ -1221,12 +1230,15 @@ class VideoManagementUI:
                 if len(videos) > 50:
                     return jsonify({"error": "Maximum 50 videos allowed per batch"}), 400
                 
-                if not self.schedule_manager:
-                    return jsonify({
-                        "error": "Schedule manager not available",
-                        "hint": "Please ensure database is configured and PostgreSQL is running"
-                    }), 503
-                
+                # Initialize lightweight YouTube-based scheduler (no DB dependency).
+                yt_scheduler = None
+                try:
+                    from langflix.youtube.last_schedule import YouTubeLastScheduleService, LastScheduleConfig
+                    yt_scheduler = YouTubeLastScheduleService(LastScheduleConfig())
+                except Exception as e:
+                    logger.warning(f"Failed to initialize YouTubeLastScheduleService: {e}")
+                    yt_scheduler = None
+ 
                 results = []
                 # Schedule videos sequentially, calculating next available slot for each
                 for video in videos:
@@ -1248,9 +1260,9 @@ class VideoManagementUI:
                         # Determine next publish time.
                         # Prefer YouTube-based lightweight scheduler; fall back to DB schedule manager.
                         publish_time = None
-                        if yt_scheduler:
+                        if self.yt_scheduler:
                             try:
-                                publish_time = yt_scheduler.get_next_available_slot()
+                                publish_time = self.yt_scheduler.get_next_available_slot()
                             except Exception as e:
                                 logger.warning(f"YouTube scheduler failed, falling back to DB: {e}")
                                 publish_time = None
@@ -1324,8 +1336,8 @@ class VideoManagementUI:
                         
                         if result.success:
                             # Update lightweight scheduler state for sequential batches
-                            if yt_scheduler:
-                                yt_scheduler.record_local(publish_time)
+                            if self.yt_scheduler:
+                                self.yt_scheduler.record_local(publish_time)
                             
                             # Store schedule in DB for tracking when available
                             actual_scheduled_time = publish_time

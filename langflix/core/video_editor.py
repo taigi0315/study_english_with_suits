@@ -874,14 +874,14 @@ class VideoEditor:
             
             # Add logo at the very end to ensure it stays at absolute top (y=0)
             # Logo position: absolute top (y=0) of black padding, above hashtags
-            # Reverted to original size to fix positioning issue
+            # Logo size: 600px height (4x original for better visibility)
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
                     # Load logo image and overlay it at top center
-                    # Reverted to original size (150px height) to fix positioning
+                    # Logo size: 600px height (4x for better visibility in 1080x1920px videos)
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 150)  # Original size: 150px height
+                    logo_video = logo_input['v'].filter('scale', -1, 600)  # 4x size: 600px height (was 150px)
                     
                     # Overlay logo at absolute top center - LAST in filter chain
                     final_video = ffmpeg.overlay(
@@ -891,7 +891,7 @@ class VideoEditor:
                         y=0,  # Absolute top - logo's top-left corner at y=0 (canvas top)
                         enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
                     )
-                    logger.info("Added logo at absolute top of short-form video (y=0, original size 150px)")
+                    logger.info("Added logo at absolute top of short-form video (y=0, 600px height)")
                 except Exception as e:
                     logger.warning(f"Failed to add logo to short-form video: {e}")
             else:

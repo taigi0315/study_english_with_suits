@@ -1219,7 +1219,7 @@ Examples:
         "--language-code", "--language",
         type=str,
         default="ko",
-        choices=['ko', 'ja', 'zh', 'es', 'fr'],
+        choices=['ko', 'ja', 'zh', 'es', 'fr', 'en'],
         help="Target language code for output (default: ko for Korean)"
     )
     

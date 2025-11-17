@@ -448,18 +448,10 @@ class VideoEditor:
                     long_form_video = long_form_input['v']
                     long_form_audio = long_form_input['a'] if 'a' in long_form_input else None
                     
-                    # Load logo image and convert to video stream for overlay
-                    # PNG images need special handling: use -loop 1 and -t to make them work as video
-                    # Scale logo to 25% of original size (original: 709x234, 25% height: ~59px)
-                    logo_input = ffmpeg.input(str(logo_path), loop=1, t='999999', framerate=25)
-                    # For PNG images, access video stream using index 0 or 'v' key
-                    try:
-                        logo_video = logo_input['v']
-                    except (KeyError, TypeError):
-                        # Fallback: use stream index 0 for image inputs
-                        logo_video = logo_input[0]
+                    # Load logo image - use simple input without loop/framerate for PNG
+                    logo_input = ffmpeg.input(str(logo_path))
                     # Scale logo to 25% of original size (height: 234 * 0.25 = 58.5 ≈ 59px)
-                    logo_video = logo_video.filter('scale', -1, 100)
+                    logo_video = logo_input['v'].filter('scale', -1, 100)
                     # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
                     logo_video = logo_video.filter('format', 'rgba')
                     # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)
@@ -471,7 +463,7 @@ class VideoEditor:
                     overlay_x = f'W-w-{margin}'  # Right edge minus logo width minus margin
                     overlay_y = margin  # Top margin
                     
-                    # Overlay logo on long-form video using overlay filter
+                    # Overlay logo on long-form video
                     final_video = ffmpeg.overlay(
                         long_form_video,
                         logo_video,
@@ -886,18 +878,10 @@ class VideoEditor:
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
-                    # Load logo image and convert to video stream for overlay
-                    # PNG images need special handling: use -loop 1 and -t to make them work as video
-                    # Scale logo to 25% of original size (original: 709x234, 25% height: ~59px)
-                    logo_input = ffmpeg.input(str(logo_path), loop=1, t='999999', framerate=25)
-                    # For PNG images, access video stream using index 0 or 'v' key
-                    try:
-                        logo_video = logo_input['v']
-                    except (KeyError, TypeError):
-                        # Fallback: use stream index 0 for image inputs
-                        logo_video = logo_input[0]
+                    # Load logo image - use simple input without loop/framerate for PNG
+                    logo_input = ffmpeg.input(str(logo_path))
                     # Scale logo to 25% of original size (height: 234 * 0.25 = 58.5 ≈ 59px)
-                    logo_video = logo_video.filter('scale', -1, 59)
+                    logo_video = logo_input['v'].filter('scale', -1, 59)
                     # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
                     logo_video = logo_video.filter('format', 'rgba')
                     # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)

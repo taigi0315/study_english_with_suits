@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from langflix.youtube.uploader import YouTubeVideoMetadata
 from langflix.youtube.video_manager import VideoMetadata
+from langflix import settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,68 @@ class YouTubeMetadataGenerator:
             "slide": "22",        # People & Blogs
             "context": "22"       # People & Blogs
         }
+        # Translation mappings for template strings (TICKET-056)
+        self.translations = self._load_translations()
+    
+    def _load_translations(self) -> Dict[str, Dict[str, str]]:
+        """Load translations for template strings by target language (TICKET-056)"""
+        return {
+            "Korean": {
+                "quick_lesson": "수트에서 배우는 빠른 영어 레슨!",
+                "expression_label": "표현",
+                "meaning_label": "의미",
+                "watch_and_learn": "좋아하는 쇼에서 보고 배우세요!",
+                "title_template": "영어 표현: {expression} | #Shorts #영어학습"
+            },
+            "English": {
+                "quick_lesson": "Quick English lesson from Suits!",
+                "expression_label": "Expression",
+                "meaning_label": "Meaning",
+                "watch_and_learn": "Watch and learn from your favorite show!",
+                "title_template": "English Expression: {expression} | #Shorts #EnglishLearning"
+            },
+            "Japanese": {
+                "quick_lesson": "スーツから学ぶクイック英語レッスン！",
+                "expression_label": "表現",
+                "meaning_label": "意味",
+                "watch_and_learn": "お気に入りの番組から見て学びましょう！",
+                "title_template": "英語表現: {expression} | #Shorts #英語学習"
+            },
+            "Chinese": {
+                "quick_lesson": "从《金装律师》快速学习英语！",
+                "expression_label": "表达",
+                "meaning_label": "含义",
+                "watch_and_learn": "从你最喜欢的节目中观看和学习！",
+                "title_template": "英语表达: {expression} | #Shorts #英语学习"
+            },
+            "Spanish": {
+                "quick_lesson": "¡Lección rápida de inglés de Suits!",
+                "expression_label": "Expresión",
+                "meaning_label": "Significado",
+                "watch_and_learn": "¡Mira y aprende de tu programa favorito!",
+                "title_template": "Expresión en inglés: {expression} | #Shorts #AprenderInglés"
+            },
+            "French": {
+                "quick_lesson": "Leçon d'anglais rapide de Suits !",
+                "expression_label": "Expression",
+                "meaning_label": "Signification",
+                "watch_and_learn": "Regardez et apprenez de votre émission préférée !",
+                "title_template": "Expression anglaise: {expression} | #Shorts #ApprendreAnglais"
+            }
+        }
+    
+    def _get_target_language(self) -> str:
+        """Get target language from settings (TICKET-056)"""
+        return getattr(settings, 'TARGET_LANGUAGE', 'Korean')
+    
+    def _get_template_translation(self, key: str, target_language: Optional[str] = None) -> str:
+        """Get translated string for template (TICKET-056)"""
+        if target_language is None:
+            target_language = self._get_target_language()
+        
+        # Fallback to English if translation not found
+        translations = self.translations.get(target_language, self.translations.get("English", {}))
+        return translations.get(key, key)
     
     def _load_templates(self) -> Dict[str, YouTubeContentTemplate]:
         """Load content templates for different video types"""
@@ -61,21 +124,11 @@ class YouTubeMetadataGenerator:
             ),
             
             "short": YouTubeContentTemplate(
-                title_template="English Expression: {expression} | #Shorts #EnglishLearning",
-                description_template="""🎬 Quick English lesson from Suits!
-
-📚 Expression: "{expression}"
-📖 Meaning: {translation}
-🎯 Episode: {episode}
-
-💡 Use this expression in your daily conversations!
-
-#Shorts #EnglishLearning #Suits #EnglishExpressions #LearnEnglish #EnglishWithTV #EnglishConversation #EnglishGrammar #EnglishVocabulary #EnglishSpeaking #EnglishPractice #SuitsTVShow #EnglishLessons #EnglishTips #EnglishStudy #EnglishFluency""",
+                title_template="{title_template}",  # Will be replaced with target language version
+                description_template="{description_template}",  # Will be replaced with target language version
                 default_tags=[
-                    "Shorts", "English Learning", "Suits", "English Expressions",
-                    "Learn English", "English with TV", "English Conversation",
-                    "English Grammar", "English Vocabulary", "English Speaking"
-                ],
+                    "Shorts", "EnglishLearning", "Suits", "EnglishExpressions", "LearnEnglish"
+                ],  # Reduced to 3-5 most relevant tags (TICKET-056)
                 category_mapping={"short": "22"}
             ),
             
@@ -111,17 +164,30 @@ class YouTubeMetadataGenerator:
         custom_title: Optional[str] = None,
         custom_description: Optional[str] = None,
         additional_tags: Optional[List[str]] = None,
-        privacy_status: str = "private"
+        privacy_status: str = "private",
+        target_language: Optional[str] = None
     ) -> YouTubeVideoMetadata:
-        """Generate YouTube metadata for a video"""
+        """Generate YouTube metadata for a video
+        
+        Args:
+            video_metadata: Video metadata object
+            custom_title: Optional custom title override
+            custom_description: Optional custom description override
+            additional_tags: Optional additional tags
+            privacy_status: Privacy status (default: "private")
+            target_language: Target language name (e.g., "Korean", "English"). 
+                           If None, uses settings.TARGET_LANGUAGE (TICKET-056)
+        """
+        if target_language is None:
+            target_language = self._get_target_language()
         
         template = self.templates.get(video_metadata.video_type, self.templates["educational"])
         
         # Generate title
-        title = self._generate_title(video_metadata, template, custom_title)
+        title = self._generate_title(video_metadata, template, custom_title, target_language)
         
         # Generate description
-        description = self._generate_description(video_metadata, template, custom_description)
+        description = self._generate_description(video_metadata, template, custom_description, target_language)
         
         # Generate tags
         tags = self._generate_tags(video_metadata, template, additional_tags)
@@ -137,7 +203,7 @@ class YouTubeMetadataGenerator:
             privacy_status=privacy_status
         )
     
-    def _generate_title(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_title: Optional[str]) -> str:
+    def _generate_title(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_title: Optional[str], target_language: Optional[str] = None) -> str:
         """Generate video title"""
         if custom_title:
             logger.debug(f"Using custom title: {custom_title}")
@@ -145,6 +211,12 @@ class YouTubeMetadataGenerator:
         
         logger.debug(f"Generating title for video_type={video_metadata.video_type}, template='{template.title_template}'")
         logger.debug(f"  Input metadata: expression='{video_metadata.expression}', episode='{video_metadata.episode}', language='{video_metadata.language}'")
+        
+        # For "short" video type, use target language template (TICKET-056)
+        if video_metadata.video_type == "short" and target_language:
+            title_template = self._get_template_translation("title_template", target_language)
+        else:
+            title_template = template.title_template
         
         # Extract episode number for better formatting
         episode_display = self._format_episode_display(video_metadata.episode) if video_metadata.episode else None
@@ -173,25 +245,29 @@ class YouTubeMetadataGenerator:
             format_args = {}
             
             # Check which placeholders are in the template
-            if "{expression}" in template.title_template:
+            if "{expression}" in title_template:
                 format_args["expression"] = expression
-            if "{episode}" in template.title_template:
+            if "{episode}" in title_template:
                 format_args["episode"] = episode
-            if "{language}" in template.title_template:
+            if "{language}" in title_template:
                 format_args["language"] = language
             
-            logger.debug(f"Format args: {format_args}, template: {template.title_template}")
+            logger.debug(f"Format args: {format_args}, template: {title_template}")
             
             # Format with only the required arguments
-            title = template.title_template.format(**format_args)
+            title = title_template.format(**format_args)
             logger.debug(f"Formatted title: '{title}'")
             
             # Ensure title is not empty and strip whitespace
             title = title.strip()
             if not title or title == "":
-                # Fallback title based on video type
+                # Fallback title based on video type and target language
                 if video_metadata.video_type == "short":
-                    title = f"English Expression: {expression} | #Shorts"
+                    if target_language:
+                        fallback_template = self._get_template_translation("title_template", target_language)
+                        title = fallback_template.format(expression=expression) if "{expression}" in fallback_template else f"{expression} | #Shorts"
+                    else:
+                        title = f"English Expression: {expression} | #Shorts"
                 else:
                     title = f"Learn English: {expression} from {episode}"
                 logger.warning(f"Generated empty title, using fallback: {title}")
@@ -205,12 +281,16 @@ class YouTubeMetadataGenerator:
             return title
         except (KeyError, AttributeError, ValueError) as e:
             logger.error(f"❌ Error generating title from template: {e}")
-            logger.error(f"  Template: {template.title_template}")
+            logger.error(f"  Template: {title_template}")
             logger.error(f"  Expression: {expression}, Episode: {episode}, Language: {language}")
             logger.error(f"  Video path: {video_metadata.path}")
             # Fallback title based on video type
             if video_metadata.video_type == "short":
-                fallback = f"English Expression: {expression} | #Shorts" if expression else "English Learning Shorts"
+                if target_language:
+                    fallback_template = self._get_template_translation("title_template", target_language)
+                    fallback = fallback_template.format(expression=expression) if expression and "{expression}" in fallback_template else "English Learning Shorts"
+                else:
+                    fallback = f"English Expression: {expression} | #Shorts" if expression else "English Learning Shorts"
             else:
                 fallback = f"Learn English: {expression} from {episode}"
             final_fallback = fallback if fallback.strip() else "Learn English Video"
@@ -245,11 +325,37 @@ class YouTubeMetadataGenerator:
         except Exception:
             return None
     
-    def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str]) -> str:
-        """Generate video description"""
+    def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str], target_language: Optional[str] = None) -> str:
+        """Generate video description (TICKET-056: Updated to use target language)"""
         if custom_description:
             return custom_description
         
+        if target_language is None:
+            target_language = self._get_target_language()
+        
+        # For "short" video type, generate target language description (TICKET-056)
+        if video_metadata.video_type == "short":
+            quick_lesson = self._get_template_translation("quick_lesson", target_language)
+            expression_label = self._get_template_translation("expression_label", target_language)
+            meaning_label = self._get_template_translation("meaning_label", target_language)
+            watch_and_learn = self._get_template_translation("watch_and_learn", target_language)
+            
+            # Get translation (meaning) - use existing method
+            translation = self._get_translation(video_metadata)
+            
+            # Build description without episode line (TICKET-056)
+            description = f"""🎬 {quick_lesson}
+
+📚 {expression_label}: "{video_metadata.expression}"
+📖 {meaning_label}: {translation}
+
+💡 {watch_and_learn}
+
+#Shorts #EnglishLearning #Suits #EnglishExpressions #LearnEnglish"""
+            
+            return description
+        
+        # For other video types, use existing template
         # Extract episode number for better formatting
         episode_display = self._format_episode_display(video_metadata.episode)
         
@@ -268,52 +374,38 @@ class YouTubeMetadataGenerator:
         )
     
     def _generate_tags(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, additional_tags: Optional[List[str]]) -> List[str]:
-        """Generate video tags"""
+        """Generate video tags (TICKET-056: Reduced to 3-5 most relevant tags)"""
         # Start with additional tags first (highest priority)
         final_tags = []
         char_count = 0
+        max_tags = 5  # Reduced from 15 to 5 (TICKET-056)
         
         # Add additional custom tags first
         if additional_tags:
             for tag in additional_tags:
-                if char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
+                if char_count + len(tag) + 1 <= 500 and len(final_tags) < max_tags:
                     final_tags.append(tag)
                     char_count += len(tag) + 1
         
-        # Then add default template tags
+        # Then add default template tags (already limited to 5 in template)
         for tag in template.default_tags:
-            if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
+            if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < max_tags:
                 final_tags.append(tag)
                 char_count += len(tag) + 1
         
-        # Add expression-specific tags
-        expression_words = video_metadata.expression.lower().split()
-        for word in expression_words:
-            if len(word) > 3:  # Only add meaningful words
-                tag = f"English {word.title()}"
-                if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
-                    final_tags.append(tag)
-                    char_count += len(tag) + 1
-        
-        # Add episode-specific tags
-        if "S01E" in video_metadata.episode:
-            episode_num = video_metadata.episode.split("S01E")[1].split("_")[0]
-            tag = f"Suits Season 1 Episode {episode_num}"
-            if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
-                final_tags.append(tag)
-                char_count += len(tag) + 1
-        
-        # Add language-specific tags
-        if video_metadata.language == "ko":
-            for tag in ["Korean English Learning", "한국어 영어학습"]:
-                if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
-                    final_tags.append(tag)
-                    char_count += len(tag) + 1
-        elif video_metadata.language == "ja":
-            for tag in ["Japanese English Learning", "日本語英語学習"]:
-                if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < 15:
-                    final_tags.append(tag)
-                    char_count += len(tag) + 1
+        # For short videos, we already have 5 tags, so we're done
+        # For other video types, we can add a few more if space allows
+        if video_metadata.video_type != "short" and len(final_tags) < max_tags:
+            # Add expression-specific tags only if we have space
+            expression_words = video_metadata.expression.lower().split()
+            for word in expression_words:
+                if len(word) > 3 and len(final_tags) < max_tags:  # Only add meaningful words
+                    tag = f"English {word.title()}"
+                    if tag not in final_tags and char_count + len(tag) + 1 <= 500:
+                        final_tags.append(tag)
+                        char_count += len(tag) + 1
+                        if len(final_tags) >= max_tags:
+                            break
         
         return final_tags
     
@@ -328,7 +420,14 @@ class YouTubeMetadataGenerator:
         """Get translation for the expression"""
         # This would ideally come from the video metadata or expression analysis
         # For now, we'll use a placeholder
+        # Note: This method name conflicts with _get_translation(key, target_language) 
+        # but they serve different purposes - this one gets expression translation,
+        # the other gets template string translation
         return "Learn the meaning and usage in the video"
+    
+    def _get_expression_translation(self, video_metadata: VideoMetadata) -> str:
+        """Get translation for the expression (alias for clarity)"""
+        return self._get_translation(video_metadata)
     
     def generate_batch_metadata(
         self, 

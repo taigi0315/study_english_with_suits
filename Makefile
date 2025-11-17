@@ -32,7 +32,7 @@ dev-frontend:
 	@echo "🌐 Starting Flask Frontend Server..."
 	. venv/bin/activate && python -m langflix.youtube.web_ui
 
-dev-all:
+dev-all: stop-all-force
 	@echo "🎬 Starting Full LangFlix Development Environment..."
 	@echo "📋 Starting services in background..."
 	@echo "   - FastAPI Backend (Port 8000)"

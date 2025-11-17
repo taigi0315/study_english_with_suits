@@ -478,7 +478,8 @@ class YouTubeScheduleManager:
         except OperationalError as e:
             # Database connection errors (PostgreSQL not running, wrong credentials, etc.)
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-            logger.error(f"Database connection error scheduling video: {error_msg}")
+            # Use warning level for connection errors (expected when DB is not running)
+            logger.warning(f"Database connection error scheduling video (PostgreSQL not running): {error_msg.split('(')[0] if '(' in error_msg else error_msg}")
             return False, f"Database connection failed. Please ensure PostgreSQL is running.", None
         except (ValueError, SQLAlchemyError) as e:
             # Other database errors

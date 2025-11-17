@@ -1640,7 +1640,12 @@ class VideoManagementUI:
                     logger.warning(f"No schedule found for video: {video_path}")
                     
         except Exception as e:
-            logger.error(f"Error updating video status: {e}", exc_info=True)
+            # Check if it's a database connection error
+            error_msg = str(e)
+            if "connection" in error_msg.lower() and ("refused" in error_msg.lower() or "5432" in error_msg):
+                logger.warning(f"Database connection error updating video status (PostgreSQL not running): {error_msg.split('(')[0] if '(' in error_msg else error_msg}")
+            else:
+                logger.error(f"Error updating video status: {e}", exc_info=True)
             # Don't raise - status update failure shouldn't block upload process
     
     def _save_youtube_account(self, channel_info: Dict[str, Any]):
@@ -1676,7 +1681,12 @@ class VideoManagementUI:
                 logger.info(f"Saved YouTube account: {channel_info['title']}")
                 
         except Exception as e:
-            logger.error(f"Failed to save YouTube account: {e}", exc_info=True)
+            # Check if it's a database connection error
+            error_msg = str(e)
+            if "connection" in error_msg.lower() and ("refused" in error_msg.lower() or "5432" in error_msg):
+                logger.warning(f"Database connection error saving YouTube account (PostgreSQL not running): {error_msg.split('(')[0] if '(' in error_msg else error_msg}")
+            else:
+                logger.error(f"Failed to save YouTube account: {e}", exc_info=True)
             # Don't raise - account save failure shouldn't block authentication
     
     def _setup_content_creation_routes(self):

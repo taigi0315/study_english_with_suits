@@ -59,6 +59,14 @@ class LanguageConfig:
             'prompt_language': 'French',
             'translation_style': 'natural',
             'character_encoding': 'utf-8'
+        },
+        'en': {
+            'name': 'English',
+            'font_path': '/System/Library/Fonts/HelveticaNeue.ttc',
+            'font_fallback': '/System/Library/Fonts/Arial.ttf',
+            'prompt_language': 'English',
+            'translation_style': 'natural',
+            'character_encoding': 'utf-8'
         }
     }
     

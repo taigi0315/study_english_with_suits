@@ -436,7 +436,7 @@ class VideoEditor:
             )
             
             # Step 6: Add logo at right-top with 50% opacity (long-form video)
-            logger.info("Adding logo to long-form video (right-top, 50% opacity)")
+            logger.info("Adding logo to long-form video (right-top, 25% size, 50% opacity)")
             long_form_with_logo_path = self.output_dir / f"temp_long_form_with_logo_{safe_expression}.mkv"
             self._register_temp_file(long_form_with_logo_path)
             
@@ -448,14 +448,14 @@ class VideoEditor:
                     long_form_video = long_form_input['v']
                     long_form_audio = long_form_input['a'] if 'a' in long_form_input else None
                     
-                    # Load logo and apply 80% opacity
+                    # Load logo and scale to 25% of original size (original: 709x234, 25% height: ~59px)
                     logo_input = ffmpeg.input(str(logo_path))
-                    # Scale logo to appropriate size (e.g., 150px height)
-                    logo_video = logo_input['v'].filter('scale', -1, 150)
-                    # Apply 80% opacity: convert to rgba format and use geq filter to adjust alpha
+                    # Scale logo to 25% of original size (height: 234 * 0.25 = 58.5 ≈ 59px)
+                    logo_video = logo_input['v'].filter('scale', -1, 59)
+                    # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
                     logo_video = logo_video.filter('format', 'rgba')
-                    # Use geq filter to set alpha to 80% (0.8 * 255 = 204)
-                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.8*alpha(X,Y)')
+                    # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)
+                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
                     
                     # Get video dimensions for positioning
                     # Overlay at right-top: x = W - w - margin, y = margin
@@ -874,14 +874,17 @@ class VideoEditor:
             
             # Add logo at the very end to ensure it stays at absolute top (y=0)
             # Logo position: absolute top (y=0) of black padding, above hashtags
-            # Logo size: 600px height (4x original for better visibility)
+            # Logo size: 25% of original (59px height), 50% opacity
             logo_path = Path(__file__).parent.parent.parent / "assets" / "top_logo.png"
             if logo_path.exists():
                 try:
-                    # Load logo image and overlay it at top center
-                    # Logo size: 600px height (4x for better visibility in 1080x1920px videos)
+                    # Load logo image and scale to 25% of original size (original: 709x234, 25% height: ~59px)
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 600)  # 4x size: 600px height (was 150px)
+                    logo_video = logo_input['v'].filter('scale', -1, 59)  # 25% of original: 59px height
+                    # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
+                    logo_video = logo_video.filter('format', 'rgba')
+                    # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)
+                    logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
                     
                     # Overlay logo at absolute top center - LAST in filter chain
                     final_video = ffmpeg.overlay(
@@ -891,7 +894,7 @@ class VideoEditor:
                         y=0,  # Absolute top - logo's top-left corner at y=0 (canvas top)
                         enable='between(t,0,999999)'  # Ensure logo appears throughout entire video
                     )
-                    logger.info("Added logo at absolute top of short-form video (y=0, 600px height)")
+                    logger.info("Added logo at absolute top of short-form video (y=0, 25% size, 50% opacity)")
                 except Exception as e:
                     logger.warning(f"Failed to add logo to short-form video: {e}")
             else:

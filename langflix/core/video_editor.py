@@ -969,8 +969,8 @@ class VideoEditor:
         return {
             'vcodec': video_config.get('codec', 'libx264'),
             'acodec': video_config.get('audio_codec', 'aac'),
-            'preset': video_config.get('preset', 'fast'),
-            'crf': video_config.get('crf', 23)
+            'preset': video_config.get('preset', 'medium'),  # Updated default for better quality (TICKET-055)
+            'crf': video_config.get('crf', 20)  # Updated default for better quality (TICKET-055)
         }
     
     def _get_background_config(self) -> tuple[str, str]:
@@ -1682,8 +1682,8 @@ class VideoEditor:
                                vf=f"scale=1280:720,{video_filter}",
                                vcodec=video_args.get('vcodec', 'libx264'),
                                acodec=video_args.get('acodec', 'aac'),
-                               preset=video_args.get('preset', 'veryfast'),
-                               crf=video_args.get('crf', 25))
+                               preset=video_args.get('preset', 'medium'),  # Updated default for better quality (TICKET-055)
+                               crf=video_args.get('crf', 20))  # Updated default for better quality (TICKET-055)
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
@@ -1726,8 +1726,8 @@ class VideoEditor:
                                vf="scale=1280:720",
                                vcodec=video_args.get('vcodec', 'libx264'),
                                acodec=video_args.get('acodec', 'aac'),
-                               preset=video_args.get('preset', 'veryfast'),
-                               crf=video_args.get('crf', 25))
+                               preset=video_args.get('preset', 'medium'),  # Updated default for better quality (TICKET-055)
+                               crf=video_args.get('crf', 20))  # Updated default for better quality (TICKET-055)
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )

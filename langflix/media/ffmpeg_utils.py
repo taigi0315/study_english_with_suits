@@ -354,17 +354,24 @@ def make_video_encode_args_from_source(source_path: str, include_preset_crf: boo
 
     args["vcodec"] = encoder
     
-    # Add preset and CRF from settings for optimal encoding speed
+    # Add preset and CRF from settings for optimal encoding quality
+    # Updated defaults: preset "medium" and CRF 20 for better quality (TICKET-055)
     if include_preset_crf:
         try:
             from langflix import settings
             video_config = settings.get_video_config()
-            args["preset"] = video_config.get("preset", "veryfast")
-            args["crf"] = video_config.get("crf", 25)
+            args["preset"] = video_config.get("preset", "medium")
+            args["crf"] = video_config.get("crf", 20)
         except Exception:
-            # Fallback if settings not available
-            args["preset"] = "veryfast"
-            args["crf"] = 25
+            # Fallback if settings not available - use quality-focused defaults
+            args["preset"] = "medium"
+            args["crf"] = 20
+        
+        # Log encoding parameters for debugging and quality monitoring (TICKET-055)
+        logger.info(
+            f"Encoding video with preset={args.get('preset', 'N/A')}, "
+            f"crf={args.get('crf', 'N/A')}, codec={args.get('vcodec', 'N/A')}"
+        )
 
     # Preserve resolution by not adding explicit scale; when filters require scale,
     # the caller should provide it based on source params.

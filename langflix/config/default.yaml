@@ -85,12 +85,14 @@ language_levels:
 # ============================================================================
 video:
   # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
-  # Optimized for speed: veryfast is ~2-3x faster than fast with minimal quality loss
-  preset: "veryfast"
+  # Changed from "veryfast" to "medium" for better quality (TICKET-055)
+  # Medium preset provides better compression and quality while maintaining reasonable encoding speed
+  preset: "medium"
 
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
-  # Optimized for speed: 25 provides good quality while encoding much faster than 23
-  crf: 0
+  # Changed from 0 (lossless) to 20 for high quality output (TICKET-055)
+  # CRF 20 provides excellent quality while being more practical than lossless encoding
+  crf: 20
 
 # ============================================================================
 # Font Configuration

@@ -20,12 +20,23 @@ class ScheduleConfig:
     preferred_times: List[str] = None    # ['10:00', '14:00', '18:00']
     quota_limit: int = 10000
     warning_threshold: float = 80.0      # Percentage (0-100), representing 80%
+    # New: slot-based scheduling controls
+    time_slots: List[str] = None         # e.g., ['08:00', '14:00', '20:00']
+    slot_capacity: int = 2               # max videos per time slot
+    daily_max_total: int = 6             # hard cap per day across all types
     
     def __post_init__(self):
         if self.daily_limits is None:
             self.daily_limits = {'final': 2, 'short': 5}
         if self.preferred_times is None:
             self.preferred_times = ['10:00', '14:00', '18:00']
+        if self.time_slots is None:
+            # Default to requested business slots
+            self.time_slots = ['08:00', '14:00', '20:00']
+        if self.slot_capacity <= 0:
+            self.slot_capacity = 2
+        if self.daily_max_total <= 0:
+            self.daily_max_total = 6
         # Validate warning_threshold is in valid range (0-100)
         if not (0 <= self.warning_threshold <= 100):
             raise ValueError(f"warning_threshold must be between 0 and 100, got {self.warning_threshold}")
@@ -67,10 +78,18 @@ class YouTubeScheduleManager:
         # Start from today or preferred date
         start_date = preferred_date or date.today()
         
-        # Check up to 7 days ahead
-        for days_ahead in range(7):
+        # Check up to 14 days ahead to ensure distribution for larger batches
+        for days_ahead in range(14):
             check_date = start_date + timedelta(days=days_ahead)
             quota_status = self.check_daily_quota(check_date)
+            
+            # If daily hard cap reached, skip this day entirely
+            try:
+                daily_total = self._count_daily_scheduled(check_date)
+                if daily_total >= self.config.daily_max_total:
+                    continue
+            except Exception as e:
+                logger.warning(f"Failed counting daily schedules for {check_date}: {e}")
             
             # Check if we have quota for this video type
             if video_type == 'final' and quota_status.final_remaining > 0:
@@ -82,17 +101,18 @@ class YouTubeScheduleManager:
                 if available_times:
                     return available_times[0]
         
-        # If no slots found in 7 days, return a fallback time
-        logger.warning(f"No available slots found for {video_type} in next 7 days")
-        return datetime.combine(start_date + timedelta(days=7), time(10, 0))
+        # If no slots found in 14 days, return a fallback time
+        logger.warning(f"No available slots found for {video_type} in next 14 days")
+        return datetime.combine(start_date + timedelta(days=7), time(8, 0))
     
     def _get_available_times_for_date(self, target_date: date, video_type: str) -> List[datetime]:
         """Get available time slots for a specific date"""
         available_times = []
         
-        # Parse preferred times
+        # Parse preferred times (legacy) and time_slots (new). time_slots take precedence.
         preferred_times = []
-        for time_str in self.config.preferred_times:
+        source_times = self.config.time_slots if self.config.time_slots else self.config.preferred_times
+        for time_str in source_times:
             try:
                 hour, minute = map(int, time_str.split(':'))
                 preferred_times.append(time(hour, minute))
@@ -108,14 +128,22 @@ class YouTubeScheduleManager:
             logger.warning(f"Database connection error getting schedules: {e}")
             scheduled_times = []
         
-        # Extract time components from scheduled datetime objects
-        occupied_times = set()
+        # Build occupancy map per slot time
+        slot_counts: Dict[time, int] = {}
         for scheduled_time in scheduled_times:
-            occupied_times.add(scheduled_time.time())
+            t = scheduled_time.time()
+            slot_counts[t] = slot_counts.get(t, 0) + 1
         
         # Find available preferred times
         for preferred_time in preferred_times:
-            if preferred_time not in occupied_times:
+            count = slot_counts.get(preferred_time, 0)
+            # Respect per-slot capacity and daily max total
+            try:
+                if self._count_daily_scheduled(target_date) >= self.config.daily_max_total:
+                    break
+            except Exception:
+                pass
+            if count < self.config.slot_capacity:
                 available_times.append(datetime.combine(target_date, preferred_time))
         
         # If no preferred times available, find any available time
@@ -123,11 +151,31 @@ class YouTubeScheduleManager:
             # Try every hour from 9 AM to 9 PM
             for hour in range(9, 22):
                 candidate_time = time(hour, 0)
-                if candidate_time not in occupied_times:
+                if slot_counts.get(candidate_time, 0) < self.config.slot_capacity:
+                    try:
+                        if self._count_daily_scheduled(target_date) >= self.config.daily_max_total:
+                            break
+                    except Exception:
+                        pass
                     available_times.append(datetime.combine(target_date, candidate_time))
                     break
         
         return available_times
+    
+    def _count_daily_scheduled(self, target_date: date) -> int:
+        """Count total scheduled uploads (any status except failed) for the date."""
+        try:
+            with db_manager.session() as db:
+                start_dt = datetime.combine(target_date, time.min)
+                end_dt = datetime.combine(target_date, time.max)
+                return db.query(YouTubeSchedule).filter(
+                    YouTubeSchedule.scheduled_publish_time >= start_dt,
+                    YouTubeSchedule.scheduled_publish_time <= end_dt,
+                    YouTubeSchedule.upload_status.in_(['scheduled', 'uploading', 'completed'])
+                ).count()
+        except Exception as e:
+            logger.warning(f"Failed to count daily schedules for {target_date}: {e}")
+            return 0
     
     def _get_schedules_for_date(self, target_date: date) -> List[datetime]:
         """
@@ -184,8 +232,7 @@ class YouTubeScheduleManager:
                 # Use SELECT FOR UPDATE if locking is needed
                 if lock:
                     # Lock the record for update (prevents concurrent reads)
-                    # Timeout: 5 seconds to prevent deadlocks
-                    query = query.with_for_update(timeout=5.0)
+                    query = query.with_for_update()
                 
                 quota_record = query.first()
                 
@@ -252,7 +299,7 @@ class YouTubeScheduleManager:
         # Lock and get quota record
         quota_record = db.query(YouTubeQuotaUsage).filter(
             YouTubeQuotaUsage.date == target_date
-        ).with_for_update(timeout=5.0).first()
+        ).with_for_update().first()
         
         if not quota_record:
             # Create new quota record
@@ -298,7 +345,7 @@ class YouTubeScheduleManager:
         # Lock quota record for update
         quota_record = db.query(YouTubeQuotaUsage).filter(
             YouTubeQuotaUsage.date == target_date
-        ).with_for_update(timeout=5.0).first()
+        ).with_for_update().first()
         
         if not quota_record:
             quota_record = YouTubeQuotaUsage(

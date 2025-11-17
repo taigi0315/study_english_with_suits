@@ -12,6 +12,7 @@ from langflix.youtube.video_manager import VideoFileManager, VideoMetadata
 from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouTubeUploadManager
 from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
 from langflix.youtube.schedule_manager import YouTubeScheduleManager, ScheduleConfig
+from langflix.youtube.last_schedule import YouTubeLastScheduleService
 from langflix.db.models import YouTubeAccount, YouTubeQuotaUsage
 from langflix.db.session import db_manager
 import logging
@@ -122,6 +123,14 @@ class VideoManagementUI:
         except Exception as e:
             logger.warning(f"Failed to initialize schedule manager: {e}")
             self.schedule_manager = None
+        
+        # Initialize YouTube-based lightweight scheduler
+        try:
+            self.yt_scheduler = YouTubeLastScheduleService()
+            logger.info("YouTube-based scheduler initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize YouTube scheduler: {e}")
+            self.yt_scheduler = None
         
         # Initialize media scanner
         from langflix.media.media_scanner import MediaScanner
@@ -712,11 +721,13 @@ class VideoManagementUI:
                 if video_type not in ['final', 'short']:
                     return jsonify({"error": "Invalid video_type. Must be 'final' or 'short'"}), 400
                 
-                if not self.schedule_manager:
-                    return jsonify({
-                        "error": "Schedule manager not available",
-                        "hint": "Please ensure database is configured and PostgreSQL is running"
-                    }), 503
+                # Initialize lightweight YouTube-based scheduler (no DB dependency)
+                try:
+                    from langflix.youtube.last_schedule import YouTubeLastScheduleService, LastScheduleConfig
+                    yt_scheduler = YouTubeLastScheduleService(LastScheduleConfig())
+                except Exception as e:
+                    logger.warning(f"Failed to initialize YouTubeLastScheduleService: {e}")
+                    yt_scheduler = None
                 
                 next_slot = self.schedule_manager.get_next_available_slot(video_type)
                 return jsonify({
@@ -1219,12 +1230,15 @@ class VideoManagementUI:
                 if len(videos) > 50:
                     return jsonify({"error": "Maximum 50 videos allowed per batch"}), 400
                 
-                if not self.schedule_manager:
-                    return jsonify({
-                        "error": "Schedule manager not available",
-                        "hint": "Please ensure database is configured and PostgreSQL is running"
-                    }), 503
-                
+                # Initialize lightweight YouTube-based scheduler (no DB dependency).
+                yt_scheduler = None
+                try:
+                    from langflix.youtube.last_schedule import YouTubeLastScheduleService, LastScheduleConfig
+                    yt_scheduler = YouTubeLastScheduleService(LastScheduleConfig())
+                except Exception as e:
+                    logger.warning(f"Failed to initialize YouTubeLastScheduleService: {e}")
+                    yt_scheduler = None
+ 
                 results = []
                 # Schedule videos sequentially, calculating next available slot for each
                 for video in videos:
@@ -1243,9 +1257,21 @@ class VideoManagementUI:
                         # Map video_type for schedule_manager
                         schedule_video_type = 'short' if video_type == 'context' else ('final' if video_type == 'long-form' else video_type)
                         
-                        # Get next available slot (will automatically find next available time)
-                        # This ensures sequential scheduling - each video gets the next free slot
-                        publish_time = self.schedule_manager.get_next_available_slot(schedule_video_type)
+                        # Determine next publish time.
+                        # Prefer YouTube-based lightweight scheduler; fall back to DB schedule manager.
+                        publish_time = None
+                        if self.yt_scheduler:
+                            try:
+                                publish_time = self.yt_scheduler.get_next_available_slot()
+                            except Exception as e:
+                                logger.warning(f"YouTube scheduler failed, falling back to DB: {e}")
+                                publish_time = None
+                        
+                        if not publish_time:
+                            if not self.schedule_manager:
+                                raise RuntimeError("No scheduler available (YouTube or DB)")
+                            # Fallback to DB-driven slot finding
+                            publish_time = self.schedule_manager.get_next_available_slot(schedule_video_type)
                         logger.info(f"Next available slot for {video_path} ({schedule_video_type}): {publish_time}")
                         
                         # Generate metadata
@@ -1309,13 +1335,21 @@ class VideoManagementUI:
                         )
                         
                         if result.success:
-                            # Store schedule in DB for tracking
-                            success, message, scheduled_time = self.schedule_manager.schedule_video(
-                                video_path, schedule_video_type, publish_time
-                            )
+                            # Update lightweight scheduler state for sequential batches
+                            if self.yt_scheduler:
+                                self.yt_scheduler.record_local(publish_time)
                             
-                            # Use actual scheduled_time from DB
-                            actual_scheduled_time = scheduled_time if scheduled_time else publish_time
+                            # Store schedule in DB for tracking when available
+                            actual_scheduled_time = publish_time
+                            if self.schedule_manager:
+                                try:
+                                    success, message, scheduled_time = self.schedule_manager.schedule_video(
+                                        video_path, schedule_video_type, publish_time
+                                    )
+                                    if success and scheduled_time:
+                                        actual_scheduled_time = scheduled_time
+                                except Exception as e:
+                                    logger.warning(f"DB schedule record failed (continuing): {e}")
                             
                             if success:
                                 self.schedule_manager.update_schedule_with_video_id(

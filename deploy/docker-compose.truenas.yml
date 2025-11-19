@@ -167,6 +167,9 @@ services:
       - LANGFLIX_UI_PORT=${UI_PORT:-5000}
       - YOUTUBE_CREDENTIALS_FILE=/app/youtube_credentials.json
       - YOUTUBE_TOKEN_FILE=/app/youtube_token.json
+      # Database (Optional - only if DATABASE_ENABLED=true)
+      - DATABASE_URL=postgresql://langflix:${POSTGRES_PASSWORD:-langflix123}@postgres:5432/langflix
+      - DATABASE_ENABLED=${DATABASE_ENABLED:-false}
     
     ports:
       - "${UI_PORT:-5000}:5000"

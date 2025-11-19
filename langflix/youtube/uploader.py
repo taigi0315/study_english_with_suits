@@ -147,6 +147,14 @@ class YouTubeUploader:
                         # User will need to re-authenticate next time
             
             # Build YouTube service
+            if not creds:
+                error_msg = (
+                    "YouTube credentials are None. Cannot build YouTube service.\n"
+                    "Please ensure youtube_credentials.json exists and OAuth flow completes successfully."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
             self.service = build('youtube', 'v3', credentials=creds)
             self.authenticated = True
             

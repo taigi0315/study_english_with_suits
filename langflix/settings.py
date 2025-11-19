@@ -339,11 +339,23 @@ def get_tts_repeat_count() -> int:
 
 def get_database_enabled() -> bool:
     """Check if database is enabled."""
+    # Check environment variable first (for Docker/container deployments)
+    import os
+    env_enabled = os.getenv('DATABASE_ENABLED')
+    if env_enabled is not None:
+        return env_enabled.lower() in ('true', '1', 'yes', 'on')
+    # Fall back to config file
     return _config_loader.get('database', 'enabled', default=False)
 
 
 def get_database_url() -> str:
     """Get database URL."""
+    # Check environment variable first (for Docker/container deployments)
+    import os
+    env_url = os.getenv('DATABASE_URL')
+    if env_url:
+        return env_url
+    # Fall back to config file
     return _config_loader.get('database', 'url', default='postgresql://user:password@localhost:5432/langflix')
 
 

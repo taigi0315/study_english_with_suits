@@ -1794,7 +1794,7 @@ class VideoManagementUI:
                     return jsonify({
                         "job_id": job.get("job_id", job_id),
                         "status": job.get("status", "UNKNOWN"),
-                        "progress": int(job.get("progress", 0)),
+                        "progress": float(job.get("progress", 0)),
                         "current_step": job.get("current_step", ""),
                         "error_message": job.get("error", None)
                     })
@@ -1878,7 +1878,7 @@ class VideoManagementUI:
                         "job_id": job_data.get("job_id", job_id),
                         "media_id": job_data.get("media_id", ""),
                         "status": job_data.get("status", "UNKNOWN"),
-                        "progress": int(job_data.get("progress", 0)),
+                        "progress": float(job_data.get("progress", 0)),
                         "current_step": job_data.get("current_step", ""),
                         "created_at": job_data.get("created_at", ""),
                         "error_message": job_data.get("error", None)

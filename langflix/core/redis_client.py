@@ -59,8 +59,8 @@ class RedisJobManager:
             if 'progress' in updates:
                 current_job = self.get_job(job_id)
                 if current_job and 'progress' in current_job:
-                    current_progress = int(current_job['progress'])
-                    new_progress = int(updates['progress'])
+                    current_progress = float(current_job['progress'])
+                    new_progress = float(updates['progress'])
                     # Only update if new progress is greater than current
                     if new_progress < current_progress:
                         logger.debug(f"⏭️ Skipping progress update for job {job_id}: {new_progress}% < {current_progress}% (preventing backward progress)")
@@ -105,7 +105,7 @@ class RedisJobManager:
             
             # Convert string values back to appropriate types
             if 'progress' in job_data:
-                job_data['progress'] = int(job_data['progress'])
+                job_data['progress'] = float(job_data['progress'])
             if 'max_expressions' in job_data:
                 job_data['max_expressions'] = int(job_data['max_expressions'])
             if 'test_mode' in job_data:

@@ -87,12 +87,12 @@ video:
   # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
   # Changed from "veryfast" to "medium" for better quality (TICKET-055)
   # Medium preset provides better compression and quality while maintaining reasonable encoding speed
-  preset: "medium"
+  preset: "fast"
 
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
   # Changed from 0 (lossless) to 20 for high quality output (TICKET-055)
   # CRF 20 provides excellent quality while being more practical than lossless encoding
-  crf: 20
+  crf: 10
 
 # ============================================================================
 # Font Configuration
@@ -208,7 +208,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 40
+      font_size: 50
       y_position: 250            # Starting Y position for first line
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -218,7 +218,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 65              # Main expression font size (increased by 10 from 45)
+      font_size: 45              # Main expression font size (increased by 10 from 45)
       y_position: 1500           # Y position for expression line
       text_color: 'yellow'
       border_width: 2
@@ -226,7 +226,7 @@ short_video:
 
     # Expression translation (bottom padding area)
     translation:
-      font_size: 65              # Translation font size (slightly smaller)
+      font_size: 45              # Translation font size (slightly smaller)
       y_position: 1600           # Y position for translation line
       gap_from_expression: 60    # Gap between expression and translation
       text_color: 'yellow'
@@ -236,8 +236,8 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 35              # Match expression font size
-      margin_v: 50               # Close to bottom for better visibility
+      font_size: 30              # Match expression font size
+      margin_v: 40               # Close to bottom for better visibility
       text_color: 'white'
       outline_width: 2
       outline_color: 'black'
@@ -276,7 +276,7 @@ expression:
       font_size: 17              # Reduced by 5 from 22 (main dialogue subtitle)
       font_weight: 'normal'
       background_color: '#000000'
-      background_opacity: 0.7
+      background_opacity: 0.5
       position: 'bottom'
       margin_bottom: 50
     expression_highlight:

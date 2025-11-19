@@ -2,7 +2,7 @@
 
 ## ⚠️ 중요: API Key와 OAuth 자격 증명의 차이
 
-제공해주신 `AIzaSyCtp24uebNtFrTEsH4scaLGcYUkP-TkylE`는 **Google API Key**입니다.
+Google API Key는 **Google API Key**입니다.
 YouTube 로그인 기능을 사용하려면 **OAuth 2.0 Client ID와 Client Secret**이 필요합니다.
 
 이것들은 서로 다른 것입니다:

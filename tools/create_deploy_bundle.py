@@ -65,6 +65,8 @@ DEFAULT_EXCLUDE_GLOBS: Set[str] = {
     ".env.local",
     "langflix.log",
     ASSETS_MEDIA_PATTERN,
+    # Note: YouTube credentials (youtube_credentials.json, youtube_token.json) are INCLUDED
+    # as they are required for YouTube functionality in deployment
 }
 
 

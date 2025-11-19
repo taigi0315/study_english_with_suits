@@ -198,8 +198,14 @@ sudo docker exec langflix-api ls -lah /media/shows
 
 ### 5-5. YouTube 자격 증명 파일 권한 설정
 
-YouTube 기능을 사용하려면 자격 증명 파일의 권한도 올바르게 설정해야 합니다:
+YouTube 기능을 사용하려면 자격 증명 파일의 권한도 올바르게 설정해야 합니다. **`run.sh` 스크립트가 자동으로 처리합니다**, 필요시 수동으로도 설정할 수 있습니다:
 
+**자동 설정 (권장):**
+`run.sh` 스크립트는 배포를 시작할 때 YouTube 자격 증명 파일의 권한을 자동으로 설정합니다:
+- `youtube_credentials.json`: 644 (읽기 전용)
+- `youtube_token.json`: 600 (읽기/쓰기, 보안)
+
+**수동 설정 (필요한 경우):**
 ```bash
 # 파일이 존재하는지 확인
 ls -la assets/youtube_credentials.json assets/youtube_token.json

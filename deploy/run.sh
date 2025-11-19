@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # LangFlix TrueNAS Deployment - Start Script
-# Usage: ./run.sh
+# Usage: ./run.sh [--build|-b]
+#   --build, -b: Force rebuild Docker images (useful after code changes)
 
 set -e
 
@@ -73,29 +74,78 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
     echo -e "${GREEN}✅ 디렉토리 생성 완료${NC}"
 fi
 
-# YouTube 자격 증명 파일 확인
+# YouTube 자격 증명 파일 확인 및 권한 설정
 echo ""
-echo -e "${BLUE}🔐 YouTube 자격 증명 파일 확인 중...${NC}"
-if [ -f "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" ]; then
-    echo -e "${GREEN}✅ youtube_credentials.json 발견${NC}"
-    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" 2>/dev/null || true
-    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_credentials.json" 2>/dev/null || true
-else
-    echo -e "${YELLOW}⚠️  youtube_credentials.json 없음${NC}"
-    echo "   YouTube 기능을 사용하려면 이 파일이 필요합니다"
+echo -e "${BLUE}🔐 YouTube 자격 증명 파일 확인 및 권한 설정 중...${NC}"
+
+# assets 디렉토리 확인 및 생성
+ASSETS_DIR="$TRUENAS_DATA_PATH/assets"
+if [ ! -d "$ASSETS_DIR" ]; then
+    echo -e "${YELLOW}⚠️  assets 디렉토리 없음, 생성 중...${NC}"
+    sudo mkdir -p "$ASSETS_DIR"
+    sudo chown -R 1000:1000 "$ASSETS_DIR" 2>/dev/null || true
+    sudo chmod -R 755 "$ASSETS_DIR" 2>/dev/null || true
 fi
 
-if [ -f "$TRUENAS_DATA_PATH/assets/youtube_token.json" ]; then
+# youtube_credentials.json 처리
+CREDENTIALS_FILE="$ASSETS_DIR/youtube_credentials.json"
+if [ -f "$CREDENTIALS_FILE" ]; then
+    echo -e "${GREEN}✅ youtube_credentials.json 발견${NC}"
+    # 항상 권한 설정 (파일이 이미 존재하더라도)
+    sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
+    sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
+    echo "   권한 설정 완료: 644 (read-only)"
+else
+    echo -e "${YELLOW}⚠️  youtube_credentials.json 없음${NC}"
+    echo "   Docker 마운트를 위해 빈 파일 생성 중..."
+    # Docker Compose가 파일을 마운트하려고 하므로 빈 파일을 미리 생성
+    sudo touch "$CREDENTIALS_FILE"
+    sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
+    sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
+    echo "   빈 파일 생성 및 권한 설정 완료: 644"
+    echo -e "${YELLOW}   ⚠️  YouTube 기능을 사용하려면 이 파일에 실제 자격 증명을 추가해야 합니다${NC}"
+fi
+
+# youtube_token.json 처리
+TOKEN_FILE="$ASSETS_DIR/youtube_token.json"
+if [ -f "$TOKEN_FILE" ]; then
     echo -e "${GREEN}✅ youtube_token.json 발견${NC}"
-    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
-    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
+    # 항상 권한 설정 (파일이 이미 존재하더라도)
+    sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
+    sudo chmod 600 "$TOKEN_FILE" 2>/dev/null || true
+    echo "   권한 설정 완료: 600 (read/write, secure)"
 else
     echo -e "${YELLOW}⚠️  youtube_token.json 없음 (첫 로그인 시 자동 생성됨)${NC}"
     # 빈 파일을 미리 생성하여 권한 문제를 방지
-    sudo touch "$TRUENAS_DATA_PATH/assets/youtube_token.json"
-    sudo chown 1000:1000 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
-    sudo chmod 600 "$TRUENAS_DATA_PATH/assets/youtube_token.json" 2>/dev/null || true
+    sudo touch "$TOKEN_FILE"
+    sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
+    sudo chmod 600 "$TOKEN_FILE" 2>/dev/null || true
+    echo "   빈 파일 생성 및 권한 설정 완료: 600"
 fi
+
+# assets 디렉토리 내 모든 YouTube 관련 파일의 권한 확인 및 수정
+echo ""
+echo -e "${BLUE}📋 assets 디렉토리 내 YouTube 관련 파일 권한 확인 중...${NC}"
+for file in "$ASSETS_DIR"/youtube_*.json; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file")
+        # 파일명에 따라 적절한 권한 설정
+        if [[ "$filename" == "youtube_credentials.json" ]]; then
+            sudo chown 1000:1000 "$file" 2>/dev/null || true
+            sudo chmod 644 "$file" 2>/dev/null || true
+            echo "   ✅ $filename: 644"
+        elif [[ "$filename" == "youtube_token.json" ]]; then
+            sudo chown 1000:1000 "$file" 2>/dev/null || true
+            sudo chmod 600 "$file" 2>/dev/null || true
+            echo "   ✅ $filename: 600"
+        else
+            # 기타 YouTube 관련 파일은 기본 권한
+            sudo chown 1000:1000 "$file" 2>/dev/null || true
+            sudo chmod 600 "$file" 2>/dev/null || true
+            echo "   ✅ $filename: 600 (default)"
+        fi
+    fi
+done
 
 # Docker Compose 파일 확인
 if [ ! -f "$COMPOSE_FILE" ]; then
@@ -141,9 +191,35 @@ if sudo docker compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
     esac
 fi
 
-# Docker Compose 시작
+# Docker Compose 시작 (이미지 재빌드 포함)
 echo ""
 echo -e "${GREEN}Docker Compose 시작 중...${NC}"
+
+# 이미지 재빌드 여부 확인
+REBUILD_IMAGES=false
+if [ "$1" == "--build" ] || [ "$1" == "-b" ]; then
+    REBUILD_IMAGES=true
+elif [ -n "$FORCE_REBUILD" ] && [ "$FORCE_REBUILD" == "true" ]; then
+    REBUILD_IMAGES=true
+fi
+
+if [ "$REBUILD_IMAGES" = true ]; then
+    echo -e "${YELLOW}🔨 이미지 재빌드 중...${NC}"
+    sudo docker compose -f "$COMPOSE_FILE" build --no-cache
+    echo -e "${GREEN}✅ 이미지 재빌드 완료${NC}"
+    echo ""
+fi
+
+# 이미지 빌드 (--build 옵션이 없을 때는 변경사항 확인 후 빌드)
+if [ "$REBUILD_IMAGES" != true ]; then
+    echo -e "${BLUE}📦 이미지 빌드 중 (변경사항 확인)...${NC}"
+    # docker-compose build는 변경사항이 있으면 자동으로 빌드하고, 없으면 스킵합니다
+    sudo docker compose -f "$COMPOSE_FILE" build
+    echo -e "${GREEN}✅ 이미지 빌드 완료${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}🚀 컨테이너 시작 중...${NC}"
 sudo docker compose -f "$COMPOSE_FILE" up -d
 
 # 잠시 대기
@@ -181,5 +257,9 @@ echo -e "${BLUE}📝 유용한 명령어:${NC}"
 echo "   로그 확인: sudo docker compose -f $COMPOSE_FILE logs -f"
 echo "   상태 확인: sudo docker compose -f $COMPOSE_FILE ps"
 echo "   중지: ./shutdown.sh"
+echo ""
+echo -e "${YELLOW}💡 팁:${NC}"
+echo "   코드 변경 후 UI가 업데이트되지 않으면:"
+echo "   ./run.sh --build    # 이미지 강제 재빌드"
 echo ""
 

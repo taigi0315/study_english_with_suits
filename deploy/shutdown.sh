@@ -91,20 +91,23 @@ fi
 echo ""
 echo -e "${BLUE}🛑 컨테이너 중지 중...${NC}"
 
-if [ "$REMOVE_VOLUMES" = true ]; then
-    sudo docker compose -f "$COMPOSE_FILE" down -v
-    echo -e "${GREEN}✅ 컨테이너 및 볼륨 제거 완료${NC}"
-else
-    sudo docker compose -f "$COMPOSE_FILE" down
-    echo -e "${GREEN}✅ 컨테이너 중지 완료${NC}"
-fi
-
-# 이미지 제거 (선택사항)
+# 이미지 제거 옵션이 있으면 down과 함께 처리
 if [ "$REMOVE_IMAGES" = true ]; then
-    echo ""
-    echo -e "${BLUE}🗑️  이미지 제거 중...${NC}"
-    sudo docker compose -f "$COMPOSE_FILE" down --rmi local
-    echo -e "${GREEN}✅ 이미지 제거 완료${NC}"
+    if [ "$REMOVE_VOLUMES" = true ]; then
+        sudo docker compose -f "$COMPOSE_FILE" down -v --rmi local
+        echo -e "${GREEN}✅ 컨테이너, 볼륨 및 이미지 제거 완료${NC}"
+    else
+        sudo docker compose -f "$COMPOSE_FILE" down --rmi local
+        echo -e "${GREEN}✅ 컨테이너 및 이미지 제거 완료${NC}"
+    fi
+else
+    if [ "$REMOVE_VOLUMES" = true ]; then
+        sudo docker compose -f "$COMPOSE_FILE" down -v
+        echo -e "${GREEN}✅ 컨테이너 및 볼륨 제거 완료${NC}"
+    else
+        sudo docker compose -f "$COMPOSE_FILE" down
+        echo -e "${GREEN}✅ 컨테이너 중지 완료${NC}"
+    fi
 fi
 
 # 정리 (선택사항)
@@ -122,8 +125,10 @@ echo -e "${GREEN}✅ LangFlix 중지 완료${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${BLUE}📝 다시 시작하려면:${NC}"
-echo "   ./run.sh"
+echo "   ./run.sh              # 일반 시작 (기존 이미지 사용)"
+echo "   ./run.sh --build      # 이미지 재빌드 후 시작 (코드 변경 후 권장)"
 echo ""
+
 
 
 

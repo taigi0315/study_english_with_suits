@@ -198,8 +198,14 @@ sudo docker exec langflix-api ls -lah /media/shows
 
 ### 5-5. Set YouTube Credential File Permissions
 
-If you plan to use YouTube features, credential file permissions must also be set correctly:
+If you plan to use YouTube features, credential file permissions must be set correctly. **The `run.sh` script automatically handles this**, but you can also set them manually if needed:
 
+**Automatic (Recommended):**
+The `run.sh` script automatically sets correct permissions for YouTube credential files when you start the deployment:
+- `youtube_credentials.json`: 644 (read-only)
+- `youtube_token.json`: 600 (read/write, secure)
+
+**Manual Setup (if needed):**
 ```bash
 # Verify files exist
 ls -la assets/youtube_credentials.json assets/youtube_token.json

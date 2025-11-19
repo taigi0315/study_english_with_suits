@@ -28,14 +28,15 @@ Welcome to LangFlix - Learn English expressions from TV shows through AI-powered
 
 #### Media Processing
 - **[Audio Module](audio/README_eng.md)** - Audio optimization and extraction
-- **[TTS Module](tts/)** - Text-to-speech integration (Gemini, LemonFox)
-- **[Video Module](video/)** - Video enhancement utilities
-- **[Subtitles Module](subtitles/)** - Subtitle overlay and processing
+- **[TTS Module](tts/README_eng.md)** - Text-to-speech integration (Gemini, LemonFox)
+- **[Video Module](video/README_eng.md)** - Video enhancement utilities
+- **[Subtitles Module](subtitles/README_eng.md)** - Subtitle overlay and processing
 
 #### Services & Utilities
 - **[Monitoring Module](monitoring/README_eng.md)** - Health checks and performance monitoring
-- **[Tasks Module](tasks/)** - Background task processing (Celery)
-- **[Slides Module](slides/)** - Educational slide generation
+- **[Tasks Module](tasks/README_eng.md)** - Background task processing (Celery)
+- **[Slides Module](slides/README_eng.md)** - Educational slide generation
+- **[Templates Module](templates/README_eng.md)** - Prompt templates and HTML templates
 - **[YouTube Module](youtube/README_eng.md)** - YouTube upload and scheduling
 - **[Utils Module](utils/)** - Utility functions
   - [TempFileManager](utils/temp_file_manager_eng.md) - Temporary file management

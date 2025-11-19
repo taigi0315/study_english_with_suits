@@ -1033,70 +1033,80 @@ class VideoEditor:
             video_duration = get_duration_seconds(video_path)
 
             # Get configuration
-            volume = bg_music_config.get('volume', 0.20)
+            volume = bg_music_config.get('volume', 0.35)
             fade_in = bg_music_config.get('fade_in_duration', 1.0)
             fade_out = bg_music_config.get('fade_out_duration', 1.0)
 
-            # Create ffmpeg command to mix audio
-            # 1. Input video
-            video_input = ffmpeg.input(str(video_path))
+            # Build filter_complex for audio mixing
+            # This is more reliable than using ffmpeg-python's complex filter graph
+            filter_parts = []
 
-            # 2. Input music - use stream_loop to repeat infinitely, then trim
-            # stream_loop=-1 means loop infinitely
-            music_input = ffmpeg.input(str(music_path), stream_loop=-1)
+            # Input 0: video file
+            # Input 1: music file
 
-            # 3. Process music audio
-            music_audio = music_input.audio
+            # Process music: loop, trim, volume, fade
+            # [1:a] = music audio stream
+            music_filters = []
 
-            # Trim music to exact video duration FIRST (before other filters)
-            music_audio = music_audio.filter('atrim', end=video_duration)
+            # Loop music infinitely and trim to video duration
+            music_filters.append(f"aloop=loop=-1:size=2e+09")
+            music_filters.append(f"atrim=end={video_duration}")
+            music_filters.append("asetpts=PTS-STARTPTS")
 
-            # Set audio timestamp to start at 0 (required after atrim)
-            music_audio = music_audio.filter('asetpts', 'PTS-STARTPTS')
+            # Apply volume
+            music_filters.append(f"volume={volume}")
 
-            # Apply volume adjustment
-            music_audio = music_audio.filter('volume', volume)
-
-            # Apply fade in at start
+            # Apply fade in
             if fade_in > 0:
-                music_audio = music_audio.filter('afade', type='in', start_time=0, duration=fade_in)
+                music_filters.append(f"afade=t=in:st=0:d={fade_in}")
 
-            # Apply fade out at end
+            # Apply fade out
             if fade_out > 0 and video_duration > fade_out:
                 fade_out_start = video_duration - fade_out
-                music_audio = music_audio.filter('afade', type='out', start_time=fade_out_start, duration=fade_out)
+                music_filters.append(f"afade=t=out:st={fade_out_start}:d={fade_out}")
 
-            # 4. Mix original audio with background music
-            # Get original audio from video
-            video_audio = video_input.audio
+            # Combine all music filters
+            music_filter_chain = ",".join(music_filters)
+            filter_parts.append(f"[1:a]{music_filter_chain}[music]")
 
-            # Mix the two audio streams with proper parameters to avoid distortion
-            # - normalize=0: disable automatic normalization
-            # - weights: dialogue at full volume (1.0), music already adjusted by volume filter
-            # - duration=first: match the duration of the video
-            mixed_audio = ffmpeg.filter(
-                [video_audio, music_audio],
-                'amix',
-                inputs=2,
-                duration='first',
-                dropout_transition=2,  # Smooth transitions if streams have different lengths
-                normalize=0  # Disable auto-normalization to prevent distortion
+            # Mix video audio with music
+            # [0:a] = video audio, [music] = processed music
+            filter_parts.append("[0:a][music]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]")
+
+            # Combine filter parts
+            filter_complex = ";".join(filter_parts)
+
+            logger.debug(f"FFmpeg filter_complex: {filter_complex}")
+
+            # Use subprocess to run ffmpeg directly for more reliable results
+            import subprocess
+            cmd = [
+                'ffmpeg',
+                '-i', str(video_path),      # Input 0: video
+                '-i', str(music_path),       # Input 1: music
+                '-filter_complex', filter_complex,
+                '-map', '0:v',               # Use video from input 0
+                '-map', '[aout]',            # Use mixed audio output
+                '-c:v', 'copy',              # Copy video stream (no re-encoding)
+                '-c:a', 'aac',               # Encode audio as AAC
+                '-b:a', '256k',              # Audio bitrate
+                '-ar', '48000',              # Sample rate
+                '-ac', '2',                  # Stereo
+                '-y',                        # Overwrite output
+                str(output_path)
+            ]
+
+            logger.debug(f"Running FFmpeg command: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True
             )
 
-            # 5. Output video with mixed audio
-            output = ffmpeg.output(
-                video_input.video,
-                mixed_audio,
-                str(output_path),
-                vcodec='copy',  # Copy video stream (no re-encoding)
-                acodec='aac',   # Encode audio
-                ac=2,           # Stereo
-                ar=48000,       # 48kHz sample rate
-                audio_bitrate='256k',
-                **{'q:a': 2}    # High quality audio encoding (lower is better)
-            )
-
-            output.overwrite_output().run(quiet=True)
+            if result.returncode != 0:
+                logger.error(f"FFmpeg error: {result.stderr}")
+                raise RuntimeError(f"FFmpeg failed with return code {result.returncode}")
 
             logger.info(f"✅ Background music applied successfully: {output_path}")
             return str(output_path)

@@ -252,7 +252,7 @@ background_music:
 
   # Volume of background music relative to dialogue (0.0-1.0)
   # Lower values make music more subtle, higher values make it more prominent
-  volume: 0.20  # 20% of original volume (dialogue volume is at 100%)
+  volume: 0.35  # 35% of original volume (dialogue volume is at 100%)
 
   # Audio mixing strategy
   # Options: "ducking" (reduce music during dialogue), "constant" (constant volume throughout)

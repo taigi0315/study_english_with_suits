@@ -71,15 +71,24 @@ async def create_batch(request: BatchCreateRequest) -> Dict[str, Any]:
         videos = [video.dict() for video in request.videos]
         
         # Extract configuration
+        # Force test_mode to False for production (only allow True if explicitly set)
+        # This ensures all chunks are processed, not just the first one
+        test_mode = request.test_mode if request.test_mode is not None else False
+        
         config = {
             'language_code': request.language_code,
             'language_level': request.language_level,
-            'test_mode': request.test_mode,
+            'test_mode': test_mode,
             'max_expressions': request.max_expressions,
             'no_shorts': request.no_shorts,
             'short_form_max_duration': request.short_form_max_duration,
             'output_dir': request.output_dir
         }
+        
+        # Log warning if test_mode is enabled
+        if test_mode:
+            logger.warning("⚠️ TEST MODE is enabled - only first chunk will be processed per episode!")
+            logger.warning("⚠️ This will result in very few expressions. Disable test_mode for full processing.")
         
         # Validate batch size
         batch_service = BatchQueueService()

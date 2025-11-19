@@ -142,25 +142,23 @@ class VideoEditor:
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"long_form_video_{safe_expression}.mkv"
+            # Simplified filename: just expression name (e.g., "throw_em_off.mkv")
+            output_filename = f"{safe_expression}.mkv"
             
-            # Use videos directory from paths (created by output_manager)
-            # All videos go to videos/ directory
-            if hasattr(self, 'videos_dir'):
-                videos_dir = self.videos_dir
-            elif hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
-                # Try to find videos directory in parent structure
+            # Use expressions/ directory from paths (created by output_manager)
+            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find expressions directory in parent structure
                 lang_dir = self.output_dir.parent
                 if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
-                    videos_dir = lang_dir / "videos"
+                    expressions_dir = lang_dir / "expressions"
                 else:
-                    videos_dir = self.output_dir.parent / "videos"
+                    expressions_dir = self.output_dir.parent / "expressions"
             else:
                 # Fallback: create in output_dir parent
-                videos_dir = Path(self.output_dir).parent / "videos"
-                videos_dir.mkdir(parents=True, exist_ok=True)
+                expressions_dir = Path(self.output_dir).parent / "expressions"
+                expressions_dir.mkdir(parents=True, exist_ok=True)
             
-            output_path = videos_dir / output_filename
+            output_path = expressions_dir / output_filename
             
             logger.info(f"Creating long-form video for: {expression.expression}")
             
@@ -555,10 +553,20 @@ class VideoEditor:
             safe_expression = sanitize_for_expression_filename(expression.expression)
             output_filename = f"short_form_{safe_expression}.mkv"
             
-            # Use short_videos directory
-            short_videos_dir = self.short_videos_dir
-            short_videos_dir.mkdir(parents=True, exist_ok=True)
-            output_path = short_videos_dir / output_filename
+            # Use shorts/ directory from paths (created by output_manager)
+            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find shorts directory in parent structure
+                lang_dir = self.output_dir.parent
+                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                    shorts_dir = lang_dir / "shorts"
+                else:
+                    shorts_dir = self.output_dir.parent / "shorts"
+            else:
+                # Fallback: create in output_dir parent
+                shorts_dir = Path(self.output_dir).parent / "shorts"
+                shorts_dir.mkdir(parents=True, exist_ok=True)
+            
+            output_path = shorts_dir / output_filename
             
             logger.info(f"Creating short-form video from long-form video: {expression.expression}")
 
@@ -1236,10 +1244,9 @@ class VideoEditor:
             provider_config_for_audio = provider_config if provider_config else {"response_format": "wav"}
             tts_enabled = settings.is_tts_enabled() and provider and bool(provider_config)
             
-            # Create audio timeline directory (used for both TTS and original audio)
-            tts_audio_dir = self.output_dir.parent / "tts_audio"
-            tts_audio_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Audio timeline directory: {tts_audio_dir}")
+            # Note: tts_audio directory is no longer created as it's not needed
+            # Audio files are created in temporary locations and embedded directly in videos
+            tts_audio_dir = self.output_dir.parent / "tts_audio"  # Used for path reference only, not created
             
             # Check if we should use expression audio instead of TTS
             if use_expression_audio and expression_video_clip_path:
@@ -2446,20 +2453,36 @@ class VideoEditor:
             # Use short-form naming convention with episode info
             episode_name = getattr(self, 'episode_name', 'Unknown_Episode')
             batch_filename = f"short-form_{episode_name}_{batch_number:03d}.mkv"
-            batch_path = self.short_videos_dir / batch_filename
+            
+            # Use shorts/ directory from paths (created by output_manager)
+            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                # Try to find shorts directory in parent structure
+                lang_dir = self.output_dir.parent
+                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
+                    shorts_dir = lang_dir / "shorts"
+                else:
+                    shorts_dir = self.output_dir.parent / "shorts"
+            else:
+                # Fallback: create in output_dir parent
+                shorts_dir = Path(self.output_dir).parent / "shorts"
+                shorts_dir.mkdir(parents=True, exist_ok=True)
+            
+            batch_path = shorts_dir / batch_filename
             
             logger.info(f"Creating batch {batch_number} with {len(video_paths)} videos")
             
             # Create concat file
-            concat_file = self.short_videos_dir / f"temp_concat_batch_{batch_number}.txt"
+            concat_file = shorts_dir / f"temp_concat_batch_{batch_number}.txt"
             self._register_temp_file(concat_file)
             
             with open(concat_file, 'w') as f:
                 for video_path in video_paths:
                     f.write(f"file '{Path(video_path).absolute()}'\n")
             
-            # Concatenate videos with concat demuxer (copy mode to preserve timestamps)
-            concat_demuxer_if_uniform(concat_file, batch_path)
+            # Concatenate videos with concat demuxer and audio normalization
+            # Normalize audio to prevent breaking issues when batching videos with different audio parameters
+            from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
+            concat_demuxer_if_uniform(concat_file, batch_path, normalize_audio=True)
             
             logger.info(f"✅ Batch {batch_number} created: {batch_path}")
             return str(batch_path)

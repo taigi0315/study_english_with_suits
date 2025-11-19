@@ -129,7 +129,7 @@ class VideoEditor:
         - context video → expression repeat (2회) → slide (expression audio 2회)
         - No transition (direct concatenation)
         - Maintains original aspect ratio (16:9 or other)
-        
+
         Args:
             expression: ExpressionAnalysis object
             context_video_path: Path to context video (used for extracting expression clip)
@@ -331,10 +331,10 @@ class VideoEditor:
                 
                 import shutil
                 shutil.move(str(temp_clip_path), str(expression_video_clip_path))
-                
+
                 if not expression_video_clip_path.exists():
                     raise RuntimeError(f"Expression clip file was not created: {expression_video_clip_path}")
-                
+
                 logger.info(f"✅ Expression clip extracted: {expression_video_clip_path}")
             except ffmpeg.Error as e:
                 stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
@@ -348,7 +348,7 @@ class VideoEditor:
             logger.info(f"Repeating expression clip {repeat_count} times")
             from langflix.media.ffmpeg_utils import repeat_av_demuxer
             repeat_av_demuxer(str(expression_video_clip_path), repeat_count, str(repeated_expression_path))
-            
+
             # Step 3: Concatenate context + transition + expression repeat
             context_expr_path = self.output_dir / f"temp_context_expr_long_form_{safe_expression}.mkv"
             self._register_temp_file(context_expr_path)
@@ -405,8 +405,8 @@ class VideoEditor:
                 concat_filter_with_explicit_map(
                     str(context_clip_reset_path),
                     str(repeated_expression_path),
-                    str(context_expr_path)
-                )
+                        str(context_expr_path)
+                    )
             
             # Get duration for slide matching
             from langflix.media.ffmpeg_utils import get_duration_seconds
@@ -416,14 +416,14 @@ class VideoEditor:
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
             educational_slide = self._create_educational_slide(
-                expression_video_path,
-                expression,
-                expression_index,
-                target_duration=context_expr_duration,
-                use_expression_audio=True,
-                expression_video_clip_path=str(expression_video_path)
-            )
-            
+                    expression_video_path,
+                    expression,
+                    expression_index,
+                    target_duration=context_expr_duration,
+                    use_expression_audio=True,
+                    expression_video_clip_path=str(expression_video_path)
+                )
+
             # Step 5: Concatenate context+expression → slide (direct, no transition)
             logger.info("Concatenating context+expression → slide (direct, no transition)")
             long_form_temp_path = self.output_dir / f"temp_long_form_{safe_expression}.mkv"
@@ -717,35 +717,12 @@ class VideoEditor:
                 max_width_percent = settings.get_keywords_max_width_percent()
                 max_width = target_width * max_width_percent
                 
-                # Group keywords into lines based on width
-                keyword_lines = []  # List of lists, each inner list is a line of keyword indices
-                current_line = []
-                current_line_width = 0
+                # Group keywords: one keyword per line (each on its own line)
+                keyword_lines = []  # List of lists, each inner list contains one keyword index
                 
                 for i, keyword in enumerate(formatted_keywords):
-                    keyword_width = len(keyword) * char_width_estimate
-                    
-                    # Check if adding this keyword would exceed max width
-                    # Account for comma if not first keyword in line
-                    needed_width = keyword_width
-                    if current_line:  # Not first keyword in line
-                        needed_width += comma_width
-                    
-                    if current_line_width + needed_width > max_width and current_line:
-                        # Start new line
-                        keyword_lines.append(current_line)
-                        current_line = [i]
-                        current_line_width = keyword_width
-                    else:
-                        # Add to current line
-                        if current_line:  # Not first keyword
-                            current_line_width += comma_width
-                        current_line.append(i)
-                        current_line_width += keyword_width
-                
-                # Add last line if not empty
-                if current_line:
-                    keyword_lines.append(current_line)
+                    # Each keyword gets its own line
+                    keyword_lines.append([i])
                 
                 # Render keywords line by line
                 for line_idx, line_keyword_indices in enumerate(keyword_lines):

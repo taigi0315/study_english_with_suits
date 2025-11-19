@@ -302,3 +302,4 @@ python -m langflix.main --subtitle "test.srt" --profile
 **Summary:** Successfully combined logo overlay and audio gain operations, reducing encoding passes and integrating structured profiling. These changes provide immediate performance benefits and enable better performance analysis going forward.
 
 
+

@@ -93,29 +93,37 @@ The expression appears in a scene that is:
 
 ---
 
-**BACKGROUND MUSIC SELECTION:**
+**BACKGROUND MUSIC SELECTION (MANDATORY):**
 
-For each expression, select the MOST APPROPRIATE background music from the library below.
+**CRITICAL:** You MUST select background music for EVERY expression. This is a REQUIRED field.
 
-**Available Background Music:**
-1. **comedic_funny** - Light, playful, bouncy music. Use for: humor, comedy, playful banter, funny moments
-2. **tense_suspenseful** - Dark, atmospheric with building tension. Use for: tension, suspense, mystery, secrets, dangerous situations
-3. **dramatic_serious** - Powerful orchestral with emotional weight. Use for: drama, serious conversations, important revelations, heavy topics
-4. **romantic_tender** - Soft, warm with gentle melodies. Use for: romance, tender moments, intimate conversations, emotional vulnerability
-5. **action_energetic** - Fast-paced with powerful beats. Use for: action, fast-paced scenes, competition, urgent situations, high energy
-6. **melancholic_sad** - Slow, somber with emotional depth. Use for: sadness, loss, disappointment, regret, emotional pain
-7. **mysterious_intriguing** - Subtle, curious with atmospheric sounds. Use for: mystery, investigation, discovery, puzzles, uncovering secrets
-8. **triumphant_victorious** - Uplifting, heroic with powerful crescendos. Use for: triumph, victory, success, achievement, overcoming obstacles
-9. **confrontational_angry** - Aggressive, intense with sharp accents. Use for: confrontation, arguments, anger, conflict, betrayal
-10. **inspirational_uplifting** - Hopeful, motivating that builds gradually. Use for: inspiration, motivation, hope, encouragement, finding courage
-11. **awkward_uncomfortable** - Quirky, off-kilter with unusual sounds. Use for: awkwardness, cringe, embarrassment, uncomfortable situations
-12. **reflective_contemplative** - Calm, thoughtful with space for reflection. Use for: reflection, contemplation, processing emotions, decision-making
+For each expression, analyze the scene's emotional tone and select EXACTLY ONE music ID from the 12 options below.
 
-**Selection Criteria:**
-- Match the PRIMARY emotional tone from scene_type
-- Music should ENHANCE learning without distracting
-- When in doubt, choose subtle music over dramatic
-- Consider what would make the learning experience more engaging and memorable
+**Available Background Music (MUST choose one):**
+1. **comedic_funny** - Light, playful, bouncy music. Use for: humor, comedy, playful banter, funny moments, witty exchanges
+2. **tense_suspenseful** - Dark, atmospheric with building tension. Use for: tension, suspense, mystery, secrets, dangerous situations, cliffhangers
+3. **dramatic_serious** - Powerful orchestral with emotional weight. Use for: drama, serious conversations, important revelations, heavy topics, confronting truths
+4. **romantic_tender** - Soft, warm with gentle melodies. Use for: romance, tender moments, intimate conversations, emotional vulnerability, heartfelt connections
+5. **action_energetic** - Fast-paced with powerful beats. Use for: action, fast-paced scenes, competition, urgent situations, high energy, decisive moments
+6. **melancholic_sad** - Slow, somber with emotional depth. Use for: sadness, loss, disappointment, regret, emotional pain, goodbyes
+7. **mysterious_intriguing** - Subtle, curious with atmospheric sounds. Use for: mystery, investigation, discovery, puzzles, uncovering secrets, curious situations
+8. **triumphant_victorious** - Uplifting, heroic with powerful crescendos. Use for: triumph, victory, success, achievement, overcoming obstacles, breakthroughs
+9. **confrontational_angry** - Aggressive, intense with sharp accents. Use for: confrontation, arguments, anger, conflict, betrayal, heated exchanges
+10. **inspirational_uplifting** - Hopeful, motivating that builds gradually. Use for: inspiration, motivation, hope, encouragement, finding courage, positive turning points
+11. **awkward_uncomfortable** - Quirky, off-kilter with unusual sounds. Use for: awkwardness, cringe, embarrassment, uncomfortable situations, social mishaps
+12. **reflective_contemplative** - Calm, thoughtful with space for reflection. Use for: reflection, contemplation, processing emotions, decision-making, quiet realizations
+
+**MANDATORY Selection Process:**
+1. Identify the PRIMARY emotional tone of the scene (from scene_type and dialogue context)
+2. Match it to ONE of the 12 music categories above
+3. Provide the exact music_id (e.g., "comedic_funny", "tense_suspenseful")
+4. Write a brief reasoning (1 sentence) explaining why this music fits
+
+**IMPORTANT:**
+- You MUST provide a valid background_music_id for EVERY expression
+- The music_id must be EXACTLY one of the 12 options above (copy the exact name)
+- If a scene has mixed emotions, choose the DOMINANT emotion
+- Music enhances learning - choose what makes the scene most engaging and memorable
 
 ---
 
@@ -139,8 +147,8 @@ For each expression, select the MOST APPROPRIATE background music from the libra
     "context_end_time": "00:00:00,000",
     "similar_expressions": ["alternative 1", "alternative 2"],
     "scene_type": "humor|drama|tension|emotional|witty|confrontation",
-    "background_music_id": "music_id_from_library",
-    "background_music_reasoning": "Brief explanation of why this music fits"
+    "background_music_id": "REQUIRED: exact music_id from the 12 options (e.g., 'comedic_funny', 'tense_suspenseful')",
+    "background_music_reasoning": "REQUIRED: Brief 1-sentence explanation of why this music fits the scene's emotional tone"
   }}
 ]
 
@@ -172,7 +180,7 @@ For each expression, select the MOST APPROPRIATE background music from the libra
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items
 - ✓ expression_dialogue_translation accurately translates expression_dialogue
 - ✓ Context timing feels natural and complete (10-25 seconds)
-- ✓ background_music_id is selected from the available music library
-- ✓ background_music_reasoning explains why the music matches the scene
+- ✓ **REQUIRED:** background_music_id is PROVIDED and is EXACTLY one of the 12 music IDs (e.g., 'comedic_funny')
+- ✓ **REQUIRED:** background_music_reasoning is PROVIDED (1 sentence explaining the music choice)
 
 Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.

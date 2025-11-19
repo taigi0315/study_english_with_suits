@@ -1041,11 +1041,20 @@ class VideoEditor:
             # 1. Input video
             video_input = ffmpeg.input(str(video_path))
 
-            # 2. Input music and loop it to match video duration
-            music_input = ffmpeg.input(str(music_path), stream_loop=-1, t=video_duration)
+            # 2. Input music - use stream_loop to repeat infinitely, then trim
+            # stream_loop=-1 means loop infinitely
+            music_input = ffmpeg.input(str(music_path), stream_loop=-1)
 
-            # 3. Apply volume adjustment and fade in/out to music
+            # 3. Process music audio
             music_audio = music_input.audio
+
+            # Trim music to exact video duration FIRST (before other filters)
+            music_audio = music_audio.filter('atrim', end=video_duration)
+
+            # Set audio timestamp to start at 0 (required after atrim)
+            music_audio = music_audio.filter('asetpts', 'PTS-STARTPTS')
+
+            # Apply volume adjustment
             music_audio = music_audio.filter('volume', volume)
 
             # Apply fade in at start
@@ -1061,8 +1070,18 @@ class VideoEditor:
             # Get original audio from video
             video_audio = video_input.audio
 
-            # Mix the two audio streams (original + background music)
-            mixed_audio = ffmpeg.filter([video_audio, music_audio], 'amix', inputs=2, duration='first')
+            # Mix the two audio streams with proper parameters to avoid distortion
+            # - normalize=0: disable automatic normalization
+            # - weights: dialogue at full volume (1.0), music already adjusted by volume filter
+            # - duration=first: match the duration of the video
+            mixed_audio = ffmpeg.filter(
+                [video_audio, music_audio],
+                'amix',
+                inputs=2,
+                duration='first',
+                dropout_transition=2,  # Smooth transitions if streams have different lengths
+                normalize=0  # Disable auto-normalization to prevent distortion
+            )
 
             # 5. Output video with mixed audio
             output = ffmpeg.output(
@@ -1071,9 +1090,10 @@ class VideoEditor:
                 str(output_path),
                 vcodec='copy',  # Copy video stream (no re-encoding)
                 acodec='aac',   # Encode audio
-                ac=2,
-                ar=48000,
-                audio_bitrate='256k'
+                ac=2,           # Stereo
+                ar=48000,       # 48kHz sample rate
+                audio_bitrate='256k',
+                **{'q:a': 2}    # High quality audio encoding (lower is better)
             )
 
             output.overwrite_output().run(quiet=True)

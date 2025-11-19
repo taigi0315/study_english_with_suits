@@ -316,6 +316,57 @@ Instead of extracting just the bare minimum phrase, include enough surrounding w
 
 ---
 
+**CATCHY CONTEXT KEYWORDS - HOOK THE VIEWER:**
+
+**PURPOSE:** Generate 2-3 short, punchy phrases in {target_language} (3-6 words each) that make people think "Wait, WHAT? I need to see this!" within 2-3 seconds.
+
+**CHARACTERISTICS OF GREAT KEYWORDS:**
+
+1. **REVEAL THE JUICY PART** without spoiling everything
+   - Hint at conflict, surprise, or drama
+   - Create curiosity: "How did THAT happen?"
+   - Examples: "천재의 면접 통과", "뉴욕 최고 변호사와 면접"
+
+2. **FOCUS ON THE UNEXPECTED**
+   - What's surprising or unusual about this scene?
+   - What would make someone stop scrolling?
+   - What's the "hook" that makes this moment special?
+
+3. **USE POWER WORDS**
+   - Words that create emotion: 천재, 최고, 위기, 반전, 대결, 비밀
+   - Action words: 통과하다, 맞서다, 밝히다, 도전하다
+   - Dramatic words: 충격, 진실, 결정, 선택
+
+4. **DIFFERENT ANGLES** for the same scene:
+   - Keyword 1: Character perspective ("천재 신입의 첫 면접")
+   - Keyword 2: Conflict/Drama angle ("법대 안 나온 변호사 지망생")
+   - Keyword 3: Relationship/Situation ("하버드 출신만 뽑는 로펌의 예외")
+
+**FORMAT:**
+- Each keyword: 3-6 words in {target_language}
+- NO full sentences, NO explanations
+- Short, punchy, scroll-stopping
+- Think: "TikTok/Reel caption style"
+
+**BAD EXAMPLES (too bland):**
+- ❌ "면접을 보는 장면" (too descriptive, no hook)
+- ❌ "변호사 사무실에서 대화" (too generic)
+- ❌ "마이크와 하비의 만남" (no drama)
+
+**GOOD EXAMPLES:**
+- ✓ "천재의 즉석 면접 통과"
+- ✓ "하버드 없이 로펌 입성"
+- ✓ "뉴욕 최고 변호사를 압도한 신입"
+- ✓ "학위 없는 변호사의 탄생"
+
+**PROCESS:**
+1. Identify what's dramatic/surprising/emotional about this scene
+2. Brainstorm 5-6 possible angles
+3. Pick the top 2-3 that would make YOU want to watch
+4. Keep them short and punchy (3-6 words)
+
+---
+
 **PROCESS:**
 
 **STEP 0:** Read and understand the entire scene
@@ -396,7 +447,12 @@ For each expression, analyze the scene's emotional tone and select EXACTLY ONE m
     "similar_expressions": ["alternative 1", "alternative 2"],
     "scene_type": "humor|drama|tension|emotional|witty|confrontation",
     "background_music_id": "REQUIRED: exact music_id from 12 options (e.g., 'comedic_funny')",
-    "background_music_reasoning": "REQUIRED: 1-sentence explanation why this music fits"
+    "background_music_reasoning": "REQUIRED: 1-sentence explanation why this music fits",
+    "catchy_keywords": [
+      "keyword 1 in {target_language} (3-6 words)",
+      "keyword 2 in {target_language} (3-6 words)",
+      "keyword 3 in {target_language} (3-6 words)"
+    ]
   }}
 ]
 
@@ -439,6 +495,8 @@ For each expression, analyze the scene's emotional tone and select EXACTLY ONE m
 - ✓ Translations capture the story context and emotion
 - ✓ NO simple curses, basic 1-2 word phrases, or obvious expressions
 - ✓ Context start/end times create a satisfying, complete clip
+- ✓ Catchy keywords are SHORT (3-6 words), PUNCHY, and create CURIOSITY
+
 
 Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.
 

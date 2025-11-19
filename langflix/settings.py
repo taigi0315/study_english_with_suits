@@ -91,6 +91,11 @@ def get_transitions_config() -> Dict[str, Any]:
     return _config_loader.get_section('transitions') or {}
 
 
+def get_background_music_config() -> Dict[str, Any]:
+    """Get background music configuration"""
+    return _config_loader.get_section('background_music') or {}
+
+
 def get_language_levels() -> Dict[str, Any]:
     """Get language proficiency levels"""
     return _config_loader.get_section('language_levels') or {}

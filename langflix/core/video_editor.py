@@ -986,7 +986,7 @@ class VideoEditor:
         """
         try:
             # Check if background music is enabled
-            bg_music_config = settings.config.get('background_music', {})
+            bg_music_config = settings.get_background_music_config()
             if not bg_music_config.get('enabled', False):
                 logger.info("Background music disabled in config, skipping")
                 import shutil

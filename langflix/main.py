@@ -777,13 +777,15 @@ class LangFlixPipeline:
                 
             logger.info("Creating short-format videos from long-form videos...")
             
-            # Get long-form videos from videos/ directory
-            videos_dir = self.paths['language'].get('videos')
-            if not videos_dir:
-                videos_dir = self.paths['language']['language_dir'] / "videos"
+            # Get long-form videos from expressions/ directory (new organized structure)
+            expressions_dir = self.paths['language'].get('expressions')
+            if not expressions_dir:
+                expressions_dir = self.paths['language']['language_dir'] / "expressions"
             
-            videos_dir = Path(videos_dir) if isinstance(videos_dir, str) else videos_dir
-            long_form_videos = sorted(list(videos_dir.glob("long_form_video_*.mkv")))
+            expressions_dir = Path(expressions_dir) if isinstance(expressions_dir, str) else expressions_dir
+            
+            # Find all expression videos in expressions/ directory (file format: {expression}.mkv)
+            long_form_videos = sorted(list(expressions_dir.glob("*.mkv")))
             
             logger.info(f"Found {len(long_form_videos)} long-form videos for short video creation")
             
@@ -794,24 +796,20 @@ class LangFlixPipeline:
             short_format_videos = []
             
             # Create a mapping from expression names to long-form videos
+            # File format: {expression}.mkv (e.g., "the_balls_in_your_court.mkv")
             long_form_video_map = {}
             for long_form_video in long_form_videos:
-                # Extract expression name from filename: long_form_video_{expression_name}.mkv
-                video_name = long_form_video.stem
-                logger.debug(f"Processing video: {long_form_video.name}, stem: {video_name}")
-                if video_name.startswith('long_form_video_'):
-                    expression_name = video_name[len('long_form_video_'):]  # Remove 'long_form_video_' prefix
-                    long_form_video_map[expression_name] = long_form_video
-                    logger.info(f"Mapped long-form video: '{expression_name}' -> {video_name}")
-                else:
-                    logger.warning(f"Video name '{video_name}' does not start with 'long_form_video_'")
+                # Extract expression name from filename: {expression}.mkv
+                expression_name = long_form_video.stem  # Remove .mkv extension
+                long_form_video_map[expression_name] = long_form_video
+                logger.info(f"Mapped long-form video: '{expression_name}' -> {long_form_video.name}")
             
             logger.info(f"Long-form video mapping: {list(long_form_video_map.keys())}")
             
             for i, expression in enumerate(self.expressions):
                 # Sanitize expression name to match filename format
                 safe_expression_name = sanitize_for_expression_filename(expression.expression)
-                logger.info(f"Looking for long-form video: long_form_video_{safe_expression_name}.mkv")
+                logger.info(f"Looking for long-form video: {safe_expression_name}.mkv")
                 
                 if safe_expression_name in long_form_video_map:
                     long_form_video = long_form_video_map[safe_expression_name]
@@ -849,8 +847,50 @@ class LangFlixPipeline:
                 logger.info(f"✅ Created {len(batch_videos)} short video batches")
                 for batch_path in batch_videos:
                     logger.info(f"  - {batch_path}")
+                
+                # After creating combined batch videos, delete individual expression short videos
+                # We only need the combined batch videos, not individual ones
+                deleted_short_count = 0
+                shorts_dir = self.paths['language'].get('shorts')
+                if not shorts_dir:
+                    shorts_dir = self.paths['language']['language_dir'] / "shorts"
+                shorts_dir = Path(shorts_dir) if isinstance(shorts_dir, str) else shorts_dir
+                
+                for video_path, _ in short_format_videos:
+                    try:
+                        video_file = Path(video_path)
+                        if video_file.exists():
+                            video_file.unlink()
+                            deleted_short_count += 1
+                            logger.debug(f"Deleted individual short video: {video_file.name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete individual short video {video_path}: {e}")
+                
+                if deleted_short_count > 0:
+                    logger.info(f"✅ Cleaned up {deleted_short_count} individual short videos (keeping only combined batches)")
             else:
                 logger.warning("No short format videos were created successfully")
+            
+            # After creating short videos, clean up individual long_form videos from expressions/ directory
+            # They are no longer needed since we have combined version and short videos
+            if long_form_videos:
+                deleted_count = 0
+                expressions_dir = self.paths['language'].get('expressions')
+                if not expressions_dir:
+                    expressions_dir = self.paths['language']['language_dir'] / "expressions"
+                expressions_dir = Path(expressions_dir) if isinstance(expressions_dir, str) else expressions_dir
+                
+                for video_path in long_form_videos:
+                    try:
+                        if video_path.exists():
+                            video_path.unlink()
+                            deleted_count += 1
+                            logger.debug(f"Deleted individual long_form video: {video_path.name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete individual long_form video {video_path}: {e}")
+                
+                if deleted_count > 0:
+                    logger.info(f"✅ Cleaned up {deleted_count} individual long_form videos after short video creation")
             
             # After creating short videos, preserve expression videos (TICKET-029)
             if hasattr(self, 'video_editor'):
@@ -876,6 +916,11 @@ class LangFlixPipeline:
         Combine short format videos into batches with max_duration limit.
         Videos that would exceed max_duration are dropped from batching.
         
+        Logic:
+        - Videos are added to current batch if current_duration + duration <= max_duration
+        - New batch is started when adding would exceed max_duration
+        - Videos exceeding max_duration individually are dropped
+        
         Args:
             short_format_videos: List of (video_path, duration) tuples
             max_duration: Maximum duration for each batch (default: 180 seconds)
@@ -887,49 +932,74 @@ class LangFlixPipeline:
             logger.info(f"Creating batched short videos from {len(short_format_videos)} videos")
             logger.info(f"Maximum duration per batch: {max_duration}s")
             
+            if not short_format_videos:
+                logger.warning("No short format videos provided for batching")
+                return []
+            
             batch_videos = []
             current_batch_videos = []
             current_duration = 0.0
             batch_number = 1
             dropped_count = 0
             
-            for video_path, duration in short_format_videos:
+            for idx, (video_path, duration) in enumerate(short_format_videos, 1):
+                video_name = Path(video_path).name
+                logger.debug(f"Processing video {idx}/{len(short_format_videos)}: {video_name} (duration: {duration:.2f}s)")
+                
                 # Check if video itself exceeds max_duration
                 if duration > max_duration:
                     logger.warning(
-                        f"Dropping video {Path(video_path).name} - duration {duration:.2f}s exceeds max {max_duration}s"
+                        f"Dropping video {video_name} - duration {duration:.2f}s exceeds max {max_duration}s"
                     )
                     dropped_count += 1
                     continue
                 
                 # Check if adding this video would exceed max_duration
-                if current_duration + duration > max_duration and current_batch_videos:
+                new_duration = current_duration + duration
+                if new_duration > max_duration and current_batch_videos:
+                    # Current batch is full, create it and start new batch
+                    logger.info(
+                        f"Batch {batch_number} full (duration: {current_duration:.2f}s, videos: {len(current_batch_videos)}). "
+                        f"Starting new batch with {video_name}"
+                    )
+                    
                     # Create batch with current videos
                     batch_path = self.video_editor._create_video_batch(current_batch_videos, batch_number)
                     batch_videos.append(batch_path)
+                    logger.info(f"✅ Created batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
                     
                     # Reset for next batch
                     current_batch_videos = [video_path]
                     current_duration = duration
                     batch_number += 1
+                    logger.debug(f"New batch {batch_number} started with {video_name} (duration: {duration:.2f}s)")
                 else:
                     # Add to current batch
                     current_batch_videos.append(video_path)
-                    current_duration += duration
+                    current_duration = new_duration
+                    logger.debug(
+                        f"Added {video_name} to batch {batch_number} "
+                        f"(current duration: {current_duration:.2f}s / {max_duration}s)"
+                    )
             
             # Create final batch if there are remaining videos
             if current_batch_videos:
+                logger.info(
+                    f"Creating final batch {batch_number} with {len(current_batch_videos)} videos "
+                    f"(duration: {current_duration:.2f}s)"
+                )
                 batch_path = self.video_editor._create_video_batch(current_batch_videos, batch_number)
                 batch_videos.append(batch_path)
+                logger.info(f"✅ Created final batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
             
             if dropped_count > 0:
                 logger.warning(f"Dropped {dropped_count} videos that exceeded max duration {max_duration}s")
             
-            logger.info(f"✅ Created {len(batch_videos)} short video batches")
+            logger.info(f"✅ Created {len(batch_videos)} short video batches from {len(short_format_videos)} videos")
             return batch_videos
             
         except Exception as e:
-            logger.error(f"Error creating batched short videos: {e}")
+            logger.error(f"Error creating batched short videos: {e}", exc_info=True)
             raise
     
     def _create_combined_long_form_video(self, long_form_videos: List[str]):
@@ -954,19 +1024,18 @@ class LangFlixPipeline:
                 logger.error("No valid long-form videos found for combination")
                 return
             
-            # Create output path for combined video
-            episode_name = self.paths.get('episode_name', 'Unknown_Episode')
-            original_filename = Path(self.subtitle_file).stem if hasattr(self, 'subtitle_file') else 'content'
-            combined_video_filename = f"combined_long_form_video_{episode_name}_{original_filename}.mkv"
+            # Create output path for combined video in long/ directory
+            # Simplified filename: just "combined.mkv"
+            combined_video_filename = "combined.mkv"
             
-            # Use videos directory from paths
-            if 'videos' in self.paths['language']:
-                videos_dir = self.paths['language']['videos']
+            # Use long/ directory from paths (created by output_manager)
+            if 'long' in self.paths['language']:
+                long_dir = self.paths['language']['long']
             else:
                 # Fallback: create in language directory
-                videos_dir = self.paths['language']['language_dir'] / "videos"
-            videos_dir.mkdir(parents=True, exist_ok=True)
-            combined_video_path = videos_dir / combined_video_filename
+                long_dir = self.paths['language']['language_dir'] / "long"
+            long_dir.mkdir(parents=True, exist_ok=True)
+            combined_video_path = long_dir / combined_video_filename
             
             # Create concat file
             import tempfile
@@ -977,21 +1046,15 @@ class LangFlixPipeline:
                     concat_file.write(f"file '{abs_path}'\n")
                 concat_file.close()
                 
-                # Concatenate videos using concat demuxer
-                import ffmpeg
-                (
-                    ffmpeg
-                    .input(concat_file.name, format='concat', safe=0)
-                    .output(str(combined_video_path),
-                           vcodec='libx264',
-                           acodec='aac',
-                           preset='fast',
-                           crf=23)
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
+                # Concatenate videos using concat demuxer with audio normalization
+                # Normalize audio to prevent breaking issues when combining videos
+                from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
+                concat_demuxer_if_uniform(concat_file.name, combined_video_path, normalize_audio=True)
                 
                 logger.info(f"✅ Combined long-form video created: {combined_video_path}")
+                
+                # Note: Individual long_form videos are NOT deleted here
+                # They are needed for short video creation, and will be cleaned up after short videos are created
             finally:
                 # Clean up concat file
                 import os
@@ -1139,8 +1202,98 @@ class LangFlixPipeline:
             if hasattr(self, 'video_editor'):
                 self.video_editor._cleanup_temp_files()
                 logger.info("✅ VideoEditor temporary files cleaned up")
+            
+            # Clean up intermediate files/directories after video processing is complete
+            # Keep only final results: shorts/, long/, slides/
+            self._cleanup_intermediate_files()
         except Exception as e:
             logger.warning(f"Failed to cleanup VideoEditor resources: {e}")
+    
+    def _cleanup_intermediate_files(self):
+        """
+        Clean up intermediate files and directories after video processing is complete.
+        
+        Removes:
+        - subtitles/ - Subtitle files (no longer needed after video creation)
+        - tts_audio/ - TTS audio files (already embedded in videos)
+        - expressions/ - Individual expression videos directory (already combined and used for shorts)
+        - videos/expressions/ - Individual expression videos (already combined and used for shorts)
+        - videos/ - Legacy videos directory (if empty after cleanup)
+        - slides/ - Educational slide videos (already embedded in final videos)
+        
+        Keeps:
+        - shorts/ - Final combined short-form batch videos (keep)
+        - long/ - Final combined long-form video (keep)
+        """
+        try:
+            lang_dir = self.paths['language']['language_dir']
+            
+            # Clean up subtitles directory
+            subtitles_dir = lang_dir / "subtitles"
+            if subtitles_dir.exists() and subtitles_dir.is_dir():
+                import shutil
+                shutil.rmtree(subtitles_dir)
+                logger.info(f"✅ Cleaned up subtitles directory: {subtitles_dir}")
+            
+            # Clean up tts_audio directory
+            tts_audio_dir = lang_dir / "tts_audio"
+            if tts_audio_dir.exists() and tts_audio_dir.is_dir():
+                import shutil
+                shutil.rmtree(tts_audio_dir)
+                logger.info(f"✅ Cleaned up tts_audio directory: {tts_audio_dir}")
+            
+            # Clean up expressions/ directory (individual expression videos are no longer needed)
+            expressions_dir = lang_dir / "expressions"
+            if expressions_dir.exists() and expressions_dir.is_dir():
+                import shutil
+                shutil.rmtree(expressions_dir)
+                logger.info(f"✅ Cleaned up expressions directory: {expressions_dir}")
+            
+            # Clean up slides/ directory (slide videos are already embedded in final videos)
+            slides_dir = lang_dir / "slides"
+            if slides_dir.exists() and slides_dir.is_dir():
+                import shutil
+                shutil.rmtree(slides_dir)
+                logger.info(f"✅ Cleaned up slides directory: {slides_dir}")
+            
+            # Clean up videos/expressions/ directory (if exists)
+            videos_dir = lang_dir / "videos"
+            expressions_in_videos = videos_dir / "expressions"
+            if expressions_in_videos.exists() and expressions_in_videos.is_dir():
+                import shutil
+                shutil.rmtree(expressions_in_videos)
+                logger.info(f"✅ Cleaned up videos/expressions directory: {expressions_in_videos}")
+            
+            # Clean up legacy videos/ directory if it's empty or only contains empty subdirectories
+            if videos_dir.exists() and videos_dir.is_dir():
+                # Check if videos directory is empty or only contains empty subdirectories
+                try:
+                    contents = list(videos_dir.iterdir())
+                    if not contents:
+                        # Directory is empty, remove it
+                        videos_dir.rmdir()
+                        logger.info(f"✅ Cleaned up empty videos directory: {videos_dir}")
+                    else:
+                        # Check if all contents are empty directories
+                        all_empty = True
+                        for item in contents:
+                            if item.is_file():
+                                all_empty = False
+                                break
+                            elif item.is_dir():
+                                if list(item.iterdir()):
+                                    all_empty = False
+                                    break
+                        
+                        if all_empty:
+                            import shutil
+                            shutil.rmtree(videos_dir)
+                            logger.info(f"✅ Cleaned up videos directory (only empty subdirectories): {videos_dir}")
+                except Exception as e:
+                    logger.debug(f"Could not check/remove videos directory: {e}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to cleanup intermediate files: {e}")
     
     def _generate_summary(self) -> Dict[str, Union[int, str]]:
         """Generate processing summary"""

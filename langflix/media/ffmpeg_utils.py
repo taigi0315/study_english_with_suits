@@ -379,17 +379,31 @@ def make_video_encode_args_from_source(source_path: str, include_preset_crf: boo
     return args
 
 
-def make_audio_encode_args(normalize: bool = False) -> Dict[str, Any]:
+def make_audio_encode_args(normalize: bool = False, quality: str = "high") -> Dict[str, Any]:
     """Get audio encoding arguments.
     
     Args:
         normalize: If True, normalize to stereo 48k. If False, use copy.
+        quality: Audio quality level - "high" (256kbps), "medium" (192kbps), or "low" (128kbps)
     
     Returns:
         Dict with audio codec args
     """
     if normalize:
-        return {"acodec": "aac", "ac": 2, "ar": 48000}
+        # Use high-quality AAC encoding to preserve original audio quality
+        # High bitrate (256kbps) ensures minimal quality loss during re-encoding
+        bitrate_map = {
+            "high": "256k",
+            "medium": "192k",
+            "low": "128k"
+        }
+        bitrate = bitrate_map.get(quality, "256k")
+        return {
+            "acodec": "aac",
+            "ac": 2,  # Stereo
+            "ar": 48000,  # 48kHz sample rate (video standard)
+            "b:a": bitrate  # High bitrate for quality preservation
+        }
     return {"acodec": "copy"}
 
 
@@ -598,11 +612,18 @@ def concat_filter_with_explicit_map(
         raise RuntimeError(f"concat_filter_with_explicit_map failed: {stderr}") from e
 
 
-def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> None:
+def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str, normalize_audio: bool = True) -> None:
     """Use concat demuxer when all inputs are uniform; caller must ensure uniformity.
     
     Note: This is a simplified version that reads from a concat list file.
     For in-memory concat, use repeat_av_demuxer pattern.
+    
+    Args:
+        list_file: Path to concat list file
+        out_path: Output path for concatenated video
+        normalize_audio: If True, normalize audio to stereo 48k with high quality encoding.
+                         This prevents audio breaking issues when concatenating videos with
+                         different audio parameters. Default: True for quality preservation.
     """
     # First, probe one of the input files to get encoding params
     # This ensures we use appropriate encoding settings, not just copy mode
@@ -617,10 +638,21 @@ def concat_demuxer_if_uniform(list_file: Path | str, out_path: Path | str) -> No
     
     if first_file and Path(first_file).exists():
         # Use encoding args from source (includes preset/crf from config)
-        encode_args = {**make_video_encode_args_from_source(str(first_file)), **make_audio_encode_args_copy()}
+        # Normalize audio to prevent breaking issues when concatenating videos
+        # with different audio parameters (sample rate, channels, codec)
+        if normalize_audio:
+            audio_args = make_audio_encode_args(normalize=True, quality="high")
+            logger.info(f"Normalizing audio during concatenation (stereo 48kHz, 256kbps) to prevent audio breaking")
+        else:
+            audio_args = make_audio_encode_args_copy()
+        encode_args = {**make_video_encode_args_from_source(str(first_file)), **audio_args}
     else:
-        # Fallback: use copy for both (fastest but may fail if not uniform)
-        encode_args = {"vcodec": "copy", "acodec": "copy"}
+        # Fallback: use copy for video, normalize audio if requested
+        if normalize_audio:
+            encode_args = {"vcodec": "copy", **make_audio_encode_args(normalize=True, quality="high")}
+            logger.info(f"Normalizing audio during concatenation (stereo 48kHz, 256kbps) to prevent audio breaking")
+        else:
+            encode_args = {"vcodec": "copy", "acodec": "copy"}
     
     (
         ffmpeg

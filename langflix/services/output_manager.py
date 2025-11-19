@@ -92,28 +92,38 @@ class OutputManager:
         lang_dir.mkdir(exist_ok=True)
         
         # Create language subdirectories
+        # Note: context_videos/, tts_audio/, and videos/ directories are not created as they are not used
         subtitles_dir = lang_dir / "subtitles"
-        context_videos_dir = lang_dir / "context_videos"
         slides_dir = lang_dir / "slides"
-        videos_dir = lang_dir / "videos"  # Unified videos directory for all video outputs
+        videos_dir = lang_dir / "videos"  # Legacy: path reference only, not created
+        
+        # New organized structure: expressions/, shorts/, long/
+        expressions_dir = lang_dir / "expressions"  # Individual expression videos
+        shorts_dir = lang_dir / "shorts"  # Short-form videos
+        long_dir = lang_dir / "long"  # Combined long-form video
         
         subtitles_dir.mkdir(exist_ok=True)
-        context_videos_dir.mkdir(exist_ok=True)
         slides_dir.mkdir(exist_ok=True)
-        videos_dir.mkdir(exist_ok=True)
+        # videos_dir is not created - not used in new structure
+        expressions_dir.mkdir(exist_ok=True)
+        shorts_dir.mkdir(exist_ok=True)
+        long_dir.mkdir(exist_ok=True)
         
         # Return language-specific paths
         lang_paths = {
             'language_dir': lang_dir,
             'subtitles': subtitles_dir,
-            'context_videos': context_videos_dir,
             'slides': slides_dir,
-            'videos': videos_dir,
+            'videos': videos_dir,  # Legacy: kept for backward compatibility
+            # New organized structure
+            'expressions': expressions_dir,
+            'shorts': shorts_dir,
+            'long': long_dir,
             # Legacy path mappings for backward compatibility (all point to videos/)
             'final_videos': videos_dir,
             'context_slide_combined': videos_dir,
-            'short_videos': videos_dir,
-            'long_form_videos': videos_dir
+            'short_videos': shorts_dir,  # Updated to point to shorts/
+            'long_form_videos': expressions_dir  # Updated to point to expressions/
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")
@@ -155,7 +165,11 @@ class OutputManager:
             if match:
                 if 'S(\\d+)E(\\d+)' in pattern:
                     # Handle S01E01 format - extract only season/episode, ignore quality/resolution
-                    series_name = match.group(1)
+                    # Remove quality/resolution info from series name (e.g., "Suits.720p.HDTV.x264" -> "Suits")
+                    raw_series_name = match.group(1)
+                    # Remove quality/resolution suffixes from series name
+                    series_name = re.sub(r'\.\d+p\..*$', '', raw_series_name)  # Remove .720p.HDTV.x264 etc
+                    series_name = re.sub(r'\.(HDTV|WEB-DL|BluRay|DVDRip).*$', '', series_name, flags=re.IGNORECASE)  # Remove quality tags
                     season = match.group(2)
                     episode = match.group(3)
                     # Use only S01E01 format, don't include quality/resolution info

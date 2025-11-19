@@ -63,6 +63,14 @@ class ExpressionAnalysis(BaseModel):
         default=None,
         description="2-3 short, punchy phrases (3-6 words each) that hook viewers"
     )
+    background_music_id: Optional[str] = Field(
+        default=None,
+        description="Selected background music ID from the music library (e.g., 'comedic_funny', 'tense_suspenseful')"
+    )
+    background_music_reasoning: Optional[str] = Field(
+        default=None,
+        description="Brief explanation of why this background music was selected for the scene"
+    )
 
     # New fields for expression-based learning
     difficulty: Optional[int] = Field(

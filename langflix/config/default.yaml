@@ -244,6 +244,67 @@ short_video:
       background_opacity: 0.5    # 50% opacity for background
 
 # ============================================================================
+# Background Music Configuration
+# ============================================================================
+background_music:
+  # Enable background music for short-form videos
+  enabled: true
+
+  # Volume of background music relative to dialogue (0.0-1.0)
+  # Lower values make music more subtle, higher values make it more prominent
+  volume: 0.20  # 20% of original volume (dialogue volume is at 100%)
+
+  # Audio mixing strategy
+  # Options: "ducking" (reduce music during dialogue), "constant" (constant volume throughout)
+  mixing_strategy: "constant"
+
+  # Fade in/out duration for smooth transitions (seconds)
+  fade_in_duration: 1.0
+  fade_out_duration: 1.0
+
+  # Music directory path (relative to project root)
+  music_directory: "assets/background_music"
+
+  # Music library definitions (matching the 12 mood categories)
+  library:
+    comedic_funny:
+      file: "comedic_funny.mp3"
+      description: "Light, playful, bouncy music for humorous scenes"
+    tense_suspenseful:
+      file: "tense_suspenseful.mp3"
+      description: "Dark, atmospheric music with building tension"
+    dramatic_serious:
+      file: "dramatic_serious.mp3"
+      description: "Powerful orchestral music with emotional weight"
+    romantic_tender:
+      file: "romantic_tender.mp3"
+      description: "Soft, warm music with gentle melodies"
+    action_energetic:
+      file: "action_energetic.mp3"
+      description: "Fast-paced music with powerful beats"
+    melancholic_sad:
+      file: "melancholic_sad.mp3"
+      description: "Slow, somber music with emotional depth"
+    mysterious_intriguing:
+      file: "mysterious_intriguing.mp3"
+      description: "Subtle, curious music with atmospheric sounds"
+    triumphant_victorious:
+      file: "triumphant_victorious.mp3"
+      description: "Uplifting, heroic music with powerful crescendos"
+    confrontational_angry:
+      file: "confrontational_angry.mp3"
+      description: "Aggressive, intense music with sharp accents"
+    inspirational_uplifting:
+      file: "inspirational_uplifting.mp3"
+      description: "Hopeful, motivating music that builds gradually"
+    awkward_uncomfortable:
+      file: "awkward_uncomfortable.mp3"
+      description: "Quirky, off-kilter music with unusual sounds"
+    reflective_contemplative:
+      file: "reflective_contemplative.mp3"
+      description: "Calm, thoughtful music with space for reflection"
+
+# ============================================================================
 # Expression-Based Learning Configuration
 # ============================================================================
 expression:

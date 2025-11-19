@@ -13,6 +13,10 @@ venv/
 
 # Large files and output directories
 assets/
+# Exception: allow background_music structure (README, .gitkeep) but not music files
+!assets/background_music/
+!assets/background_music/README.md
+!assets/background_music/.gitkeep
 test_output/
 output/
 

@@ -93,6 +93,32 @@ The expression appears in a scene that is:
 
 ---
 
+**BACKGROUND MUSIC SELECTION:**
+
+For each expression, select the MOST APPROPRIATE background music from the library below.
+
+**Available Background Music:**
+1. **comedic_funny** - Light, playful, bouncy music. Use for: humor, comedy, playful banter, funny moments
+2. **tense_suspenseful** - Dark, atmospheric with building tension. Use for: tension, suspense, mystery, secrets, dangerous situations
+3. **dramatic_serious** - Powerful orchestral with emotional weight. Use for: drama, serious conversations, important revelations, heavy topics
+4. **romantic_tender** - Soft, warm with gentle melodies. Use for: romance, tender moments, intimate conversations, emotional vulnerability
+5. **action_energetic** - Fast-paced with powerful beats. Use for: action, fast-paced scenes, competition, urgent situations, high energy
+6. **melancholic_sad** - Slow, somber with emotional depth. Use for: sadness, loss, disappointment, regret, emotional pain
+7. **mysterious_intriguing** - Subtle, curious with atmospheric sounds. Use for: mystery, investigation, discovery, puzzles, uncovering secrets
+8. **triumphant_victorious** - Uplifting, heroic with powerful crescendos. Use for: triumph, victory, success, achievement, overcoming obstacles
+9. **confrontational_angry** - Aggressive, intense with sharp accents. Use for: confrontation, arguments, anger, conflict, betrayal
+10. **inspirational_uplifting** - Hopeful, motivating that builds gradually. Use for: inspiration, motivation, hope, encouragement, finding courage
+11. **awkward_uncomfortable** - Quirky, off-kilter with unusual sounds. Use for: awkwardness, cringe, embarrassment, uncomfortable situations
+12. **reflective_contemplative** - Calm, thoughtful with space for reflection. Use for: reflection, contemplation, processing emotions, decision-making
+
+**Selection Criteria:**
+- Match the PRIMARY emotional tone from scene_type
+- Music should ENHANCE learning without distracting
+- When in doubt, choose subtle music over dramatic
+- Consider what would make the learning experience more engaging and memorable
+
+---
+
 **OUTPUT FORMAT (JSON):**
 
 [
@@ -112,7 +138,9 @@ The expression appears in a scene that is:
     "context_start_time": "00:00:00,000",
     "context_end_time": "00:00:00,000",
     "similar_expressions": ["alternative 1", "alternative 2"],
-    "scene_type": "humor|drama|tension|emotional|witty|confrontation"
+    "scene_type": "humor|drama|tension|emotional|witty|confrontation",
+    "background_music_id": "music_id_from_library",
+    "background_music_reasoning": "Brief explanation of why this music fits"
   }}
 ]
 
@@ -144,5 +172,7 @@ The expression appears in a scene that is:
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items
 - ✓ expression_dialogue_translation accurately translates expression_dialogue
 - ✓ Context timing feels natural and complete (10-25 seconds)
+- ✓ background_music_id is selected from the available music library
+- ✓ background_music_reasoning explains why the music matches the scene
 
 Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.

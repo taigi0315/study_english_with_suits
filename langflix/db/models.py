@@ -51,6 +51,8 @@ class Expression(Base):
     context_start_time = Column(String(20))  # e.g., "00:01:23,456"
     context_end_time = Column(String(20))    # e.g., "00:01:25,789"
     scene_type = Column(String(50))          # e.g., "dialogue", "action"
+    background_music_id = Column(String(50))  # e.g., "comedic_funny", "tense_suspenseful"
+    background_music_reasoning = Column(Text)  # Explanation of music selection
     context_video_path = Column(Text)        # Reference to storage backend
     slide_video_path = Column(Text)         # Reference to storage backend
     created_at = Column(DateTime(timezone=True), server_default=func.now())

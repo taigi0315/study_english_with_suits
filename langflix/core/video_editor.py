@@ -946,9 +946,20 @@ class VideoEditor:
             # Step 6: Skip subtitle overlay - long-form video already contains subtitles
             # Long-form video already has subtitles embedded, so we don't need to add them again
             logger.info("Skipping subtitle overlay - long-form video already contains subtitles")
+
+            # Step 7: Apply background music
+            temp_without_music_path = self.output_dir / f"temp_short_no_music_{safe_expression}.mkv"
+            self._register_temp_file(temp_without_music_path)
             import shutil
-            shutil.copy(str(temp_with_expression_path), str(output_path))
-            
+            shutil.copy(str(temp_with_expression_path), str(temp_without_music_path))
+
+            # Apply background music to create final output
+            self._apply_background_music(
+                video_path=str(temp_without_music_path),
+                expression=expression,
+                output_path=str(output_path)
+            )
+
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
             
@@ -956,6 +967,127 @@ class VideoEditor:
             logger.error(f"Error creating short-form video from long-form video: {e}")
             raise
     
+    def _apply_background_music(
+        self,
+        video_path: str,
+        expression: ExpressionAnalysis,
+        output_path: str
+    ) -> str:
+        """
+        Apply background music to a video based on the expression's selected music_id.
+
+        Args:
+            video_path: Path to input video file
+            expression: ExpressionAnalysis object with background_music_id field
+            output_path: Path for output video with background music
+
+        Returns:
+            Path to video with background music applied
+        """
+        try:
+            # Check if background music is enabled
+            bg_music_config = settings.config.get('background_music', {})
+            if not bg_music_config.get('enabled', False):
+                logger.info("Background music disabled in config, skipping")
+                import shutil
+                shutil.copy(video_path, output_path)
+                return output_path
+
+            # Get music ID from expression
+            music_id = getattr(expression, 'background_music_id', None)
+            if not music_id:
+                logger.warning("No background_music_id specified for expression, skipping background music")
+                import shutil
+                shutil.copy(video_path, output_path)
+                return output_path
+
+            # Get music file path from config
+            music_library = bg_music_config.get('library', {})
+            if music_id not in music_library:
+                logger.warning(f"Music ID '{music_id}' not found in library, skipping background music")
+                import shutil
+                shutil.copy(video_path, output_path)
+                return output_path
+
+            music_filename = music_library[music_id].get('file')
+            if not music_filename:
+                logger.warning(f"No file specified for music ID '{music_id}', skipping")
+                import shutil
+                shutil.copy(video_path, output_path)
+                return output_path
+
+            # Construct full path to music file
+            music_dir = bg_music_config.get('music_directory', 'assets/background_music')
+            music_path = Path(music_dir) / music_filename
+
+            if not music_path.exists():
+                logger.warning(f"Music file not found: {music_path}, skipping background music")
+                import shutil
+                shutil.copy(video_path, output_path)
+                return output_path
+
+            logger.info(f"Applying background music: {music_id} ({music_path})")
+
+            # Get video duration
+            from langflix.media.ffmpeg_utils import get_duration_seconds
+            video_duration = get_duration_seconds(video_path)
+
+            # Get configuration
+            volume = bg_music_config.get('volume', 0.20)
+            fade_in = bg_music_config.get('fade_in_duration', 1.0)
+            fade_out = bg_music_config.get('fade_out_duration', 1.0)
+
+            # Create ffmpeg command to mix audio
+            # 1. Input video
+            video_input = ffmpeg.input(str(video_path))
+
+            # 2. Input music and loop it to match video duration
+            music_input = ffmpeg.input(str(music_path), stream_loop=-1, t=video_duration)
+
+            # 3. Apply volume adjustment and fade in/out to music
+            music_audio = music_input.audio
+            music_audio = music_audio.filter('volume', volume)
+
+            # Apply fade in at start
+            if fade_in > 0:
+                music_audio = music_audio.filter('afade', type='in', start_time=0, duration=fade_in)
+
+            # Apply fade out at end
+            if fade_out > 0 and video_duration > fade_out:
+                fade_out_start = video_duration - fade_out
+                music_audio = music_audio.filter('afade', type='out', start_time=fade_out_start, duration=fade_out)
+
+            # 4. Mix original audio with background music
+            # Get original audio from video
+            video_audio = video_input.audio
+
+            # Mix the two audio streams (original + background music)
+            mixed_audio = ffmpeg.filter([video_audio, music_audio], 'amix', inputs=2, duration='first')
+
+            # 5. Output video with mixed audio
+            output = ffmpeg.output(
+                video_input.video,
+                mixed_audio,
+                str(output_path),
+                vcodec='copy',  # Copy video stream (no re-encoding)
+                acodec='aac',   # Encode audio
+                ac=2,
+                ar=48000,
+                audio_bitrate='256k'
+            )
+
+            output.overwrite_output().run(quiet=True)
+
+            logger.info(f"✅ Background music applied successfully: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"Error applying background music: {e}")
+            logger.warning("Falling back to video without background music")
+            import shutil
+            shutil.copy(video_path, output_path)
+            return str(output_path)
+
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext"""
         try:

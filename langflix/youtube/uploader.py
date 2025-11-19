@@ -330,62 +330,83 @@ class YouTubeUploader:
             if not hasattr(self, '_oauth_states'):
                 self._oauth_states = {}
             self._oauth_states[state] = time.time() + expiration_seconds
+            logger.debug(f"Stored OAuth state in memory (expires in {expiration_seconds}s), state: {state[:20]}...")
         else:
             # Use provided storage (e.g., Redis)
             try:
                 if hasattr(self.oauth_state_storage, 'setex'):
-                    # Redis-like interface
-                    self.oauth_state_storage.setex(f"oauth:state:{state}", expiration_seconds, state)
+                    # Redis-like interface - store state value with expiration
+                    redis_key = f"oauth:state:{state}"
+                    self.oauth_state_storage.setex(redis_key, expiration_seconds, state)
+                    logger.debug(f"Stored OAuth state in Redis (expires in {expiration_seconds}s), key: {redis_key[:50]}...")
                 elif hasattr(self.oauth_state_storage, 'set'):
                     # Dict-like interface with TTL support
                     self.oauth_state_storage[state] = {
-                        'expires_at': time.time() + expiration_seconds
+                        'expires_at': time.time() + expiration_seconds,
+                        'value': state
                     }
+                    logger.debug(f"Stored OAuth state in dict (expires in {expiration_seconds}s), state: {state[:20]}...")
                 else:
                     # Simple dict
                     self.oauth_state_storage[state] = time.time() + expiration_seconds
+                    logger.debug(f"Stored OAuth state in simple dict (expires in {expiration_seconds}s), state: {state[:20]}...")
             except Exception as e:
-                logger.warning(f"Failed to store OAuth state in storage: {e}, using fallback")
+                logger.warning(f"Failed to store OAuth state in storage: {e}, using fallback", exc_info=True)
                 if not hasattr(self, '_oauth_states'):
                     self._oauth_states = {}
                 self._oauth_states[state] = time.time() + expiration_seconds
+                logger.debug(f"Stored OAuth state in memory fallback (expires in {expiration_seconds}s), state: {state[:20]}...")
     
     def _verify_oauth_state(self, state: str) -> bool:
         """Verify OAuth state matches stored state"""
         if self.oauth_state_storage is None:
             # Check in-memory dict
             if not hasattr(self, '_oauth_states'):
+                logger.warning(f"OAuth state storage not initialized, state: {state[:20]}...")
                 return False
             stored_expiry = self._oauth_states.get(state)
             if stored_expiry is None:
+                logger.warning(f"OAuth state not found in memory storage, state: {state[:20]}...")
                 return False
             if time.time() > stored_expiry:
                 # Expired
+                logger.warning(f"OAuth state expired, state: {state[:20]}...")
                 del self._oauth_states[state]
                 return False
+            logger.debug(f"OAuth state verified successfully (in-memory), state: {state[:20]}...")
             return True
         else:
-            # Check provided storage
+            # Check provided storage (Redis or dict-like)
             try:
-                if hasattr(self.oauth_state_storage, 'get'):
-                    # Redis-like or dict-like
-                    if hasattr(self.oauth_state_storage, 'get') and callable(self.oauth_state_storage.get):
-                        stored = self.oauth_state_storage.get(f"oauth:state:{state}")
-                        if stored:
-                            return True
-                    # Dict-like
-                    stored = self.oauth_state_storage.get(state)
+                # Try Redis-like interface first (setex/get pattern)
+                if hasattr(self.oauth_state_storage, 'get') and callable(self.oauth_state_storage.get):
+                    redis_key = f"oauth:state:{state}"
+                    stored = self.oauth_state_storage.get(redis_key)
                     if stored is None:
+                        logger.warning(f"OAuth state not found in Redis, key: {redis_key[:50]}...")
                         return False
-                    if isinstance(stored, dict):
-                        expires_at = stored.get('expires_at', 0)
-                        if time.time() > expires_at:
-                            return False
+                    # Redis setex stores the state value itself, so verify it matches
+                    if stored != state:
+                        logger.warning(f"OAuth state mismatch in Redis, expected: {state[:20]}..., got: {stored[:20] if stored else 'None'}...")
+                        return False
+                    logger.debug(f"OAuth state verified successfully (Redis), state: {state[:20]}...")
                     return True
+                
+                # Fallback to dict-like interface
+                stored = self.oauth_state_storage.get(state)
+                if stored is None:
+                    logger.warning(f"OAuth state not found in dict storage, state: {state[:20]}...")
+                    return False
+                if isinstance(stored, dict):
+                    expires_at = stored.get('expires_at', 0)
+                    if time.time() > expires_at:
+                        logger.warning(f"OAuth state expired in dict storage, state: {state[:20]}...")
+                        return False
+                logger.debug(f"OAuth state verified successfully (dict), state: {state[:20]}...")
+                return True
             except Exception as e:
-                logger.warning(f"Failed to verify OAuth state from storage: {e}")
+                logger.error(f"Failed to verify OAuth state from storage: {e}", exc_info=True)
                 return False
-        return False
     
     def _remove_oauth_state(self, state: str):
         """Remove OAuth state after successful verification"""

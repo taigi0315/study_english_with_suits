@@ -769,13 +769,16 @@ class LangFlixPipeline:
                 )
                 
                 # Create subtitle files for each target language
+                # IMPORTANT: Use base_expression (original English) for subtitle creation
+                # The subtitle file contains: original language (from subtitle file) + target language translation
                 for lang in self.target_languages:
                     try:
-                        # Get translated expression for this language
+                        # Get translated expression for this language (for translation field)
+                        translated_expression = None
                         if lang in self.translated_expressions:
                             lang_expressions = self.translated_expressions[lang]
                             if expr_idx < len(lang_expressions):
-                                expression = lang_expressions[expr_idx]
+                                translated_expression = lang_expressions[expr_idx]
                             else:
                                 logger.warning(f"Expression {expr_idx+1} not found for language {lang}, skipping")
                                 continue
@@ -798,14 +801,48 @@ class LangFlixPipeline:
                             self.paths['languages'][lang] = lang_paths
                         
                         # Create subtitle file for this expression and language
-                        safe_filename = sanitize_for_expression_filename(expression.expression)
+                        # Use base expression name for filename (original English)
+                        safe_filename = sanitize_for_expression_filename(base_expression.expression)
                         subtitle_filename = f"expression_{expr_idx+1:02d}_{safe_filename[:30]}.srt"
                         subtitle_output = lang_paths['subtitles'] / subtitle_filename
                         subtitle_output.parent.mkdir(parents=True, exist_ok=True)
                         
-                        # Create subtitle file using language-specific expression
+                        # CRITICAL: Use base_expression (original) but with translated_expression.translation
+                        # This ensures:
+                        # - Original dialogues come from base_expression (English)
+                        # - Translations come from translated_expression (target language)
+                        # Create a hybrid expression: base structure with translated translation field
+                        from langflix.core.models import ExpressionAnalysis
+                        hybrid_expression = ExpressionAnalysis(
+                            # Use base expression structure (original English)
+                            dialogues=base_expression.dialogues,
+                            expression=base_expression.expression,
+                            expression_dialogue=base_expression.expression_dialogue,
+                            expression_dialogue_translation=translated_expression.expression_dialogue_translation,
+                            expression_translation=translated_expression.expression_translation,
+                            context_start_time=base_expression.context_start_time,
+                            context_end_time=base_expression.context_end_time,
+                            expression_start_time=base_expression.expression_start_time,
+                            expression_end_time=base_expression.expression_end_time,
+                            # Use translated translation field (target language)
+                            translation=translated_expression.translation,
+                            similar_expressions=base_expression.similar_expressions,
+                            catchy_keywords=base_expression.catchy_keywords,
+                            scene_type=base_expression.scene_type,
+                            difficulty=base_expression.difficulty,
+                            category=base_expression.category,
+                            educational_value=base_expression.educational_value,
+                            usage_notes=base_expression.usage_notes,
+                            educational_value_score=base_expression.educational_value_score,
+                            frequency=base_expression.frequency,
+                            context_relevance=base_expression.context_relevance,
+                            ranking_score=base_expression.ranking_score
+                        )
+                        
+                        # Create subtitle file using hybrid expression
+                        # This ensures original language (English) is first, target language translation is second
                         subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
-                            expression,
+                            hybrid_expression,
                             str(subtitle_output)
                         )
                         

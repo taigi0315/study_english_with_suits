@@ -21,8 +21,8 @@ class ScheduleConfig:
     quota_limit: int = 10000
     warning_threshold: float = 80.0      # Percentage (0-100), representing 80%
     # New: slot-based scheduling controls
-    time_slots: List[str] = None         # e.g., ['08:00', '14:00', '20:00']
-    slot_capacity: int = 2               # max videos per time slot
+    time_slots: List[str] = None         # e.g., ['00:00', '06:00', '12:00', '18:00']
+    slot_capacity: int = 3               # max videos per time slot
     daily_max_total: int = 6             # hard cap per day across all types
     
     def __post_init__(self):
@@ -31,10 +31,10 @@ class ScheduleConfig:
         if self.preferred_times is None:
             self.preferred_times = ['10:00', '14:00', '18:00']
         if self.time_slots is None:
-            # Default to requested business slots
-            self.time_slots = ['08:00', '14:00', '20:00']
+            # Default to 4 times per day with 6-hour intervals (0, 6, 12, 18)
+            self.time_slots = ['00:00', '06:00', '12:00', '18:00']
         if self.slot_capacity <= 0:
-            self.slot_capacity = 2
+            self.slot_capacity = 3  # Default: 3 videos per slot
         if self.daily_max_total <= 0:
             self.daily_max_total = 6
         # Validate warning_threshold is in valid range (0-100)

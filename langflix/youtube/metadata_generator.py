@@ -42,42 +42,42 @@ class YouTubeMetadataGenerator:
                 "expression_label": "표현",
                 "meaning_label": "의미",
                 "watch_and_learn": "좋아하는 쇼에서 보고 배우세요!",
-                "title_template": "영어 표현: {expression} | #Shorts #영어학습"
+                "title_template": "영어 표현 {expression} from {episode}"
             },
             "English": {
                 "quick_lesson": "Quick English lesson from Suits!",
                 "expression_label": "Expression",
                 "meaning_label": "Meaning",
                 "watch_and_learn": "Watch and learn from your favorite show!",
-                "title_template": "English Expression: {expression} | #Shorts #EnglishLearning"
+                "title_template": "English Expression {expression} from {episode}"
             },
             "Japanese": {
                 "quick_lesson": "スーツから学ぶクイック英語レッスン！",
                 "expression_label": "表現",
                 "meaning_label": "意味",
                 "watch_and_learn": "お気に入りの番組から見て学びましょう！",
-                "title_template": "英語表現: {expression} | #Shorts #英語学習"
+                "title_template": "英語表現 {expression} from {episode}"
             },
             "Chinese": {
                 "quick_lesson": "从《金装律师》快速学习英语！",
                 "expression_label": "表达",
                 "meaning_label": "含义",
                 "watch_and_learn": "从你最喜欢的节目中观看和学习！",
-                "title_template": "英语表达: {expression} | #Shorts #英语学习"
+                "title_template": "英语表达 {expression} from {episode}"
             },
             "Spanish": {
                 "quick_lesson": "¡Lección rápida de inglés de Suits!",
                 "expression_label": "Expresión",
                 "meaning_label": "Significado",
                 "watch_and_learn": "¡Mira y aprende de tu programa favorito!",
-                "title_template": "Expresión en inglés: {expression} | #Shorts #AprenderInglés"
+                "title_template": "Expresión en inglés {expression} from {episode}"
             },
             "French": {
                 "quick_lesson": "Leçon d'anglais rapide de Suits !",
                 "expression_label": "Expression",
                 "meaning_label": "Signification",
                 "watch_and_learn": "Regardez et apprenez de votre émission préférée !",
-                "title_template": "Expression anglaise: {expression} | #Shorts #ApprendreAnglais"
+                "title_template": "Expression anglaise {expression} from {episode}"
             }
         }
     
@@ -218,9 +218,6 @@ class YouTubeMetadataGenerator:
         else:
             title_template = template.title_template
         
-        # Extract episode number for better formatting
-        episode_display = self._format_episode_display(video_metadata.episode) if video_metadata.episode else None
-        
         # Validate required fields with better fallbacks
         expression = (video_metadata.expression or "").strip()
         if not expression:
@@ -229,12 +226,16 @@ class YouTubeMetadataGenerator:
             expression = self._extract_expression_from_filename(video_metadata.path) or "English Expressions"
             logger.debug(f"Extracted expression: {expression}")
         
-        episode = (episode_display or video_metadata.episode or "").strip()
-        if not episode:
+        # Format episode as "Suits.S01E02" format
+        episode_raw = video_metadata.episode or ""
+        if not episode_raw:
             # Try to extract from filename if episode is empty
             logger.debug(f"Episode is empty, trying to extract from filename: {video_metadata.path}")
-            episode = self._extract_episode_from_filename(video_metadata.path) or "Episode"
-            logger.debug(f"Extracted episode: {episode}")
+            episode_raw = self._extract_episode_from_filename(video_metadata.path) or ""
+        
+        # Format episode: ensure "Suits." prefix and remove quality/resolution info
+        episode = self._format_episode_for_title(episode_raw)
+        logger.debug(f"Formatted episode: '{episode}'")
         
         language = (video_metadata.language or "en").upper()
         
@@ -325,6 +326,57 @@ class YouTubeMetadataGenerator:
         except Exception:
             return None
     
+    def _format_episode_for_title(self, episode_raw: str) -> str:
+        """Format episode as 'Suits.S01E02' format for title"""
+        if not episode_raw:
+            return "Suits"
+        
+        import re
+        # Extract S01E02 pattern
+        episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_raw)
+        if episode_match:
+            episode_code = f"S{episode_match.group(1)}E{episode_match.group(2)}"
+            # Check if "Suits" is already in the episode string
+            if "Suits" in episode_raw or "suits" in episode_raw.lower():
+                # If "Suits" is present, extract just "Suits.S01E02" part
+                # Remove quality/resolution info (e.g., .720p.HDTV.x264)
+                parts = episode_raw.split('.')
+                suits_part = None
+                episode_part = None
+                for part in parts:
+                    if "suits" in part.lower():
+                        suits_part = "Suits"
+                    if re.match(r'[Ss]\d+[Ee]\d+', part):
+                        episode_part = part
+                        break
+                
+                if suits_part and episode_part:
+                    return f"{suits_part}.{episode_part}"
+                elif episode_part:
+                    return f"Suits.{episode_part}"
+            else:
+                # If "Suits" is not present, add it
+                return f"Suits.{episode_code}"
+        
+        # Fallback: if no episode pattern found, try to extract from full string
+        if "Suits" in episode_raw or "suits" in episode_raw.lower():
+            # Extract "Suits.S01E02" part, removing quality info
+            parts = episode_raw.split('.')
+            result_parts = []
+            for part in parts:
+                if "suits" in part.lower() or re.match(r'[Ss]\d+[Ee]\d+', part):
+                    if "suits" in part.lower():
+                        result_parts.append("Suits")
+                    else:
+                        result_parts.append(part)
+                    if len(result_parts) >= 2:
+                        break
+            if result_parts:
+                return '.'.join(result_parts)
+        
+        # Final fallback
+        return "Suits" if not episode_raw else episode_raw
+    
     def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str], target_language: Optional[str] = None) -> str:
         """Generate video description (TICKET-056: Updated to use target language)"""
         if custom_description:
@@ -343,14 +395,11 @@ class YouTubeMetadataGenerator:
             # Get translation (meaning) - use existing method
             translation = self._get_translation(video_metadata)
             
-            # Build description without episode line (TICKET-056)
+            # Build description in simplified format
             description = f"""🎬 {quick_lesson}
-
-📚 {expression_label}: "{video_metadata.expression}"
+📚 {expression_label}: {video_metadata.expression}
 📖 {meaning_label}: {translation}
-
 💡 {watch_and_learn}
-
 #Shorts #EnglishLearning #Suits #EnglishExpressions #LearnEnglish"""
             
             return description

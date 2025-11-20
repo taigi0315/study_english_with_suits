@@ -4,7 +4,7 @@ Job management endpoints for LangFlix API
 
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, Depends, HTTPException
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import uuid
 import logging
 import asyncio
@@ -39,7 +39,8 @@ async def process_video_task(
     test_mode: bool,
     no_shorts: bool,
     short_form_max_duration: float = 180.0,
-    output_dir: str = "output"
+    output_dir: str = "output",
+    target_languages: Optional[List[str]] = None
 ):
     """Process video in background task using unified VideoPipelineService."""
     
@@ -87,7 +88,8 @@ async def process_video_task(
                 
                 service = VideoPipelineService(
                     language_code=language_code,
-                    output_dir=output_dir
+                    output_dir=output_dir,
+                    target_languages=target_languages
                 )
                 
                 # Process video using unified service
@@ -161,6 +163,7 @@ async def create_job(
     no_shorts: bool = Form(False),
     short_form_max_duration: float = Form(180.0),
     output_dir: str = Form("output"),
+    target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
     background_tasks: BackgroundTasks = BackgroundTasks()
 ) -> Dict[str, Any]:
     """Create a new video processing job."""
@@ -191,6 +194,13 @@ async def create_job(
         
         # Get Redis job manager
         redis_manager = get_redis_job_manager()
+        
+        # Parse target_languages if provided
+        target_languages_list = None
+        if target_languages:
+            # Parse comma-separated string to list
+            target_languages_list = [lang.strip() for lang in target_languages.split(',') if lang.strip()]
+            logger.info(f"Target languages: {target_languages_list}")
         
         # Store job information in Redis
         job_data = {
@@ -230,7 +240,8 @@ async def create_job(
             test_mode=test_mode,
             no_shorts=no_shorts,
             short_form_max_duration=short_form_max_duration,
-            output_dir=output_dir
+            output_dir=output_dir,
+            target_languages=target_languages_list
         )
         
         return {

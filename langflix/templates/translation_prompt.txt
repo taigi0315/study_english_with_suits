@@ -1,0 +1,59 @@
+Translate the following English learning content to {target_language}.
+Provide natural, contextual translations (의역) that capture the meaning and emotion, not literal word-by-word translations (직역).
+
+**CONTEXT:**
+- Expression: {expression}
+- Full Dialogue: {expression_dialogue}
+- Scene Context: {dialogues}
+- Scene Type: {scene_type}
+- Catchy Keywords: {catchy_keywords}
+- Similar Expressions: {similar_expressions}
+
+**TRANSLATION REQUIREMENTS:**
+
+1. **All Dialogue Lines** (maintain same count, preserve timing):
+   Original dialogues:
+   {dialogue_lines}
+   
+   Translate each dialogue line naturally, maintaining the emotional tone and context of the scene.
+
+2. **Expression Translation**:
+   Original: {expression}
+   Provide a natural, contextual translation that captures the meaning and usage context.
+
+3. **Expression Dialogue Translation**:
+   Original: {expression_dialogue}
+   Translate the complete sentence naturally, maintaining the speaker's tone and intent.
+
+4. **Catchy Keywords** (3-6 words each, natural in target language):
+   Original: {catchy_keywords}
+   Translate to create memorable, engaging keywords that native speakers would use.
+
+5. **Similar Expressions** (natural alternatives in target language):
+   Original: {similar_expressions}
+   Provide natural alternative expressions that convey similar meaning in the target language.
+
+**IMPORTANT GUIDELINES:**
+- Maintain the emotional tone and context of the scene
+- Use natural expressions that native speakers would use
+- Preserve the educational value and memorability
+- Focus on meaning and context (의역) rather than literal translation (직역)
+- Ensure translations flow naturally in the target language
+- Keep the same number of dialogue lines as the original
+
+**OUTPUT FORMAT (JSON):**
+{{
+  "dialogues_translation": [
+    // Translated dialogue lines (same count as original)
+    // Natural, contextual translations
+  ],
+  "expression_translation": "natural translation of the expression",
+  "expression_dialogue_translation": "natural translation of the complete expression dialogue",
+  "catchy_keywords": [
+    // Translated catchy keywords (3-6 words each, natural in target language)
+  ],
+  "similar_expressions": [
+    // Translated similar expressions (natural alternatives in target language)
+  ]
+}}
+

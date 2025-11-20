@@ -183,6 +183,7 @@ class LangFlixPipeline:
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media",
                  output_dir: str = "output", language_code: str = "ko",
+                 target_languages: Optional[List[str]] = None,
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
                  video_file: str = None,
@@ -194,7 +195,8 @@ class LangFlixPipeline:
             subtitle_file: Path to subtitle file
             video_dir: Directory containing video files
             output_dir: Directory for output files
-            language_code: Target language code (e.g., 'ko', 'ja', 'zh')
+            language_code: Primary target language code (e.g., 'ko', 'ja', 'zh')
+            target_languages: List of target language codes for multi-language generation (defaults to [language_code])
             progress_callback: Optional callback function(progress: int, message: str) -> None
             series_name: Optional series name (if not provided, extracted from subtitle path)
             episode_name: Optional episode name (if not provided, extracted from subtitle path)
@@ -204,10 +206,11 @@ class LangFlixPipeline:
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
         self.language_code = language_code
+        self.target_languages = target_languages or [language_code]  # Default to single language
         self.progress_callback = progress_callback
         self.video_file = Path(video_file) if video_file else None
         
-        # Create organized output structure (pass series_name/episode_name if provided)
+        # Create organized output structure for primary language
         self.paths = create_output_structure(
             str(self.subtitle_file), 
             language_code, 
@@ -215,6 +218,22 @@ class LangFlixPipeline:
             series_name=series_name,
             episode_name=episode_name
         )
+        
+        # Create language structures for all target languages
+        from langflix.services.output_manager import OutputManager
+        output_manager = OutputManager(str(self.output_dir))
+        episode_paths = self.paths.get('episode', {})
+        
+        # Initialize languages dict
+        if 'languages' not in self.paths:
+            self.paths['languages'] = {}
+        
+        # Create structure for each target language
+        for lang in self.target_languages:
+            if lang not in self.paths['languages']:
+                lang_paths = output_manager.create_language_structure(episode_paths, lang)
+                self.paths['languages'][lang] = lang_paths
+                logger.info(f"Created output structure for language: {lang}")
         
         # Extract series and episode names from paths
         self.series_name = self.paths['series_name']
@@ -228,18 +247,20 @@ class LangFlixPipeline:
         # Pipeline state
         self.subtitles = []
         self.chunks = []
-        self.expressions = []
+        self.expressions = []  # Base expressions (language-agnostic)
+        self.translated_expressions = {}  # Dict[language_code, List[ExpressionAnalysis]]
         self.processed_expressions = 0
         # Note: expression_groups and enable_expression_grouping removed (1:1 context-expression mapping)
         
         # TICKET-037: Profiling support
         self.profiler = profiler
         
-    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False, short_form_max_duration: float = 180.0) -> Dict[str, Any]:
+    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False, short_form_max_duration: float = 180.0, target_languages: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Run the complete pipeline
         
         TICKET-037: Integrated profiling support for performance measurement.
+        TICKET-057: Multi-language support - generates videos for multiple languages.
         
         Args:
             max_expressions: Maximum number of expressions to process
@@ -248,10 +269,15 @@ class LangFlixPipeline:
             save_llm_output: If True, save LLM responses to files for review
             test_mode: If True, process only the first chunk for testing
             no_shorts: If True, skip creating short-format videos
+            target_languages: List of target language codes (defaults to [language_code])
             
         Returns:
             Dictionary with processing results
         """
+        # Update target_languages if provided
+        if target_languages:
+            self.target_languages = target_languages
+            logger.info(f"Target languages set to: {self.target_languages}")
         # TICKET-037: Start profiling if enabled
         if self.profiler:
             self.profiler.start(metadata={
@@ -312,13 +338,15 @@ class LangFlixPipeline:
                 self.chunks = chunk_subtitles(self.subtitles)
             logger.info(f"Created {len(self.chunks)} chunks")
             
-            # Step 3: Analyze expressions
-            logger.info("Step 3: Analyzing expressions...")
+            # Step 3: Analyze expressions (language-agnostic, run once)
+            logger.info("Step 3: Analyzing expressions (language-agnostic)...")
             if test_mode:
                 logger.info("🧪 TEST MODE: Processing only first chunk")
             if self.progress_callback:
                 self.progress_callback(30, "Analyzing expressions...")
             with profile_stage("analyze_expressions", self.profiler, metadata={"num_chunks": len(self.chunks)}):
+                # Run LLM analysis once (language-agnostic)
+                # Use first language for prompt, but results are reusable
                 self.expressions = self._analyze_expressions(max_expressions, language_level, save_llm_output, test_mode)
             if not self.expressions:
                 logger.error("❌ No expressions found after analysis")
@@ -337,12 +365,25 @@ class LangFlixPipeline:
             # Note: Expression grouping removed as per new architecture (1:1 context-expression mapping)
             # Each expression is processed individually without grouping
             # self.expression_groups is deprecated and no longer used
-            logger.info(f"Processing {len(self.expressions)} expressions individually (1:1 context-expression mapping)")
+            logger.info(f"Found {len(self.expressions)} expressions (language-agnostic analysis)")
+            
+            # Step 3.5: Translate expressions to all target languages
+            if len(self.target_languages) > 1 or (len(self.target_languages) == 1 and self.target_languages[0] != self.language_code):
+                logger.info(f"Step 3.5: Translating expressions to {len(self.target_languages)} languages...")
+                if self.progress_callback:
+                    self.progress_callback(35, f"Translating to {len(self.target_languages)} languages...")
+                with profile_stage("translate_expressions", self.profiler, metadata={"num_languages": len(self.target_languages)}):
+                    self.translated_expressions = self._translate_expressions_to_languages(self.expressions, self.target_languages)
+                logger.info(f"✅ Translated expressions for {len(self.translated_expressions)} languages")
+            else:
+                # Single language, use original expressions
+                self.translated_expressions = {self.language_code: self.expressions}
+                logger.info(f"Single language mode: using original expressions for {self.language_code}")
             
             # Save expressions to database if enabled and media_id is available
             if DB_AVAILABLE and settings.get_database_enabled() and media_id:
                 try:
-                    logger.info("Step 3.5: Saving expressions to database...")
+                    logger.info("Step 3.6: Saving expressions to database...")
                     self._save_expressions_to_database(media_id)
                 except Exception as e:
                     logger.error(f"Failed to save expressions to database: {e}")
@@ -371,7 +412,35 @@ class LangFlixPipeline:
                     with profile_stage("create_short_videos", self.profiler, metadata={"num_expressions": len(self.expressions)}):
                         # Use provided short_form_max_duration or get from settings
                         max_duration = short_form_max_duration if short_form_max_duration else settings.get_short_video_max_duration()
-                        self._create_short_videos(short_form_max_duration=max_duration)
+                        # Create short videos for each target language
+                        for lang in self.target_languages:
+                            logger.info(f"Creating short-format videos for language: {lang}")
+                            if self.progress_callback:
+                                lang_progress = 80 + int((self.target_languages.index(lang) / len(self.target_languages)) * 10)
+                                self.progress_callback(lang_progress, f"Creating short videos for {lang} ({self.target_languages.index(lang)+1}/{len(self.target_languages)})...")
+                            
+                            # Get language-specific paths
+                            lang_paths = self.paths.get('languages', {}).get(lang)
+                            if not lang_paths:
+                                logger.error(f"Language paths not found for {lang}, skipping short video creation.")
+                                continue
+                            
+                            # Create a language-specific VideoEditor instance for short videos
+                            from langflix.core.video_editor import VideoEditor
+                            lang_video_editor = VideoEditor(
+                                output_dir=str(lang_paths['language_dir']), # Base output for temp files
+                                language_code=lang,
+                                episode_name=self.episode_name,
+                                subtitle_processor=self.subtitle_processor
+                            )
+                            lang_video_editor.paths = lang_paths  # Set language-specific paths
+                            lang_video_editor.temp_manager = self.video_editor.temp_manager # Share temp manager
+                            
+                            try:
+                                self._create_short_videos(short_form_max_duration=max_duration, language_code=lang, lang_paths=lang_paths, video_editor=lang_video_editor)
+                            except Exception as e:
+                                logger.error(f"Error creating short videos for {lang}: {e}")
+                                continue
                 else:
                     logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
             elif not dry_run and not self.expressions:
@@ -601,6 +670,56 @@ class LangFlixPipeline:
         
         return limited_expressions
     
+    def _translate_expressions_to_languages(
+        self,
+        expressions: List[ExpressionAnalysis],
+        target_languages: List[str]
+    ) -> Dict[str, List[ExpressionAnalysis]]:
+        """
+        Translate expressions to all target languages.
+        
+        Args:
+            expressions: List of base ExpressionAnalysis objects (language-agnostic)
+            target_languages: List of target language codes
+            
+        Returns:
+            Dictionary mapping language_code to list of translated ExpressionAnalysis objects
+        """
+        from langflix.core.translator import translate_expression_to_languages
+        
+        translated_expressions = {}
+        
+        for lang in target_languages:
+            if lang == self.language_code:
+                # Use original expressions (already translated during analysis)
+                translated_expressions[lang] = expressions
+                logger.info(f"Using original expressions for {lang} (already translated)")
+            else:
+                # Translate to target language
+                logger.info(f"Translating {len(expressions)} expressions to {lang}...")
+                lang_expressions = []
+                
+                for expr_idx, expr in enumerate(expressions):
+                    try:
+                        if self.progress_callback:
+                            progress = 35 + int((expr_idx / len(expressions)) * 10)
+                            self.progress_callback(progress, f"Translating expression {expr_idx+1}/{len(expressions)} to {lang}...")
+                        
+                        translated_dict = translate_expression_to_languages(expr, [lang])
+                        if lang in translated_dict:
+                            lang_expressions.append(translated_dict[lang])
+                        else:
+                            logger.warning(f"Translation to {lang} failed for expression {expr_idx+1}, skipping")
+                    except Exception as e:
+                        logger.error(f"Error translating expression {expr_idx+1} to {lang}: {e}")
+                        # Continue with other expressions even if one fails
+                        continue
+                
+                translated_expressions[lang] = lang_expressions
+                logger.info(f"✅ Translated {len(lang_expressions)} expressions to {lang}")
+        
+        return translated_expressions
+    
     def _save_expressions_to_database(self, media_id: str):
         """Save expressions to database."""
         if not DB_AVAILABLE or not settings.get_database_enabled():
@@ -627,7 +746,10 @@ class LangFlixPipeline:
             # Don't raise - allow pipeline to continue
     
     def _process_expressions(self):
-        """Process each expression individually (1:1 context-expression mapping)"""
+        """
+        Process each expression individually (1:1 context-expression mapping).
+        For multi-language support, creates subtitle files for all target languages.
+        """
         from langflix.utils.temp_file_manager import get_temp_manager
         temp_manager = get_temp_manager()
         
@@ -637,48 +759,79 @@ class LangFlixPipeline:
             logger.warning("No video file found, skipping expression processing")
             return
         
-        # Process each expression individually (no grouping)
-        # SIMPLIFIED: Only create subtitle files here
-        # Context video extraction is handled by create_long_form_video for efficiency
-        for expr_idx, expression in enumerate(self.expressions):
+        # Process each expression for all target languages
+        # Create subtitle files for each language
+        for expr_idx, base_expression in enumerate(self.expressions):
             try:
                 logger.info(
                     f"Processing expression {expr_idx+1}/{len(self.expressions)}: "
-                    f"'{expression.expression}'"
+                    f"'{base_expression.expression}'"
                 )
                 
-                # Create subtitle file for this expression
-                try:
-                    safe_filename = sanitize_for_expression_filename(expression.expression)
-                    subtitle_filename = f"expression_{expr_idx+1:02d}_{safe_filename[:30]}.srt"
-                    subtitle_output = self.paths['language']['subtitles'] / subtitle_filename
-                    subtitle_output.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # Create subtitle file
-                    subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
-                        expression,
-                        str(subtitle_output)
-                    )
-                    
-                    if subtitle_success:
-                        logger.info(f"✅ Subtitle file created: {subtitle_output}")
-                        self.processed_expressions += 1
-                    else:
-                        logger.warning(f"❌ Failed to create subtitle file: {subtitle_output}")
+                # Create subtitle files for each target language
+                for lang in self.target_languages:
+                    try:
+                        # Get translated expression for this language
+                        if lang in self.translated_expressions:
+                            lang_expressions = self.translated_expressions[lang]
+                            if expr_idx < len(lang_expressions):
+                                expression = lang_expressions[expr_idx]
+                            else:
+                                logger.warning(f"Expression {expr_idx+1} not found for language {lang}, skipping")
+                                continue
+                        else:
+                            logger.warning(f"No translations found for language {lang}, skipping")
+                            continue
                         
-                except Exception as e:
-                    logger.error(f"Error creating subtitle file for expression {expr_idx+1}: {e}")
-                    continue
+                        # Get language-specific output paths
+                        # Create output structure for this language if not exists
+                        lang_paths = self.paths.get('languages', {}).get(lang)
+                        if not lang_paths:
+                            # Create language structure
+                            from langflix.services.output_manager import OutputManager
+                            output_manager = OutputManager(str(self.output_dir))
+                            episode_paths = self.paths.get('episode', {})
+                            lang_paths = output_manager.create_language_structure(episode_paths, lang)
+                            # Store in paths for reuse
+                            if 'languages' not in self.paths:
+                                self.paths['languages'] = {}
+                            self.paths['languages'][lang] = lang_paths
+                        
+                        # Create subtitle file for this expression and language
+                        safe_filename = sanitize_for_expression_filename(expression.expression)
+                        subtitle_filename = f"expression_{expr_idx+1:02d}_{safe_filename[:30]}.srt"
+                        subtitle_output = lang_paths['subtitles'] / subtitle_filename
+                        subtitle_output.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Create subtitle file using language-specific expression
+                        subtitle_success = self.subtitle_processor.create_dual_language_subtitle_file(
+                            expression,
+                            str(subtitle_output)
+                        )
+                        
+                        if subtitle_success:
+                            logger.info(f"✅ Subtitle file created for {lang}: {subtitle_output}")
+                        else:
+                            logger.warning(f"❌ Failed to create subtitle file for {lang}: {subtitle_output}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error creating subtitle file for expression {expr_idx+1} in language {lang}: {e}")
+                        continue
+                
+                self.processed_expressions += 1
                         
             except Exception as e:
                 logger.error(f"Error processing expression {expr_idx+1}: {e}")
                 continue
     
     def _create_educational_videos(self):
-        """Create long-form videos for each expression (1:1 context-expression mapping)"""
-        logger.info(f"Creating long-form videos for {len(self.expressions)} expressions...")
+        """
+        Create long-form videos for each expression (1:1 context-expression mapping).
+        For multi-language support, extracts video slices once and reuses for all languages.
+        """
+        logger.info(f"Creating long-form videos for {len(self.expressions)} expressions in {len(self.target_languages)} languages...")
         
-        # Get original video file for passing directly to create_long_form_video
+        # Get original video file
         original_video = self.video_processor.find_video_file(str(self.subtitle_file))
         if not original_video:
             logger.error("No original video file found, cannot create long-form videos")
@@ -686,59 +839,135 @@ class LangFlixPipeline:
         
         logger.info(f"Using original video file: {original_video}")
         
-        long_form_videos = []
+        # Step 1: Extract video slices once (reused for all languages)
+        logger.info("Step 1: Extracting video slices (reused for all languages)...")
+        extracted_slices = {}  # Dict[expr_idx, Path] - context clips for each expression
         
-        # Iterate over expressions individually (1:1 mapping)
-        # SIMPLIFIED: Pass original video directly instead of pre-extracted context clips
-        for expr_idx, expression in enumerate(self.expressions):
+        for expr_idx, base_expression in enumerate(self.expressions):
             try:
-                logger.info(
-                    f"Processing expression {expr_idx+1}/{len(self.expressions)}: "
-                    f"'{expression.expression}' "
-                    f"(context: {expression.context_start_time}-{expression.context_end_time})"
-                )
+                # Extract context clip once (reused for all languages)
+                from langflix.utils.temp_file_manager import get_temp_manager
+                import tempfile
                 
-                try:
-                    # Create long-form video for this expression
-                    # create_long_form_video will extract the context clip internally
-                    long_form_video = self.video_editor.create_long_form_video(
-                        expression,
-                        str(original_video),  # Original video - extraction happens in create_long_form_video
-                        str(original_video),  # Original video for expression audio
-                        expression_index=expr_idx  # Expression index for voice alternation
+                temp_manager = get_temp_manager()
+                
+                # Create temporary file for context clip (delete=False so we can reuse it)
+                safe_filename = sanitize_for_expression_filename(base_expression.expression)
+                with temp_manager.create_temp_file(
+                    prefix=f"context_clip_{expr_idx:02d}_{safe_filename[:30]}_",
+                    suffix=".mkv",
+                    delete=False  # Don't delete immediately, we'll reuse this file
+                ) as temp_context_clip:
+                    # Extract context clip using VideoProcessor
+                    success = self.video_processor.extract_clip(
+                        Path(original_video),
+                        base_expression.context_start_time,
+                        base_expression.context_end_time,
+                        temp_context_clip
                     )
                     
-                    long_form_videos.append(long_form_video)
-                    logger.info(f"✅ Long-form video created for expression: {long_form_video}")
+                    if not success:
+                        logger.error(f"Failed to extract context clip for expression {expr_idx+1}")
+                        continue
+                    
+                    # Store the Path (file will persist after context exits because delete=False)
+                    extracted_slices[expr_idx] = temp_context_clip
+                    logger.info(f"✅ Extracted context clip for expression {expr_idx+1}: {temp_context_clip}")
+                
+            except Exception as e:
+                logger.error(f"Error extracting context clip for expression {expr_idx+1}: {e}")
+                continue
+        
+        if not extracted_slices:
+            raise RuntimeError("No video slices extracted. Cannot create videos.")
+        
+        # Step 2: Create videos for each language (reuse slices)
+        all_long_form_videos = {}  # Dict[language_code, List[Path]]
+        
+        for lang in self.target_languages:
+            logger.info(f"Creating videos for language: {lang}")
+            if self.progress_callback:
+                lang_progress = 50 + int((self.target_languages.index(lang) / len(self.target_languages)) * 30)
+                self.progress_callback(lang_progress, f"Creating videos for {lang} ({self.target_languages.index(lang)+1}/{len(self.target_languages)})...")
+            
+            # Get language-specific expressions
+            if lang not in self.translated_expressions:
+                logger.warning(f"No translations found for language {lang}, skipping")
+                continue
+            
+            lang_expressions = self.translated_expressions[lang]
+            
+            # Get language-specific paths
+            lang_paths = self.paths.get('languages', {}).get(lang)
+            if not lang_paths:
+                # Create language structure if not exists
+                from langflix.services.output_manager import OutputManager
+                output_manager = OutputManager(str(self.output_dir))
+                episode_paths = self.paths.get('episode', {})
+                lang_paths = output_manager.create_language_structure(episode_paths, lang)
+                if 'languages' not in self.paths:
+                    self.paths['languages'] = {}
+                self.paths['languages'][lang] = lang_paths
+            
+            # Create VideoEditor for this language
+            from langflix.core.video_editor import VideoEditor
+            lang_video_editor = VideoEditor(
+                str(lang_paths['final_videos']),
+                lang,
+                self.episode_name,
+                subtitle_processor=self.subtitle_processor
+            )
+            lang_video_editor.paths = lang_paths  # Set language-specific paths
+            
+            lang_long_form_videos = []
+            
+            # Create videos for each expression using pre-extracted slices
+            for expr_idx, expression in enumerate(lang_expressions):
+                if expr_idx not in extracted_slices:
+                    logger.warning(f"No extracted slice for expression {expr_idx+1}, skipping")
+                    continue
+                
+                try:
+                    logger.info(
+                        f"Creating video for {lang} - expression {expr_idx+1}/{len(lang_expressions)}: "
+                        f"'{expression.expression}'"
+                    )
+                    
+                    # Create long-form video using pre-extracted slice
+                    long_form_video = lang_video_editor.create_long_form_video(
+                        expression,
+                        str(original_video),  # Original video for expression audio
+                        str(original_video),  # Original video for expression audio
+                        expression_index=expr_idx,
+                        pre_extracted_context_clip=extracted_slices[expr_idx]  # Reuse extracted slice
+                    )
+                    
+                    lang_long_form_videos.append(long_form_video)
+                    logger.info(f"✅ Long-form video created for {lang}: {long_form_video}")
                     
                 except Exception as e:
                     logger.error(
-                        f"Error creating long-form video for expression {expr_idx+1}: {e}",
+                        f"Error creating long-form video for {lang} - expression {expr_idx+1}: {e}",
                         exc_info=True
                     )
                     continue
-                        
+            
+            if lang_long_form_videos:
+                all_long_form_videos[lang] = lang_long_form_videos
+                logger.info(f"✅ Created {len(lang_long_form_videos)} videos for {lang}")
+            else:
+                logger.warning(f"⚠️ No videos created for {lang}")
+        
+        # Step 3: Create combined long-form videos for each language
+        for lang, long_form_videos in all_long_form_videos.items():
+            logger.info(f"Creating combined long-form video for {lang} from {len(long_form_videos)} videos...")
+            try:
+                lang_paths = self.paths.get('languages', {}).get(lang)
+                if lang_paths:
+                    self._create_combined_long_form_video(long_form_videos, lang, lang_paths)
             except Exception as e:
-                logger.error(f"Error processing expression {expr_idx+1}: {e}")
+                logger.error(f"Error creating combined long-form video for {lang}: {e}")
                 continue
-        
-        if not long_form_videos:
-            logger.error(
-                f"❌ Cannot create long-form videos: No long-form videos were created\n"
-                f"   Reasons this might happen:\n"
-                f"   1. No expressions were found/parsed from LLM response\n"
-                f"   2. All expressions failed validation (check log for 'Dropping expression' messages)\n"
-                f"   3. All video creation steps failed (check log for 'Error creating' messages)\n"
-                f"   Expression count: {len(self.expressions)}"
-            )
-            raise RuntimeError(
-                f"Cannot create long-form videos: {len(long_form_videos)} long-form videos created "
-                f"(expected at least 1). Check logs above for expression parsing/validation errors."
-            )
-        
-        # Create combined long-form video
-        logger.info(f"Creating combined long-form video from {len(long_form_videos)} long-form videos...")
-        self._create_combined_long_form_video(long_form_videos)
         
         # Clean up all temporary files created by VideoEditor
         # For long form, clean up everything (preserve_short_format=False) (TICKET-029)
@@ -766,21 +995,31 @@ class LangFlixPipeline:
             except Exception as e:
                 logger.warning(f"Failed to cleanup VideoEditor temporary files: {e}")
     
-    def _create_short_videos(self, short_form_max_duration: float = 180.0):
-        """Create short-format videos from long-form videos."""
+    def _create_short_videos(self, short_form_max_duration: float = 180.0, language_code: Optional[str] = None, lang_paths: Optional[Dict] = None, video_editor = None):
+        """Create short-format videos from long-form videos for a specific language."""
         try:
             # Check if short video generation is enabled
             from langflix import settings
             if not settings.is_short_video_enabled():
                 logger.info("Short video generation is disabled in configuration")
                 return
-                
-            logger.info("Creating short-format videos from long-form videos...")
+            
+            # Use provided language-specific paths or fallback to primary language
+            if lang_paths:
+                target_lang_paths = lang_paths
+                target_lang_code = language_code or self.language_code
+                target_video_editor = video_editor or self.video_editor
+            else:
+                target_lang_paths = self.paths['language']
+                target_lang_code = self.language_code
+                target_video_editor = self.video_editor
+            
+            logger.info(f"Creating short-format videos from long-form videos for {target_lang_code}...")
             
             # Get long-form videos from expressions/ directory (new organized structure)
-            expressions_dir = self.paths['language'].get('expressions')
+            expressions_dir = target_lang_paths.get('expressions')
             if not expressions_dir:
-                expressions_dir = self.paths['language']['language_dir'] / "expressions"
+                expressions_dir = target_lang_paths['language_dir'] / "expressions"
             
             expressions_dir = Path(expressions_dir) if isinstance(expressions_dir, str) else expressions_dir
             
@@ -806,20 +1045,31 @@ class LangFlixPipeline:
             
             logger.info(f"Long-form video mapping: {list(long_form_video_map.keys())}")
             
-            for i, expression in enumerate(self.expressions):
-                # Sanitize expression name to match filename format
-                safe_expression_name = sanitize_for_expression_filename(expression.expression)
+            # Get language-specific expressions (translated version)
+            lang_expressions = self.translated_expressions.get(target_lang_code, self.expressions)
+            if not lang_expressions:
+                logger.warning(f"No expressions found for {target_lang_code}, using base expressions")
+                lang_expressions = self.expressions
+            
+            logger.info(f"Using {len(lang_expressions)} expressions for {target_lang_code}")
+            
+            for i, expression in enumerate(lang_expressions):
+                # Sanitize expression name to match filename format (use base expression name for file matching)
+                # File names are based on base English expressions, so we need to match using base expression
+                base_expression = self.expressions[i] if i < len(self.expressions) else expression
+                safe_expression_name = sanitize_for_expression_filename(base_expression.expression)
                 logger.info(f"Looking for long-form video: {safe_expression_name}.mkv")
                 
                 if safe_expression_name in long_form_video_map:
                     long_form_video = long_form_video_map[safe_expression_name]
-                    logger.info(f"Creating short format video {i+1}/{len(self.expressions)}: {expression.expression}")
+                    logger.info(f"Creating short format video {i+1}/{len(lang_expressions)}: {expression.expression}")
                     logger.info(f"Using long-form video: {long_form_video.name}")
                     
                     try:
-                        output_path = self.video_editor.create_short_form_from_long_form(
+                        # Use translated expression for rendering (catchy keywords, expression text, etc.)
+                        output_path = target_video_editor.create_short_form_from_long_form(
                             str(long_form_video),
-                            expression,
+                            expression,  # Use translated expression for text rendering
                             expression_index=i
                         )
                         
@@ -841,7 +1091,7 @@ class LangFlixPipeline:
                 from langflix import settings
                 max_duration = short_form_max_duration
                 batch_videos = self._create_batched_short_videos_with_max_duration(
-                    short_format_videos, max_duration=max_duration
+                    short_format_videos, max_duration=max_duration, video_editor=target_video_editor
                 )
                 
                 logger.info(f"✅ Created {len(batch_videos)} short video batches")
@@ -851,9 +1101,9 @@ class LangFlixPipeline:
                 # After creating combined batch videos, delete individual expression short videos
                 # We only need the combined batch videos, not individual ones
                 deleted_short_count = 0
-                shorts_dir = self.paths['language'].get('shorts')
+                shorts_dir = target_lang_paths.get('shorts')
                 if not shorts_dir:
-                    shorts_dir = self.paths['language']['language_dir'] / "shorts"
+                    shorts_dir = target_lang_paths['language_dir'] / "shorts"
                 shorts_dir = Path(shorts_dir) if isinstance(shorts_dir, str) else shorts_dir
                 
                 for video_path, _ in short_format_videos:
@@ -875,9 +1125,9 @@ class LangFlixPipeline:
             # They are no longer needed since we have combined version and short videos
             if long_form_videos:
                 deleted_count = 0
-                expressions_dir = self.paths['language'].get('expressions')
+                expressions_dir = target_lang_paths.get('expressions')
                 if not expressions_dir:
-                    expressions_dir = self.paths['language']['language_dir'] / "expressions"
+                    expressions_dir = target_lang_paths['language_dir'] / "expressions"
                 expressions_dir = Path(expressions_dir) if isinstance(expressions_dir, str) else expressions_dir
                 
                 for video_path in long_form_videos:
@@ -893,12 +1143,12 @@ class LangFlixPipeline:
                     logger.info(f"✅ Cleaned up {deleted_count} individual long_form videos after short video creation")
             
             # After creating short videos, preserve expression videos (TICKET-029)
-            if hasattr(self, 'video_editor'):
+            if target_video_editor:
                 try:
                     # Clean up but preserve short format expression videos
-                    self.video_editor._cleanup_temp_files(preserve_short_format=True)
+                    target_video_editor._cleanup_temp_files(preserve_short_format=True)
                     # Clear the tracking list after preservation
-                    self.video_editor.short_format_temp_files.clear()
+                    target_video_editor.short_format_temp_files.clear()
                     logger.info("✅ Short format expression videos preserved")
                 except Exception as e:
                     logger.warning(f"Failed to cleanup short format temp files: {e}")
@@ -910,7 +1160,8 @@ class LangFlixPipeline:
     def _create_batched_short_videos_with_max_duration(
         self,
         short_format_videos: List[tuple[str, float]],
-        max_duration: float = 180.0
+        max_duration: float = 180.0,
+        video_editor = None
     ) -> List[str]:
         """
         Combine short format videos into batches with max_duration limit.
@@ -964,7 +1215,8 @@ class LangFlixPipeline:
                     )
                     
                     # Create batch with current videos
-                    batch_path = self.video_editor._create_video_batch(current_batch_videos, batch_number)
+                    editor = video_editor if video_editor else self.video_editor
+                    batch_path = editor._create_video_batch(current_batch_videos, batch_number)
                     batch_videos.append(batch_path)
                     logger.info(f"✅ Created batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
                     
@@ -988,7 +1240,8 @@ class LangFlixPipeline:
                     f"Creating final batch {batch_number} with {len(current_batch_videos)} videos "
                     f"(duration: {current_duration:.2f}s)"
                 )
-                batch_path = self.video_editor._create_video_batch(current_batch_videos, batch_number)
+                editor = video_editor if video_editor else self.video_editor
+                batch_path = editor._create_video_batch(current_batch_videos, batch_number)
                 batch_videos.append(batch_path)
                 logger.info(f"✅ Created final batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
             
@@ -1002,7 +1255,7 @@ class LangFlixPipeline:
             logger.error(f"Error creating batched short videos: {e}", exc_info=True)
             raise
     
-    def _create_combined_long_form_video(self, long_form_videos: List[str]):
+    def _create_combined_long_form_video(self, long_form_videos: List[str], language_code: Optional[str] = None, lang_paths: Optional[Dict] = None):
         """Create combined long-form video from all long-form videos"""
         try:
             if not long_form_videos:
@@ -1028,12 +1281,17 @@ class LangFlixPipeline:
             # Simplified filename: just "combined.mkv"
             combined_video_filename = "combined.mkv"
             
-            # Use long/ directory from paths (created by output_manager)
-            if 'long' in self.paths['language']:
+            # Use language-specific paths if provided (for multi-language support)
+            if lang_paths and 'long' in lang_paths:
+                long_dir = lang_paths['long']
+            elif 'long' in self.paths.get('language', {}):
                 long_dir = self.paths['language']['long']
             else:
                 # Fallback: create in language directory
-                long_dir = self.paths['language']['language_dir'] / "long"
+                if lang_paths and 'language_dir' in lang_paths:
+                    long_dir = lang_paths['language_dir'] / "long"
+                else:
+                    long_dir = self.paths['language']['language_dir'] / "long"
             long_dir.mkdir(parents=True, exist_ok=True)
             combined_video_path = long_dir / combined_video_filename
             
@@ -1204,12 +1462,20 @@ class LangFlixPipeline:
                 logger.info("✅ VideoEditor temporary files cleaned up")
             
             # Clean up intermediate files/directories after video processing is complete
-            # Keep only final results: shorts/, long/, slides/
-            self._cleanup_intermediate_files()
+            # Keep only final results: shorts/, long/
+            # Clean up for all target languages
+            for lang in self.target_languages:
+                lang_paths = self.paths.get('languages', {}).get(lang)
+                if lang_paths:
+                    self._cleanup_intermediate_files(lang_paths=lang_paths)
+                else:
+                    # Fallback to primary language if language paths not found
+                    if lang == self.language_code:
+                        self._cleanup_intermediate_files()
         except Exception as e:
             logger.warning(f"Failed to cleanup VideoEditor resources: {e}")
     
-    def _cleanup_intermediate_files(self):
+    def _cleanup_intermediate_files(self, lang_paths: Optional[Dict] = None):
         """
         Clean up intermediate files and directories after video processing is complete.
         
@@ -1224,9 +1490,16 @@ class LangFlixPipeline:
         Keeps:
         - shorts/ - Final combined short-form batch videos (keep)
         - long/ - Final combined long-form video (keep)
+        
+        Args:
+            lang_paths: Optional language-specific paths dict. If not provided, uses primary language paths.
         """
         try:
-            lang_dir = self.paths['language']['language_dir']
+            # Use provided language-specific paths or fallback to primary language
+            if lang_paths:
+                lang_dir = lang_paths['language_dir']
+            else:
+                lang_dir = self.paths['language']['language_dir']
             
             # Clean up subtitles directory
             subtitles_dir = lang_dir / "subtitles"
@@ -1373,7 +1646,14 @@ Examples:
         type=str,
         default="ko",
         choices=['ko', 'ja', 'zh', 'es', 'fr', 'en'],
-        help="Target language code for output (default: ko for Korean)"
+        help="Primary target language code for output (default: ko for Korean)"
+    )
+    
+    parser.add_argument(
+        "--target-languages",
+        type=str,
+        default=None,
+        help="Comma-separated list of target language codes for multi-language generation (e.g., 'ko,ja,zh'). If not provided, uses --language-code only."
     )
     
     parser.add_argument(
@@ -1425,12 +1705,23 @@ Examples:
             profiler = PipelineProfiler(output_path=output_path)
             logger.info("📊 Pipeline profiling enabled")
         
+        # Parse target_languages if provided
+        target_languages_list = None
+        if args.target_languages:
+            target_languages_list = [lang.strip() for lang in args.target_languages.split(',') if lang.strip()]
+            logger.info(f"Target languages from CLI: {target_languages_list}")
+        else:
+            # Default to single language
+            target_languages_list = [args.language_code]
+            logger.info(f"Using single language (default): {target_languages_list}")
+        
         # Initialize pipeline
         pipeline = LangFlixPipeline(
             subtitle_file=args.subtitle,
             video_dir=args.video_dir,
             output_dir=args.output_dir,
             language_code=args.language_code,
+            target_languages=target_languages_list,  # Pass target languages
             profiler=profiler
         )
         

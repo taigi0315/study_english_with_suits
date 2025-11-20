@@ -1450,19 +1450,48 @@
                     </div>
                     
                     <div style="margin-bottom: 20px;">
-                        <h3 style="color: #34495e; margin-bottom: 10px;">Language & Level</h3>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Target Language</label>
-                                <select id="languageSelect" style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
-                                    <option value="ko">Korean (한국어)</option>
-                                    <option value="en">English</option>
-                                    <option value="ja">Japanese (日本語)</option>
-                                    <option value="zh">Chinese (中文)</option>
-                                    <option value="es">Spanish (Español)</option>
-                                    <option value="fr">French (Français)</option>
-                                </select>
+                        <h3 style="color: #34495e; margin-bottom: 10px;">Languages & Level</h3>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Languages (Select multiple)</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="ko" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">Korean (한국어)</span>
+                                </label>
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="ja" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">Japanese (日本語)</span>
+                                </label>
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="zh" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">Chinese (中文)</span>
+                                </label>
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="en" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">English</span>
+                                </label>
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="es" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">Spanish (Español)</span>
+                                </label>
+                                <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                                    <input type="checkbox" class="language-checkbox" value="fr" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                                    <span style="font-weight: 500; color: #2c3e50;">French (Français)</span>
+                                </label>
                             </div>
+                            <style>
+                                .language-checkbox-label:hover {
+                                    background: #e8f4f8 !important;
+                                    border-color: #3498db !important;
+                                }
+                                .language-checkbox-label:has(input:checked) {
+                                    background: #d4edda !important;
+                                    border-color: #27ae60 !important;
+                                }
+                            </style>
+                            <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">💡 Tip: Select multiple languages to generate videos for all selected languages at once!</p>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Language Level</label>
                                 <select id="levelSelect" style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
@@ -1520,7 +1549,20 @@
                 return;
             }
             
-            const languageCode = document.getElementById('languageSelect').value;
+            // Get selected languages from checkboxes
+            const selectedLanguages = Array.from(document.querySelectorAll('.language-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedLanguages.length === 0) {
+                alert('Please select at least one target language');
+                return;
+            }
+            
+            // Use first selected language as primary language_code (for backward compatibility)
+            const languageCode = selectedLanguages[0];
+            // All selected languages as target_languages (comma-separated string)
+            const targetLanguages = selectedLanguages.join(',');
+            
             const languageLevel = document.getElementById('levelSelect').value;
             const testMode = document.getElementById('testModeCheckbox').checked;
             const shortFormMaxDuration = parseFloat(document.getElementById('shortFormMaxDuration').value) || 180;
@@ -1533,7 +1575,7 @@
             // Check if multiple videos selected (batch mode)
             if (selectedMedia.length > 1) {
                 // Batch processing
-                await startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, shortFormMaxDuration, createButton);
+                await startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton);
             } else {
                 // Single video processing (backward compatible)
                 const media = selectedMedia[0];
@@ -1552,6 +1594,7 @@
                         video_path: videoPath,
                         subtitle_path: subtitlePath,
                         language_code: languageCode,
+                        target_languages: targetLanguages,  // Add target_languages parameter
                         language_level: languageLevel,
                         test_mode: testMode,
                         short_form_max_duration: shortFormMaxDuration
@@ -1579,7 +1622,7 @@
             }
         }
 
-        async function startBatchContentCreation(selectedMedia, languageCode, languageLevel, testMode, shortFormMaxDuration, createButton) {
+        async function startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton) {
             try {
                 // Collect all selected videos
                 const videos = Array.from(selectedMedia).map(checkbox => ({
@@ -1606,6 +1649,7 @@
                     body: JSON.stringify({
                         videos: videos,
                         language_code: languageCode,
+                        target_languages: targetLanguages,  // Add target_languages parameter
                         language_level: languageLevel,
                         test_mode: testMode,
                         short_form_max_duration: shortFormMaxDuration

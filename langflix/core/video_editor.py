@@ -122,7 +122,9 @@ class VideoEditor:
         expression: ExpressionAnalysis,
         context_video_path: str,
         expression_video_path: str,
-        expression_index: int = 0
+        expression_index: int = 0,
+        pre_extracted_context_clip: Optional[Path] = None,
+        language_code: Optional[str] = None
     ) -> str:
         """
         Create long-form video with unified layout:
@@ -132,9 +134,11 @@ class VideoEditor:
 
         Args:
             expression: ExpressionAnalysis object
-            context_video_path: Path to context video (used for extracting expression clip)
+            context_video_path: Path to context video (used for extracting expression clip if pre_extracted_context_clip not provided)
             expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
+            pre_extracted_context_clip: Optional pre-extracted context clip path (reused for multi-language)
+            language_code: Optional language code for language-specific subtitle paths
             
         Returns:
             Path to created long-form video
@@ -181,74 +185,127 @@ class VideoEditor:
             
             logger.info(f"Expression relative: {relative_start:.2f}s - {relative_end:.2f}s ({expression_duration:.2f}s)")
             
-            # Step 1a: Extract context clip from original video WITH subtitles
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
-            self._register_temp_file(context_clip_path)
-
-            context_end_seconds = self._time_to_seconds(expression.context_end_time)
-            context_duration = context_end_seconds - context_start_seconds
-
-            logger.info(f"Extracting context clip with subtitles: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
-
-            # Find and apply subtitle file
-            subtitle_file = None
-            # Try to find subtitle file in subtitles directory
-            subtitles_dir = self.output_dir.parent / "subtitles"
-            if subtitles_dir.exists():
-                # Look for subtitle file matching expression pattern
-                from langflix.utils.filename_utils import sanitize_for_expression_filename
-                safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
-                subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
-                subtitle_file_path = subtitles_dir / subtitle_filename
+            # Step 1a: Extract context clip from original video WITH subtitles (or reuse pre-extracted)
+            if pre_extracted_context_clip and pre_extracted_context_clip.exists():
+                # Reuse pre-extracted context clip (for multi-language support)
+                logger.info(f"Reusing pre-extracted context clip: {pre_extracted_context_clip}")
+                context_clip_path = pre_extracted_context_clip
                 
-                if subtitle_file_path.exists():
-                    subtitle_file = subtitle_file_path
-                    logger.info(f"Found subtitle file: {subtitle_file}")
+                # Still need to apply language-specific subtitles
+                subtitle_file = None
+                # Try to find subtitle file in subtitles directory (language-specific)
+                if hasattr(self, 'paths') and self.paths:
+                    # Use language-specific paths if available
+                    lang_paths = self.paths
+                    if 'subtitles' in lang_paths:
+                        subtitles_dir = lang_paths['subtitles']
+                    else:
+                        subtitles_dir = self.output_dir.parent / "subtitles"
                 else:
-                    # Try to find any subtitle file matching the expression
-                    pattern = f"expression_*_{safe_expression_short}*.srt"
-                    matching_files = list(subtitles_dir.glob(pattern))
-                    if matching_files:
-                        subtitle_file = matching_files[0]
-                        logger.info(f"Found matching subtitle file: {subtitle_file}")
-            
-            if subtitle_file and subtitle_file.exists():
-                logger.info(f"Applying subtitles from: {subtitle_file}")
-
-                # Apply subtitles using subs_overlay (extract + apply in one step)
-                subs_overlay.apply_dual_subtitle_layers(
-                    str(context_video_path),
-                    str(subtitle_file),
-                    "",  # No expression subtitle for long-form video
-                    str(context_clip_path),
-                    context_start_seconds,
-                    context_end_seconds
-                )
-            else:
-                # No subtitles - extract context clip without them
-                logger.warning("No subtitle file found, extracting context without subtitles")
-                context_input = ffmpeg.input(str(context_video_path))
-                context_video = context_input['v']
-                context_audio = context_input['a']
-
-                (
-                    ffmpeg.output(
-                        context_video,
-                        context_audio,
+                    subtitles_dir = self.output_dir.parent / "subtitles"
+                
+                if subtitles_dir.exists():
+                    from langflix.utils.filename_utils import sanitize_for_expression_filename
+                    safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                    subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
+                    subtitle_file_path = Path(subtitles_dir) / subtitle_filename
+                    
+                    if subtitle_file_path.exists():
+                        subtitle_file = subtitle_file_path
+                        logger.info(f"Found language-specific subtitle file: {subtitle_file}")
+                
+                # Apply language-specific subtitles to pre-extracted clip
+                if subtitle_file and subtitle_file.exists():
+                    logger.info(f"Applying language-specific subtitles from: {subtitle_file}")
+                    # Create a new clip with subtitles applied
+                    context_clip_with_subs = self.output_dir / f"temp_context_clip_with_subs_{safe_expression}.mkv"
+                    self._register_temp_file(context_clip_with_subs)
+                    
+                    subs_overlay.apply_dual_subtitle_layers(
                         str(context_clip_path),
-                        vcodec='libx264',
-                        acodec='aac',
-                        ac=2,
-                        ar=48000,
-                        preset='fast',
-                        crf=23,
-                        ss=context_start_seconds,
-                        t=context_duration
+                        str(subtitle_file),
+                        "",  # No expression subtitle for long-form video
+                        str(context_clip_with_subs),
+                        0,  # Start from beginning (clip already extracted)
+                        get_duration_seconds(str(context_clip_path))  # Use full clip duration
                     )
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
+                    context_clip_path = context_clip_with_subs
+            else:
+                # Extract context clip from original video WITH subtitles
+                self.output_dir.mkdir(parents=True, exist_ok=True)
+                context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
+                self._register_temp_file(context_clip_path)
+
+                context_end_seconds = self._time_to_seconds(expression.context_end_time)
+                context_duration = context_end_seconds - context_start_seconds
+
+                logger.info(f"Extracting context clip with subtitles: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
+
+                # Find and apply subtitle file
+                subtitle_file = None
+                # Try to find subtitle file in subtitles directory (language-specific if paths available)
+                if hasattr(self, 'paths') and self.paths:
+                    lang_paths = self.paths
+                    if 'subtitles' in lang_paths:
+                        subtitles_dir = lang_paths['subtitles']
+                    else:
+                        subtitles_dir = self.output_dir.parent / "subtitles"
+                else:
+                    subtitles_dir = self.output_dir.parent / "subtitles"
+                
+                if subtitles_dir.exists():
+                    from langflix.utils.filename_utils import sanitize_for_expression_filename
+                    safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                    subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
+                    subtitle_file_path = Path(subtitles_dir) / subtitle_filename
+                    
+                    if subtitle_file_path.exists():
+                        subtitle_file = subtitle_file_path
+                        logger.info(f"Found subtitle file: {subtitle_file}")
+                    else:
+                        # Try to find any subtitle file matching the expression
+                        pattern = f"expression_*_{safe_expression_short}*.srt"
+                        matching_files = list(Path(subtitles_dir).glob(pattern))
+                        if matching_files:
+                            subtitle_file = matching_files[0]
+                            logger.info(f"Found matching subtitle file: {subtitle_file}")
+                
+                if subtitle_file and subtitle_file.exists():
+                    logger.info(f"Applying subtitles from: {subtitle_file}")
+
+                    # Apply subtitles using subs_overlay (extract + apply in one step)
+                    subs_overlay.apply_dual_subtitle_layers(
+                        str(context_video_path),
+                        str(subtitle_file),
+                        "",  # No expression subtitle for long-form video
+                        str(context_clip_path),
+                        context_start_seconds,
+                        context_end_seconds
+                    )
+                else:
+                    # No subtitles - extract context clip without them
+                    logger.warning("No subtitle file found, extracting context without subtitles")
+                    context_input = ffmpeg.input(str(context_video_path))
+                    context_video = context_input['v']
+                    context_audio = context_input['a']
+
+                    (
+                        ffmpeg.output(
+                            context_video,
+                            context_audio,
+                            str(context_clip_path),
+                            vcodec='libx264',
+                            acodec='aac',
+                            ac=2,
+                            ar=48000,
+                            preset='fast',
+                            crf=23,
+                            ss=context_start_seconds,
+                            t=context_duration
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
 
             # Reset timestamps of context clip
             context_clip_reset_path = self.output_dir / f"temp_context_clip_reset_{safe_expression}.mkv"
@@ -407,7 +464,7 @@ class VideoEditor:
                     )
             
             # Get duration for slide matching
-            from langflix.media.ffmpeg_utils import get_duration_seconds
+            # get_duration_seconds is already imported at module level (line 16)
             context_expr_duration = get_duration_seconds(str(context_expr_path))
             logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
             
@@ -554,18 +611,39 @@ class VideoEditor:
             output_filename = f"short_form_{safe_expression}.mkv"
             
             # Use shorts/ directory from paths (created by output_manager)
-            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
-                # Try to find shorts directory in parent structure
-                lang_dir = self.output_dir.parent
-                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
-                    shorts_dir = lang_dir / "shorts"
-                else:
-                    shorts_dir = self.output_dir.parent / "shorts"
-            else:
-                # Fallback: create in output_dir parent
-                shorts_dir = Path(self.output_dir).parent / "shorts"
-                shorts_dir.mkdir(parents=True, exist_ok=True)
+            # Priority: 1) self.paths['shorts'], 2) self.paths['language']['shorts'], 3) fallback to output_dir structure
+            shorts_dir = None
+            if hasattr(self, 'paths') and self.paths:
+                if 'shorts' in self.paths:
+                    shorts_dir = Path(self.paths['shorts'])
+                    logger.debug(f"Using shorts directory from self.paths['shorts']: {shorts_dir}")
+                elif 'language' in self.paths and isinstance(self.paths['language'], dict) and 'shorts' in self.paths['language']:
+                    shorts_dir = Path(self.paths['language']['shorts'])
+                    logger.debug(f"Using shorts directory from self.paths['language']['shorts']: {shorts_dir}")
+                elif 'language_dir' in self.paths:
+                    shorts_dir = Path(self.paths['language_dir']) / "shorts"
+                    logger.debug(f"Using shorts directory from self.paths['language_dir']/shorts: {shorts_dir}")
+                elif 'language' in self.paths and isinstance(self.paths['language'], dict) and 'language_dir' in self.paths['language']:
+                    shorts_dir = Path(self.paths['language']['language_dir']) / "shorts"
+                    logger.debug(f"Using shorts directory from self.paths['language']['language_dir']/shorts: {shorts_dir}")
             
+            # Fallback: try to find from output_dir structure
+            if shorts_dir is None:
+                if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                    lang_dir = self.output_dir.parent
+                    if lang_dir.name in ['ko', 'ja', 'zh', 'en', 'es', 'fr']:  # Language code
+                        shorts_dir = lang_dir / "shorts"
+                        logger.debug(f"Using shorts directory from output_dir.parent (language dir): {shorts_dir}")
+                    else:
+                        shorts_dir = self.output_dir.parent / "shorts"
+                        logger.debug(f"Using shorts directory from output_dir.parent: {shorts_dir}")
+                else:
+                    # Final fallback: create in output_dir parent
+                    shorts_dir = Path(self.output_dir).parent / "shorts"
+                    logger.debug(f"Using shorts directory from Path(output_dir).parent: {shorts_dir}")
+            
+            shorts_dir.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Short video output path: {shorts_dir / output_filename}")
             output_path = shorts_dir / output_filename
             
             logger.info(f"Creating short-form video from long-form video: {expression.expression}")
@@ -2455,19 +2533,40 @@ class VideoEditor:
             batch_filename = f"short-form_{episode_name}_{batch_number:03d}.mkv"
             
             # Use shorts/ directory from paths (created by output_manager)
-            if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
-                # Try to find shorts directory in parent structure
-                lang_dir = self.output_dir.parent
-                if lang_dir.name in ['ko', 'ja', 'zh', 'en']:  # Language code
-                    shorts_dir = lang_dir / "shorts"
-                else:
-                    shorts_dir = self.output_dir.parent / "shorts"
-            else:
-                # Fallback: create in output_dir parent
-                shorts_dir = Path(self.output_dir).parent / "shorts"
-                shorts_dir.mkdir(parents=True, exist_ok=True)
+            # Priority: 1) self.paths['shorts'], 2) self.paths['language']['shorts'], 3) fallback to output_dir structure
+            shorts_dir = None
+            if hasattr(self, 'paths') and self.paths:
+                if 'shorts' in self.paths:
+                    shorts_dir = Path(self.paths['shorts'])
+                    logger.debug(f"Using shorts directory from self.paths['shorts'] for batch: {shorts_dir}")
+                elif 'language' in self.paths and isinstance(self.paths['language'], dict) and 'shorts' in self.paths['language']:
+                    shorts_dir = Path(self.paths['language']['shorts'])
+                    logger.debug(f"Using shorts directory from self.paths['language']['shorts'] for batch: {shorts_dir}")
+                elif 'language_dir' in self.paths:
+                    shorts_dir = Path(self.paths['language_dir']) / "shorts"
+                    logger.debug(f"Using shorts directory from self.paths['language_dir']/shorts for batch: {shorts_dir}")
+                elif 'language' in self.paths and isinstance(self.paths['language'], dict) and 'language_dir' in self.paths['language']:
+                    shorts_dir = Path(self.paths['language']['language_dir']) / "shorts"
+                    logger.debug(f"Using shorts directory from self.paths['language']['language_dir']/shorts for batch: {shorts_dir}")
             
+            # Fallback: try to find from output_dir structure
+            if shorts_dir is None:
+                if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
+                    lang_dir = self.output_dir.parent
+                    if lang_dir.name in ['ko', 'ja', 'zh', 'en', 'es', 'fr']:  # Language code
+                        shorts_dir = lang_dir / "shorts"
+                        logger.debug(f"Using shorts directory from output_dir.parent (language dir) for batch: {shorts_dir}")
+                    else:
+                        shorts_dir = self.output_dir.parent / "shorts"
+                        logger.debug(f"Using shorts directory from output_dir.parent for batch: {shorts_dir}")
+                else:
+                    # Final fallback: create in output_dir parent
+                    shorts_dir = Path(self.output_dir).parent / "shorts"
+                    logger.debug(f"Using shorts directory from Path(output_dir).parent for batch: {shorts_dir}")
+            
+            shorts_dir.mkdir(parents=True, exist_ok=True)
             batch_path = shorts_dir / batch_filename
+            logger.debug(f"Batch video output path: {batch_path}")
             
             logger.info(f"Creating batch {batch_number} with {len(video_paths)} videos")
             

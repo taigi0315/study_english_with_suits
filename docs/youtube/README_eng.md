@@ -189,6 +189,7 @@ class DailyQuotaStatus:
 Flask-based web interface for video management dashboard.
 
 **Features:**
+- **File Explorer Interface**: Directory-based navigation (output/ → Series/ → Episode/ → shorts/ or long/)
 - Video listing and filtering
 - Upload management with progress tracking
 - Schedule management interface
@@ -196,19 +197,32 @@ Flask-based web interface for video management dashboard.
 - OAuth authentication flow for YouTube
 - Batch operations (multi-select upload)
 - Real-time job status updates
+- Breadcrumb navigation for directory traversal
 
 **Key Routes:**
-- `/`: Main dashboard (HTML)
+- `/`: Main dashboard with file explorer (HTML)
 - `/api/videos`: Get all videos (JSON)
 - `/api/videos/<video_type>`: Get videos by type
 - `/api/videos/episode/<episode>`: Get videos by episode
 - `/api/upload-ready`: Get videos ready for upload
 - `/api/statistics`: Get video statistics
+- `/api/explore`: Explore directory structure (new)
+- `/api/explore/file-info`: Get detailed file information (new)
 - `/api/upload`: Upload video to YouTube
 - `/api/schedule`: Schedule video for upload
 - `/api/schedule/<schedule_id>`: Get/update/delete schedule
 - `/api/oauth/authorize`: Initiate OAuth flow
 - `/api/oauth/callback`: Handle OAuth callback
+- `/api/thumbnail/<video_path>`: Generate and serve video thumbnail (uses temporary files)
+
+**UI Features:**
+- **File Explorer View**: Navigate through output directory structure like a file manager
+- **List View**: Compact list display showing video files with metadata
+- **Breadcrumb Navigation**: Easy navigation between directory levels
+- **Filtering**: Filter by video type (short-form, long-form), upload status
+- **Search**: Search files by name
+- **Batch Selection**: Select multiple videos for batch upload operations
+- **File Filtering**: Automatically filters out system files (.DS_Store) and thumbnail files
 
 **Integration Points:**
 - Uses `VideoFileManager` for video scanning
@@ -218,6 +232,14 @@ Flask-based web interface for video management dashboard.
 - Uses `MediaScanner` for media file discovery
 - Uses `JobQueue` for background processing
 - Uses Redis for OAuth state storage
+
+**Recent Enhancements (2025-01):**
+- File explorer interface replacing flat video list
+- Directory-based navigation for better organization
+- Automatic filtering of system files (.DS_Store)
+- Thumbnail generation using temporary files (no disk storage)
+- Improved list view with full filename display
+- Removed redundant metadata (episode name, file size) for cleaner UI
 
 **Recent Enhancements (TICKET-021):**
 - Multi-select checkbox for batch video management

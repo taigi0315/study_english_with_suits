@@ -1914,6 +1914,10 @@ class VideoManagementUI:
                     "short_form_max_duration": short_form_max_duration
                 }
                 
+                # Add target_languages if provided (for multi-language support)
+                if 'target_languages' in data and data['target_languages']:
+                    form_data['target_languages'] = data['target_languages']
+                
                 # Add video file if it exists
                 video_file_handle = None
                 subtitle_file_handle = None

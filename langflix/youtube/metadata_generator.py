@@ -223,8 +223,15 @@ class YouTubeMetadataGenerator:
         if not expression:
             # Try to extract from filename if expression is empty
             logger.debug(f"Expression is empty, trying to extract from filename: {video_metadata.path}")
-            expression = self._extract_expression_from_filename(video_metadata.path) or "English Expressions"
-            logger.debug(f"Extracted expression: {expression}")
+            extracted = self._extract_expression_from_filename(video_metadata.path)
+            if extracted:
+                expression = extracted
+                logger.debug(f"Extracted expression: {expression}")
+            else:
+                # For batch videos or when extraction fails, use a generic expression
+                # This ensures title generation doesn't fail
+                expression = "English Expressions"
+                logger.debug(f"Using default expression: {expression}")
         
         # Format episode as "Suits.S01E02" format
         episode_raw = video_metadata.episode or ""
@@ -303,11 +310,25 @@ class YouTubeMetadataGenerator:
         try:
             from pathlib import Path
             filename = Path(filepath).stem
-            # Try to extract expression from filename patterns
-            # This is a simple fallback - can be improved based on actual naming patterns
+            
+            # For short-form batch videos (short-form_episode_batch), expression is not in filename
+            # Check if it's a batch video
+            if filename.startswith("short-form_"):
+                # This is a batch video - expression is not available in filename
+                # Return None to use default fallback
+                return None
+            
+            # For individual short_form_{expression} videos, extract expression
+            if filename.startswith("short_form_"):
+                # Format: short_form_{expression}
+                parts = filename.split("_", 2)  # Split into ['short', 'form', '{expression}']
+                if len(parts) >= 3:
+                    return parts[2].replace("_", " ").title()  # Convert underscores to spaces
+            
+            # Try to extract expression from other filename patterns
             parts = filename.split('_')
             if len(parts) > 1:
-                return parts[-1]  # Usually expression is at the end
+                return parts[-1].replace("_", " ").title()  # Usually expression is at the end
             return None
         except Exception:
             return None

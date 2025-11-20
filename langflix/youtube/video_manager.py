@@ -258,20 +258,27 @@ class VideoFileManager:
                     expression = "Long Form Video"
             elif filename.startswith("short-form_"):
                 video_type = "short"  # Use "short" to match template
-                # Extract episode and sequence from short-form filename
+                # Extract episode from short-form filename
                 # Format: short-form_Suits.S01E01.720p.HDTV.x264_008
                 parts = filename.split("_")
-                if len(parts) >= 3:
+                if len(parts) >= 2:
                     # Extract episode from parts[1] (e.g., "Suits.S01E01.720p.HDTV.x264")
                     episode_part = parts[1]
                     if "S01E" in episode_part:
-                        episode = episode_part.split("S01E")[1].split(".")[0]
-                        episode = f"S01E{episode}"
-                    # Expression can be the sequence number or a default
-                    sequence = parts[2] if len(parts) > 2 else "001"
-                    expression = f"Episode {episode} - Short #{sequence}"
+                        # Extract S01E## pattern
+                        import re
+                        episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_part)
+                        if episode_match:
+                            episode = f"S{episode_match.group(1)}E{episode_match.group(2)}"
+                        else:
+                            episode = episode_part
+                    else:
+                        episode = episode_part
+                    # For batch videos, expression is not in filename - use empty string
+                    # This will trigger fallback in metadata generator to extract from filename or use default
+                    expression = ""  # Empty to trigger fallback extraction
                 else:
-                    expression = "Short Form Video"
+                    expression = ""  # Empty to trigger fallback
             # Legacy naming convention (for backward compatibility)
             elif "educational" in filename:
                 video_type = "educational"

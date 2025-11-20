@@ -290,16 +290,34 @@ class VideoManagementUI:
                 if not video_file.exists():
                     return jsonify({"error": "Video file not found"}), 404
                 
-                # Generate thumbnail
-                thumbnail_path = video_file.parent / f"{video_file.stem}_thumb.jpg"
-                success = self.video_manager.generate_thumbnail(
-                    str(video_file), str(thumbnail_path)
-                )
+                # Generate thumbnail to temporary file (not saved to disk)
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                    thumbnail_path = tmp_file.name
                 
-                if success and thumbnail_path.exists():
-                    return send_file(str(thumbnail_path), mimetype='image/jpeg')
-                else:
-                    return jsonify({"error": "Failed to generate thumbnail"}), 500
+                try:
+                    success = self.video_manager.generate_thumbnail(
+                        str(video_file), thumbnail_path
+                    )
+                    
+                    if success and Path(thumbnail_path).exists():
+                        # Send file and then delete it
+                        response = send_file(thumbnail_path, mimetype='image/jpeg')
+                        # Delete temporary file after sending
+                        try:
+                            Path(thumbnail_path).unlink()
+                        except Exception:
+                            pass  # Ignore cleanup errors
+                        return response
+                    else:
+                        return jsonify({"error": "Failed to generate thumbnail"}), 500
+                except Exception as e:
+                    # Clean up temp file on error
+                    try:
+                        Path(thumbnail_path).unlink()
+                    except Exception:
+                        pass
+                    raise
                     
             except Exception as e:
                 logger.error(f"Error generating thumbnail: {e}")
@@ -337,6 +355,161 @@ class VideoManagementUI:
                 return jsonify(result)
             except Exception as e:
                 logger.error(f"Error organizing videos: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/explore')
+        def explore_directory():
+            """Explore directory structure - returns files and subdirectories"""
+            try:
+                # Get path parameter (default to output directory)
+                path = request.args.get('path', '')
+                
+                # Start from output directory if path is empty or relative
+                if not path or not os.path.isabs(path):
+                    base_path = Path(self.output_dir).resolve()
+                    if path:
+                        # Join relative path to base
+                        target_path = base_path / path
+                    else:
+                        target_path = base_path
+                else:
+                    # Absolute path provided
+                    target_path = Path(path)
+                
+                # Security: Ensure path is within output directory
+                base_path = Path(self.output_dir).resolve()
+                try:
+                    target_path = target_path.resolve()
+                    # Check if target_path is within base_path
+                    if not str(target_path).startswith(str(base_path)):
+                        return jsonify({"error": "Access denied: Path outside output directory"}), 403
+                except (OSError, ValueError) as e:
+                    return jsonify({"error": f"Invalid path: {e}"}), 400
+                
+                if not target_path.exists():
+                    return jsonify({"error": "Path does not exist"}), 404
+                
+                if not target_path.is_dir():
+                    return jsonify({"error": "Path is not a directory"}), 400
+                
+                # Get directory contents
+                items = []
+                for item in sorted(target_path.iterdir()):
+                    try:
+                        # Filter out .DS_Store files (macOS system files)
+                        if item.name == '.DS_Store':
+                            continue
+                        
+                        # Filter out thumbnail files (they're generated on-demand)
+                        if item.name.endswith('_thumb.jpg'):
+                            continue
+                        
+                        stat = item.stat()
+                        item_info = {
+                            "name": item.name,
+                            "path": str(item.relative_to(base_path)),
+                            "absolute_path": str(item),
+                            "is_directory": item.is_dir(),
+                            "is_file": item.is_file(),
+                            "size": stat.st_size if item.is_file() else 0,
+                            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        }
+                        
+                        # Add file extension for files
+                        if item.is_file():
+                            item_info["extension"] = item.suffix.lower()
+                            # Check if it's a video file
+                            video_extensions = {'.mkv', '.mp4', '.avi', '.mov', '.webm'}
+                            item_info["is_video"] = item.suffix.lower() in video_extensions
+                        else:
+                            item_info["extension"] = None
+                            item_info["is_video"] = False
+                        
+                        items.append(item_info)
+                    except (OSError, PermissionError) as e:
+                        logger.warning(f"Could not access {item}: {e}")
+                        continue
+                
+                # Calculate parent path
+                parent_path = None
+                if target_path != base_path:
+                    try:
+                        parent = target_path.parent
+                        if parent.resolve() != base_path.resolve() and str(parent.resolve()).startswith(str(base_path)):
+                            parent_path = str(parent.relative_to(base_path))
+                        else:
+                            parent_path = ""
+                    except Exception:
+                        parent_path = None
+                
+                return jsonify({
+                    "path": str(target_path.relative_to(base_path)),
+                    "absolute_path": str(target_path),
+                    "parent_path": parent_path,
+                    "items": items,
+                    "item_count": len(items)
+                })
+                
+            except Exception as e:
+                logger.error(f"Error exploring directory: {e}", exc_info=True)
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/explore/file-info')
+        def get_file_info():
+            """Get detailed information about a file"""
+            try:
+                path = request.args.get('path', '')
+                if not path:
+                    return jsonify({"error": "Path parameter required"}), 400
+                
+                base_path = Path(self.output_dir).resolve()
+                if not os.path.isabs(path):
+                    target_path = base_path / path
+                else:
+                    target_path = Path(path)
+                
+                # Security check
+                try:
+                    target_path = target_path.resolve()
+                    if not str(target_path).startswith(str(base_path)):
+                        return jsonify({"error": "Access denied"}), 403
+                except (OSError, ValueError):
+                    return jsonify({"error": "Invalid path"}), 400
+                
+                if not target_path.exists():
+                    return jsonify({"error": "File not found"}), 404
+                
+                stat = target_path.stat()
+                info = {
+                    "name": target_path.name,
+                    "path": str(target_path.relative_to(base_path)),
+                    "absolute_path": str(target_path),
+                    "size": stat.st_size,
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "is_directory": target_path.is_dir(),
+                    "is_file": target_path.is_file(),
+                }
+                
+                # Add video-specific info if it's a video file
+                if target_path.is_file() and target_path.suffix.lower() in {'.mkv', '.mp4', '.avi', '.mov', '.webm'}:
+                    try:
+                        from langflix.media.ffmpeg_utils import get_duration_seconds, get_video_params
+                        duration = get_duration_seconds(str(target_path))
+                        video_params = get_video_params(str(target_path))
+                        info["duration_seconds"] = duration
+                        info["duration_formatted"] = f"{int(duration // 60)}m {int(duration % 60)}s"
+                        info["video_codec"] = video_params.codec
+                        info["resolution"] = f"{video_params.width}x{video_params.height}" if video_params.width and video_params.height else None
+                    except Exception as e:
+                        logger.debug(f"Could not get video info: {e}")
+                        info["duration_seconds"] = None
+                
+                return jsonify(info)
+                
+            except Exception as e:
+                logger.error(f"Error getting file info: {e}")
                 return jsonify({"error": str(e)}), 500
         
         @self.app.route('/api/upload/preview/<path:video_path>')

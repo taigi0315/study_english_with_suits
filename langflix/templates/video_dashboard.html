@@ -597,6 +597,19 @@
             loadDirectory(path);
         }
 
+        function loadVideos(path = '') {
+            if (path) {
+                navigateToPath(path);
+                return;
+            }
+
+            if (currentPath) {
+                loadDirectory(currentPath);
+            } else {
+                navigateToPath('');
+            }
+        }
+
         function updateBreadcrumb(path) {
             const breadcrumb = document.getElementById('breadcrumbNav');
             const parts = path ? path.split('/').filter(p => p) : [];

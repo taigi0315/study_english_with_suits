@@ -836,7 +836,7 @@
                             const languageDisplay = video ? getLanguageDisplayName(video.language) : '';
                             
                             const previewPath = video ? video.path : item.absolute_path;
-                            const previewArg = JSON.stringify(previewPath);
+                            const previewArg = JSON.stringify(previewPath).replace(/"/g, '&quot;');
                             const showUploadButton = readyForUpload;
                             
                             return `

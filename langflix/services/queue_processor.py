@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from langflix.core.redis_client import get_redis_job_manager
 from langflix.utils.temp_file_manager import get_temp_manager
 from langflix.core.error_handler import handle_error, ErrorContext
+from langflix.settings import get_short_video_max_duration
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ class QueueProcessor:
             language_level = job_data.get('language_level', 'intermediate')
             test_mode = job_data.get('test_mode', False)
             no_shorts = job_data.get('no_shorts', False)
+            short_form_max_duration = float(job_data.get('short_form_max_duration', get_short_video_max_duration()))
             output_dir = job_data.get('output_dir', 'output')
             
             if not video_path or not os.path.exists(video_path):
@@ -298,6 +300,7 @@ class QueueProcessor:
                             language_level=language_level,
                             test_mode=test_mode,
                             no_shorts=no_shorts,
+                            short_form_max_duration=short_form_max_duration,
                             progress_callback=update_progress
                         )
                     )

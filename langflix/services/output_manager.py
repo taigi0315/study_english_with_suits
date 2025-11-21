@@ -5,12 +5,68 @@ Manages organized output structure for scalable multi-language support
 """
 
 import os
+import re
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+def sanitize_path_component(name: str, fallback: str = "Unknown") -> str:
+    """
+    Make directory-friendly string: collapse whitespace, remove illegal chars.
+    """
+    if not name:
+        return fallback
+
+    sanitized = re.sub(r'[\\/]+', '_', name)
+    sanitized = re.sub(r'\s+', '_', sanitized)
+    sanitized = re.sub(r'[<>:"|?*]+', '', sanitized)
+    sanitized = re.sub(r'\.{2,}', '.', sanitized)
+    sanitized = sanitized.strip(' _-.')
+    return sanitized or fallback
+
+
+def parse_series_episode_from_string(filename: str) -> Tuple[str, str]:
+    """
+    Extract normalized series/episode identifiers from a filename.
+    """
+    base = Path(filename).stem
+    if base.endswith('.en'):
+        base = base[:-3]
+
+    patterns = [
+        r'^(.+?)\s*-\s*(\d+x\d+)\s*-\s*(.+)$',
+        r'^(.+?)\.S(\d+)E(\d+)(?:\..+)?$',
+        r'^(.+?)\.S(\d+)E(\d+)$',
+        r'^(.+?)_(\d+x\d+)_(.+)$'
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, base, re.IGNORECASE)
+        if not match:
+            continue
+
+        if 'S(\\d+)E(\\d+)' in pattern:
+            raw_series = match.group(1)
+            series_name = re.sub(r'\.\d+p\..*$', '', raw_series, flags=re.IGNORECASE)
+            series_name = re.sub(r'\.(HDTV|WEB-DL|BluRay|DVDRip).*$', '', series_name, flags=re.IGNORECASE)
+            season, episode = match.group(2), match.group(3)
+            episode_name = f"S{int(season):02d}E{int(episode):02d}"
+        else:
+            series_name = match.group(1)
+            episode_num = match.group(2)
+            if len(match.groups()) > 2:
+                episode_title = re.sub(r'\.\d+p\..*$', '', match.group(3), flags=re.IGNORECASE)
+                episode_name = f"{episode_num}_{episode_title}"
+            else:
+                episode_name = episode_num
+
+        return sanitize_path_component(series_name, "Unknown_Series"), sanitize_path_component(episode_name, "Unknown_Episode")
+
+    return "Unknown_Series", "Unknown_Episode"
+
 
 class OutputManager:
     """
@@ -52,8 +108,11 @@ class OutputManager:
         Returns:
             Dictionary with path mappings for different content types
         """
+        normalized_series = sanitize_path_component(series_name or "Unknown_Series", fallback="Unknown_Series")
+        normalized_episode = sanitize_path_component(episode_name or "Unknown_Episode", fallback="Unknown_Episode")
+
         # Create main episode directory
-        episode_dir = self.base_output_dir / series_name / episode_name
+        episode_dir = self.base_output_dir / normalized_series / normalized_episode
         episode_dir.mkdir(parents=True, exist_ok=True)
         
         # Note: Removed translations/ directory - language folders go directly under episode
@@ -139,60 +198,7 @@ class OutputManager:
         Returns:
             Tuple of (series_name, episode_name)
         """
-        subtitle_path = Path(subtitle_file_path)
-        filename = subtitle_path.stem
-        
-        # Remove language suffix
-        if filename.endswith('.en'):
-            filename = filename[:-3]
-        
-        # Try different parsing patterns
-        patterns = [
-            # Pattern 1: "Suits - 1x01 - Pilot.720p.WEB-DL"
-            r'^(.+?)\s*-\s*(\d+x\d+)\s*-\s*(.+)$',
-            # Pattern 2: "Suits.S01E01.720p.HDTV.x264" - Extract only S01E01, ignore quality/resolution
-            r'^(.+?)\.S(\d+)E(\d+)(?:\..+)?$',
-            # Pattern 3: "Suits.S01E01"
-            r'^(.+?)\.S(\d+)E(\d+)$',
-            # Pattern 4: "Suits_1x01_Pilot"
-            r'^(.+?)_(\d+x\d+)_(.+)$'
-        ]
-        
-        import re
-        
-        for pattern in patterns:
-            match = re.match(pattern, filename)
-            if match:
-                if 'S(\\d+)E(\\d+)' in pattern:
-                    # Handle S01E01 format - extract only season/episode, ignore quality/resolution
-                    # Remove quality/resolution info from series name (e.g., "Suits.720p.HDTV.x264" -> "Suits")
-                    raw_series_name = match.group(1)
-                    # Remove quality/resolution suffixes from series name
-                    series_name = re.sub(r'\.\d+p\..*$', '', raw_series_name)  # Remove .720p.HDTV.x264 etc
-                    series_name = re.sub(r'\.(HDTV|WEB-DL|BluRay|DVDRip).*$', '', series_name, flags=re.IGNORECASE)  # Remove quality tags
-                    season = match.group(2)
-                    episode = match.group(3)
-                    # Use only S01E01 format, don't include quality/resolution info
-                    episode_name = f"S{season}E{episode}"
-                else:
-                    # Handle other formats
-                    series_name = match.group(1)
-                    episode_num = match.group(2)
-                    if len(match.groups()) > 2:
-                        episode_title = match.group(3)
-                        # Remove quality/resolution from episode title if present
-                        episode_title = re.sub(r'\.\d+p\..*$', '', episode_title)  # Remove .720p.HDTV.x264 etc
-                        episode_name = f"{episode_num}_{episode_title}"
-                    else:
-                        episode_name = episode_num
-                
-                return series_name, episode_name
-        
-        # Fallback naming
-        series_name = "Unknown_Series"
-        episode_name = "Unknown_Episode"
-        
-        return series_name, episode_name
+        return parse_series_episode_from_string(Path(subtitle_file_path).name)
     
     def save_metadata(self, episode_paths: Dict[str, Path], metadata: Dict) -> Path:
         """

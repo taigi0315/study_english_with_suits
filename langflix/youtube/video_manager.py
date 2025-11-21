@@ -3,6 +3,7 @@ Video File Manager for YouTube Content Management
 Scans and manages generated video files for YouTube upload
 """
 import os
+import re
 import json
 import logging
 from pathlib import Path
@@ -190,10 +191,11 @@ class VideoFileManager:
         language = "unknown"
         
         try:
-            # Find episode info (S01E01, S01E02, etc.)
+            # Find episode info (S01E01, S02E03, etc.) from any path segment
             for part in path_parts:
-                if "S01E" in part:
-                    episode = part
+                match = re.search(r'(S\d+E\d+)', part, flags=re.IGNORECASE)
+                if match:
+                    episode = match.group(1).upper()
                     break
             
             # Find language info - prioritize translations directory structure
@@ -266,7 +268,6 @@ class VideoFileManager:
                     episode_part = parts[1]
                     if "S01E" in episode_part:
                         # Extract S01E## pattern
-                        import re
                         episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_part)
                         if episode_match:
                             episode = f"S{episode_match.group(1)}E{episode_match.group(2)}"

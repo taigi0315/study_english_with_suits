@@ -5,6 +5,7 @@ Provides a web interface to view and manage generated videos
 import os
 import json
 from pathlib import Path
+from urllib.parse import unquote
 from typing import List, Dict, Any
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, send_file, render_template_string
@@ -279,7 +280,7 @@ class VideoManagementUI:
             """Generate and serve thumbnail"""
             try:
                 # Decode URL-encoded path
-                video_path = video_path.replace('%2F', '/')
+                video_path = unquote(video_path)
                 
                 # Ensure the path starts with / (Flask strips it sometimes)
                 if not video_path.startswith('/'):

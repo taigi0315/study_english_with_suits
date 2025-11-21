@@ -4,6 +4,7 @@ Video Editor for LangFlix
 Creates educational video sequences with context, expression clips, and educational slides
 """
 
+import json
 import ffmpeg
 import logging
 import os
@@ -2525,7 +2526,12 @@ class VideoEditor:
             logger.error(f"Error creating transition video: {e}")
             return None
     
-    def _create_video_batch(self, video_paths: List[str], batch_number: int) -> str:
+    def _create_video_batch(
+        self,
+        video_paths: List[str],
+        batch_number: int,
+        metadata_entries: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
         """Create a single batch video from a list of video paths"""
         try:
             # Use short-form naming convention with episode info
@@ -2584,6 +2590,19 @@ class VideoEditor:
             concat_demuxer_if_uniform(concat_file, batch_path, normalize_audio=True)
             
             logger.info(f"✅ Batch {batch_number} created: {batch_path}")
+
+            if metadata_entries:
+                metadata_path = Path(batch_path).with_suffix(".meta.json")
+                metadata_payload = {
+                    "batch_number": batch_number,
+                    "episode": episode_name,
+                    "language": metadata_entries[0].get("language") or self.language_code or "unknown",
+                    "expressions": metadata_entries,
+                    "source_videos": [Path(p).name for p in video_paths]
+                }
+                metadata_path.write_text(json.dumps(metadata_payload, ensure_ascii=False, indent=2))
+                logger.info(f"Saved batch metadata: {metadata_path}")
+
             return str(batch_path)
             
         except Exception as e:

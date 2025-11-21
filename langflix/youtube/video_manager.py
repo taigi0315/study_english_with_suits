@@ -28,6 +28,8 @@ class VideoMetadata:
     expression: str
     video_type: str  # 'educational', 'short', 'final', 'slide', 'context'
     language: str
+    expression_translation: Optional[str] = None
+    expressions_included: Optional[List[Dict[str, str]]] = None
     ready_for_upload: bool = False
     uploaded_to_youtube: bool = False
     youtube_video_id: Optional[str] = None
@@ -135,6 +137,19 @@ class VideoFileManager:
             
             # Determine video type and extract episode/expression info
             video_type, episode, expression, language = self._parse_video_path(video_path)
+            expression_translation = None
+            expressions_included = None
+            metadata_path = video_path.with_suffix(".meta.json")
+            if metadata_path.exists():
+                try:
+                    metadata_content = json.loads(metadata_path.read_text(encoding='utf-8'))
+                    expressions_included = metadata_content.get("expressions")
+                    if expressions_included and isinstance(expressions_included, list):
+                        primary = expressions_included[0]
+                        expression = primary.get("expression") or expression
+                        expression_translation = primary.get("translation") or expression_translation
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata for {video_path.name}: {e}")
             
             # Check database for upload status
             uploaded_to_youtube = False
@@ -166,6 +181,8 @@ class VideoFileManager:
                 created_at=created_at,
                 episode=episode,
                 expression=expression,
+                expression_translation=expression_translation,
+                expressions_included=expressions_included,
                 video_type=video_type,
                 language=language,
                 ready_for_upload=self._is_ready_for_upload(video_type, duration),

@@ -575,6 +575,53 @@ class TestVideoFileManagerWithFFProbe:
                 assert metadata.duration_seconds == 120.5
                 assert metadata.resolution == "1920x1080"
                 assert metadata.format == "h264"
+
+    def test_extract_video_metadata_uses_metadata_file(self, video_manager, tmp_path):
+        """Test video metadata extraction loads metadata JSON for expression info"""
+        video_file = tmp_path / "test_video.mp4"
+        video_file.write_bytes(b"fake video content")
+        metadata_file = video_file.with_suffix(".meta.json")
+        metadata_payload = {
+            "batch_number": 1,
+            "episode": "S01E01",
+            "language": "ko",
+            "expressions": [
+                {"expression": "Meta Expression", "translation": "메타 번역"}
+            ]
+        }
+        metadata_file.write_text(json.dumps(metadata_payload))
+
+        ffprobe_output = {
+            "format": {
+                "duration": "120.5"
+            },
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "width": 1920,
+                    "height": 1080,
+                    "codec_name": "h264"
+                }
+            ]
+        }
+
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value = Mock(
+                stdout=json.dumps(ffprobe_output),
+                stderr="",
+                returncode=0
+            )
+
+            with patch('pathlib.Path.stat') as mock_stat:
+                mock_stat.return_value.st_size = 1024 * 1024  # 1MB
+                mock_stat.return_value.st_ctime = datetime.now().timestamp()
+
+                metadata = video_manager._extract_video_metadata(video_file)
+
+                assert metadata is not None
+                assert metadata.expression == "Meta Expression"
+                assert metadata.expression_translation == "메타 번역"
+                assert metadata.expressions_included == metadata_payload["expressions"]
     
     def test_extract_video_metadata_ffprobe_error(self, video_manager, tmp_path):
         """Test video metadata extraction with ffprobe error"""

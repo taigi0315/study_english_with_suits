@@ -132,6 +132,24 @@ class TestYouTubeMetadataGenerator:
         # Check tags include shorts-specific tags
         assert "Shorts" in metadata.tags
         assert "English Learning" in metadata.tags
+
+    def test_generate_description_short_uses_metadata_list(self, generator, sample_video_metadata):
+        """Short description should use expressions_included metadata when expression field is empty"""
+        sample_video_metadata.video_type = "short"
+        sample_video_metadata.expression = ""
+        sample_video_metadata.expression_translation = None
+        sample_video_metadata.expressions_included = [
+            {"expression": "Meta Expression", "translation": "메타 번역"}
+        ]
+
+        description = generator._generate_description(
+            sample_video_metadata,
+            generator.templates["short"],
+            None
+        )
+
+        assert "Meta Expression" in description
+        assert "메타 번역" in description
     
     def test_generate_metadata_final(self, generator, sample_video_metadata):
         """Test generating metadata for final video"""

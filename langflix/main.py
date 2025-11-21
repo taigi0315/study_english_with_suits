@@ -1077,7 +1077,15 @@ class LangFlixPipeline:
                         from langflix.media.ffmpeg_utils import get_duration_seconds
                         duration = get_duration_seconds(str(output_path))
                         
-                        short_format_videos.append((output_path, duration))
+                        short_format_videos.append({
+                            "path": str(output_path),
+                            "duration": duration,
+                            "expression": expression.expression,
+                            "expression_translation": expression.expression_translation,
+                            "language": target_lang_code,
+                            "episode": self.episode_name,
+                            "source_short": Path(output_path).name
+                        })
                         logger.info(f"✅ Short format video created: {output_path} (duration: {duration:.2f}s)")
                     except Exception as e:
                         logger.error(f"Error creating short format video for expression {i+1}: {e}")
@@ -1106,7 +1114,8 @@ class LangFlixPipeline:
                     shorts_dir = target_lang_paths['language_dir'] / "shorts"
                 shorts_dir = Path(shorts_dir) if isinstance(shorts_dir, str) else shorts_dir
                 
-                for video_path, _ in short_format_videos:
+                for video_data in short_format_videos:
+                    video_path = video_data["path"]
                     try:
                         video_file = Path(video_path)
                         if video_file.exists():
@@ -1189,12 +1198,22 @@ class LangFlixPipeline:
             
             batch_videos = []
             current_batch_videos = []
+            current_batch_metadata = []
             current_duration = 0.0
             batch_number = 1
             dropped_count = 0
             
-            for idx, (video_path, duration) in enumerate(short_format_videos, 1):
+            for idx, video_data in enumerate(short_format_videos, 1):
+                video_path = video_data["path"]
+                duration = video_data["duration"]
                 video_name = Path(video_path).name
+                metadata_entry = {
+                    "expression": video_data.get("expression"),
+                    "translation": video_data.get("expression_translation"),
+                    "language": video_data.get("language"),
+                    "episode": video_data.get("episode"),
+                    "source_short": video_data.get("source_short")
+                }
                 logger.debug(f"Processing video {idx}/{len(short_format_videos)}: {video_name} (duration: {duration:.2f}s)")
                 
                 # Check if video itself exceeds max_duration
@@ -1216,18 +1235,24 @@ class LangFlixPipeline:
                     
                     # Create batch with current videos
                     editor = video_editor if video_editor else self.video_editor
-                    batch_path = editor._create_video_batch(current_batch_videos, batch_number)
+                    batch_path = editor._create_video_batch(
+                        current_batch_videos,
+                        batch_number,
+                        metadata_entries=current_batch_metadata.copy()
+                    )
                     batch_videos.append(batch_path)
                     logger.info(f"✅ Created batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
                     
                     # Reset for next batch
                     current_batch_videos = [video_path]
+                    current_batch_metadata = [metadata_entry]
                     current_duration = duration
                     batch_number += 1
                     logger.debug(f"New batch {batch_number} started with {video_name} (duration: {duration:.2f}s)")
                 else:
                     # Add to current batch
                     current_batch_videos.append(video_path)
+                    current_batch_metadata.append(metadata_entry)
                     current_duration = new_duration
                     logger.debug(
                         f"Added {video_name} to batch {batch_number} "
@@ -1241,7 +1266,11 @@ class LangFlixPipeline:
                     f"(duration: {current_duration:.2f}s)"
                 )
                 editor = video_editor if video_editor else self.video_editor
-                batch_path = editor._create_video_batch(current_batch_videos, batch_number)
+                batch_path = editor._create_video_batch(
+                    current_batch_videos,
+                    batch_number,
+                    metadata_entries=current_batch_metadata.copy()
+                )
                 batch_videos.append(batch_path)
                 logger.info(f"✅ Created final batch {batch_number}: {batch_path} ({len(current_batch_videos)} videos, {current_duration:.2f}s)")
             

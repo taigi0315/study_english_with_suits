@@ -413,13 +413,24 @@ class YouTubeMetadataGenerator:
             meaning_label = self._get_template_translation("meaning_label", target_language)
             watch_and_learn = self._get_template_translation("watch_and_learn", target_language)
             
-            # Get translation (meaning) - use existing method
-            translation = self._get_translation(video_metadata)
-            
+            # Get expression metadata from video data first
+            expression_text = video_metadata.expression
+            translation_text = video_metadata.expression_translation
+
+            if not expression_text and video_metadata.expressions_included:
+                first_expression = video_metadata.expressions_included[0]
+                expression_text = expression_text or first_expression.get("expression")
+                translation_text = translation_text or first_expression.get("translation")
+
+            if not translation_text:
+                translation_text = self._get_translation(video_metadata)
+
+            expression_text = expression_text or video_metadata.expression or "Expression"
+
             # Build description in simplified format
             description = f"""🎬 {quick_lesson}
-📚 {expression_label}: {video_metadata.expression}
-📖 {meaning_label}: {translation}
+📚 {expression_label}: {expression_text}
+📖 {meaning_label}: {translation_text}
 💡 {watch_and_learn}
 #Shorts #EnglishLearning #Suits #EnglishExpressions #LearnEnglish"""
             

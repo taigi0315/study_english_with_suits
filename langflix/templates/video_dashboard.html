@@ -712,6 +712,17 @@
             return languageNames[languageCode] || languageCode;
         }
 
+        function guessVideoTypeFromName(name) {
+            const lower = name.toLowerCase();
+            if (lower.includes('short-form') || lower.includes('short_') || lower.includes('short')) {
+                return 'short-form';
+            }
+            if (lower.includes('long-form') || lower.includes('long_') || lower.includes('long')) {
+                return 'long-form';
+            }
+            return 'video';
+        }
+
         function renderDirectory(items) {
             const container = document.getElementById('videosContainer');
             
@@ -811,6 +822,10 @@
                             const uploadIcon = isUploaded ? '✅' : '📤';
                             const languageDisplay = video ? getLanguageDisplayName(video.language) : '';
                             
+                            const previewPath = video ? video.path : item.absolute_path;
+                            const previewArg = JSON.stringify(previewPath);
+                            const showUploadButton = readyForUpload;
+                            
                             return `
                                 <div class="video-row ${readyForUpload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}">
                                     <div style="margin-right: 10px;">
@@ -846,16 +861,16 @@
                                         </div>
                                     </div>
                                     <div class="video-actions-compact">
-                                        ${video && isVideo ? `
+                                        ${isVideo ? `
                                             <button class="action-btn-icon btn-white" 
-                                                    onclick="previewVideo('${video.path}')" 
+                                                    onclick="previewVideo(${previewArg})" 
                                                     title="Preview">
                                                 <img src="/assets/icon/play.png" alt="Play" style="width: 20px; height: 20px;">
                                             </button>
                                             <button class="action-btn-icon btn-white" 
-                                                    onclick="uploadToYouTube('${video.path}')" 
-                                                    ${!readyForUpload ? 'disabled' : ''}
-                                                    title="Upload to YouTube">
+                                                    onclick="uploadToYouTube(${previewArg})" 
+                                                    ${showUploadButton ? '' : 'disabled'}
+                                                    title="${showUploadButton ? 'Upload to YouTube' : 'Eligible when ready for upload'}">
                                                 <img src="/assets/icon/upload.png" alt="Upload" style="width: 20px; height: 20px;">
                                             </button>
                                         ` : ''}

@@ -55,7 +55,25 @@ class YouTubeVideoMetadata:
 class YouTubeUploader:
     """Handles YouTube video uploads"""
     
-    def __init__(self, credentials_file: str = "auth/youtube_credentials.json", token_file: str = "auth/youtube_token.json", oauth_state_storage=None):
+    def __init__(self, credentials_file: str = None, token_file: str = None, oauth_state_storage=None):
+        # Determine default paths based on environment
+        if credentials_file is None:
+            # Check if running in Docker
+            is_docker = os.path.exists("/app") or os.getenv("DOCKER_ENV") == "true"
+            if is_docker:
+                credentials_file = "/app/auth/youtube_credentials.json"
+            else:
+                # Local development: use relative path
+                credentials_file = "auth/youtube_credentials.json"
+        
+        if token_file is None:
+            is_docker = os.path.exists("/app") or os.getenv("DOCKER_ENV") == "true"
+            if is_docker:
+                token_file = "/app/auth/youtube_token.json"
+            else:
+                # Local development: use relative path
+                token_file = "auth/youtube_token.json"
+        
         self.credentials_file = credentials_file
         self.token_file = token_file
         self.service = None

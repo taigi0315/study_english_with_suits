@@ -101,18 +101,34 @@ class VideoManagementUI:
             logger.warning(f"Redis not available for OAuth state storage, using in-memory: {e}")
             oauth_state_storage = None
         
-        # Use absolute paths for YouTube credentials (mounted in Docker)
-        youtube_creds_file = os.getenv("YOUTUBE_CREDENTIALS_FILE", "/app/auth/youtube_credentials.json")
-        youtube_token_file = os.getenv("YOUTUBE_TOKEN_FILE", "/app/auth/youtube_token.json")
+        # Determine if running in Docker or locally
+        is_docker = os.path.exists("/app") or os.getenv("DOCKER_ENV") == "true"
+        
+        # Use appropriate default path based on environment
+        if is_docker:
+            default_creds = "/app/auth/youtube_credentials.json"
+            default_token = "/app/auth/youtube_token.json"
+        else:
+            # Local development: use relative paths from project root
+            project_root = os.getcwd()
+            default_creds = os.path.join(project_root, "auth", "youtube_credentials.json")
+            default_token = os.path.join(project_root, "auth", "youtube_token.json")
+        
+        youtube_creds_file = os.getenv("YOUTUBE_CREDENTIALS_FILE", default_creds)
+        youtube_token_file = os.getenv("YOUTUBE_TOKEN_FILE", default_token)
         
         # Fallback logic: Try multiple locations (new structure -> old locations)
         if not os.path.exists(youtube_creds_file):
-            # Try new location: auth/ directory
+            project_root = os.getcwd()
             fallback_paths = [
-                os.path.join(os.getcwd(), "auth", "youtube_credentials.json"),
-                os.path.join(os.getcwd(), "assets", "youtube_credentials.json"),  # Old location
-                os.path.join(os.getcwd(), "youtube_credentials.json"),  # Root (legacy)
+                os.path.join(project_root, "auth", "youtube_credentials.json"),  # New location
+                os.path.join(project_root, "assets", "youtube_credentials.json"),  # Old location
+                os.path.join(project_root, "youtube_credentials.json"),  # Root (legacy)
             ]
+            # Also check Docker path if not already checked
+            if not is_docker:
+                fallback_paths.append("/app/auth/youtube_credentials.json")
+            
             for path in fallback_paths:
                 if os.path.exists(path):
                     youtube_creds_file = path
@@ -120,12 +136,16 @@ class VideoManagementUI:
                     break
         
         if not os.path.exists(youtube_token_file):
-            # Try new location: auth/ directory
+            project_root = os.getcwd()
             fallback_paths = [
-                os.path.join(os.getcwd(), "auth", "youtube_token.json"),
-                os.path.join(os.getcwd(), "assets", "youtube_token.json"),  # Old location
-                os.path.join(os.getcwd(), "youtube_token.json"),  # Root (legacy)
+                os.path.join(project_root, "auth", "youtube_token.json"),  # New location
+                os.path.join(project_root, "assets", "youtube_token.json"),  # Old location
+                os.path.join(project_root, "youtube_token.json"),  # Root (legacy)
             ]
+            # Also check Docker path if not already checked
+            if not is_docker:
+                fallback_paths.append("/app/auth/youtube_token.json")
+            
             for path in fallback_paths:
                 if os.path.exists(path):
                     youtube_token_file = path

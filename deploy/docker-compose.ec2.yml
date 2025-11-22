@@ -14,7 +14,7 @@ services:
       # EBS volume mount (from host)
       - /data:/data
       # Application config
-      - ../config.yaml:/app/config.yaml:ro
+      - ../config/config.yaml:/app/config/config.yaml:ro
       - ../.env:/app/.env:ro
     restart: unless-stopped
     deploy:

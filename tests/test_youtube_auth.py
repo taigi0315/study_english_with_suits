@@ -28,7 +28,7 @@ def test_youtube_authentication():
         from langflix.youtube.uploader import YouTubeUploader
         
         # 인증 파일 경로 확인
-        credentials_file = "youtube_credentials.json"
+        credentials_file = "auth/youtube_credentials.json"
         if not os.path.exists(credentials_file):
             logger.error(f"❌ 인증 파일을 찾을 수 없습니다: {credentials_file}")
             return False

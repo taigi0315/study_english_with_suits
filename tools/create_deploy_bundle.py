@@ -203,6 +203,11 @@ def main() -> None:
     with ZipFile(output_path, "w", compression=ZIP_DEFLATED) as bundle:
         for rel_path in files:
             abs_path = project_root / rel_path
+            # Skip if file doesn't exist (e.g., optional credentials files)
+            if not abs_path.exists():
+                if not args.quiet:
+                    print(f"⚠️  Skipping non-existent file: {rel_path}")
+                continue
             bundle.write(abs_path, rel_path.as_posix())
             entries_recorded.append(rel_path.as_posix())
 

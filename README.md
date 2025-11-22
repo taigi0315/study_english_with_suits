@@ -114,7 +114,7 @@ LangFlix uses YAML-based configuration files for easy customization. The system 
 
 1. **Copy the example configuration**
    ```bash
-   cp config.example.yaml config.yaml
+   cp config/config.example.yaml config/config.yaml
    ```
 
 2. **Edit `config.yaml`** to customize settings like:

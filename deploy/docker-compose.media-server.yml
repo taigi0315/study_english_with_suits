@@ -12,7 +12,7 @@ services:
       # Media storage path - mount network path here
       - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
       # Or use config file path
-      - LANGFLIX_CONFIG_PATH=/app/config.yaml
+      - LANGFLIX_CONFIG_PATH=/app/config/config.yaml
     volumes:
       # Mount network media path to container
       # Option A: If already mounted on host at /mnt/media-server
@@ -23,7 +23,7 @@ services:
       # Then reference the mount point above
       
       # Application config
-      - ../config.yaml:/app/config.yaml:ro
+      - ../config/config.yaml:/app/config/config.yaml:ro
       - ../.env:/app/.env:ro
       
       # Output directory (local storage for generated files)

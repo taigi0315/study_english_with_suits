@@ -32,13 +32,13 @@ class ConfigLoader:
         self.package_dir = Path(__file__).parent
         self.default_config_path = self.package_dir / "default.yaml"
         
-        # User config at project root
+        # User config in config/ directory
         if user_config_path:
             self.user_config_path = Path(user_config_path)
         else:
-            # Go up two levels from langflix/config/ to project root
+            # Go up two levels from langflix/config/ to project root, then into config/
             project_root = self.package_dir.parent.parent
-            self.user_config_path = project_root / "config.yaml"
+            self.user_config_path = project_root / "config" / "config.yaml"
         
         # Load configuration
         self.config = self._load_config()

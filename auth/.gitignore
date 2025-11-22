@@ -1,0 +1,20 @@
+# Ignore all OAuth credential files
+# Only templates and README should be tracked
+
+# YouTube OAuth files
+youtube_credentials.json
+youtube_token.json
+
+# Future platform OAuth files
+facebook_credentials.json
+facebook_token.json
+tiktok_credentials.json
+tiktok_token.json
+instagram_credentials.json
+instagram_token.json
+
+# Any other credential files
+*.json
+!*.template
+!*.example
+

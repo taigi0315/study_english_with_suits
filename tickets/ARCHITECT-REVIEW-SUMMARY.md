@@ -1,10 +1,10 @@
 # Architect Review Summary
-**Review Date:** 2025-01-30
+**Review Date:** 2025-01-21 (Updated)
 **Reviewed by:** Architect Agent
 
 ## Tickets Reviewed
-- Total tickets evaluated: 4
-- Approved: 3
+- Total tickets evaluated: 5 (including TICKET-060)
+- Approved: 4 (including TICKET-060)
 - Rejected: 0
 - Deferred: 0
 - Needs revision: 0
@@ -12,10 +12,10 @@
 
 ## Decision Breakdown
 
-### ✅ Approved (3 tickets)
+### ✅ Approved (4 tickets)
 Organized into 3 phases over 4-6 weeks timeline
 
-**Phase 1 (Sprint 1 - Weeks 1-2):** 1 ticket
+**Phase 1 (Sprint 1 - Weeks 1-2):** 2 tickets (TICKET-007, TICKET-060)
 **Phase 2 (Sprint 2 - Weeks 3-4):** 1 ticket
 **Phase 3 (Sprint 3+ - Weeks 5-6+):** 1 ticket
 
@@ -29,25 +29,36 @@ Organized into 3 phases over 4-6 weeks timeline
 - **Note:** Previous review tickets (TICKET-001 through TICKET-005 from earlier review) were already approved and moved
 
 ## Strategic Themes Addressed
-1. **Performance Optimization** (TICKET-001): 1 ticket, 2-3 days
+1. **Performance Optimization** (TICKET-007): 1 ticket, 2-3 days
    - Impact: 3-5x faster expression analysis
-   - Key ticket: TICKET-001
+   - Key ticket: TICKET-007
    
-2. **Feature Enhancement** (TICKET-002): 1 ticket, 7-9 days
+2. **Feature Enhancement** (TICKET-008): 1 ticket, 7-9 days
    - Impact: Richer educational content, better efficiency
-   - Key ticket: TICKET-002
+   - Key ticket: TICKET-008
    
-3. **Production Readiness** (TICKET-003): 1 ticket, 4-5 days
+3. **User Experience** (TICKET-060): 1 ticket, 2-3 days
+   - Impact: Target language users see localized YouTube metadata, improved discoverability
+   - Key ticket: TICKET-060
+   - Completes: TICKET-056 partial implementation
+   
+4. **Production Readiness** (TICKET-009): 1 ticket, 4-5 days
    - Impact: Consistent deployment, automation, security
-   - Key ticket: TICKET-003
+   - Key ticket: TICKET-009
 
 ## Architectural Direction
 
 ### Immediate Focus (Phase 1 - Weeks 1-2)
-**TICKET-001: Parallel LLM Processing**
+**TICKET-007: Parallel LLM Processing**
 - Leverage existing `ParallelProcessor` infrastructure
 - Critical fix: Proposed implementation has sequential loop bug
 - Performance: 3-5x improvement expected
+
+**TICKET-060: Target Language Metadata (After TICKET-059)**
+- Completes TICKET-056 partial implementation
+- All video types use target language for metadata
+- Improves YouTube discoverability for target language users
+- Uses expression_translation from TICKET-059
 
 ### Medium-term (Phase 2 - Weeks 3-4)
 **TICKET-002: Multiple Expressions Per Context**
@@ -77,10 +88,16 @@ Organized into 3 phases over 4-6 weeks timeline
 - **Impact:** Richer content without breaking existing workflows
 
 ### Decision 3: Production Stack Simplification
-- **Context:** TICKET-003 includes Celery but may not be actively used
+- **Context:** TICKET-009 includes Celery but may not be actively used
 - **Decision:** Make Celery optional, simplify to API + Redis + optional PostgreSQL
 - **Rationale:** Right-sized for current needs, can add Celery later if distributed workers needed
 - **Impact:** Simpler deployment, less maintenance burden
+
+### Decision 4: Target Language Metadata Strategy
+- **Context:** TICKET-056 partially implemented target language for short videos only
+- **Decision:** Extend to all video types, use expression_translation field, consider bilingual tags
+- **Rationale:** Target language users are primary audience, metadata should be in their language for better discoverability
+- **Impact:** Improved YouTube SEO, better user experience, completes TICKET-056 work
 
 ## Risks and Mitigations
 **Highest risks identified:**
@@ -95,22 +112,30 @@ Organized into 3 phases over 4-6 weeks timeline
    - Mitigation: Separate mode default, single expressions = groups of 1
    - Status: Design ensures compatibility
 
-3. **TICKET-003: Over-engineering with unused services**
+3. **TICKET-009: Over-engineering with unused services**
    - Risk: Complex deployment for no benefit
    - Mitigation: Simplified stack, remove Celery initially
    - Status: Scope adjusted
 
+4. **TICKET-060: Expression translation may not be available**
+   - Risk: Some videos may not have expression_translation populated
+   - Mitigation: Graceful fallback to English expression, TICKET-059 ensures metadata is populated
+   - Status: Low risk with TICKET-059 dependency
+
 ## Resource Requirements
 - Timeline: 4-6 weeks (2-3 sprints)
 - Skills needed:
-  - Senior engineer: 2 weeks (TICKET-001, TICKET-002)
-  - DevOps/senior backend engineer: 1 week (TICKET-003)
+  - Senior engineer: 2 weeks (TICKET-007, TICKET-008)
+  - Any engineer: 2-3 days (TICKET-060)
+  - DevOps/senior backend engineer: 1 week (TICKET-009)
 - Infrastructure: Docker, GitHub Actions (Phase 3)
 
 ## Success Criteria
 We'll know this roadmap is successful when:
 - [ ] Parallel processing provides 3x+ performance improvement
 - [ ] Multiple expressions per context working (backward compatible)
+- [ ] All video types generate metadata in target language (TICKET-060)
+- [ ] Target language users see localized YouTube metadata
 - [ ] Production deployment automated and tested
 - [ ] All tests passing
 - [ ] Documentation updated

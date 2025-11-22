@@ -121,12 +121,12 @@ services:
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
 
       # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
-      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/youtube_credentials.json:ro
-      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
+      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/auth/youtube_token.json:rw
       
       # 설정 파일 (읽기 전용)
       # Note: .env file is not mounted - all environment variables are passed via 'environment' section
-      - ../config.yaml:/app/config.yaml:ro
+      - ../config/config.yaml:/app/config/config.yaml:ro
     
     depends_on:
       redis:
@@ -165,8 +165,8 @@ services:
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/media/shows
       - LANGFLIX_UI_PORT=${UI_PORT:-5000}
-      - YOUTUBE_CREDENTIALS_FILE=/app/youtube_credentials.json
-      - YOUTUBE_TOKEN_FILE=/app/youtube_token.json
+      - YOUTUBE_CREDENTIALS_FILE=/app/auth/youtube_credentials.json
+      - YOUTUBE_TOKEN_FILE=/app/auth/youtube_token.json
       # Database (Optional - only if DATABASE_ENABLED=true)
       - DATABASE_URL=postgresql://langflix:${POSTGRES_PASSWORD:-langflix123}@postgres:5432/langflix
       - DATABASE_ENABLED=${DATABASE_ENABLED:-false}
@@ -181,8 +181,8 @@ services:
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
-      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/youtube_credentials.json:ro
-      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/youtube_token.json:rw
+      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/auth/youtube_token.json:rw
     
     depends_on:
       langflix-api:

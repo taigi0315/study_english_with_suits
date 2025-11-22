@@ -82,7 +82,7 @@ docker-up:
 	@echo "   - Celery Worker"
 	@echo "   - Celery Beat Scheduler"
 	@echo ""
-	docker-compose -f docker-compose.dev.yml up -d
+	docker-compose -f deploy/docker/docker-compose.dev.yml up -d
 	@echo "✅ Services started successfully!"
 	@echo ""
 	@echo "🌐 Access points:"
@@ -94,24 +94,24 @@ docker-up:
 
 docker-down:
 	@echo "🛑 Stopping LangFlix Docker services..."
-	docker-compose -f docker-compose.dev.yml down
+	docker-compose -f deploy/docker/docker-compose.dev.yml down
 	@echo "✅ Services stopped successfully!"
 
 docker-logs:
 	@echo "📋 Viewing LangFlix Docker logs..."
-	docker-compose -f docker-compose.dev.yml logs -f
+	docker-compose -f deploy/docker/docker-compose.dev.yml logs -f
 
 docker-restart:
 	@echo "🔄 Restarting LangFlix Docker services..."
-	docker-compose -f docker-compose.dev.yml restart
+	docker-compose -f deploy/docker/docker-compose.dev.yml restart
 	@echo "✅ Services restarted successfully!"
 
 # Production Docker commands (TrueNAS deployment)
 docker-build:
 	@echo "🔨 Building LangFlix production Docker images..."
 	@echo "📋 Building multi-stage Dockerfile..."
-	docker build -t langflix:latest .
-	docker build --target api -t langflix:api .
+	docker build -t langflix:latest -f deploy/docker/Dockerfile .
+	docker build --target api -t langflix:api -f deploy/docker/Dockerfile .
 	@echo "✅ Docker images built successfully!"
 	@echo ""
 	@echo "💡 Images created:"
@@ -175,18 +175,18 @@ docker-clean:
 # Database commands
 db-migrate:
 	@echo "📊 Running database migrations..."
-	. venv/bin/activate && alembic upgrade head
+	. venv/bin/activate && alembic -c config/alembic.ini upgrade head
 	@echo "✅ Database migrations completed!"
 
 db-reset:
 	@echo "🗑️ Resetting database..."
-	. venv/bin/activate && alembic downgrade base && alembic upgrade head
+	. venv/bin/activate && alembic -c config/alembic.ini downgrade base && alembic -c config/alembic.ini upgrade head
 	@echo "✅ Database reset completed!"
 
 # Test commands
 test:
 	@echo "🧪 Running tests..."
-	. venv/bin/activate && python run_tests.py
+	. venv/bin/activate && python scripts/run_tests.py all
 
 test-api:
 	@echo "🧪 Running API tests..."
@@ -199,7 +199,7 @@ test-unit:
 # Utility commands
 logs:
 	@echo "📋 Viewing LangFlix logs..."
-	tail -f langflix.log
+	tail -f logs/langflix.log
 
 deploy-zip:
 	@echo "📦 Creating deployment bundle..."
@@ -209,7 +209,7 @@ deploy-zip:
 status:
 	@echo "📊 Checking service status..."
 	@echo "Docker services:"
-	@docker-compose -f docker-compose.dev.yml ps 2>/dev/null || echo "Docker services not running"
+	@docker-compose -f deploy/docker/docker-compose.dev.yml ps 2>/dev/null || echo "Docker services not running"
 	@echo ""
 	@echo "Python processes:"
 	@ps aux | grep -E "(langflix|uvicorn)" | grep -v grep || echo "No Python services running"

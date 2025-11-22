@@ -1473,20 +1473,22 @@
                     <h2 style="margin-bottom: 20px; color: #2c3e50;">➕ Create Content</h2>
                     
                     <div style="margin-bottom: 20px;">
-                        <h3 style="color: #34495e; margin-bottom: 10px;">Select Media File(s) - You can select multiple</h3>
-                        <div style="margin-bottom: 10px; display: flex; gap: 10px;">
-                            <button type="button" id="selectAllMediaBtn" 
-                                    style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s;"
-                                    onmouseover="this.style.background='#2980b9'" 
-                                    onmouseout="this.style.background='#3498db'">
-                                Select All
-                            </button>
-                            <button type="button" id="deselectAllMediaBtn" 
-                                    style="padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s;"
-                                    onmouseover="this.style.background='#7f8c8d'" 
-                                    onmouseout="this.style.background='#95a5a6'">
-                                Deselect All
-                            </button>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h3 style="color: #34495e; margin: 0;">Select Media File(s) - You can select multiple</h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" id="selectAllMediaBtn" 
+                                        style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s; font-size: 14px;"
+                                        onmouseover="this.style.background='#2980b9'" 
+                                        onmouseout="this.style.background='#3498db'">
+                                    ✓ Select All
+                                </button>
+                                <button type="button" id="deselectAllMediaBtn" 
+                                        style="padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s; font-size: 14px;"
+                                        onmouseover="this.style.background='#7f8c8d'" 
+                                        onmouseout="this.style.background='#95a5a6'">
+                                    ✗ Deselect All
+                                </button>
+                            </div>
                         </div>
                         ${mediaListHTML}
                     </div>

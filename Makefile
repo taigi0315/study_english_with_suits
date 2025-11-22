@@ -175,18 +175,18 @@ docker-clean:
 # Database commands
 db-migrate:
 	@echo "📊 Running database migrations..."
-	. venv/bin/activate && alembic upgrade head
+	. venv/bin/activate && alembic -c config/alembic.ini upgrade head
 	@echo "✅ Database migrations completed!"
 
 db-reset:
 	@echo "🗑️ Resetting database..."
-	. venv/bin/activate && alembic downgrade base && alembic upgrade head
+	. venv/bin/activate && alembic -c config/alembic.ini downgrade base && alembic -c config/alembic.ini upgrade head
 	@echo "✅ Database reset completed!"
 
 # Test commands
 test:
 	@echo "🧪 Running tests..."
-	. venv/bin/activate && python run_tests.py
+	. venv/bin/activate && python scripts/run_tests.py
 
 test-api:
 	@echo "🧪 Running API tests..."
@@ -199,7 +199,7 @@ test-unit:
 # Utility commands
 logs:
 	@echo "📋 Viewing LangFlix logs..."
-	tail -f langflix.log
+	tail -f logs/langflix.log
 
 deploy-zip:
 	@echo "📦 Creating deployment bundle..."

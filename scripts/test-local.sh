@@ -47,14 +47,14 @@ export LANGFLIX_API_BASE_URL=http://localhost:8000
 export REDIS_URL=redis://localhost:6379/0
 export LANGFLIX_OUTPUT_DIR=./output
 export LANGFLIX_MEDIA_DIR=./assets/media
-export YOUTUBE_CREDENTIALS_FILE=./assets/youtube_credentials.json
-export YOUTUBE_TOKEN_FILE=./assets/youtube_token.json
+export YOUTUBE_CREDENTIALS_FILE=./auth/youtube_credentials.json
+export YOUTUBE_TOKEN_FILE=./auth/youtube_token.json
 export LANGFLIX_UI_PORT=5000
 export LANGFLIX_UI_OPEN_BROWSER=false
 
 # YouTube 자격 증명 파일 확인
-if [ ! -f "./assets/youtube_credentials.json" ]; then
-    echo -e "${YELLOW}⚠️  경고: ./assets/youtube_credentials.json 파일이 없습니다${NC}"
+if [ ! -f "./auth/youtube_credentials.json" ]; then
+    echo -e "${YELLOW}⚠️  경고: ./auth/youtube_credentials.json 파일이 없습니다${NC}"
     echo "   YouTube 기능을 테스트하려면 이 파일이 필요합니다"
 fi
 

@@ -527,10 +527,24 @@
                     <button class="filter-btn" data-filter="uploaded">📤 Uploaded</button>
                     <button class="filter-btn" data-filter="not-uploaded">⏳ Not Uploaded</button>
                 </div>
-                <button class="btn-create-content" onclick="showCreateContentModal()">
-                    <span class="btn-icon">✨</span>
-                    <span class="btn-text">Create Content</span>
-                </button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="selectAllVideosBtn" 
+                            style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
+                            onmouseover="this.style.background='#2980b9'; this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.background='#3498db'; this.style.transform='translateY(0)'">
+                        ✓ Select All
+                    </button>
+                    <button id="deselectAllVideosBtn" 
+                            style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
+                            onmouseover="this.style.background='#7f8c8d'; this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.background='#95a5a6'; this.style.transform='translateY(0)'">
+                        ✗ Deselect All
+                    </button>
+                    <button class="btn-create-content" onclick="showCreateContentModal()">
+                        <span class="btn-icon">✨</span>
+                        <span class="btn-text">Create Content</span>
+                    </button>
+                </div>
             </div>
             <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
         </div>
@@ -2061,11 +2075,41 @@
                 }
             });
 
-            // Clear selection button
-            document.getElementById('clearSelectionBtn').addEventListener('click', function() {
-                document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
-                updateBatchActionsBar();
-            });
+            // Select All button (main video list)
+            const selectAllBtn = document.getElementById('selectAllVideosBtn');
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', function() {
+                    // Select all visible video checkboxes (respects current filter)
+                    document.querySelectorAll('.video-checkbox').forEach(cb => {
+                        // Only select if the checkbox's parent row is visible (not filtered out)
+                        const row = cb.closest('.video-row');
+                        if (row && row.style.display !== 'none') {
+                            cb.checked = true;
+                        }
+                    });
+                    updateBatchActionsBar();
+                });
+            }
+
+            // Deselect All button (main video list)
+            const deselectAllBtn = document.getElementById('deselectAllVideosBtn');
+            if (deselectAllBtn) {
+                deselectAllBtn.addEventListener('click', function() {
+                    document.querySelectorAll('.video-checkbox').forEach(cb => {
+                        cb.checked = false;
+                    });
+                    updateBatchActionsBar();
+                });
+            }
+
+            // Clear selection button (batch actions bar)
+            const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+            if (clearSelectionBtn) {
+                clearSelectionBtn.addEventListener('click', function() {
+                    document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+                    updateBatchActionsBar();
+                });
+            }
 
             // Delete selected button
             document.getElementById('deleteSelectedBtn').addEventListener('click', async function() {

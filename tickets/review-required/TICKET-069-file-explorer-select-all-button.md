@@ -152,9 +152,36 @@ if (deselectAllBtn) {
 - Similar feature: Clear selection button in video list
 
 ## Success Criteria
-- [ ] "Select All" button selects all media file checkboxes
-- [ ] "Deselect All" button deselects all media file checkboxes
-- [ ] Buttons work correctly with existing checkbox functionality
-- [ ] Selected files are correctly passed to content creation
-- [ ] UI is intuitive and discoverable
+- [x] "Select All" button selects all media file checkboxes
+- [x] "Deselect All" button deselects all media file checkboxes
+- [x] Buttons work correctly with existing checkbox functionality
+- [x] Selected files are correctly passed to content creation
+- [x] UI is intuitive and discoverable
+
+---
+## ✅ Implementation Complete
+
+**Implemented by:** Implementation Engineer
+**Implementation Date:** 2025-01-22
+**Branch:** feature/TICKET-069-select-all-button
+**Commit:** cd99fce
+
+### What Was Implemented
+- Added "Select All" and "Deselect All" buttons to media file selection section
+- Buttons appear above the media file list in Create Content modal
+- Select All only selects enabled checkboxes (files with subtitles)
+- Deselect All clears all selections regardless of enabled state
+- Added hover effects for better UX
+
+### Files Modified
+- `langflix/templates/video_dashboard.html` - Added buttons and JavaScript event handlers
+
+### Testing Performed
+- Manual testing: Buttons correctly select/deselect all checkboxes
+- Verified disabled checkboxes are skipped by Select All
+- Verified existing checkbox functionality remains intact
+- No linter errors
+
+### Documentation Updated
+- Success criteria marked as completed
 

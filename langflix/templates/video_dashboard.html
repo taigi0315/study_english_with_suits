@@ -1474,6 +1474,20 @@
                     
                     <div style="margin-bottom: 20px;">
                         <h3 style="color: #34495e; margin-bottom: 10px;">Select Media File(s) - You can select multiple</h3>
+                        <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                            <button type="button" id="selectAllMediaBtn" 
+                                    style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s;"
+                                    onmouseover="this.style.background='#2980b9'" 
+                                    onmouseout="this.style.background='#3498db'">
+                                Select All
+                            </button>
+                            <button type="button" id="deselectAllMediaBtn" 
+                                    style="padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background 0.2s;"
+                                    onmouseover="this.style.background='#7f8c8d'" 
+                                    onmouseout="this.style.background='#95a5a6'">
+                                Deselect All
+                            </button>
+                        </div>
                         ${mediaListHTML}
                     </div>
                     
@@ -1562,6 +1576,28 @@
                 
                 modal.appendChild(dialog);
                 document.body.appendChild(modal);
+                
+                // Add event listeners for Select All / Deselect All buttons
+                const selectAllBtn = dialog.querySelector('#selectAllMediaBtn');
+                const deselectAllBtn = dialog.querySelector('#deselectAllMediaBtn');
+                
+                if (selectAllBtn) {
+                    selectAllBtn.addEventListener('click', function() {
+                        // Select all enabled checkboxes (skip disabled ones)
+                        dialog.querySelectorAll('.media-checkbox:not([disabled])').forEach(cb => {
+                            cb.checked = true;
+                        });
+                    });
+                }
+                
+                if (deselectAllBtn) {
+                    deselectAllBtn.addEventListener('click', function() {
+                        // Deselect all checkboxes
+                        dialog.querySelectorAll('.media-checkbox').forEach(cb => {
+                            cb.checked = false;
+                        });
+                    });
+                }
                 
             } catch (error) {
                 alert(`Error: ${error.message}`);

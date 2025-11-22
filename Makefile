@@ -186,7 +186,7 @@ db-reset:
 # Test commands
 test:
 	@echo "🧪 Running tests..."
-	. venv/bin/activate && python scripts/run_tests.py
+	. venv/bin/activate && python scripts/run_tests.py all
 
 test-api:
 	@echo "🧪 Running API tests..."

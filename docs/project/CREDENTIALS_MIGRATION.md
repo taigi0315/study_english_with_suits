@@ -7,30 +7,50 @@
 
 If you're getting "YouTube credentials file not found" error after the file structure reorganization:
 
-### Option 1: Move Your Existing File (Recommended)
-
-If you have `youtube_credentials.json` in an old location:
+### Step 1: Check if File Exists
 
 ```bash
-# Check if file exists in old locations
+# Check all possible locations
+ls -la auth/youtube_credentials.json
 ls -la assets/youtube_credentials.json
 ls -la youtube_credentials.json
+```
 
+### Option 1: Move Your Existing File (If Found)
+
+If you found the file in an old location:
+
+```bash
 # Move to new location
 mv assets/youtube_credentials.json auth/youtube_credentials.json
 # OR
 mv youtube_credentials.json auth/youtube_credentials.json
 ```
 
-### Option 2: Create New Credentials
+### Option 2: Create New Credentials (If Not Found)
 
-If you don't have the file:
+If you don't have the file anywhere:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Download OAuth 2.0 credentials
-3. Save as `auth/youtube_credentials.json`
+2. Create or select a project
+3. Enable YouTube Data API v3
+4. Create OAuth 2.0 credentials (Desktop app type)
+5. Download the JSON file
+6. Save as `auth/youtube_credentials.json` in your project root
 
-See `docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md` for detailed instructions.
+**Detailed instructions:** See `docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md`
+
+### Step 2: Verify
+
+After adding the file:
+
+```bash
+# Check file exists
+ls -la auth/youtube_credentials.json
+
+# Restart the app
+make dev-frontend
+```
 
 ## Backward Compatibility
 

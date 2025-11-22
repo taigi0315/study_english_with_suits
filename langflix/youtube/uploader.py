@@ -68,14 +68,33 @@ class YouTubeUploader:
     def authenticate(self) -> bool:
         """Authenticate with YouTube API"""
         try:
-            # Validate credentials file exists
+            # Try to find credentials file in multiple locations if not found
             if not os.path.exists(self.credentials_file):
-                error_msg = (
-                    f"YouTube credentials file not found: {self.credentials_file}\n"
-                    "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
-                )
-                logger.error(error_msg)
-                raise FileNotFoundError(error_msg)
+                # Fallback: Try common locations
+                project_root = Path(__file__).parent.parent.parent
+                fallback_paths = [
+                    project_root / "auth" / "youtube_credentials.json",
+                    project_root / "assets" / "youtube_credentials.json",  # Old location
+                    project_root / "youtube_credentials.json",  # Root (legacy)
+                ]
+                
+                for path in fallback_paths:
+                    if path.exists():
+                        logger.info(f"Found credentials at fallback location: {path}")
+                        self.credentials_file = str(path)
+                        break
+                else:
+                    # Still not found after checking all locations
+                    error_msg = (
+                        f"YouTube credentials file not found: {self.credentials_file}\n"
+                        f"Tried locations:\n"
+                        f"  - {project_root / 'auth' / 'youtube_credentials.json'}\n"
+                        f"  - {project_root / 'assets' / 'youtube_credentials.json'}\n"
+                        f"  - {project_root / 'youtube_credentials.json'}\n"
+                        "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json' in the 'auth/' directory."
+                    )
+                    logger.error(error_msg)
+                    raise FileNotFoundError(error_msg)
             
             creds = None
             

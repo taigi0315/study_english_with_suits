@@ -105,11 +105,32 @@ class VideoManagementUI:
         youtube_creds_file = os.getenv("YOUTUBE_CREDENTIALS_FILE", "/app/auth/youtube_credentials.json")
         youtube_token_file = os.getenv("YOUTUBE_TOKEN_FILE", "/app/auth/youtube_token.json")
         
-        # Fallback to auth/ directory if files don't exist at mounted paths
+        # Fallback logic: Try multiple locations (new structure -> old locations)
         if not os.path.exists(youtube_creds_file):
-            youtube_creds_file = os.path.join(os.getcwd(), "auth", "youtube_credentials.json")
+            # Try new location: auth/ directory
+            fallback_paths = [
+                os.path.join(os.getcwd(), "auth", "youtube_credentials.json"),
+                os.path.join(os.getcwd(), "assets", "youtube_credentials.json"),  # Old location
+                os.path.join(os.getcwd(), "youtube_credentials.json"),  # Root (legacy)
+            ]
+            for path in fallback_paths:
+                if os.path.exists(path):
+                    youtube_creds_file = path
+                    logger.info(f"Found YouTube credentials at fallback location: {path}")
+                    break
+        
         if not os.path.exists(youtube_token_file):
-            youtube_token_file = os.path.join(os.getcwd(), "auth", "youtube_token.json")
+            # Try new location: auth/ directory
+            fallback_paths = [
+                os.path.join(os.getcwd(), "auth", "youtube_token.json"),
+                os.path.join(os.getcwd(), "assets", "youtube_token.json"),  # Old location
+                os.path.join(os.getcwd(), "youtube_token.json"),  # Root (legacy)
+            ]
+            for path in fallback_paths:
+                if os.path.exists(path):
+                    youtube_token_file = path
+                    logger.info(f"Found YouTube token at fallback location: {path}")
+                    break
         
         self.upload_manager = YouTubeUploadManager(credentials_file=youtube_creds_file)
         # Pass OAuth state storage to uploader

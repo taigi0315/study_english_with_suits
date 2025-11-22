@@ -724,15 +724,37 @@ sudo docker exec langflix-api ls -lah /media/shows
   ```
 - 데이터베이스 기능이 필요 없다면 해당 경고는 무시해도 됩니다.
 
-### YouTube 자격 증명 파일 접근 오류 (`Permission denied`)
+### YouTube 자격 증명 파일 접근 오류 (`Permission denied` 또는 `OAuth URL failed to generate`)
 
 **증상:**
 ```bash
 sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
 # cat: /app/youtube_credentials.json: Permission denied
+
+# 또는 UI에서:
+# Error: \app\youtube_credental.json Oauth URL failed to generate
 ```
 
 **해결 방법:**
+
+> **참고:** `run.sh` 스크립트가 파일 권한을 자동으로 처리합니다. `run.sh`를 사용하는 경우, 자동으로 올바른 권한이 설정됩니다. 아래의 수동 단계는 `run.sh`를 사용하지 않거나 자동 권한 설정이 실패한 경우에만 필요합니다.
+
+**자동 수정 (권장):**
+
+`deploy/run.sh` 스크립트가 자동으로:
+1. YouTube 자격 증명 파일 확인
+2. 소유권을 `1000:1000`으로 설정 (Docker 컨테이너 사용자)
+3. 권한 설정: `youtube_credentials.json`은 `644`, `youtube_token.json`은 `600`
+4. `youtube_token.json`이 없으면 빈 파일 생성
+5. 시작 후 컨테이너 내부에서 파일 접근 검증
+
+다음 명령어만 실행하세요:
+```bash
+cd /mnt/Pool_2/Projects/langflix/deploy
+./run.sh
+```
+
+**수동 수정 (자동 수정이 작동하지 않는 경우):**
 
 1. **파일 소유권 확인:**
    ```bash

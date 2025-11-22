@@ -91,36 +91,66 @@ fi
 CREDENTIALS_FILE="$ASSETS_DIR/youtube_credentials.json"
 if [ -f "$CREDENTIALS_FILE" ]; then
     echo -e "${GREEN}✅ youtube_credentials.json 발견${NC}"
-    # 항상 권한 설정 (파일이 이미 존재하더라도)
-    sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
-    sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
-    echo "   권한 설정 완료: 644 (read-only)"
+    # 소유권 설정 (UID/GID 1000 = Docker 컨테이너 사용자)
+    if sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null; then
+        echo "   소유권 설정 완료 (1000:1000)"
+    else
+        echo -e "${YELLOW}⚠️  소유권 설정 실패 (권한이 부족할 수 있음)${NC}"
+    fi
+    # 권한 설정 (644 = read-only, 컨테이너에서 읽기만 필요)
+    if sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null; then
+        echo "   권한 설정 완료 (644)"
+    else
+        echo -e "${YELLOW}⚠️  권한 설정 실패${NC}"
+    fi
+    # 권한 확인
+    PERMS=$(ls -l "$CREDENTIALS_FILE" 2>/dev/null | awk '{print $1, $3, $4}')
+    echo "   현재 상태: $PERMS"
 else
     echo -e "${YELLOW}⚠️  youtube_credentials.json 없음${NC}"
     echo "   Docker 마운트를 위해 빈 파일 생성 중..."
     # Docker Compose가 파일을 마운트하려고 하므로 빈 파일을 미리 생성
-    sudo touch "$CREDENTIALS_FILE"
-    sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
-    sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
-    echo "   빈 파일 생성 및 권한 설정 완료: 644"
-    echo -e "${YELLOW}   ⚠️  YouTube 기능을 사용하려면 이 파일에 실제 자격 증명을 추가해야 합니다${NC}"
+    if sudo touch "$CREDENTIALS_FILE" 2>/dev/null; then
+        sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
+        sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
+        echo "   빈 파일 생성 및 권한 설정 완료: 644"
+        echo -e "${YELLOW}   ⚠️  YouTube 기능을 사용하려면 이 파일에 실제 자격 증명을 추가해야 합니다${NC}"
+        echo "   참고: docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md"
+    else
+        echo -e "${YELLOW}⚠️  파일 생성 실패 (권한이 부족할 수 있음)${NC}"
+    fi
 fi
 
 # youtube_token.json 처리
 TOKEN_FILE="$ASSETS_DIR/youtube_token.json"
 if [ -f "$TOKEN_FILE" ]; then
     echo -e "${GREEN}✅ youtube_token.json 발견${NC}"
-    # 항상 권한 설정 (파일이 이미 존재하더라도)
-    sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
-    sudo chmod 600 "$TOKEN_FILE" 2>/dev/null || true
-    echo "   권한 설정 완료: 600 (read/write, secure)"
+    # 소유권 설정
+    if sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null; then
+        echo "   소유권 설정 완료 (1000:1000)"
+    else
+        echo -e "${YELLOW}⚠️  소유권 설정 실패${NC}"
+    fi
+    # 권한 설정 (600 = read/write, 더 안전)
+    if sudo chmod 600 "$TOKEN_FILE" 2>/dev/null; then
+        echo "   권한 설정 완료 (600)"
+    else
+        echo -e "${YELLOW}⚠️  권한 설정 실패${NC}"
+    fi
+    # 권한 확인
+    PERMS=$(ls -l "$TOKEN_FILE" 2>/dev/null | awk '{print $1, $3, $4}')
+    echo "   현재 상태: $PERMS"
 else
     echo -e "${YELLOW}⚠️  youtube_token.json 없음 (첫 로그인 시 자동 생성됨)${NC}"
     # 빈 파일을 미리 생성하여 권한 문제를 방지
-    sudo touch "$TOKEN_FILE"
-    sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
-    sudo chmod 600 "$TOKEN_FILE" 2>/dev/null || true
-    echo "   빈 파일 생성 및 권한 설정 완료: 600"
+    if sudo touch "$TOKEN_FILE" 2>/dev/null; then
+        echo "   빈 파일 생성 완료"
+        sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
+        sudo chmod 600 "$TOKEN_FILE" 2>/dev/null || true
+        echo "   권한 설정 완료 (1000:1000, 600)"
+    else
+        echo -e "${YELLOW}⚠️  파일 생성 실패 (권한이 부족할 수 있음)${NC}"
+    fi
 fi
 
 # assets 디렉토리 내 모든 YouTube 관련 파일의 권한 확인 및 수정
@@ -167,7 +197,7 @@ if sudo docker compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
     echo "  2) 건너뛰기 (현재 상태 유지)"
     echo "  3) 취소"
     read -p "선택 (1/2/3): " choice
-    
+
     case $choice in
         1)
             echo ""
@@ -241,6 +271,37 @@ if curl -s http://localhost:8000/health > /dev/null 2>&1; then
     echo -e "${GREEN}✅ API 서버 정상 작동${NC}"
 else
     echo -e "${YELLOW}⚠️  API 서버 응답 없음 (아직 시작 중일 수 있음)${NC}"
+fi
+
+# YouTube 자격 증명 파일 접근 검증 (컨테이너 내부)
+echo ""
+echo -e "${BLUE}🔍 YouTube 자격 증명 파일 접근 검증 중...${NC}"
+if sudo docker ps | grep -q "langflix-ui"; then
+    # 컨테이너 내부에서 파일 접근 테스트
+    if sudo docker exec langflix-ui test -r /app/auth/youtube_credentials.json 2>/dev/null; then
+        echo -e "${GREEN}✅ youtube_credentials.json 접근 가능${NC}"
+    else
+        echo -e "${YELLOW}⚠️  youtube_credentials.json 접근 불가${NC}"
+        echo "   파일이 없거나 권한 문제가 있을 수 있습니다"
+        echo "   해결 방법:"
+        echo "   1. 파일이 존재하는지 확인: ls -la $CREDENTIALS_FILE"
+        echo "   2. 소유권 확인: sudo chown 1000:1000 $CREDENTIALS_FILE"
+        echo "   3. 권한 확인: sudo chmod 644 $CREDENTIALS_FILE"
+    fi
+
+    if sudo docker exec langflix-ui test -r /app/auth/youtube_token.json 2>/dev/null; then
+        echo -e "${GREEN}✅ youtube_token.json 접근 가능${NC}"
+    else
+        echo -e "${YELLOW}⚠️  youtube_token.json 접근 불가 (첫 로그인 시 생성됨)${NC}"
+    fi
+
+    # 파일 목록 확인
+    echo ""
+    echo "   컨테이너 내부 파일 목록:"
+    sudo docker exec langflix-ui ls -la /app/auth/youtube_*.json 2>/dev/null || echo "   파일 없음"
+else
+    echo -e "${YELLOW}⚠️  langflix-ui 컨테이너가 실행 중이 아닙니다${NC}"
+    echo "   컨테이너 시작 후 자동으로 검증됩니다"
 fi
 
 echo ""

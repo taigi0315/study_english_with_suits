@@ -724,15 +724,37 @@ sudo docker exec langflix-api ls -lah /media/shows
   ```
 - Otherwise, the warnings can be ignored.
 
-### YouTube Credential File Access Error (`Permission denied`)
+### YouTube Credential File Access Error (`Permission denied` or `OAuth URL failed to generate`)
 
 **Symptom:**
 ```bash
 sudo docker exec langflix-ui cat /app/youtube_credentials.json | head -5
 # cat: /app/youtube_credentials.json: Permission denied
+
+# Or in UI:
+# Error: \app\youtube_credental.json Oauth URL failed to generate
 ```
 
 **Solution:**
+
+> **Note:** The `run.sh` script automatically handles file permissions. If you're using `run.sh`, it will set the correct permissions automatically. The manual steps below are only needed if you're not using `run.sh` or if automatic permission setting fails.
+
+**Automatic Fix (Recommended):**
+
+The `deploy/run.sh` script automatically:
+1. Checks for YouTube credential files
+2. Sets ownership to `1000:1000` (Docker container user)
+3. Sets permissions: `644` for `youtube_credentials.json`, `600` for `youtube_token.json`
+4. Creates empty `youtube_token.json` if missing
+5. Verifies file access from inside the container after startup
+
+Simply run:
+```bash
+cd /mnt/Pool_2/Projects/langflix/deploy
+./run.sh
+```
+
+**Manual Fix (If automatic doesn't work):**
 
 1. **Verify file ownership:**
    ```bash

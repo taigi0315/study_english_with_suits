@@ -446,6 +446,10 @@ class VideoManagementUI:
                         if item.name.endswith('_thumb.jpg'):
                             continue
                         
+                        # Filter out .json metadata files (TICKET-070)
+                        if item.is_file() and item.suffix.lower() == '.json':
+                            continue
+                        
                         stat = item.stat()
                         item_info = {
                             "name": item.name,
@@ -1915,7 +1919,17 @@ class VideoManagementUI:
                     return jsonify({"error": "Media scanner not initialized"}), 503
                 
                 media_files = self.media_scanner.scan_media_directory()
-                return jsonify(media_files)
+                
+                # Filter out non-video files (e.g., .json metadata files)
+                # Only return files with video extensions
+                video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.webm']
+                filtered_files = [
+                    f for f in media_files 
+                    if any(f.get('video_path', '').lower().endswith(ext) for ext in video_extensions)
+                ]
+                
+                logger.debug(f"Filtered {len(media_files)} files to {len(filtered_files)} video files")
+                return jsonify(filtered_files)
             except Exception as e:
                 logger.error(f"Error scanning media: {e}")
                 return jsonify({"error": str(e)}), 500

@@ -68,11 +68,29 @@ YouTube API 인증 및 비디오 업로드를 처리합니다.
 - 동적 콘텐츠 대체(표현식, 번역, 에피소드)
 - SEO 최적화된 제목 및 설명
 - YouTube 카테고리 매핑
+- **타겟 언어 지원 (TICKET-060)**: 모든 메타데이터(제목, 설명, 태그)가 타겟 언어로 생성됨
+- **로컬라이즈된 태그**: 발견성 향상을 위해 타겟 언어로 해시태그 생성
+- **표현식 번역 우선순위**: 사용 가능한 경우 `expression_translation` 필드 사용 (TICKET-059에서 제공)
+
+**주요 메서드:**
+- `generate_metadata(video_metadata, custom_title=None, custom_description=None, additional_tags=None, privacy_status="private", target_language=None)`: 전체 메타데이터 생성
+- `_generate_title(video_metadata, template, custom_title, target_language=None)`: 타겟 언어로 제목 생성
+- `_generate_description(video_metadata, template, custom_description, target_language=None)`: 타겟 언어로 설명 생성
+- `_generate_tags(video_metadata, template, additional_tags, target_language=None)`: 로컬라이즈된 태그 생성
+- `_generate_localized_tags(video_metadata, target_language)`: 타겟 언어로 해시태그 생성
 
 **템플릿:**
 - 교육용, 숏, 최종 비디오 타입에 대한 사전 구성된 템플릿
-- 설정을 통한 사용자 정의 템플릿
-- 다국어 지원
+- **타겟 언어 템플릿 (TICKET-060)**: 모든 비디오 타입이 타겟 언어 템플릿 지원
+- 다국어 지원: 한국어, 영어, 일본어, 중국어, 스페인어, 프랑스어
+- Long-form 및 Final 비디오 템플릿이 모든 지원 언어에 추가됨
+
+**타겟 언어 지원 (TICKET-060):**
+- **제목 생성**: 모든 비디오 타입(short, long-form, final)이 타겟 언어 템플릿 사용
+- **설명 생성**: 사용 가능한 경우 `expression_translation` 필드 사용, 없으면 영어 표현식으로 폴백
+- **태그 생성**: 타겟 언어 기반 로컬라이즈된 해시태그 (예: 한국어는 `#영어학습`, 일본어는 `#英語学習`)
+- **폴백 전략**: 타겟 언어 번역이 없으면 영어로 우아하게 폴백
+- **언어 감지**: 기본적으로 `settings.TARGET_LANGUAGE` 사용, 비디오별로 재정의 가능
 
 ### YouTubeScheduleManager (`schedule_manager.py`)
 

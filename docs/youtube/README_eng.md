@@ -117,17 +117,29 @@ Generates YouTube metadata for educational videos.
 - Dynamic content substitution (expression, translation, episode)
 - SEO-optimized titles and descriptions
 - Category mapping for YouTube categories
+- **Target language support (TICKET-060)**: All metadata (title, description, tags) generated in target language
+- **Localized tags**: Hashtags generated in target language for better discoverability
+- **Expression translation priority**: Uses `expression_translation` field when available (from TICKET-059)
 
 **Key Methods:**
-- `generate_metadata(video_type, expression, translation, episode, language)`: Generate complete metadata
-- `generate_title(video_type, expression, episode)`: Generate title
-- `generate_description(video_type, expression, translation, episode, language)`: Generate description
-- `generate_tags(video_type, expression, episode)`: Generate tags
+- `generate_metadata(video_metadata, custom_title=None, custom_description=None, additional_tags=None, privacy_status="private", target_language=None)`: Generate complete metadata
+- `_generate_title(video_metadata, template, custom_title, target_language=None)`: Generate title in target language
+- `_generate_description(video_metadata, template, custom_description, target_language=None)`: Generate description in target language
+- `_generate_tags(video_metadata, template, additional_tags, target_language=None)`: Generate localized tags
+- `_generate_localized_tags(video_metadata, target_language)`: Generate hashtags in target language
 
 **Templates:**
 - Pre-configured templates for educational, short, and final video types
-- Customizable templates via configuration
-- Supports multiple languages
+- **Target language templates (TICKET-060)**: All video types support target language templates
+- Supports multiple languages: Korean, English, Japanese, Chinese, Spanish, French
+- Long-form and final video templates added for all supported languages
+
+**Target Language Support (TICKET-060):**
+- **Title Generation**: All video types (short, long-form, final) use target language templates
+- **Description Generation**: Uses `expression_translation` field when available, falls back to English expression
+- **Tag Generation**: Localized hashtags based on target language (e.g., `#영어학습` for Korean, `#英語学習` for Japanese)
+- **Fallback Strategy**: Gracefully falls back to English if target language translation is missing
+- **Language Detection**: Uses `settings.TARGET_LANGUAGE` by default, can be overridden per video
 
 ### YouTubeScheduleManager (`schedule_manager.py`)
 

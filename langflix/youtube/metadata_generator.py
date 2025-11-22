@@ -302,9 +302,13 @@ class YouTubeMetadataGenerator:
         else:
             title_template = template.title_template
         
-        # Use translated expression if available (TICKET-060)
-        # Prefer expression_translation for target language, fallback to English expression
-        expression = (video_metadata.expression_translation or video_metadata.expression or "").strip()
+        # FIX (TICKET-071): Use original English expression and translation for title format
+        # Get original English expression
+        expression = (video_metadata.expression or "").strip()
+        if not expression and video_metadata.expressions_included:
+            first_expression = video_metadata.expressions_included[0]
+            expression = first_expression.get("expression", "").strip()
+        
         if not expression:
             # Try to extract from filename if expression is empty
             logger.debug(f"Expression is empty, trying to extract from filename: {video_metadata.path}")
@@ -314,60 +318,51 @@ class YouTubeMetadataGenerator:
                 logger.debug(f"Extracted expression: {expression}")
             else:
                 # For batch videos or when extraction fails, use a generic expression
-                # This ensures title generation doesn't fail
                 expression = "English Expressions"
                 logger.debug(f"Using default expression: {expression}")
         
-        # Format episode as "Suits.S01E02" format
+        # Get translation
+        translation = video_metadata.expression_translation or ""
+        if not translation and video_metadata.expressions_included:
+            first_expression = video_metadata.expressions_included[0]
+            translation = first_expression.get("translation", "")
+        
+        if not translation:
+            translation = self._get_translation(video_metadata) or ""
+        
+        # Format episode as "Suits.S01E06" format (uppercase)
         episode_raw = video_metadata.episode or ""
         if not episode_raw:
             # Try to extract from filename if episode is empty
             logger.debug(f"Episode is empty, trying to extract from filename: {video_metadata.path}")
             episode_raw = self._extract_episode_from_filename(video_metadata.path) or ""
         
-        # Format episode: ensure "Suits." prefix and remove quality/resolution info
+        # Format episode: ensure "Suits." prefix and uppercase (S01E06)
         episode = self._format_episode_for_title(episode_raw)
+        # Ensure uppercase for episode code (S01E06, not s01e06)
+        import re
+        episode = re.sub(r'([Ss])(\d+)([Ee])(\d+)', r'S\2E\4', episode)
         logger.debug(f"Formatted episode: '{episode}'")
         
-        language = (video_metadata.language or "en").upper()
-        
-        logger.debug(f"Final values: expression='{expression}', episode='{episode}', language='{language}'")
+        logger.debug(f"Final values: expression='{expression}', translation='{translation}', episode='{episode}'")
         
         try:
-            # Prepare format arguments based on template requirements
-            format_args = {}
-            
-            # Check which placeholders are in the template
-            if "{expression}" in title_template:
-                format_args["expression"] = expression
-            if "{episode}" in title_template:
-                format_args["episode"] = episode
-            if "{language}" in title_template:
-                format_args["language"] = language
-            
-            logger.debug(f"Format args: {format_args}, template: {title_template}")
-            
-            # Format with only the required arguments
-            title = title_template.format(**format_args)
-            logger.debug(f"Formatted title: '{title}'")
+            # FIX (TICKET-071): New title format: {expression} - {translation} from {series}.{episode}
+            if expression and translation:
+                title = f"{expression} - {translation} from {episode}"
+            elif expression:
+                # Fallback if translation is missing
+                title = f"{expression} from {episode}"
+            else:
+                # Final fallback
+                title = f"English Expression from {episode}"
             
             # Ensure title is not empty and strip whitespace
             title = title.strip()
-            if not title or title == "":
-                # Fallback title based on video type and target language
-                if video_metadata.video_type == "short":
-                    if target_language:
-                        fallback_template = self._get_template_translation("title_template", target_language)
-                        title = fallback_template.format(expression=expression) if "{expression}" in fallback_template else f"{expression} | #Shorts"
-                    else:
-                        title = f"English Expression: {expression} | #Shorts"
-                else:
-                    title = f"Learn English: {expression} from {episode}"
-                logger.warning(f"Generated empty title, using fallback: {title}")
             
             # Final validation - ensure title is not empty
             if not title or title.strip() == "":
-                title = "Learn English Video"
+                title = f"Learn English from {episode}"
                 logger.error(f"All title generation methods failed for {video_metadata.path}, using minimal fallback")
             
             logger.info(f"✅ Final generated title: '{title}'")
@@ -433,15 +428,16 @@ class YouTubeMetadataGenerator:
             return None
     
     def _format_episode_for_title(self, episode_raw: str) -> str:
-        """Format episode as 'Suits.S01E02' format for title"""
+        """Format episode as 'Suits.S01E02' format for title (uppercase)"""
         if not episode_raw:
             return "Suits"
         
         import re
-        # Extract S01E02 pattern
+        # Extract S01E02 pattern and ensure uppercase
         episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_raw)
         if episode_match:
-            episode_code = f"S{episode_match.group(1)}E{episode_match.group(2)}"
+            # Ensure uppercase: S01E02
+            episode_code = f"S{episode_match.group(1)}E{episode_match.group(2)}".upper()
             # Check if "Suits" is already in the episode string
             if "Suits" in episode_raw or "suits" in episode_raw.lower():
                 # If "Suits" is present, extract just "Suits.S01E02" part
@@ -498,20 +494,25 @@ class YouTubeMetadataGenerator:
             meaning_label = self._get_template_translation("meaning_label", target_language)
             watch_and_learn = self._get_template_translation("watch_and_learn", target_language)
             
-            # Get expression metadata from video data first (TICKET-060: Use expression_translation)
-            expression_text = video_metadata.expression_translation or video_metadata.expression
-            translation_text = video_metadata.expression_translation
-
+            # FIX (TICKET-071): Expression field should show original English, Meaning field shows translation
+            # Get original English expression for Expression field
+            expression_text = video_metadata.expression or ""
             if not expression_text and video_metadata.expressions_included:
                 first_expression = video_metadata.expressions_included[0]
-                expression_text = expression_text or first_expression.get("translation") or first_expression.get("expression")
-                translation_text = translation_text or first_expression.get("translation")
+                expression_text = first_expression.get("expression", "")
+
+            # Get translation for Meaning field
+            translation_text = video_metadata.expression_translation
+            if not translation_text and video_metadata.expressions_included:
+                first_expression = video_metadata.expressions_included[0]
+                translation_text = first_expression.get("translation")
 
             if not translation_text:
                 translation_text = self._get_translation(video_metadata)
 
-            # Use translated expression text (not English) - TICKET-060
-            expression_text = expression_text or video_metadata.expression_translation or video_metadata.expression or "Expression"
+            # Fallback if expression is still empty
+            if not expression_text:
+                expression_text = video_metadata.expression or "Expression"
 
             # Generate localized tags (TICKET-060)
             tags = self._generate_localized_tags(video_metadata, target_language)
@@ -786,3 +787,4 @@ class YouTubeMetadataGenerator:
             "category_id": self.category_mapping.get(video_metadata.video_type, "22"),
             "template_used": video_metadata.video_type
         }
+

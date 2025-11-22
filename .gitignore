@@ -18,6 +18,7 @@ output/
 
 # Cache files
 cache/
+build/cache/
 *.cache
 
 # Database files
@@ -46,8 +47,10 @@ short_videos/
 *.tmp
 *.temp
 *.log
+logs/
 
 # Configuration files
+config/config.yaml
 config.yaml
 
 # OS generated files
@@ -71,7 +74,14 @@ examples/client_secret_*.json
 examples/youtube_token.json
 
 # YouTube OAuth files
+auth/youtube_credentials.json
+auth/youtube_token.json
 assets/youtube_credentials.json
 assets/youtube_token.json
 youtube_credentials.json
 youtube_token.json
+
+# Build artifacts
+build/
+htmlcov/
+dist/

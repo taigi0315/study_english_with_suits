@@ -25,7 +25,7 @@ services:
       - /mnt/pool/media/shows:/media/shows:ro
       
       # CHANGE THIS: Path to your config.yaml file
-      - /mnt/pool/apps/langflix/config.yaml:/app/config.yaml:ro
+      - /mnt/pool/apps/langflix/config/config.yaml:/app/config/config.yaml:ro
       
       # CHANGE THIS: Where to save output videos
       - /mnt/pool/apps/langflix/output:/data/output

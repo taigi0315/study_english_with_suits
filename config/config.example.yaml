@@ -1,6 +1,6 @@
 # LangFlix Default Configuration
 # This file contains all default settings for the LangFlix application
-# To customize these settings, copy this file to config.yaml at the project root
+# To customize these settings, copy this file to config/config.yaml
 
 # ============================================================================
 # Application Settings

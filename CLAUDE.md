@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 # Setup configuration
 cp env.example .env       # Add GEMINI_API_KEY
-cp config.example.yaml config.yaml
+cp config/config.example.yaml config/config.yaml
 ```
 
 ### Running the Application
@@ -149,7 +149,7 @@ mypy langflix/
 
 **2. Configuration Cascade**
 - Built-in defaults (`langflix/config/default.yaml`)
-- User overrides (`config.yaml` at project root)
+- User overrides (`config/config.yaml`)
 - Environment variables (`LANGFLIX_*` prefix)
 
 **3. Video Processing Strategy (TICKET-035)**

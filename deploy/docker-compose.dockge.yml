@@ -27,7 +27,7 @@ services:
       - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
       
       # Optional: Config file path
-      - LANGFLIX_CONFIG_PATH=/app/config.yaml
+      - LANGFLIX_CONFIG_PATH=/app/config/config.yaml
       
       # Database (if using PostgreSQL)
       # - DATABASE_URL=postgresql://user:password@postgres:5432/langflix
@@ -44,7 +44,7 @@ services:
       # - /mnt/media-server:/media/shows:ro
       
       # Application configuration
-      - /path/to/config.yaml:/app/config.yaml:ro  # Update path
+      - /path/to/config/config.yaml:/app/config/config.yaml:ro  # Update path
       - /path/to/.env:/app/.env:ro  # Update path (optional)
       
       # Output directory - where generated videos will be saved

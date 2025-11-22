@@ -3,12 +3,13 @@
 **Architect:** Architect Agent
 
 ## Executive Summary
-- Total tickets approved: 14
+- Total tickets approved: 15
 - Estimated timeline: 4-6 weeks (2-3 sprints) + Phase 0 (3-4 days)
 - Critical path: TICKET-021 (Immediate) → TICKET-007 → TICKET-008 → TICKET-013
 - Key milestones: 
   - **Week 0**: Scheduler race condition fixes (TICKET-021) - Critical for production
   - **Week 2**: Parallel processing (TICKET-007)
+  - **Week 2**: Target language metadata (TICKET-060) - After TICKET-059
   - **Week 4**: Multi-expression support (TICKET-008)
   - **Week 6**: Production deployment (TICKET-009)
 
@@ -21,7 +22,7 @@ This implementation plan addresses:
 5. **Feature Enhancement** - TICKET-008 (1 ticket)
 6. **Bug Fixes** - TICKET-013 (1 ticket)
 7. **Operations** - TICKET-009, TICKET-012 (2 tickets)
-8. **YouTube Features** - TICKET-017, TICKET-018, TICKET-019, TICKET-020 (4 tickets)
+8. **YouTube Features** - TICKET-017, TICKET-018, TICKET-019, TICKET-020, TICKET-060 (5 tickets)
 
 ### Architectural Vision
 Where we're headed:
@@ -37,6 +38,7 @@ After completing this roadmap:
 - **Test Coverage**: YouTube modules reach 80%+ coverage, enabling safe refactoring
 - **Performance**: Expression analysis 3-5x faster
 - **Content Quality**: Richer educational content with multiple expressions per context
+- **User Experience**: Target language users see localized YouTube metadata, improving discoverability
 - **Deployment**: Consistent, reproducible production environments
 - **Automation**: CI/CD pipeline for reliable releases
 
@@ -67,11 +69,35 @@ After completing this roadmap:
 - [ ] Graceful degradation on partial failures
 - [ ] All existing tests pass
 
+### TICKET-060: Generate YouTube Metadata in Target Language for All Video Types
+- **Priority:** High
+- **Effort:** 2-3 days
+- **Why now:** Completes TICKET-056 work, improves user experience for target language audience
+- **Depends on:** TICKET-059 (populate expression metadata) - ensures `expression_translation` is available
+- **Owner:** Any engineer
+
+**Key Deliverables:**
+- Extended target language support to all video types (short, long-form, final)
+- Use translated expression text in descriptions (`expression_translation` field)
+- Generate localized tags based on target language
+- Long-form/final video templates added to translation dictionary
+- Comprehensive tests for all video types and languages
+
+**Success Criteria:**
+- [ ] All video types generate metadata in target language
+- [ ] Expression text uses translated version (not English)
+- [ ] Tags are localized (consider bilingual for SEO)
+- [ ] All unit tests pass for Korean, Japanese, Chinese
+- [ ] Integration tests verify metadata in upload process
+- [ ] Manual testing confirms YouTube preview shows localized metadata
+
 **Phase 1 Risks:**
 - Risk: Gemini API rate limits
   - Mitigation: Conservative default (max 5 workers), auto-adjust
 - Risk: Implementation bug (sequential loop)
   - Mitigation: Code review, integration tests
+- Risk: Expression translation may not be available
+  - Mitigation: Graceful fallback to English expression
 
 ---
 

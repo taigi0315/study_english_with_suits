@@ -55,7 +55,7 @@ class YouTubeVideoMetadata:
 class YouTubeUploader:
     """Handles YouTube video uploads"""
     
-    def __init__(self, credentials_file: str = "youtube_credentials.json", token_file: str = "youtube_token.json", oauth_state_storage=None):
+    def __init__(self, credentials_file: str = "auth/youtube_credentials.json", token_file: str = "auth/youtube_token.json", oauth_state_storage=None):
         self.credentials_file = credentials_file
         self.token_file = token_file
         self.service = None

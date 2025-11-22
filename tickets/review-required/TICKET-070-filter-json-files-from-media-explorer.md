@@ -157,8 +157,31 @@ def scan_media_directory(self) -> List[Dict[str, Any]]:
 - `langflix/media/media_scanner.py`: Media scanning logic
 
 ## Success Criteria
-- [ ] `.json` files are not shown in media file explorer
-- [ ] Only video files (`.mp4`, `.mkv`, `.avi`, `.mov`, `.m4v`, `.webm`) are shown
-- [ ] Existing functionality is not broken
-- [ ] All supported video extensions are included
+- [x] `.json` files are not shown in media file explorer
+- [x] Only video files (`.mp4`, `.mkv`, `.avi`, `.mov`, `.m4v`, `.webm`) are shown
+- [x] Existing functionality is not broken
+- [x] All supported video extensions are included
+
+---
+## ✅ Implementation Complete
+
+**Implemented by:** Implementation Engineer
+**Implementation Date:** 2025-01-22
+**Branch:** feature/TICKET-070-071-filter-json-fix-metadata
+**Commit:** 0ba3646
+
+### What Was Implemented
+- Added filtering logic to `/api/media/scan` endpoint
+- Filters out non-video files (e.g., `.json` metadata files)
+- Only returns files with video extensions
+- Added debug logging for filtered file counts
+
+### Files Modified
+- `langflix/youtube/web_ui.py` - Added filtering logic to scan_media endpoint
+
+### Testing Performed
+- Manual testing: Only video files shown in media explorer
+- Verified `.json` files are filtered out
+- Verified all video extensions are included
+- No linter errors
 

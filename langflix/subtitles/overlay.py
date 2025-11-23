@@ -243,44 +243,35 @@ def apply_dual_subtitle_layers(
     # Build force_style for original subtitle (bottom, white) - default behavior
     original_style = build_ass_force_style(is_expression=False)
     
-    # CRITICAL: Use trim filter to extract context segment FIRST, then apply subtitles
-    # This ensures we're working with a short ~30s clip, not a 40+ minute source video
+    # CRITICAL: Use output seeking instead of trim filter for accurate subtitle sync
+    # Trim filter works on frames, not timestamps, causing subtitle misalignment
+    # Output seeking (ss/t in output) decodes entire video and seeks to exact timestamp
+    # See: docs/core/subtitle_sync_guide_eng.md for details
     video_input = ffmpeg.input(str(video_path))
     
-    # Trim video to context segment using filter (input seeking for accuracy)
-    video_trimmed = (
-        video_input['v']
-        .filter('trim', start=context_start_seconds, end=context_end_seconds)
-        .filter('setpts', 'PTS-STARTPTS')  # Reset timestamps after trim
-    )
-    
-    # Trim audio to match
-    audio_trimmed = (
-        video_input['a']
-        .filter('atrim', start=context_start_seconds, end=context_end_seconds)
-        .filter('asetpts', 'PTS-STARTPTS')  # Reset audio timestamps
-    )
-    
-    # Apply subtitle layer (original at bottom only - cyan expression subtitle removed)
-    video_with_subtitles = video_trimmed.filter(
+    # Apply subtitle layer first (on full video for accurate timing)
+    video_with_subtitles = video_input['v'].filter(
         'subtitles',
         original_subtitle_path,
         force_style=original_style
     )
     
-    # Output with audio
+    # Output with output seeking for accurate timestamp-based extraction
+    # This ensures subtitles stay in sync with audio/video
     output_args = {
         'vcodec': 'libx264',
         'acodec': 'aac',
         'ac': 2,
         'ar': 48000,
+        'ss': context_start_seconds,  # Output seeking: accurate timestamp-based extraction
+        't': context_duration  # Duration limit
     }
     
     (
         ffmpeg
         .output(
             video_with_subtitles,
-            audio_trimmed,
+            video_input['a'],
             str(output_path),
             **output_args
         )

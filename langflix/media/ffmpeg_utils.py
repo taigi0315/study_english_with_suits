@@ -355,17 +355,17 @@ def make_video_encode_args_from_source(source_path: str, include_preset_crf: boo
     args["vcodec"] = encoder
     
     # Add preset and CRF from settings for optimal encoding quality
-    # Updated defaults: preset "medium" and CRF 20 for better quality (TICKET-055)
+    # Updated defaults: preset "medium" and CRF 18 for better quality (TICKET-072)
     if include_preset_crf:
         try:
             from langflix import settings
             video_config = settings.get_video_config()
             args["preset"] = video_config.get("preset", "medium")
-            args["crf"] = video_config.get("crf", 20)
+            args["crf"] = video_config.get("crf", 18)
         except Exception:
             # Fallback if settings not available - use quality-focused defaults
             args["preset"] = "medium"
-            args["crf"] = 20
+            args["crf"] = 18
         
         # Log encoding parameters for debugging and quality monitoring (TICKET-055)
         logger.info(

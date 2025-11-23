@@ -271,20 +271,26 @@ class VideoProcessor:
             True if successful, False otherwise
         """
         try:
+            # Get quality settings from config (TICKET-072: improved quality)
+            from langflix import settings
+            video_config = settings.get_video_config()
+            preset = video_config.get('preset', 'medium')
+            crf = video_config.get('crf', 18)
+            
             (
                 ffmpeg
                 .input(str(video_path), ss=start_seconds, t=duration)
                 .output(str(output_path), 
                        vcodec='libx264',  # Re-encode for frame accuracy
                        acodec='aac',
-                       preset='fast',
-                       crf=23,
+                       preset=preset,
+                       crf=crf,
                        avoid_negative_ts='make_zero')
                 .overwrite_output()
                 .run(quiet=True)
             )
             
-            logger.info(f"Successfully extracted clip (re-encode) to: {output_path}")
+            logger.info(f"Successfully extracted clip (re-encode) to: {output_path} with preset={preset}, crf={crf}")
             return True
         except Exception as e:
             logger.error(f"Re-encode extraction failed: {e}")

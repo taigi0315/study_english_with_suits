@@ -35,7 +35,7 @@ database:
 llm:
   # Maximum characters of subtitle content per chunk
   # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
-  max_input_length: 4000
+  max_input_length: 2000
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
@@ -85,14 +85,16 @@ language_levels:
 # ============================================================================
 video:
   # Encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
-  # Changed from "veryfast" to "medium" for better quality (TICKET-055)
+  # Changed to "medium" for significantly better quality (TICKET-072)
   # Medium preset provides better compression and quality while maintaining reasonable encoding speed
-  preset: "fast"
+  # ~2x slower than "fast" but much better quality, especially for 720p sources
+  preset: "medium"
 
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
-  # Changed from 0 (lossless) to 20 for high quality output (TICKET-055)
-  # CRF 20 provides excellent quality while being more practical than lossless encoding
-  crf: 10
+  # Changed to 18 for high quality output (TICKET-072)
+  # CRF 18 provides near-lossless quality, especially important for 720p source videos
+  # Lower values = better quality: 18-20 is excellent, 21-23 is good, 24+ is acceptable
+  crf: 18
 
 # ============================================================================
 # Font Configuration

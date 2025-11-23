@@ -70,7 +70,7 @@ services:
   langflix-api:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: deploy/docker/Dockerfile
       target: api
     container_name: langflix-api
     restart: unless-stopped
@@ -154,7 +154,7 @@ services:
   langflix-ui:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: deploy/docker/Dockerfile
       target: ui
     container_name: langflix-ui
     restart: unless-stopped

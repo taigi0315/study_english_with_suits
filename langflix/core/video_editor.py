@@ -290,17 +290,19 @@ class VideoEditor:
                     context_video = context_input['v']
                     context_audio = context_input['a']
 
+                    # Get quality settings from config (TICKET-072: improved quality)
+                    video_args = self._get_video_output_args(source_video_path=context_video_path)
                     (
                         ffmpeg.output(
                             context_video,
                             context_audio,
                             str(context_clip_path),
-                            vcodec='libx264',
-                            acodec='aac',
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            acodec=video_args.get('acodec', 'aac'),
                             ac=2,
                             ar=48000,
-                            preset='fast',
-                            crf=23,
+                            preset=video_args.get('preset', 'medium'),
+                            crf=video_args.get('crf', 18),
                             ss=context_start_seconds,
                             t=context_duration
                         )
@@ -316,17 +318,19 @@ class VideoEditor:
             reset_video = ffmpeg.filter(reset_input['v'], 'setpts', 'PTS-STARTPTS')
             reset_audio = ffmpeg.filter(reset_input['a'], 'asetpts', 'PTS-STARTPTS')
 
+            # Get quality settings from config (TICKET-072: improved quality)
+            video_args = self._get_video_output_args(source_video_path=context_video_path)
             (
                 ffmpeg.output(
                     reset_video,
                     reset_audio,
                     str(context_clip_reset_path),
-                    vcodec='libx264',
-                    acodec='aac',
+                    vcodec=video_args.get('vcodec', 'libx264'),
+                    acodec=video_args.get('acodec', 'aac'),
                     ac=2,
                     ar=48000,
-                    preset='fast',
-                    crf=23
+                    preset=video_args.get('preset', 'medium'),
+                    crf=video_args.get('crf', 18)
                 )
                 .overwrite_output()
                 .run(capture_stdout=True, capture_stderr=True)
@@ -343,17 +347,19 @@ class VideoEditor:
             
             try:
                 # Extract with output seeking
+                # Get quality settings from config (TICKET-072: improved quality)
+                video_args = self._get_video_output_args(source_video_path=context_video_path)
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
                         str(expression_video_clip_path),
-                        vcodec='libx264',
-                        acodec='aac',
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
                         ac=2,
                         ar=48000,
-                        preset='fast',
-                        crf=23,
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18),
                         ss=relative_start,
                         t=expression_duration
                     )
@@ -527,19 +533,20 @@ class VideoEditor:
                         y=overlay_y
                     )
                     
-                    # Output video with logo
+                    # Output video with logo - Get quality settings from config (TICKET-072)
+                    video_args = self._get_video_output_args(source_video_path=long_form_video_path)
                     if long_form_audio:
                         (
                             ffmpeg.output(
                                 final_video,
                                 long_form_audio,
                                 str(long_form_with_logo_path),
-                                vcodec='libx264',
-                                acodec='aac',
+                                vcodec=video_args.get('vcodec', 'libx264'),
+                                acodec=video_args.get('acodec', 'aac'),
                                 ac=2,
                                 ar=48000,
-                                preset='fast',
-                                crf=23
+                                preset=video_args.get('preset', 'medium'),
+                                crf=video_args.get('crf', 18)
                             )
                             .overwrite_output()
                             .run(capture_stdout=True, capture_stderr=True)
@@ -549,9 +556,9 @@ class VideoEditor:
                             ffmpeg.output(
                                 final_video,
                                 str(long_form_with_logo_path),
-                                vcodec='libx264',
-                                preset='fast',
-                                crf=23
+                                vcodec=video_args.get('vcodec', 'libx264'),
+                                preset=video_args.get('preset', 'medium'),
+                                crf=video_args.get('crf', 18)
                             )
                             .overwrite_output()
                             .run(capture_stdout=True, capture_stderr=True)
@@ -704,19 +711,20 @@ class VideoEditor:
             except (KeyError, AttributeError):
                 logger.debug("No audio stream in long-form video")
             
-            # Output scaled long-form video
+            # Output scaled long-form video - Get quality settings from config (TICKET-072)
+            video_args = self._get_video_output_args(source_video_path=long_form_video_path)
             if audio_stream:
                 (
                     ffmpeg.output(
                         video_stream,
                         audio_stream,
                         str(long_form_scaled_path),
-                        vcodec='libx264',
-                        acodec='aac',
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
                         ac=2,
                         ar=48000,
-                        preset='fast',
-                        crf=23
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -726,9 +734,9 @@ class VideoEditor:
                     ffmpeg.output(
                         video_stream,
                         str(long_form_scaled_path),
-                        vcodec='libx264',
-                        preset='fast',
-                        crf=23
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -978,18 +986,20 @@ class VideoEditor:
             temp_with_expression_path = self.output_dir / f"temp_short_with_expression_{safe_expression}.mkv"
             self._register_temp_file(temp_with_expression_path)
             
+            # Get quality settings from config (TICKET-072: improved quality)
+            video_args = self._get_video_output_args(source_video_path=long_form_video_path)
             if final_audio:
                 (
                     ffmpeg.output(
                         final_video,
                         final_audio,
                         str(temp_with_expression_path),
-                        vcodec='libx264',
-                        acodec='aac',
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
                         ac=2,
                         ar=48000,
-                        preset='fast',
-                        crf=23
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -999,9 +1009,9 @@ class VideoEditor:
                     ffmpeg.output(
                         final_video,
                         str(temp_with_expression_path),
-                        vcodec='libx264',
-                        preset='fast',
-                        crf=23
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
                     )
                     .overwrite_output()
                     .run(quiet=True)
@@ -1031,14 +1041,50 @@ class VideoEditor:
             logger.warning(f"Error getting font option: {e}")
         return ""
     
-    def _get_video_output_args(self) -> dict:
-        """Get video output arguments from configuration"""
+    def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
+        """Get video output arguments from configuration with optional resolution-aware quality.
+        
+        Args:
+            source_video_path: Optional path to source video for resolution-based quality adjustment
+            
+        Returns:
+            Dictionary with vcodec, acodec, preset, and crf values
+        """
         video_config = settings.get_video_config()
+        base_crf = video_config.get('crf', 18)
+        base_preset = video_config.get('preset', 'medium')
+        
+        # If source video provided, adjust quality based on resolution (TICKET-072)
+        if source_video_path and os.path.exists(source_video_path):
+            try:
+                from langflix.media.ffmpeg_utils import get_video_params
+                vp = get_video_params(source_video_path)
+                height = vp.height or 720
+                
+                # Higher quality for lower resolution sources (720p needs more care)
+                if height <= 720:
+                    crf = min(base_crf, 18)  # Ensure high quality for 720p
+                    logger.debug(f"720p source detected, using CRF {crf} for better quality")
+                elif height <= 1080:
+                    crf = base_crf
+                else:
+                    crf = max(base_crf, 20)  # Can use slightly lower for 4K
+                    
+                return {
+                    'vcodec': video_config.get('codec', 'libx264'),
+                    'acodec': video_config.get('audio_codec', 'aac'),
+                    'preset': base_preset,
+                    'crf': crf
+                }
+            except Exception as e:
+                logger.warning(f"Could not detect source resolution, using base settings: {e}")
+        
+        # Default: use config values
         return {
             'vcodec': video_config.get('codec', 'libx264'),
             'acodec': video_config.get('audio_codec', 'aac'),
-            'preset': video_config.get('preset', 'medium'),  # Updated default for better quality (TICKET-055)
-            'crf': video_config.get('crf', 20)  # Updated default for better quality (TICKET-055)
+            'preset': base_preset,  # Updated default for better quality (TICKET-072)
+            'crf': base_crf  # Updated default for better quality (TICKET-072)
         }
     
     def _get_background_config(self) -> tuple[str, str]:

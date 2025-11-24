@@ -91,20 +91,33 @@ fi
 CREDENTIALS_FILE="$AUTH_DIR/youtube_credentials.json"
 if [ -f "$CREDENTIALS_FILE" ]; then
     echo -e "${GREEN}✅ youtube_credentials.json 발견${NC}"
+    # 현재 파일 상태 확인
+    CURRENT_OWNER=$(stat -c '%U:%G' "$CREDENTIALS_FILE" 2>/dev/null || stat -f '%Su:%Sg' "$CREDENTIALS_FILE" 2>/dev/null || echo "unknown")
+    echo "   현재 소유자: $CURRENT_OWNER"
+    
     # 소유권 설정 (UID/GID 1000 = Docker 컨테이너 사용자)
+    # TrueNAS ZFS에서는 chown이 실패할 수 있으므로 여러 방법 시도
     if sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null; then
         echo "   소유권 설정 완료 (1000:1000)"
     else
-        echo -e "${YELLOW}⚠️  소유권 설정 실패 (권한이 부족할 수 있음)${NC}"
+        # ZFS ACL을 사용한 대안 시도
+        echo -e "${YELLOW}⚠️  chown 실패, ZFS ACL 확인 중...${NC}"
+        # 파일이 읽을 수 있는지 확인 (권한이 없어도 마운트는 가능)
+        if [ -r "$CREDENTIALS_FILE" ]; then
+            echo -e "${GREEN}   ✅ 파일 읽기 가능 (마운트는 정상 작동할 수 있음)${NC}"
+        else
+            echo -e "${YELLOW}   ⚠️  파일 읽기 불가 - ZFS 데이터셋 권한 확인 필요${NC}"
+            echo "   해결 방법: TrueNAS 웹 UI에서 데이터셋 권한 설정 확인"
+        fi
     fi
     # 권한 설정 (644 = read-only, 컨테이너에서 읽기만 필요)
     if sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null; then
         echo "   권한 설정 완료 (644)"
     else
-        echo -e "${YELLOW}⚠️  권한 설정 실패${NC}"
+        echo -e "${YELLOW}⚠️  chmod 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
     fi
     # 권한 확인
-    PERMS=$(ls -l "$CREDENTIALS_FILE" 2>/dev/null | awk '{print $1, $3, $4}')
+    PERMS=$(ls -l "$CREDENTIALS_FILE" 2>/dev/null | awk '{print $1, $3, $4}' || echo "권한 확인 불가")
     echo "   현재 상태: $PERMS"
 else
     echo -e "${YELLOW}⚠️  youtube_credentials.json 없음${NC}"
@@ -148,21 +161,45 @@ for file in "$AUTH_DIR"/youtube_*.json; do
         filename=$(basename "$file")
         # 파일명에 따라 적절한 권한 설정
         if [[ "$filename" == "youtube_credentials.json" ]]; then
-            sudo chown 1000:1000 "$file" 2>/dev/null || true
-            sudo chmod 644 "$file" 2>/dev/null || true
-            echo "   ✅ $filename: 644"
+            sudo chown 1000:1000 "$file" 2>/dev/null || echo -e "${YELLOW}   ⚠️  $filename: 소유권 설정 실패 (ZFS ACL 확인 필요)${NC}"
+            sudo chmod 644 "$file" 2>/dev/null || echo -e "${YELLOW}   ⚠️  $filename: 권한 설정 실패${NC}"
+            # 읽기 가능 여부 확인
+            if [ -r "$file" ]; then
+                echo "   ✅ $filename: 읽기 가능"
+            else
+                echo -e "${YELLOW}   ⚠️  $filename: 읽기 불가 - 권한 문제${NC}"
+            fi
         elif [[ "$filename" == "youtube_token.json" ]]; then
-            sudo chown 1000:1000 "$file" 2>/dev/null || true
-            sudo chmod 600 "$file" 2>/dev/null || true
-            echo "   ✅ $filename: 600"
+            sudo chown 1000:1000 "$file" 2>/dev/null || echo -e "${YELLOW}   ⚠️  $filename: 소유권 설정 실패${NC}"
+            sudo chmod 600 "$file" 2>/dev/null || echo -e "${YELLOW}   ⚠️  $filename: 권한 설정 실패${NC}"
+            if [ -r "$file" ]; then
+                echo "   ✅ $filename: 읽기 가능"
+            else
+                echo -e "${YELLOW}   ⚠️  $filename: 읽기 불가${NC}"
+            fi
         else
             # 기타 YouTube 관련 파일은 기본 권한
             sudo chown 1000:1000 "$file" 2>/dev/null || true
             sudo chmod 600 "$file" 2>/dev/null || true
-            echo "   ✅ $filename: 600 (default)"
+            if [ -r "$file" ]; then
+                echo "   ✅ $filename: 읽기 가능"
+            else
+                echo -e "${YELLOW}   ⚠️  $filename: 읽기 불가${NC}"
+            fi
         fi
     fi
 done
+
+# TrueNAS ZFS 권한 문제 안내
+echo ""
+if [ -f "$CREDENTIALS_FILE" ] && [ ! -r "$CREDENTIALS_FILE" ]; then
+    echo -e "${YELLOW}⚠️  TrueNAS ZFS 권한 문제 감지${NC}"
+    echo "   해결 방법:"
+    echo "   1. TrueNAS 웹 UI에서 데이터셋 권한 확인"
+    echo "   2. 또는 다음 명령어로 ZFS ACL 확인:"
+    echo "      zfs get aclmode $(zfs list -H -o name | grep -i langflix | head -1)"
+    echo "   3. Docker 컨테이너는 파일이 마운트되면 접근 가능할 수 있습니다"
+fi
 
 # Docker Compose 파일 확인
 if [ ! -f "$COMPOSE_FILE" ]; then

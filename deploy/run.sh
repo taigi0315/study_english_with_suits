@@ -379,6 +379,30 @@ if sudo docker ps | grep -q "langflix-ui"; then
     echo "   컨테이너 내부 파일 목록:"
     sudo docker exec langflix-ui ls -la /app/auth/youtube_*.json 2>/dev/null || echo "   파일 없음"
     
+    # End-to-End 테스트 가이드
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}🧪 End-to-End 테스트 가이드${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════${NC}"
+    UI_IP=$(hostname -I | awk '{print $1}')
+    echo ""
+    echo -e "${GREEN}1. 웹 UI 접속:${NC}"
+    echo "   http://${UI_IP}:5000"
+    echo ""
+    echo -e "${GREEN}2. YouTube 로그인 테스트:${NC}"
+    echo "   - 대시보드에서 'Login to YouTube' 버튼 클릭"
+    echo "   - OAuth 인증 완료"
+    echo "   - 성공 메시지 확인"
+    echo ""
+    echo -e "${GREEN}3. 로그 모니터링 (별도 터미널):${NC}"
+    echo "   sudo docker compose -f $COMPOSE_FILE logs -f langflix-ui"
+    echo ""
+    echo -e "${GREEN}4. 문제 발생 시 확인:${NC}"
+    echo "   - 마운트 경로: sudo docker inspect langflix-ui | grep youtube_token"
+    echo "   - 파일 접근: sudo docker exec langflix-ui cat /app/auth/youtube_token.json"
+    echo "   - 최근 오류: sudo docker logs langflix-ui 2>&1 | tail -50"
+    echo ""
+    
     # End-to-end 테스트 제안
     echo ""
     echo -e "${BLUE}📋 End-to-End 테스트 제안:${NC}"

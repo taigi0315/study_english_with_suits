@@ -77,6 +77,7 @@ def create_silent_slide(
     text: SlideText,
     duration: float,
     output_path: Path,
+    language_code: Optional[str] = None,
 ) -> Path:
     bg_input, bg_type = _get_background_input()
 
@@ -87,13 +88,28 @@ def create_silent_slide(
     s1 = _esc_draw(_clean_for_draw(text.similar1 or "", 100)) if text.similar1 else None
     s2 = _esc_draw(_clean_for_draw(text.similar2 or "", 100)) if text.similar2 else None
 
+    # Get language-specific font for drawtext filter
     font_file_opt = ""
     try:
-        font_file = settings.get_font_file(None)
-        if font_file:
-            font_file_opt = f"fontfile={font_file}:"
-    except Exception:
-        pass
+        from langflix.config.font_utils import get_font_file_for_language
+        import os
+        
+        font_path = get_font_file_for_language(language_code)
+        if font_path and os.path.exists(font_path):
+            # FFmpeg drawtext can use TTC files, but we need absolute path
+            font_file_opt = f"fontfile={font_path}:"
+            logger.debug(f"Using font for language {language_code}: {font_path}")
+        else:
+            logger.warning(f"Font not found for language {language_code}, using default")
+    except Exception as e:
+        logger.warning(f"Error getting font for language {language_code}: {e}")
+        # Fallback to old method
+        try:
+            font_file = settings.get_font_file(language_code)
+            if font_file:
+                font_file_opt = f"fontfile={font_file}:"
+        except Exception:
+            pass
 
     d_size = _font_size("expression_dialogue", 40)
     e_size = _font_size("expression", 58)

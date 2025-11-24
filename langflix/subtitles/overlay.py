@@ -294,18 +294,33 @@ def apply_dual_subtitle_layers(
     return Path(output_path)
 
 
-def drawtext_fallback_single_line(input_video: Path, text: str, output_path: Path) -> Path:
+def drawtext_fallback_single_line(input_video: Path, text: str, output_path: Path, language_code: Optional[str] = None) -> Path:
     def _clean(text_: str) -> str:
         text_ = text_.replace("'", "").replace('"', "").replace("\n", " ")
         text_ = "".join(c for c in text_ if c.isprintable())
         return text_[:200] if text_ else "Translation"
 
     clean = _clean(text)
+    
+    # Get language-specific font for drawtext
+    font_opt = ""
     try:
-        font_file = settings.get_font_file(None)
-        font_opt = f"fontfile={font_file}:" if font_file else ""
-    except Exception:
-        font_opt = ""
+        from langflix.config.font_utils import get_font_file_for_language
+        import os
+        font_path = get_font_file_for_language(language_code)
+        if font_path and os.path.exists(font_path):
+            font_opt = f"fontfile={font_path}:"
+            logger.debug(f"Using font for fallback subtitle (language {language_code}): {font_path}")
+        else:
+            logger.warning(f"Font not found for language {language_code}, using default")
+    except Exception as e:
+        logger.warning(f"Error getting font for fallback subtitle: {e}")
+        # Fallback to old method
+        try:
+            font_file = settings.get_font_file(language_code)
+            font_opt = f"fontfile={font_file}:" if font_file else ""
+        except Exception:
+            font_opt = ""
 
     # Color from settings (default)
     try:

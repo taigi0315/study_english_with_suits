@@ -60,6 +60,7 @@ def get_platform_default_font() -> str:
 def get_font_file_for_language(language_code: Optional[str] = None) -> str:
     """
     Get font file path for the given language or default.
+    Prioritizes TTF/TTC files that work with FFmpeg drawtext filter.
     
     Args:
         language_code: Optional language code (e.g., 'ko', 'ja', 'zh', 'es')
@@ -79,7 +80,21 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
                     logger.info(f"Using language-specific font for {language_code}: {font_path}")
                     return font_path
                 else:
-                    logger.warning(f"Language-specific font not found for {language_code}, falling back to default")
+                    logger.warning(f"Language-specific font not found for {language_code}, trying platform-specific fonts")
+                    
+                    # For Linux/Docker, try to find CJK fonts directly
+                    if platform.system() == "Linux":
+                        if language_code in ['ko', 'ja', 'zh']:
+                            # Try Noto Sans CJK (installed in Dockerfile)
+                            cjk_fonts = [
+                                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                                "/usr/share/fonts/truetype/nanum/NanumGothic.ttc",
+                                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                            ]
+                            for font_path in cjk_fonts:
+                                if os.path.exists(font_path):
+                                    logger.info(f"Using Linux CJK font for {language_code}: {font_path}")
+                                    return font_path
                     
                     # Special handling for Spanish - try recommended fonts
                     if language_code == 'es':

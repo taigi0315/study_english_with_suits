@@ -863,11 +863,19 @@ class VideoEditor:
                             'bordercolor': settings.get_keywords_border_color()
                         }
 
-                        # Add fontfile if available
-                        if font_file:
-                            font_path = font_file.replace('fontfile=', '').replace(':', '')
-                            if font_path:
+                        # Add language-specific fontfile if available
+                        try:
+                            from langflix.config.font_utils import get_font_file_for_language
+                            font_path = get_font_file_for_language(self.language_code)
+                            if font_path and os.path.exists(font_path):
                                 keyword_args['fontfile'] = font_path
+                        except Exception as e:
+                            logger.warning(f"Error getting font for keywords: {e}")
+                            # Fallback to old method
+                            if font_file:
+                                font_path = font_file.replace('fontfile=', '').replace(':', '')
+                                if font_path and os.path.exists(font_path):
+                                    keyword_args['fontfile'] = font_path
 
                         final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
 
@@ -890,10 +898,19 @@ class VideoEditor:
                                 'borderw': settings.get_keywords_border_width(),
                                 'bordercolor': settings.get_keywords_border_color()
                             }
-                            if font_file:
-                                font_path = font_file.replace('fontfile=', '').replace(':', '')
-                                if font_path:
+                            # Use language-specific font for comma
+                            try:
+                                from langflix.config.font_utils import get_font_file_for_language
+                                font_path = get_font_file_for_language(self.language_code)
+                                if font_path and os.path.exists(font_path):
                                     comma_args['fontfile'] = font_path
+                            except Exception as e:
+                                logger.warning(f"Error getting font for comma: {e}")
+                                # Fallback to old method
+                                if font_file:
+                                    font_path = font_file.replace('fontfile=', '').replace(':', '')
+                                    if font_path and os.path.exists(font_path):
+                                        comma_args['fontfile'] = font_path
                             final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
 
                 logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
@@ -917,12 +934,20 @@ class VideoEditor:
                 'bordercolor': settings.get_expression_border_color()
             }
 
-            # Add fontfile if available
-            if font_file:
-                # Extract font path from "fontfile=path:" format
-                font_path = font_file.replace('fontfile=', '').replace(':', '')
-                if font_path:
+            # Get language-specific font for drawtext
+            try:
+                from langflix.config.font_utils import get_font_file_for_language
+                font_path = get_font_file_for_language(self.language_code)
+                if font_path and os.path.exists(font_path):
                     drawtext_args_1['fontfile'] = font_path
+                    logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
+            except Exception as e:
+                logger.warning(f"Error getting font for expression text: {e}")
+                # Fallback to old method
+                if font_file:
+                    font_path = font_file.replace('fontfile=', '').replace(':', '')
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_1['fontfile'] = font_path
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_1)
 
@@ -937,10 +962,19 @@ class VideoEditor:
                 'bordercolor': settings.get_translation_border_color()
             }
 
-            if font_file:
-                font_path = font_file.replace('fontfile=', '').replace(':', '')
-                if font_path:
+            # Use same language-specific font for translation
+            try:
+                from langflix.config.font_utils import get_font_file_for_language
+                font_path = get_font_file_for_language(self.language_code)
+                if font_path and os.path.exists(font_path):
                     drawtext_args_2['fontfile'] = font_path
+            except Exception as e:
+                logger.warning(f"Error getting font for translation text: {e}")
+                # Fallback to old method
+                if font_file:
+                    font_path = font_file.replace('fontfile=', '').replace(':', '')
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_2['fontfile'] = font_path
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
             
@@ -1031,14 +1065,24 @@ class VideoEditor:
             raise
     
     def _get_font_option(self) -> str:
-        """Get font file option for ffmpeg drawtext"""
+        """Get font file option for ffmpeg drawtext using language-specific font"""
         try:
-            font_file = settings.get_font_file(self.language_code)
-            # Ensure font_file is a string
-            if isinstance(font_file, str) and font_file and os.path.exists(font_file):
-                return f"fontfile={font_file}:"
+            from langflix.config.font_utils import get_font_file_for_language
+            font_path = get_font_file_for_language(self.language_code)
+            if font_path and os.path.exists(font_path):
+                logger.debug(f"Using font for drawtext (language {self.language_code}): {font_path}")
+                return f"fontfile={font_path}:"
+            else:
+                logger.warning(f"Font not found for language {self.language_code}, using default")
         except Exception as e:
             logger.warning(f"Error getting font option: {e}")
+            # Fallback to old method
+            try:
+                font_file = settings.get_font_file(self.language_code)
+                if isinstance(font_file, str) and font_file and os.path.exists(font_file):
+                    return f"fontfile={font_file}:"
+            except Exception:
+                pass
         return ""
     
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:

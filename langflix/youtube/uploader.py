@@ -141,9 +141,34 @@ class YouTubeUploader:
             
             creds = None
             
-            # Load existing token
+            # Load existing token (only if file exists and is not empty)
             if os.path.exists(self.token_file):
-                creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
+                # Check if token file is empty or invalid
+                token_size = os.path.getsize(self.token_file)
+                if token_size == 0:
+                    logger.warning(f"Token file is empty: {self.token_file}, will start new OAuth flow")
+                else:
+                    try:
+                        # Validate JSON before loading
+                        with open(self.token_file, 'r') as f:
+                            token_content = f.read().strip()
+                            if not token_content:
+                                logger.warning(f"Token file is empty after reading: {self.token_file}")
+                            else:
+                                # Validate JSON format
+                                json.loads(token_content)
+                                # Load credentials if JSON is valid
+                                creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Invalid JSON in token file: {self.token_file}, error: {e}. Will start new OAuth flow.")
+                        # Remove invalid token file
+                        try:
+                            os.remove(self.token_file)
+                            logger.info(f"Removed invalid token file: {self.token_file}")
+                        except Exception as remove_error:
+                            logger.warning(f"Could not remove invalid token file: {remove_error}")
+                    except Exception as e:
+                        logger.warning(f"Error loading token file: {e}, will start new OAuth flow")
             
             # If no valid credentials, get new ones
             if not creds or not creds.valid:

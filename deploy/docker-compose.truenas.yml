@@ -121,8 +121,9 @@ services:
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
 
       # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
-      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
-      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/auth/youtube_token.json:rw
+      # Use auth/ directory (after file reorganization)
+      - ${TRUENAS_DATA_PATH}/auth/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/auth/youtube_token.json:/app/auth/youtube_token.json:rw
       
       # 설정 파일 (읽기 전용)
       # Note: .env file is not mounted - all environment variables are passed via 'environment' section
@@ -181,8 +182,10 @@ services:
       - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
       - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
       - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
-      - ${TRUENAS_DATA_PATH}/assets/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
-      - ${TRUENAS_DATA_PATH}/assets/youtube_token.json:/app/auth/youtube_token.json:rw
+      # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
+      # Use auth/ directory (after file reorganization)
+      - ${TRUENAS_DATA_PATH}/auth/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/auth/youtube_token.json:/app/auth/youtube_token.json:rw
     
     depends_on:
       langflix-api:

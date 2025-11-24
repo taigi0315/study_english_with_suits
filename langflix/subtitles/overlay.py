@@ -197,12 +197,17 @@ def build_ass_force_style(is_expression: bool = False) -> str:
 
 def apply_subtitles_with_file(input_video: Path, subtitle_file: Path, output_path: Path, is_expression: bool = False) -> Path:
     force_style = build_ass_force_style(is_expression=is_expression)
+    
+    # Get platform-specific fonts directory for FFmpeg
+    from langflix.config.font_utils import get_fonts_dir
+    fonts_dir = get_fonts_dir()
+    
     (
         ffmpeg
         .input(str(input_video))
         .output(
             str(output_path),
-            vf=f"subtitles={subtitle_file}:force_style='{force_style}'",
+            vf=f"subtitles={subtitle_file}:fontsdir={fonts_dir}:force_style='{force_style}'",
             # video encoder decided by caller; keep default here
             vcodec="libx264",
             acodec="aac",
@@ -249,10 +254,16 @@ def apply_dual_subtitle_layers(
     # See: docs/core/subtitle_sync_guide_eng.md for details
     video_input = ffmpeg.input(str(video_path))
     
+    # Get platform-specific fonts directory for FFmpeg
+    from langflix.config.font_utils import get_fonts_dir
+    fonts_dir = get_fonts_dir()
+    
     # Apply subtitle layer first (on full video for accurate timing)
+    # Use fontsdir parameter to help FFmpeg find fonts
     video_with_subtitles = video_input['v'].filter(
         'subtitles',
         original_subtitle_path,
+        fontsdir=fonts_dir,
         force_style=original_style
     )
     

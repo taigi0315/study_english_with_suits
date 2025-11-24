@@ -112,3 +112,69 @@ def validate_spanish_font_support() -> dict:
             'error': 'LanguageConfig not available'
         }
 
+
+def get_fonts_dir() -> str:
+    """
+    Get platform-specific fonts directory for FFmpeg subtitles filter.
+    
+    Returns:
+        str: Path to fonts directory for the current platform
+    """
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
+        return "/System/Library/Fonts"
+    elif system == "Linux":
+        return "/usr/share/fonts"
+    elif system == "Windows":
+        return "C:/Windows/Fonts"
+    else:
+        # Fallback to Linux path (most common for Docker)
+        logger.warning(f"Unknown platform: {system}, using Linux fonts directory")
+        return "/usr/share/fonts"
+
+
+def get_font_name_for_ffmpeg(font_path: Optional[str] = None, language_code: Optional[str] = None) -> str:
+    """
+    Get font name for FFmpeg FontName parameter.
+    
+    Args:
+        font_path: Optional font file path
+        language_code: Optional language code (e.g., 'ko', 'ja', 'zh')
+        
+    Returns:
+        str: Font name for FFmpeg
+    """
+    system = platform.system()
+    
+    # If font path is provided, try to determine font name from path
+    if font_path:
+        if 'AppleSDGothicNeo' in font_path or 'Apple SD Gothic Neo' in font_path:
+            return "Apple SD Gothic Neo"
+        elif 'NanumGothic' in font_path or 'Nanum Gothic' in font_path:
+            return "NanumGothic"
+        elif 'NotoSansCJK' in font_path or 'Noto Sans CJK' in font_path:
+            return "Noto Sans CJK"
+        elif 'Hiragino' in font_path:
+            return "Hiragino Sans"
+        elif 'HelveticaNeue' in font_path:
+            return "Helvetica Neue"
+        elif 'malgun' in font_path.lower():
+            return "Malgun Gothic"
+    
+    # Platform-specific defaults
+    if system == "Darwin":  # macOS
+        return "Apple SD Gothic Neo"
+    elif system == "Linux":
+        # Check if Noto or Nanum fonts are available
+        if os.path.exists("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"):
+            return "Noto Sans CJK"
+        elif os.path.exists("/usr/share/fonts/truetype/nanum/NanumGothic.ttc"):
+            return "NanumGothic"
+        else:
+            return "DejaVu Sans"  # Fallback
+    elif system == "Windows":
+        return "Malgun Gothic"
+    else:
+        return "Arial"  # Ultimate fallback
+

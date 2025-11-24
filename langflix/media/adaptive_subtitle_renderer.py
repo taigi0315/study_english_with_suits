@@ -526,11 +526,16 @@ class AdaptiveSubtitleRenderer(SubtitleRenderer):
                 else:
                     font_name = "Arial"
             
+            # Get platform-specific fonts directory and font name
+            from langflix.config.font_utils import get_fonts_dir, get_font_name_for_ffmpeg
+            fonts_dir = get_fonts_dir()
+            font_name = get_font_name_for_ffmpeg(font_path, None)
+            
             # Build FFmpeg command with custom style and font configuration
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-i', video_path,
-                '-vf', f"subtitles='{temp_srt_path}':fontsdir=/System/Library/Fonts:force_style='FontName={font_name},{style_string}'",
+                '-vf', f"subtitles='{temp_srt_path}':fontsdir={fonts_dir}:force_style='FontName={font_name},{style_string}'",
                 '-c:a', 'copy',
                 '-y',
                 str(local_output_path)

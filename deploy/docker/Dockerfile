@@ -49,11 +49,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ----------------------------------------------------------------------------
 FROM python:3.11-slim AS runtime
 
-# Install runtime dependencies only
+# Install runtime dependencies and Korean fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    fonts-noto-cjk \
+    fonts-noto-cjk-extra \
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -fv
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv

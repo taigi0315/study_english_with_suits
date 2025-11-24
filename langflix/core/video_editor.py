@@ -1886,7 +1886,15 @@ class VideoEditor:
             try:
                 # Copy the slide (which now already includes audio) to final location
                 import shutil
-                shutil.copy2(str(output_path), str(final_slide_path))
+                try:
+                    shutil.copy2(str(output_path), str(final_slide_path))
+                except PermissionError as perm_error:
+                    # Some NAS filesystems (e.g. TrueNAS with ACL) block metadata preservation
+                    logger.warning(
+                        "Permission error during metadata-preserving copy (%s). "
+                        "Falling back to basic copy without metadata.", perm_error
+                    )
+                    shutil.copyfile(str(output_path), str(final_slide_path))
                 logger.info(f"Successfully created educational slide with TTS audio: {final_slide_path}")
             except Exception as copy_error:
                 logger.error(f"Error copying slide to final location: {copy_error}")

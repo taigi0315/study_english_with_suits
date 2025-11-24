@@ -114,6 +114,31 @@ class YouTubeUploader:
                     logger.error(error_msg)
                     raise FileNotFoundError(error_msg)
             
+            # Check if credentials file is empty or invalid
+            if os.path.getsize(self.credentials_file) == 0:
+                error_msg = (
+                    f"YouTube credentials file is empty: {self.credentials_file}\n"
+                    "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Validate JSON format
+            try:
+                with open(self.credentials_file, 'r') as f:
+                    content = f.read().strip()
+                    if not content:
+                        raise ValueError(f"Credentials file is empty: {self.credentials_file}")
+                    json.loads(content)  # Validate JSON
+            except json.JSONDecodeError as e:
+                error_msg = (
+                    f"Invalid JSON in credentials file: {self.credentials_file}\n"
+                    f"JSON error: {str(e)}\n"
+                    "Please ensure the file contains valid OAuth2 credentials from Google Cloud Console"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+            
             creds = None
             
             # Load existing token
@@ -230,9 +255,30 @@ class YouTubeUploader:
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
         
+        # Check if file is empty
+        if os.path.getsize(self.credentials_file) == 0:
+            error_msg = (
+                f"YouTube credentials file is empty: {self.credentials_file}\n"
+                "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Load client secrets
-        with open(self.credentials_file, 'r') as f:
-            client_config = json.load(f)
+        try:
+            with open(self.credentials_file, 'r') as f:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError(f"Credentials file is empty: {self.credentials_file}")
+                client_config = json.loads(content)
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"Invalid JSON in credentials file: {self.credentials_file}\n"
+                f"JSON error: {str(e)}\n"
+                "Please ensure the file contains valid OAuth2 credentials from Google Cloud Console"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
         
         # Convert 'installed' type to 'web' type for web flow
         # If credentials are for 'installed' app, we need to adapt them
@@ -316,9 +362,30 @@ class YouTubeUploader:
         if not os.path.exists(self.credentials_file):
             raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
         
+        # Check if file is empty
+        if os.path.getsize(self.credentials_file) == 0:
+            error_msg = (
+                f"YouTube credentials file is empty: {self.credentials_file}\n"
+                "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Load client secrets
-        with open(self.credentials_file, 'r') as f:
-            client_config = json.load(f)
+        try:
+            with open(self.credentials_file, 'r') as f:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError(f"Credentials file is empty: {self.credentials_file}")
+                client_config = json.loads(content)
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"Invalid JSON in credentials file: {self.credentials_file}\n"
+                f"JSON error: {str(e)}\n"
+                "Please ensure the file contains valid OAuth2 credentials from Google Cloud Console"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
         
         # Convert 'installed' type to 'web' type if needed
         if 'installed' in client_config:

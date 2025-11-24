@@ -754,9 +754,22 @@ class VideoManagementUI:
                     }), 500
                 except ValueError as e:
                     logger.error(f"Invalid OAuth configuration: {e}")
+                    error_msg = str(e)
+                    # Check if it's an empty file error
+                    if "empty" in error_msg.lower() or "invalid json" in error_msg.lower():
+                        return jsonify({
+                            "error": "Invalid YouTube credentials file",
+                            "details": error_msg,
+                            "hint": (
+                                "The youtube_credentials.json file is empty or contains invalid JSON.\n"
+                                "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                                "See docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions."
+                            ),
+                            "setup_guide": "docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md"
+                        }), 400
                     return jsonify({
                         "error": "Invalid OAuth configuration",
-                        "details": str(e),
+                        "details": error_msg,
                         "hint": "Please check your youtube_credentials.json file format"
                     }), 400
                 except Exception as e:
@@ -805,6 +818,27 @@ class VideoManagementUI:
                         "details": str(e),
                         "hint": "Please close other applications using port 8080"
                     }), 500
+                except ValueError as e:
+                    error_msg = str(e)
+                    # Check if it's an empty file or invalid JSON error
+                    if "empty" in error_msg.lower() or "invalid json" in error_msg.lower():
+                        logger.error(f"Invalid YouTube credentials file: {e}")
+                        return jsonify({
+                            "error": "Invalid YouTube credentials file",
+                            "details": error_msg,
+                            "hint": (
+                                "The youtube_credentials.json file is empty or contains invalid JSON.\n"
+                                "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'.\n"
+                                "See docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md for detailed setup instructions."
+                            ),
+                            "setup_guide": "docs/youtube/YOUTUBE_SETUP_GUIDE_eng.md"
+                        }), 400
+                    logger.error(f"Invalid OAuth configuration: {e}")
+                    return jsonify({
+                        "error": "Invalid OAuth configuration",
+                        "details": error_msg,
+                        "hint": "Please check your youtube_credentials.json file format"
+                    }), 400
                 except Exception as e:
                     logger.error(f"Error authenticating with YouTube: {e}", exc_info=True)
                     return jsonify({

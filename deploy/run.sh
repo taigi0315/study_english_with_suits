@@ -68,10 +68,93 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
     for dir_path in "${MISSING_DIRS[@]}"; do
         echo "   생성: $dir_path"
         sudo mkdir -p "$dir_path"
-        sudo chown -R 1000:1000 "$dir_path" 2>/dev/null || true
-        sudo chmod -R 755 "$dir_path" 2>/dev/null || true
+        
+        # 소유권 설정 (여러 방법 시도)
+        if sudo chown -R 1000:1000 "$dir_path" 2>/dev/null; then
+            echo -e "${GREEN}   ✅ 소유권 설정 완료 (1000:1000)${NC}"
+        else
+            echo -e "${YELLOW}   ⚠️  소유권 설정 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+            # 현재 상태 확인
+            CURRENT_OWNER=$(stat -c '%U:%G' "$dir_path" 2>/dev/null || stat -f '%Su:%Sg' "$dir_path" 2>/dev/null || echo "UNKNOWN")
+            CURRENT_PERM=$(stat -c '%a' "$dir_path" 2>/dev/null || stat -f '%A' "$dir_path" 2>/dev/null || echo "UNKNOWN")
+            echo "   현재 소유자: $CURRENT_OWNER"
+            echo "   현재 권한: $CURRENT_PERM"
+        fi
+        
+        # 권한 설정 (ZFS ACL 때문에 실패할 수 있음)
+        if sudo chmod -R 775 "$dir_path" 2>/dev/null; then
+            echo -e "${GREEN}   ✅ 권한 설정 완료 (775)${NC}"
+        else
+            echo -e "${YELLOW}   ⚠️  chmod 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+            # 현재 상태 확인
+            CURRENT_PERM=$(stat -c '%a' "$dir_path" 2>/dev/null || stat -f '%A' "$dir_path" 2>/dev/null || echo "UNKNOWN")
+            echo "   현재 권한: $CURRENT_PERM"
+        fi
+        
+        # 읽기 가능 여부 확인
+        if [ -r "$dir_path" ]; then
+            echo -e "${GREEN}   ✅ 읽기 가능${NC}"
+        else
+            echo -e "${RED}   ❌ 읽기 불가능${NC}"
+        fi
+        
+        # 쓰기 가능 여부 확인 (sudo로)
+        if sudo -u "#1000" test -w "$dir_path" 2>/dev/null || sudo test -w "$dir_path" 2>/dev/null; then
+            echo -e "${GREEN}   ✅ 쓰기 가능${NC}"
+        else
+            echo -e "${YELLOW}   ⚠️  쓰기 불가능 (컨테이너에서 문제 발생 가능)${NC}"
+            echo "   TrueNAS 웹 UI에서 데이터셋 권한을 확인하세요:"
+            echo "   1. Storage > Pools > 해당 데이터셋 선택"
+            echo "   2. Edit Permissions > User: 1000, Group: 1000"
+            echo "   3. Apply permissions recursively"
+        fi
     done
     echo -e "${GREEN}✅ 디렉토리 생성 완료${NC}"
+fi
+
+# output 디렉토리 추가 확인 (가장 중요)
+OUTPUT_DIR="$TRUENAS_DATA_PATH/output"
+if [ -d "$OUTPUT_DIR" ]; then
+    echo ""
+    echo -e "${BLUE}📂 output 디렉토리 권한 확인 중...${NC}"
+    
+    # 소유권 확인 및 설정
+    CURRENT_OWNER=$(stat -c '%U:%G' "$OUTPUT_DIR" 2>/dev/null || stat -f '%Su:%Sg' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN:UNKNOWN")
+    echo "   현재 소유자: $CURRENT_OWNER"
+    
+    if sudo chown -R 1000:1000 "$OUTPUT_DIR" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 소유권 설정 완료 (1000:1000)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  소유권 설정 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+    fi
+    
+    # 권한 설정
+    if sudo chmod -R 775 "$OUTPUT_DIR" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 권한 설정 완료 (775)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  권한 설정 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+        CURRENT_PERM=$(stat -c '%a' "$OUTPUT_DIR" 2>/dev/null || stat -f '%A' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN")
+        echo "   현재 권한: $CURRENT_PERM"
+    fi
+    
+    # 최종 상태 확인
+    FINAL_OWNER=$(stat -c '%U:%G' "$OUTPUT_DIR" 2>/dev/null || stat -f '%Su:%Sg' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN:UNKNOWN")
+    FINAL_PERM=$(stat -c '%a' "$OUTPUT_DIR" 2>/dev/null || stat -f '%A' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN")
+    echo "   최종 상태: $FINAL_PERM $FINAL_OWNER"
+    
+    # 컨테이너 사용자(1000)로 쓰기 테스트
+    if sudo -u "#1000" test -w "$OUTPUT_DIR" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 컨테이너 사용자(1000) 쓰기 가능${NC}"
+    else
+        echo -e "${RED}   ❌ 컨테이너 사용자(1000) 쓰기 불가능${NC}"
+        echo ""
+        echo -e "${YELLOW}   ⚠️  TrueNAS 웹 UI에서 권한 설정 필요:${NC}"
+        echo "   1. Storage > Pools > 해당 데이터셋 선택"
+        echo "   2. Edit Permissions > Set ACL"
+        echo "   3. User: 1000 또는 'langflix' 사용자 추가"
+        echo "   4. Permissions: Read, Write, Execute"
+        echo "   5. Apply permissions recursively 체크"
+    fi
 fi
 
 # YouTube 자격 증명 파일 확인 및 권한 설정

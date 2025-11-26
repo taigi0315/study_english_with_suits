@@ -83,3 +83,33 @@ format_args["translation"] = translation
 - [ ] Title follows `Expression | translation | from Show Episodes` format.
 - [ ] Description includes original expression and translated "Watch and learn".
 - [ ] Tags are in target language.
+
+---
+## ✅ Implementation Complete
+
+**Implemented by:** Antigravity
+**Implementation Date:** 2025-11-26
+**Branch:** feature/TICKET-074-update-youtube-posting-format
+**PR:** Merged directly
+
+### What Was Implemented
+Updated the YouTube metadata generation logic to strictly follow the requested format for titles and descriptions, including better localization support.
+
+### Files Modified
+- `langflix/youtube/metadata_generator.py` - Updated templates and generation logic.
+
+### Files Created
+- `tests/unit/test_metadata_generator_ticket_074.py` - Unit tests for the new format.
+
+### Tests Added
+**Unit Tests:**
+- `TestYouTubeMetadataGeneratorTicket074`
+  - `test_korean_metadata_format`: Verifies title, description, and tags for Korean target language.
+  - `test_english_metadata_format`: Verifies title and description for English target language.
+
+### Verification Performed
+- [x] All tests pass
+- [x] Manual verification of output format via test script
+
+### Additional Notes
+The `implementation_plan.md` was created during the process and will be removed in the cleanup phase.

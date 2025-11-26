@@ -35,16 +35,16 @@ class YouTubeMetadataGenerator:
         self.translations = self._load_translations()
     
     def _load_translations(self) -> Dict[str, Dict[str, str]]:
-        """Load translations for template strings by target language (TICKET-056, TICKET-060)"""
+        """Load translations for template strings by target language (TICKET-056, TICKET-060, TICKET-074)"""
         return {
             "Korean": {
                 "quick_lesson": "수트에서 배우는 빠른 영어 레슨!",
-                "expression_label": "표현",
+                "expression_label": "Expression",
                 "meaning_label": "의미",
                 "watch_and_learn": "좋아하는 쇼에서 보고 배우세요!",
-                "title_template": "영어 표현 {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "수트에서 배우는 영어 표현 - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "수트 드라마에서 배우는 실용적인 영어 표현들을 모았습니다.",
                 "final_title": "완전한 영어 레슨: {episode} | 수트에서 배우는 5개 이상의 표현",
                 "final_description_intro": "수트 {episode}의 완전한 영어 레슨!",
@@ -61,9 +61,9 @@ class YouTubeMetadataGenerator:
                 "expression_label": "Expression",
                 "meaning_label": "Meaning",
                 "watch_and_learn": "Watch and learn from your favorite show!",
-                "title_template": "English Expression {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "Learn English Expressions from Suits - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "Learn practical English expressions from the hit TV show Suits!",
                 "final_title": "Complete English Lesson: {episode} | Learn 5+ Expressions from Suits",
                 "final_description_intro": "Complete English lesson from Suits {episode}!",
@@ -77,12 +77,12 @@ class YouTubeMetadataGenerator:
             },
             "Japanese": {
                 "quick_lesson": "スーツから学ぶクイック英語レッスン！",
-                "expression_label": "表現",
+                "expression_label": "Expression",
                 "meaning_label": "意味",
                 "watch_and_learn": "お気に入りの番組から見て学びましょう！",
-                "title_template": "英語表現 {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "スーツから学ぶ英語表現 - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "人気ドラマ「スーツ」から実用的な英語表現を学びましょう！",
                 "final_title": "完全な英語レッスン: {episode} | スーツから5つ以上の表現を学ぶ",
                 "final_description_intro": "スーツ {episode}の完全な英語レッスン！",
@@ -96,12 +96,12 @@ class YouTubeMetadataGenerator:
             },
             "Chinese": {
                 "quick_lesson": "从《金装律师》快速学习英语！",
-                "expression_label": "表达",
+                "expression_label": "Expression",
                 "meaning_label": "含义",
                 "watch_and_learn": "从你最喜欢的节目中观看和学习！",
-                "title_template": "英语表达 {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "从《金装律师》学习英语表达 - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "从热门电视剧《金装律师》中学习实用的英语表达！",
                 "final_title": "完整英语课程: {episode} | 从《金装律师》学习5个以上表达",
                 "final_description_intro": "《金装律师》{episode}的完整英语课程！",
@@ -115,12 +115,12 @@ class YouTubeMetadataGenerator:
             },
             "Spanish": {
                 "quick_lesson": "¡Lección rápida de inglés de Suits!",
-                "expression_label": "Expresión",
+                "expression_label": "Expression",
                 "meaning_label": "Significado",
                 "watch_and_learn": "¡Mira y aprende de tu programa favorito!",
-                "title_template": "Expresión en inglés {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "Aprende expresiones en inglés de Suits - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "¡Aprende expresiones prácticas en inglés de la exitosa serie de TV Suits!",
                 "final_title": "Lección completa de inglés: {episode} | Aprende 5+ expresiones de Suits",
                 "final_description_intro": "¡Lección completa de inglés de Suits {episode}!",
@@ -137,9 +137,9 @@ class YouTubeMetadataGenerator:
                 "expression_label": "Expression",
                 "meaning_label": "Signification",
                 "watch_and_learn": "Regardez et apprenez de votre émission préférée !",
-                "title_template": "Expression anglaise {expression} from {episode}",
+                "title_template": "{expression} | {translation} | from {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "Apprenez des expressions anglaises de Suits - {episode}",
+                "long_form_title": "{expression} | {translation} | from {episode}",
                 "long_form_description_intro": "Apprenez des expressions anglaises pratiques de la série à succès Suits !",
                 "final_title": "Leçon d'anglais complète : {episode} | Apprenez 5+ expressions de Suits",
                 "final_description_intro": "Leçon d'anglais complète de Suits {episode} !",
@@ -170,7 +170,7 @@ class YouTubeMetadataGenerator:
         """Load content templates for different video types"""
         return {
             "educational": YouTubeContentTemplate(
-                title_template="Learn English: {expression} from Suits {episode} | English Expressions",
+                title_template="{expression} | {translation} | from {episode}",
                 description_template="""🎬 Learn English expressions from the hit TV show Suits!
 
 📚 In this video, we'll learn the expression: "{expression}"
@@ -304,7 +304,9 @@ class YouTubeMetadataGenerator:
         
         # Use translated expression if available (TICKET-060)
         # Prefer expression_translation for target language, fallback to English expression
-        expression = (video_metadata.expression_translation or video_metadata.expression or "").strip()
+        expression = (video_metadata.expression or "").strip()
+        translation = (video_metadata.expression_translation or self._get_translation(video_metadata)).strip()
+        
         if not expression:
             # Try to extract from filename if expression is empty
             logger.debug(f"Expression is empty, trying to extract from filename: {video_metadata.path}")
@@ -331,7 +333,7 @@ class YouTubeMetadataGenerator:
         
         language = (video_metadata.language or "en").upper()
         
-        logger.debug(f"Final values: expression='{expression}', episode='{episode}', language='{language}'")
+        logger.debug(f"Final values: expression='{expression}', translation='{translation}', episode='{episode}', language='{language}'")
         
         try:
             # Prepare format arguments based on template requirements
@@ -340,6 +342,8 @@ class YouTubeMetadataGenerator:
             # Check which placeholders are in the template
             if "{expression}" in title_template:
                 format_args["expression"] = expression
+            if "{translation}" in title_template:
+                format_args["translation"] = translation
             if "{episode}" in title_template:
                 format_args["episode"] = episode
             if "{language}" in title_template:
@@ -358,11 +362,11 @@ class YouTubeMetadataGenerator:
                 if video_metadata.video_type == "short":
                     if target_language:
                         fallback_template = self._get_template_translation("title_template", target_language)
-                        title = fallback_template.format(expression=expression) if "{expression}" in fallback_template else f"{expression} | #Shorts"
+                        title = fallback_template.format(expression=expression, translation=translation, episode=episode) if "{expression}" in fallback_template else f"{expression} | {translation} | from {episode}"
                     else:
-                        title = f"English Expression: {expression} | #Shorts"
+                        title = f"{expression} | {translation} | from {episode}"
                 else:
-                    title = f"Learn English: {expression} from {episode}"
+                    title = f"{expression} | {translation} | from {episode}"
                 logger.warning(f"Generated empty title, using fallback: {title}")
             
             # Final validation - ensure title is not empty
@@ -375,17 +379,13 @@ class YouTubeMetadataGenerator:
         except (KeyError, AttributeError, ValueError) as e:
             logger.error(f"❌ Error generating title from template: {e}")
             logger.error(f"  Template: {title_template}")
-            logger.error(f"  Expression: {expression}, Episode: {episode}, Language: {language}")
+            logger.error(f"  Expression: {expression}, Translation: {translation}, Episode: {episode}, Language: {language}")
             logger.error(f"  Video path: {video_metadata.path}")
             # Fallback title based on video type
             if video_metadata.video_type == "short":
-                if target_language:
-                    fallback_template = self._get_template_translation("title_template", target_language)
-                    fallback = fallback_template.format(expression=expression) if expression and "{expression}" in fallback_template else "English Learning Shorts"
-                else:
-                    fallback = f"English Expression: {expression} | #Shorts" if expression else "English Learning Shorts"
+                fallback = f"{expression} | {translation} | from {episode}"
             else:
-                fallback = f"Learn English: {expression} from {episode}"
+                fallback = f"{expression} | {translation} | from {episode}"
             final_fallback = fallback if fallback.strip() else "Learn English Video"
             logger.warning(f"Using error fallback: '{final_fallback}'")
             return final_fallback
@@ -494,24 +494,24 @@ class YouTubeMetadataGenerator:
         # For "short" video type, generate target language description (TICKET-056, TICKET-060)
         if video_metadata.video_type == "short":
             quick_lesson = self._get_template_translation("quick_lesson", target_language)
-            expression_label = self._get_template_translation("expression_label", target_language)
+            expression_label = "Expression" # Always English as per request
             meaning_label = self._get_template_translation("meaning_label", target_language)
             watch_and_learn = self._get_template_translation("watch_and_learn", target_language)
             
             # Get expression metadata from video data first (TICKET-060: Use expression_translation)
-            expression_text = video_metadata.expression_translation or video_metadata.expression
+            expression_text = video_metadata.expression
             translation_text = video_metadata.expression_translation
 
             if not expression_text and video_metadata.expressions_included:
                 first_expression = video_metadata.expressions_included[0]
-                expression_text = expression_text or first_expression.get("translation") or first_expression.get("expression")
+                expression_text = expression_text or first_expression.get("expression")
                 translation_text = translation_text or first_expression.get("translation")
 
             if not translation_text:
                 translation_text = self._get_translation(video_metadata)
 
-            # Use translated expression text (not English) - TICKET-060
-            expression_text = expression_text or video_metadata.expression_translation or video_metadata.expression or "Expression"
+            # Ensure expression_text is the original expression (English)
+            expression_text = expression_text or "Expression"
 
             # Generate localized tags (TICKET-060)
             tags = self._generate_localized_tags(video_metadata, target_language)
@@ -529,7 +529,7 @@ class YouTubeMetadataGenerator:
         episode_display = self._format_episode_display(video_metadata.episode)
         
         # Get translated expression (TICKET-060)
-        expression = video_metadata.expression_translation or video_metadata.expression
+        expression = video_metadata.expression
         translation = video_metadata.expression_translation or self._get_translation(video_metadata)
         
         # For final videos, list multiple expressions
@@ -581,7 +581,7 @@ class YouTubeMetadataGenerator:
             else:
                 description = f"""🎬 {intro}
 
-📚 {self._get_template_translation("expression_label", target_language)}: "{expression}"
+📚 Expression: "{expression}"
 📖 {self._get_template_translation("meaning_label", target_language)}: {translation}
 🎯 {episode_display}
 🌍 {video_metadata.language.upper()}

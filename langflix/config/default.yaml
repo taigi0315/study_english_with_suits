@@ -37,6 +37,9 @@ llm:
   # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
   max_input_length: 800
   
+  # Gemini model name (defaults to gemini-1.5-flash for Tier 1 / Free Tier)
+  model_name: "gemini-1.5-flash"
+  
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"

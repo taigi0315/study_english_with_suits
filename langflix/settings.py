@@ -245,6 +245,17 @@ def get_retry_backoff_seconds() -> list:
     return get_llm_config().get('retry_backoff_seconds', [3, 6, 12])
 
 
+def get_llm_model_name() -> str:
+    """Get the Gemini model name for LLM operations"""
+    # Check environment variable first
+    import os
+    env_model = os.getenv("GEMINI_MODEL")
+    if env_model:
+        return env_model
+    # Get from config or default to 1.5-flash
+    return get_llm_config().get('model_name', 'gemini-1.5-flash')
+
+
 # ============================================================================
 # Font Settings
 # ============================================================================

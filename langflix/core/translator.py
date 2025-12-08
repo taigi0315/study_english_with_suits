@@ -218,7 +218,7 @@ def translate_expression_to_language(
         prompt = _create_translation_prompt(expression, target_language)
         
         # Configure model
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        model_name = settings.get_llm_model_name()
         generation_config = settings.get_generation_config()
         
         model = genai.GenerativeModel(model_name=model_name)

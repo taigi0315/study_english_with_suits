@@ -173,7 +173,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             logger.warning(f"Total prompt length ({len(prompt)}) is very large. Consider reducing chunk size.")
         
         # Configure model with settings from YAML config
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        model_name = settings.get_llm_model_name()
         generation_config = settings.get_generation_config()
         
         model = genai.GenerativeModel(model_name=model_name)

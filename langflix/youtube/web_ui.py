@@ -2045,6 +2045,11 @@ class VideoManagementUI:
                 if 'target_languages' in data and data['target_languages']:
                     form_data['target_languages'] = data['target_languages']
                 
+                # Add auto_upload_config if provided
+                if 'auto_upload_config' in data and data['auto_upload_config']:
+                    import json
+                    form_data['auto_upload_config'] = json.dumps(data['auto_upload_config'])
+                
                 # Add video file if it exists
                 video_file_handle = None
                 subtitle_file_handle = None
@@ -2133,6 +2138,11 @@ class VideoManagementUI:
                 # Call FastAPI backend batch endpoint
                 import requests
                 fastapi_url = self._build_api_url("/api/v1/batch")
+                
+                # Ensure auto_upload_config is passed if present
+                if 'auto_upload_config' in data:
+                    # It's already in data, which is passed as json
+                    pass
                 
                 response = requests.post(fastapi_url, json=data)
                 

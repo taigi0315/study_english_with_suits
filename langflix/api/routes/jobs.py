@@ -40,7 +40,8 @@ async def process_video_task(
     no_shorts: bool,
     short_form_max_duration: float = 180.0,
     output_dir: str = "output",
-    target_languages: Optional[List[str]] = None
+    target_languages: Optional[List[str]] = None,
+    auto_upload_config: Optional[Dict[str, Any]] = None
 ):
     """Process video in background task using unified VideoPipelineService."""
     
@@ -124,6 +125,149 @@ async def process_video_task(
                 redis_manager.invalidate_video_cache()
                 
                 logger.info(f"✅ Completed processing for job {job_id}")
+                
+                # Auto Upload Logic
+                if auto_upload_config and auto_upload_config.get('enabled'):
+                    try:
+                        logger.info(f"Starting auto-upload for job {job_id}")
+                        from langflix.youtube.uploader import YouTubeUploader
+                        from langflix.youtube.schedule_manager import YouTubeScheduleManager
+                        from langflix.youtube.metadata_generator import YouTubeMetadataGenerator, YouTubeVideoMetadata
+                        from langflix.youtube.video_manager import VideoFileManager
+                        from langflix import settings
+                        
+                        # Initialize services
+                        uploader = YouTubeUploader()
+                        schedule_manager = None
+                        
+                        # Check database availability before initializing schedule manager
+                        from langflix.db.session import db_manager
+                        if settings.get_database_enabled():
+                            if db_manager.check_connection():
+                                schedule_manager = YouTubeScheduleManager()
+                            else:
+                                logger.warning("Database enabled but unreachable. Running in stateless mode (scheduling disabled).")
+                        
+                        metadata_generator = YouTubeMetadataGenerator()
+                        video_manager = VideoFileManager()
+                        
+                        timing = auto_upload_config.get('timing', 'scheduled')
+                        upload_shorts = auto_upload_config.get('upload_shorts', True)
+                        upload_long = auto_upload_config.get('upload_long', True)
+                        
+                        videos_to_upload = []
+                        
+                        # Add final video if requested
+                        if upload_long and result.get('final_video'):
+                            videos_to_upload.append({
+                                'path': result['final_video'],
+                                'type': 'final'
+                            })
+                            
+                        # Add short videos if requested
+                        if upload_shorts and result.get('short_videos'):
+                            for short_video in result['short_videos']:
+                                videos_to_upload.append({
+                                    'path': short_video,
+                                    'type': 'short'
+                                })
+                        
+                        for video in videos_to_upload:
+                            video_path = video['path']
+                            video_type = video['type']
+                            
+                            logger.info(f"Auto-uploading {video_type} video: {video_path}")
+                            
+                            # Generate metadata
+                            # We need to scan the file first to get metadata
+                            # Or manually construct it since we have the expressions
+                            # Let's use VideoFileManager to be consistent
+                            video_meta = video_manager._extract_video_metadata(Path(video_path))
+                            if not video_meta:
+                                logger.warning(f"Could not scan video for metadata: {video_path}")
+                                continue
+                                
+                            youtube_metadata = metadata_generator.generate_metadata(video_meta)
+                            
+                            # Determine action based on timing and availability
+                            should_upload_now = False
+                            
+                            if timing == 'immediate':
+                                youtube_metadata.privacy_status = 'private'
+                                should_upload_now = True
+                                
+                            elif timing == 'scheduled':
+                                if schedule_manager:
+                                    # Schedule upload
+                                    publish_time = schedule_manager.get_next_available_slot(video_type)
+                                    success, msg, scheduled_time = schedule_manager.schedule_video(video_path, video_type, publish_time)
+                                    if success:
+                                        logger.info(f"Scheduled upload for {scheduled_time}")
+                                    else:
+                                        logger.error(f"Scheduling failed: {msg}")
+                                else:
+                                    # Stateless fallback: Try YouTube-based scheduler first
+                                    publish_time = None
+                                    yt_scheduler = None
+                                    
+                                    try:
+                                        from langflix.youtube.last_schedule import YouTubeLastScheduleService, LastScheduleConfig
+                                        # Initialize with default config
+                                        yt_scheduler = YouTubeLastScheduleService(LastScheduleConfig())
+                                        # Map video type to schedule type (context -> short, long-form -> final)
+                                        schedule_video_type = 'short' if video_type == 'context' else ('final' if video_type == 'long-form' else video_type)
+                                        
+                                        # Get next slot from YouTube/cache
+                                        publish_time = yt_scheduler.get_next_available_slot()
+                                        logger.info(f"Stateless mode: would schedule for next slot: {publish_time}")
+                                        
+                                    except Exception as e:
+                                        logger.warning(f"Failed to initialize YouTube scheduler fallback: {e}")
+                                        yt_scheduler = None
+                                    
+                                    if publish_time:
+                                        # We have a slot, so we can "schedule" it by setting publish_at
+                                        # Note: We can't store it in DB, but we can tell YouTube to publish it then
+                                        logger.info(f"Stateless scheduling: Uploading with publish_at={publish_time}")
+                                        
+                                        # Upload with publish_at
+                                        upload_result = uploader.upload_video(
+                                            video_path, 
+                                            youtube_metadata, 
+                                            publish_at=publish_time
+                                        )
+                                        
+                                        if upload_result.success:
+                                            logger.info(f"Stateless upload success: {upload_result.video_id} (scheduled for {publish_time})")
+                                            # Update local cache so next video in this batch gets next slot
+                                            if yt_scheduler:
+                                                yt_scheduler.record_local(publish_time)
+                                        else:
+                                            logger.error(f"Stateless upload failed: {upload_result.error_message}")
+                                            
+                                        # Skip the immediate upload block below
+                                        should_upload_now = False
+                                        
+                                    else:
+                                        # truly stateless fallback if even YouTube scheduler fails
+                                        logger.warning("Database unavailable and YouTube scheduler failed. Falling back to immediate private upload.")
+                                        youtube_metadata.privacy_status = 'private'
+                                        should_upload_now = True
+                            
+                            # Execute immediate upload if needed (and not handled by stateless scheduling above)
+                            if should_upload_now:
+                                upload_result = uploader.upload_video(video_path, youtube_metadata)
+                                if upload_result.success:
+                                    logger.info(f"Immediate upload success: {upload_result.video_id}")
+                                    # Update DB if available
+                                    if schedule_manager:
+                                        schedule_manager.update_schedule_with_video_id(video_path, upload_result.video_id, 'uploaded')
+                                else:
+                                    logger.error(f"Immediate upload failed: {upload_result.error_message}")
+                                    
+                    except Exception as e:
+                        logger.error(f"Auto-upload failed: {e}", exc_info=True)
+                
                 # Temp files automatically cleaned up when context exits
         
     except Exception as e:
@@ -164,6 +308,7 @@ async def create_job(
     short_form_max_duration: float = Form(180.0),
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
+    auto_upload_config: Optional[str] = Form(None), # JSON string
     background_tasks: BackgroundTasks = BackgroundTasks()
 ) -> Dict[str, Any]:
     """Create a new video processing job."""
@@ -201,6 +346,16 @@ async def create_job(
             # Parse comma-separated string to list
             target_languages_list = [lang.strip() for lang in target_languages.split(',') if lang.strip()]
             logger.info(f"Target languages: {target_languages_list}")
+            
+        # Parse auto_upload_config if provided
+        auto_upload_config_dict = None
+        if auto_upload_config:
+            import json
+            try:
+                auto_upload_config_dict = json.loads(auto_upload_config)
+                logger.info(f"Auto upload config: {auto_upload_config_dict}")
+            except Exception as e:
+                logger.warning(f"Failed to parse auto_upload_config: {e}")
         
         # Store job information in Redis
         job_data = {
@@ -241,7 +396,8 @@ async def create_job(
             no_shorts=no_shorts,
             short_form_max_duration=short_form_max_duration,
             output_dir=output_dir,
-            target_languages=target_languages_list
+            target_languages=target_languages_list,
+            auto_upload_config=auto_upload_config_dict
         )
         
         return {

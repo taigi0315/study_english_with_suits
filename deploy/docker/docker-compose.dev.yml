@@ -36,16 +36,16 @@ services:
   # Celery Worker for background tasks
   celery-worker:
     build:
-      context: .
-      dockerfile: Dockerfile.dev
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.dev
     container_name: langflix-celery-worker
     environment:
       - DATABASE_URL=postgresql://postgres:langflix123@postgres:5432/langflix
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - .:/app
-      - ./output:/app/output
+      - ../../:/app
+      - ../../output:/app/output
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,16 +57,16 @@ services:
   # Celery Beat for scheduled tasks
   celery-beat:
     build:
-      context: .
-      dockerfile: Dockerfile.dev
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.dev
     container_name: langflix-celery-beat
     environment:
       - DATABASE_URL=postgresql://postgres:langflix123@postgres:5432/langflix
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - .:/app
-      - ./output:/app/output
+      - ../../:/app
+      - ../../output:/app/output
     depends_on:
       postgres:
         condition: service_healthy

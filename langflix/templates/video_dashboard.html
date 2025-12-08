@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,40 +11,40 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }
-        
+
         .header {
             background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
             padding: 30px;
             text-align: center;
         }
-        
+
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
         }
-        
+
         .header p {
             font-size: 1.2em;
             opacity: 0.9;
         }
-        
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -51,45 +52,45 @@
             padding: 30px;
             background: #f8f9fa;
         }
-        
+
         .stat-card {
             background: white;
             padding: 25px;
             border-radius: 10px;
             text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             transition: transform 0.3s ease;
         }
-        
+
         .stat-card:hover {
             transform: translateY(-5px);
         }
-        
+
         .stat-number {
             font-size: 2.5em;
             font-weight: bold;
             color: #3498db;
             margin-bottom: 10px;
         }
-        
+
         .stat-label {
             color: #7f8c8d;
             font-size: 1.1em;
         }
-        
+
         .controls {
             padding: 20px 30px;
             background: white;
             border-bottom: 1px solid #ecf0f1;
         }
-        
+
         .filter-buttons {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             margin-bottom: 20px;
         }
-        
+
         .filter-btn {
             padding: 10px 20px;
             border: none;
@@ -100,12 +101,13 @@
             transition: all 0.3s ease;
             font-weight: 500;
         }
-        
-        .filter-btn:hover, .filter-btn.active {
+
+        .filter-btn:hover,
+        .filter-btn.active {
             background: #2980b9;
             transform: translateY(-2px);
         }
-        
+
         .search-box {
             width: 100%;
             max-width: 400px;
@@ -115,18 +117,18 @@
             font-size: 1em;
             transition: border-color 0.3s ease;
         }
-        
+
         .search-box:focus {
             outline: none;
             border-color: #3498db;
         }
-        
+
         /* Compact Video List View */
         .video-list {
             padding: 0;
             margin: 0;
         }
-        
+
         .video-row {
             display: flex;
             align-items: center;
@@ -137,21 +139,21 @@
             cursor: pointer;
             min-height: 60px;
         }
-        
+
         .video-row:hover {
             background: #f8f9fa;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        
+
         .video-row.ready-for-upload {
             border-left: 3px solid #27ae60;
         }
-        
+
         .video-row.uploaded {
             background: #f0fff4;
             border-left: 3px solid #3498db;
         }
-        
+
         .video-thumbnail-small {
             width: 40px;
             height: 40px;
@@ -161,13 +163,13 @@
             flex-shrink: 0;
             overflow: hidden;
         }
-        
+
         .video-thumbnail-small img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        
+
         .video-info-compact {
             display: flex;
             align-items: center;
@@ -175,7 +177,7 @@
             flex: 1;
             min-width: 0;
         }
-        
+
         .video-title-compact {
             font-size: 1em;
             font-weight: 600;
@@ -187,7 +189,7 @@
             overflow: visible;
             line-height: 1.4;
         }
-        
+
         .video-meta-compact {
             display: flex;
             align-items: center;
@@ -197,17 +199,17 @@
             flex: 0 1 auto;
             min-width: 0;
         }
-        
+
         .video-meta-compact span {
             white-space: nowrap;
         }
-        
+
         .video-actions-compact {
             display: flex;
             gap: 8px;
             flex-shrink: 0;
         }
-        
+
         .action-btn-icon {
             width: 36px;
             height: 36px;
@@ -220,14 +222,14 @@
             align-items: center;
             justify-content: center;
             background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .action-btn-icon:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
             transform: translateY(-1px);
         }
-        
+
         .action-btn {
             padding: 8px 16px;
             border: none;
@@ -237,51 +239,51 @@
             transition: all 0.2s ease;
             font-size: 0.9em;
         }
-        
+
         .btn-primary {
             background: #3498db;
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: #2980b9;
         }
-        
+
         .btn-success {
             background: #27ae60;
             color: white;
         }
-        
+
         .btn-success:hover {
             background: #229954;
         }
-        
+
         .btn-warning {
             background: #f39c12;
             color: white;
         }
-        
+
         .btn-warning:hover {
             background: #e67e22;
         }
-        
+
         .btn-white {
             background: white;
             color: #2c3e50;
             border: 1px solid #ddd;
         }
-        
+
         .btn-white:hover {
             background: #f8f9fa;
             border-color: #bbb;
             color: #1a252f;
         }
-        
+
         .btn-white:active {
             background: #e9ecef;
             border-color: #999;
         }
-        
+
         .btn-create-content {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -299,40 +301,47 @@
             position: relative;
             overflow: hidden;
         }
-        
+
         .btn-create-content:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
             background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
         }
-        
+
         .btn-create-content:active {
             transform: translateY(0);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
-        
+
         .btn-create-content .btn-icon {
             font-size: 1.2em;
             animation: sparkle 2s ease-in-out infinite;
         }
-        
+
         .btn-create-content .btn-text {
             font-weight: 600;
             letter-spacing: 0.5px;
         }
-        
+
         @keyframes sparkle {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
         }
-        
+
         .loading {
             text-align: center;
             padding: 50px;
             color: #7f8c8d;
             font-size: 1.2em;
         }
-        
+
         .error {
             background: #e74c3c;
             color: white;
@@ -341,7 +350,7 @@
             border-radius: 10px;
             text-align: center;
         }
-        
+
         .upload-ready-badge {
             position: absolute;
             top: 10px;
@@ -353,73 +362,74 @@
             font-size: 0.8em;
             font-weight: bold;
         }
-        
+
         .video-type-badge {
             position: absolute;
             top: 10px;
             left: 10px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 5px 10px;
             border-radius: 15px;
             font-size: 0.8em;
         }
-        
+
         /* YouTube Account Section */
         .youtube-account-section {
             margin-top: 20px;
             padding: 20px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
             backdrop-filter: blur(10px);
         }
-        
+
         .youtube-account-info {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 20px;
         }
-        
+
         .account-details {
             display: flex;
             align-items: center;
             gap: 15px;
         }
-        
+
         .channel-thumbnail {
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
         }
-        
+
         .account-text {
             color: white;
         }
-        
+
         .channel-title {
             font-weight: bold;
             font-size: 1.1em;
             margin-bottom: 5px;
         }
-        
+
         .channel-email {
             font-size: 0.9em;
             opacity: 0.8;
         }
-        
+
         .youtube-login-prompt {
             text-align: center;
             color: white;
         }
-        
+
         .youtube-login-prompt p {
             margin-bottom: 15px;
             font-size: 1.1em;
         }
-        
-        .btn-login, .btn-logout {
+
+        .btn-login,
+        .btn-logout {
             padding: 10px 20px;
             border: none;
             border-radius: 25px;
@@ -427,48 +437,49 @@
             font-weight: 500;
             transition: all 0.3s ease;
         }
-        
+
         .btn-login {
             background: #ff4444;
             color: white;
         }
-        
+
         .btn-login:hover {
             background: #ff3333;
             transform: translateY(-2px);
         }
-        
+
         .btn-logout {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             color: white;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
-        
+
         .btn-logout:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255, 255, 255, 0.3);
         }
-        
+
         @media (max-width: 768px) {
             .videos-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .filter-buttons {
                 justify-content: center;
             }
-            
+
             .header h1 {
                 font-size: 2em;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>🎬 LangFlix Video Dashboard</h1>
             <p>Manage your generated educational videos for YouTube upload</p>
-            
+
             <!-- YouTube Account Section -->
             <div id="youtubeAccountSection" class="youtube-account-section">
                 <div id="youtubeAccountInfo" class="youtube-account-info" style="display: none;">
@@ -484,12 +495,8 @@
                 <div id="youtubeLoginPrompt" class="youtube-login-prompt">
                     <p>Connect to YouTube to schedule uploads</p>
                     <div style="margin: 15px 0;">
-                        <input 
-                            type="email" 
-                            id="youtubeEmailInput" 
-                            placeholder="Enter your Google email (optional)"
-                            style="padding: 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; width: 300px; max-width: 100%; font-size: 14px;"
-                        />
+                        <input type="email" id="youtubeEmailInput" placeholder="Enter your Google email (optional)"
+                            style="padding: 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; width: 300px; max-width: 100%; font-size: 14px;" />
                         <p style="font-size: 0.85em; margin-top: 8px; opacity: 0.8; color: white;">
                             Leave empty to use default browser login
                         </p>
@@ -498,7 +505,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
                 <div class="stat-number" id="totalVideos">-</div>
@@ -517,7 +524,7 @@
                 <div class="stat-label">Total Duration</div>
             </div>
         </div>
-        
+
         <div class="controls">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div class="filter-buttons">
@@ -528,16 +535,16 @@
                     <button class="filter-btn" data-filter="not-uploaded">⏳ Not Uploaded</button>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <button id="selectAllVideosBtn" 
-                            style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
-                            onmouseover="this.style.background='#2980b9'; this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.background='#3498db'; this.style.transform='translateY(0)'">
+                    <button id="selectAllVideosBtn"
+                        style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
+                        onmouseover="this.style.background='#2980b9'; this.style.transform='translateY(-2px)'"
+                        onmouseout="this.style.background='#3498db'; this.style.transform='translateY(0)'">
                         ✓ Select All
                     </button>
-                    <button id="deselectAllVideosBtn" 
-                            style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
-                            onmouseover="this.style.background='#7f8c8d'; this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.background='#95a5a6'; this.style.transform='translateY(0)'">
+                    <button id="deselectAllVideosBtn"
+                        style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;"
+                        onmouseover="this.style.background='#7f8c8d'; this.style.transform='translateY(-2px)'"
+                        onmouseout="this.style.background='#95a5a6'; this.style.transform='translateY(0)'">
                         ✗ Deselect All
                     </button>
                     <button class="btn-create-content" onclick="showCreateContentModal()">
@@ -548,33 +555,41 @@
             </div>
             <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
         </div>
-        
+
         <!-- Batch Actions Bar -->
-        <div id="batchActionsBar" class="batch-actions" style="display: none; padding: 15px; background: #f8f9fa; margin: 20px 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <div id="batchActionsBar" class="batch-actions"
+            style="display: none; padding: 15px; background: #f8f9fa; margin: 20px 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <span id="selectedCount" style="font-weight: bold; color: #2c3e50;">0 selected</span>
-                    <button id="deleteSelectedBtn" class="batch-action-btn" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    <button id="deleteSelectedBtn" class="batch-action-btn"
+                        style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
                         🗑️ Delete Selected
                     </button>
-                    <button id="uploadImmediateBtn" class="batch-action-btn" style="background: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    <button id="uploadImmediateBtn" class="batch-action-btn"
+                        style="background: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
                         📤 Upload Selected (Immediate)
                     </button>
-                    <button id="uploadScheduleBtn" class="batch-action-btn" style="background: #27ae60; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    <button id="uploadScheduleBtn" class="batch-action-btn"
+                        style="background: #27ae60; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
                         📅 Upload Selected (Schedule)
                     </button>
                 </div>
-                <button id="clearSelectionBtn" style="background: transparent; border: 1px solid #bdc3c7; color: #7f8c8d; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
+                <button id="clearSelectionBtn"
+                    style="background: transparent; border: 1px solid #bdc3c7; color: #7f8c8d; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
                     Clear Selection
                 </button>
             </div>
         </div>
-        
+
         <!-- Breadcrumb Navigation -->
-        <div class="breadcrumb-nav" style="padding: 15px 30px; background: white; border-bottom: 1px solid #ecf0f1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;" id="breadcrumbNav">
-            <a href="#" onclick="navigateToPath(''); return false;" style="color: #3498db; text-decoration: none; font-weight: 500;">output</a>
+        <div class="breadcrumb-nav"
+            style="padding: 15px 30px; background: white; border-bottom: 1px solid #ecf0f1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;"
+            id="breadcrumbNav">
+            <a href="#" onclick="navigateToPath(''); return false;"
+                style="color: #3498db; text-decoration: none; font-weight: 500;">output</a>
         </div>
-        
+
         <div id="videosContainer">
             <div class="loading">Loading...</div>
         </div>
@@ -588,18 +603,18 @@
         let currentDirectoryItems = [];
 
         // Load videos on page load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             navigateToPath(''); // Start at output root
             loadStatistics();
             loadYouTubeAccount();
             loadQuotaStatus();
-            
+
             // Setup event listeners
             setupFilterButtons();
             setupSearchBox();
             setupYouTubeAccountEvents();
             setupBatchOperations();
-            
+
             // Restore active job progress bar if exists
             restoreActiveJobs();
             restoreActiveBatches();
@@ -627,9 +642,9 @@
         function updateBreadcrumb(path) {
             const breadcrumb = document.getElementById('breadcrumbNav');
             const parts = path ? path.split('/').filter(p => p) : [];
-            
+
             let html = '<a href="#" onclick="navigateToPath(\'\'); return false;" style="color: #3498db; text-decoration: none; font-weight: 500;">output</a>';
-            
+
             let currentPath = '';
             parts.forEach((part, index) => {
                 currentPath += (currentPath ? '/' : '') + part;
@@ -641,30 +656,30 @@
                     html += `<a href="#" onclick="navigateToPath('${currentPath}'); return false;" style="color: #3498db; text-decoration: none; font-weight: 500;">${escapeHtml(part)}</a>`;
                 }
             });
-            
+
             breadcrumb.innerHTML = html;
         }
 
         async function loadDirectory(path) {
             const container = document.getElementById('videosContainer');
             container.innerHTML = '<div class="loading">Loading...</div>';
-            
+
             try {
                 const url = `/api/explore${path ? '?path=' + encodeURIComponent(path) : ''}`;
                 const response = await fetch(url);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     container.innerHTML = `<div class="error">Error: ${data.error}</div>`;
                     return;
                 }
-                
+
                 currentDirectoryItems = data.items || [];
-                
+
                 // Also load all videos for statistics and filtering
                 const videosResponse = await fetch('/api/videos');
                 allVideos = await videosResponse.json();
-                
+
                 renderDirectory(currentDirectoryItems);
             } catch (error) {
                 showError('Failed to load directory: ' + error.message);
@@ -681,7 +696,7 @@
             try {
                 const response = await fetch('/api/statistics');
                 const stats = await response.json();
-                
+
                 document.getElementById('totalVideos').textContent = stats.total_videos || 0;
                 document.getElementById('uploadReady').textContent = stats.upload_ready_count || 0;
                 document.getElementById('totalSize').textContent = stats.total_size_mb || 0;
@@ -694,11 +709,11 @@
         function setupFilterButtons() {
             const buttons = document.querySelectorAll('.filter-btn');
             buttons.forEach(button => {
-                button.addEventListener('click', function() {
+                button.addEventListener('click', function () {
                     // Update active button
                     buttons.forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
-                    
+
                     // Update filter
                     currentFilter = this.dataset.filter;
                     applyFilters();
@@ -708,11 +723,11 @@
 
         function setupSearchBox() {
             const searchBox = document.getElementById('searchBox');
-            searchBox.addEventListener('input', function() {
+            searchBox.addEventListener('input', function () {
                 applyFilters();
             });
         }
-        
+
         // Keep renderVideos for backward compatibility (if needed elsewhere)
         function renderVideos() {
             // This is now handled by renderDirectory
@@ -727,7 +742,7 @@
         // Language code to display name mapping
         const languageNames = {
             'ko': 'Korean',
-            'ja': 'Japanese', 
+            'ja': 'Japanese',
             'zh': 'Chinese',
             'es': 'Spanish',
             'fr': 'French',
@@ -752,17 +767,17 @@
 
         function renderDirectory(items) {
             const container = document.getElementById('videosContainer');
-            
+
             if (items.length === 0) {
                 container.innerHTML = '<div class="loading">This directory is empty.</div>';
                 return;
             }
-            
+
             // Separate directories and files
             const directories = items.filter(item => item.is_directory).sort((a, b) => a.name.localeCompare(b.name));
             const files = items.filter(item => item.is_file).sort((a, b) => a.name.localeCompare(b.name));
             const sortedItems = [...directories, ...files];
-            
+
             // Filter items based on current filter
             let displayItems = sortedItems;
             if (currentFilter !== 'all') {
@@ -799,26 +814,26 @@
                     displayItems = [...directories, ...filteredFiles];
                 }
             }
-            
+
             // Apply search filter
             const searchTerm = document.getElementById('searchBox').value.toLowerCase();
             if (searchTerm) {
-                displayItems = displayItems.filter(item => 
+                displayItems = displayItems.filter(item =>
                     item.name.toLowerCase().includes(searchTerm)
                 );
             }
-            
+
             if (displayItems.length === 0) {
                 container.innerHTML = '<div class="loading">No items found matching your criteria.</div>';
                 return;
             }
-            
+
             // Render as list view (like the old video list)
             container.innerHTML = `
                 <div class="video-list">
                     ${displayItems.map(item => {
-                        if (item.is_directory) {
-                            return `
+                if (item.is_directory) {
+                    return `
                                 <div class="video-row" onclick="navigateToPath('${item.path}')" style="cursor: pointer;">
                                     <div style="margin-right: 10px;">
                                         <div style="font-size: 24px;">📁</div>
@@ -839,21 +854,21 @@
                                     </div>
                                 </div>
                             `;
-                        } else {
-                            // Find matching video metadata
-                            const video = allVideos.find(v => v.path === item.absolute_path);
-                            const isVideo = item.is_video;
-                            const uploadStatus = video ? (video.upload_status || 'not_uploaded') : 'not_uploaded';
-                            const isUploaded = uploadStatus === 'uploaded';
-                            const readyForUpload = video ? video.ready_for_upload : false;
-                            const uploadIcon = isUploaded ? '✅' : '📤';
-                            const languageDisplay = video ? getLanguageDisplayName(video.language) : '';
-                            
-                            const previewPath = video ? video.path : item.absolute_path;
-                            const previewArg = JSON.stringify(previewPath).replace(/"/g, '&quot;');
-                            const showUploadButton = readyForUpload;
-                            
-                            return `
+                } else {
+                    // Find matching video metadata
+                    const video = allVideos.find(v => v.path === item.absolute_path);
+                    const isVideo = item.is_video;
+                    const uploadStatus = video ? (video.upload_status || 'not_uploaded') : 'not_uploaded';
+                    const isUploaded = uploadStatus === 'uploaded';
+                    const readyForUpload = video ? video.ready_for_upload : false;
+                    const uploadIcon = isUploaded ? '✅' : '📤';
+                    const languageDisplay = video ? getLanguageDisplayName(video.language) : '';
+
+                    const previewPath = video ? video.path : item.absolute_path;
+                    const previewArg = JSON.stringify(previewPath).replace(/"/g, '&quot;');
+                    const showUploadButton = readyForUpload;
+
+                    return `
                                 <div class="video-row ${readyForUpload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}">
                                     <div style="margin-right: 10px;">
                                         <input type="checkbox" 
@@ -904,8 +919,8 @@
                                     </div>
                                 </div>
                             `;
-                        }
-                    }).join('')}
+                }
+            }).join('')}
                 </div>
             `;
         }
@@ -939,7 +954,7 @@
                 justify-content: center;
                 z-index: 2000;
             `;
-            
+
             const videoContainer = document.createElement('div');
             videoContainer.style.cssText = `
                 background: black;
@@ -949,7 +964,7 @@
                 max-height: 90vh;
                 position: relative;
             `;
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.innerHTML = '✕';
             closeBtn.style.cssText = `
@@ -968,7 +983,7 @@
                 align-items: center;
                 justify-content: center;
             `;
-            
+
             const video = document.createElement('video');
             video.controls = true;
             video.style.cssText = `
@@ -976,15 +991,15 @@
                 max-height: 80vh;
                 border-radius: 5px;
             `;
-            
+
             const encodedPath = encodeURIComponent(videoPath);
             video.src = `/api/video/${encodedPath}`;
-            
+
             closeBtn.onclick = () => modal.remove();
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
-            
+
             videoContainer.appendChild(closeBtn);
             videoContainer.appendChild(video);
             modal.appendChild(videoContainer);
@@ -996,19 +1011,19 @@
                 // First, preview the metadata
                 const previewResponse = await fetch(`/api/upload/preview/${encodeURIComponent(videoPath)}`);
                 const preview = await previewResponse.json();
-                
+
                 if (!previewResponse.ok) {
                     alert(`Error: ${preview.error}`);
                     return;
                 }
-                
+
                 // Determine video type from path
                 const videoType = videoPath.includes('short') ? 'short' : 'final';
-                
+
                 // Get next available time
                 const nextAvailableResponse = await fetch(`/api/schedule/next-available?video_type=${videoType}`);
                 const nextAvailable = await nextAvailableResponse.json();
-                
+
                 let nextAvailableTime = null;
                 if (nextAvailableResponse.ok) {
                     nextAvailableTime = nextAvailable.next_available_time;
@@ -1020,10 +1035,10 @@
                     tomorrow.setHours(10, 0, 0, 0);
                     nextAvailableTime = tomorrow.toISOString();
                 }
-                
+
                 // Show scheduling dialog
                 const scheduleDialog = showScheduleDialog(preview, videoPath, videoType, nextAvailableTime);
-                
+
             } catch (error) {
                 alert(`Error: ${error.message}`);
             }
@@ -1044,7 +1059,7 @@
                 justify-content: center;
                 z-index: 1000;
             `;
-            
+
             const dialog = document.createElement('div');
             dialog.style.cssText = `
                 background: white;
@@ -1055,7 +1070,7 @@
                 max-height: 80vh;
                 overflow-y: auto;
             `;
-            
+
             const nextAvailableDate = new Date(nextAvailableTime);
             const formattedTime = nextAvailableDate.toLocaleString('ko-KR', {
                 year: 'numeric',
@@ -1064,7 +1079,7 @@
                 hour: '2-digit',
                 minute: '2-digit'
             });
-            
+
             dialog.innerHTML = `
                 <h2 style="margin-bottom: 20px; color: #2c3e50;">📅 Schedule YouTube Upload</h2>
                 
@@ -1098,21 +1113,21 @@
                     <button id="scheduleBtn" style="padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer;">Schedule Upload</button>
                 </div>
             `;
-            
+
             modal.appendChild(dialog);
             document.body.appendChild(modal);
-            
+
             // Ensure modal is visible with a small delay
             setTimeout(() => {
                 modal.style.display = 'flex';
                 modal.style.opacity = '1';
             }, 10);
-            
+
             // Event listeners
             document.getElementById('cancelBtn').addEventListener('click', () => {
                 document.body.removeChild(modal);
             });
-            
+
             // Test upload button
             document.getElementById('testUploadBtn').addEventListener('click', async () => {
                 try {
@@ -1131,9 +1146,9 @@
                             category_id: preview.category_id
                         })
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (response.ok) {
                         alert(`Test upload successful!\n\nVideo ID: ${result.video_id}\nYouTube URL: ${result.video_url}`);
                         document.body.removeChild(modal);
@@ -1145,11 +1160,11 @@
                     alert(`Test upload error: ${error.message}`);
                 }
             });
-            
+
             document.getElementById('scheduleBtn').addEventListener('click', async () => {
                 const scheduleType = document.querySelector('input[name="schedule"]:checked').value;
                 let publishTime = nextAvailableTime;
-                
+
                 if (scheduleType === 'custom') {
                     const customDateTime = document.getElementById('customDateTime').value;
                     if (!customDateTime) {
@@ -1158,7 +1173,7 @@
                     }
                     publishTime = new Date(customDateTime).toISOString();
                 }
-                
+
                 try {
                     const response = await fetch('/api/upload/schedule', {
                         method: 'POST',
@@ -1171,9 +1186,9 @@
                             publish_time: publishTime
                         })
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (response.ok) {
                         // Use scheduled_publish_time from backend response (this is the actual scheduled time)
                         const scheduledTime = result.scheduled_publish_time || result.scheduled_time;
@@ -1211,7 +1226,7 @@
                                         video_type: videoType
                                     })
                                 });
-                                
+
                                 if (queueResponse.ok) {
                                     alert('Video added to upload queue successfully!');
                                     document.body.removeChild(modal);
@@ -1224,13 +1239,13 @@
                             }
                         } else {
                             alert(`Scheduling failed: ${result.error}`);
+                        }
                     }
-                }
-            } catch (error) {
+                } catch (error) {
                     alert(`Scheduling error: ${error.message}`);
                 }
             });
-            
+
             // Set minimum date for custom datetime input
             const customDateTimeInput = document.getElementById('customDateTime');
             const now = new Date();
@@ -1253,7 +1268,7 @@
             try {
                 const response = await fetch('/api/youtube/account');
                 const account = await response.json();
-                
+
                 if (account.authenticated) {
                     showYouTubeAccountInfo(account.channel);
                 } else {
@@ -1268,7 +1283,7 @@
         function showYouTubeAccountInfo(channel) {
             document.getElementById('youtubeAccountInfo').style.display = 'flex';
             document.getElementById('youtubeLoginPrompt').style.display = 'none';
-            
+
             // Handle missing thumbnail_url gracefully
             const thumbnail = document.getElementById('channelThumbnail');
             if (channel.thumbnail_url) {
@@ -1283,7 +1298,7 @@
         function showYouTubeLoginPrompt() {
             document.getElementById('youtubeAccountInfo').style.display = 'none';
             document.getElementById('youtubeLoginPrompt').style.display = 'block';
-            
+
             // Clear email input
             const emailInput = document.getElementById('youtubeEmailInput');
             if (emailInput) {
@@ -1300,13 +1315,13 @@
             const emailInput = document.getElementById('youtubeEmailInput');
             const email = emailInput ? emailInput.value.trim() : null;
             const useWebFlow = email !== null && email !== '';  // Use web flow if email provided
-            
+
             try {
                 const requestBody = {
                     use_web_flow: useWebFlow,
                     email: email || null
                 };
-                
+
                 const response = await fetch('/api/youtube/login', {
                     method: 'POST',
                     headers: {
@@ -1314,9 +1329,9 @@
                     },
                     body: JSON.stringify(requestBody)
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok) {
                     if (result.flow === 'web') {
                         // Open OAuth URL in popup
@@ -1325,14 +1340,14 @@
                             'youtube-auth',
                             'width=600,height=700,scrollbars=yes,resizable=yes'
                         );
-                        
+
                         // Listen for auth success/error messages from popup
                         const messageHandler = (event) => {
                             // Security: Only accept messages from same origin
                             if (event.origin !== window.location.origin) {
                                 return;
                             }
-                            
+
                             if (event.data.type === 'youtube-auth-success') {
                                 window.removeEventListener('message', messageHandler);
                                 if (popup && !popup.closed) {
@@ -1349,9 +1364,9 @@
                                 alert(`Login failed: ${event.data.error || 'Authentication error'}\n${event.data.details || ''}`);
                             }
                         };
-                        
+
                         window.addEventListener('message', messageHandler);
-                        
+
                         // Also handle popup close (user might close manually)
                         const checkPopupClosed = setInterval(() => {
                             if (popup.closed) {
@@ -1359,11 +1374,11 @@
                                 window.removeEventListener('message', messageHandler);
                             }
                         }, 1000);
-                        
+
                     } else {
                         // Desktop flow (existing behavior)
-                    showYouTubeAccountInfo(result.channel);
-                    alert('Successfully connected to YouTube!');
+                        showYouTubeAccountInfo(result.channel);
+                        alert('Successfully connected to YouTube!');
                     }
                 } else {
                     alert(`Login failed: ${result.error}\n${result.details || ''}`);
@@ -1384,7 +1399,7 @@
                         'Content-Type': 'application/json',
                     }
                 });
-                
+
                 if (response.ok) {
                     showYouTubeLoginPrompt();
                     alert('Successfully logged out from YouTube');
@@ -1402,11 +1417,11 @@
             try {
                 const response = await fetch('/api/quota/status');
                 const quota = await response.json();
-                
+
                 if (response.ok) {
                     // Update quota display in header or stats
                     console.log('Quota status:', quota);
-                    
+
                     // Show warnings if any
                     if (quota.warnings && quota.warnings.length > 0) {
                         quota.warnings.forEach(warning => {
@@ -1430,9 +1445,9 @@
                     alert('Failed to scan media files');
                     return;
                 }
-                
+
                 const mediaFiles = await response.json();
-                
+
                 // Create modal
                 const modal = document.createElement('div');
                 modal.style.cssText = `
@@ -1447,7 +1462,7 @@
                     justify-content: center;
                     z-index: 1000;
                 `;
-                
+
                 const dialog = document.createElement('div');
                 dialog.style.cssText = `
                     background: white;
@@ -1458,7 +1473,7 @@
                     max-height: 80vh;
                     overflow-y: auto;
                 `;
-                
+
                 let mediaListHTML = '';
                 if (mediaFiles.length === 0) {
                     mediaListHTML = '<p style="color: #7f8c8d;">No media files found. Please add media to the media directory.</p>';
@@ -1469,7 +1484,7 @@
                         const warningIcon = hasSubtitle ? '' : '⚠️';
                         const statusText = hasSubtitle ? 'Ready' : 'No Subtitle';
                         const disabled = hasSubtitle ? '' : 'disabled';
-                        
+
                         mediaListHTML += `
                             <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #ecf0f1; margin-bottom: 8px; border-radius: 8px; cursor: ${hasSubtitle ? 'pointer' : 'not-allowed'}; ${!hasSubtitle ? 'opacity: 0.5;' : ''}">
                                 <input type="checkbox" class="media-checkbox" data-media-id="${media.id}" data-video="${media.video_path}" data-subtitle="${media.subtitle_path || ''}" data-episode="${media.episode}" data-show="${media.show_name}" ${disabled} style="margin-right: 10px;">
@@ -1482,7 +1497,7 @@
                     });
                     mediaListHTML += '</div>';
                 }
-                
+
                 dialog.innerHTML = `
                     <h2 style="margin-bottom: 20px; color: #2c3e50;">➕ Create Content</h2>
                     
@@ -1575,6 +1590,43 @@
                             <small style="color: #7f8c8d; display: block; margin-top: 5px;">Videos exceeding this duration will be dropped from batching (default: 180)</small>
                         </div>
                     </div>
+
+                    <div style="margin-bottom: 20px; border-top: 1px solid #ecf0f1; padding-top: 20px;">
+                        <h3 style="color: #34495e; margin-bottom: 10px;">Auto Upload</h3>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 10px;">
+                            <input type="checkbox" id="autoUploadCheckbox" onchange="document.getElementById('uploadOptions').style.display = this.checked ? 'block' : 'none'" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">Auto Upload to YouTube</span>
+                        </label>
+                        
+                        <div id="uploadOptions" style="display: none; margin-left: 28px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Timing</label>
+                                <div style="display: flex; gap: 20px;">
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="radio" name="uploadTiming" value="scheduled" checked> 
+                                        <span>Scheduled (Recommended)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="radio" name="uploadTiming" value="immediate"> 
+                                        <span>Immediate (Private)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Content Types to Upload</label>
+                                <div style="display: flex; gap: 20px;">
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="uploadShorts" checked> 
+                                        <span>Short Form</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                        <input type="checkbox" id="uploadLong" checked> 
+                                        <span>Long Form</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div style="margin-bottom: 15px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 3px solid #3498db;">
                         <strong>Note:</strong> This will create both a final video and short videos (2-3 minutes each). Expressions will be selected automatically by AI.
@@ -1589,32 +1641,32 @@
                         </button>
                     </div>
                 `;
-                
+
                 modal.appendChild(dialog);
                 document.body.appendChild(modal);
-                
+
                 // Add event listeners for Select All / Deselect All buttons
                 const selectAllBtn = dialog.querySelector('#selectAllMediaBtn');
                 const deselectAllBtn = dialog.querySelector('#deselectAllMediaBtn');
-                
+
                 if (selectAllBtn) {
-                    selectAllBtn.addEventListener('click', function() {
+                    selectAllBtn.addEventListener('click', function () {
                         // Select all enabled checkboxes (skip disabled ones)
                         dialog.querySelectorAll('.media-checkbox:not([disabled])').forEach(cb => {
                             cb.checked = true;
                         });
                     });
                 }
-                
+
                 if (deselectAllBtn) {
-                    deselectAllBtn.addEventListener('click', function() {
+                    deselectAllBtn.addEventListener('click', function () {
                         // Deselect all checkboxes
                         dialog.querySelectorAll('.media-checkbox').forEach(cb => {
                             cb.checked = false;
                         });
                     });
                 }
-                
+
             } catch (error) {
                 alert(`Error: ${error.message}`);
             }
@@ -1623,86 +1675,100 @@
         async function startContentCreation() {
             // Get all selected checkboxes
             const selectedMedia = document.querySelectorAll('.media-checkbox:checked');
-            
+
             if (selectedMedia.length === 0) {
                 alert('Please select at least one media file');
                 return;
             }
-            
+
             // Get selected languages from checkboxes
             const selectedLanguages = Array.from(document.querySelectorAll('.language-checkbox:checked'))
                 .map(cb => cb.value);
-            
+
             if (selectedLanguages.length === 0) {
                 alert('Please select at least one target language');
                 return;
             }
-            
+
             // Use first selected language as primary language_code (for backward compatibility)
             const languageCode = selectedLanguages[0];
             // All selected languages as target_languages (comma-separated string)
             const targetLanguages = selectedLanguages.join(',');
-            
+
             const languageLevel = document.getElementById('levelSelect').value;
             const testMode = document.getElementById('testModeCheckbox').checked;
             const shortFormMaxDuration = parseFloat(document.getElementById('shortFormMaxDuration').value) || 180;
-            
+
+            // Auto Upload Configuration
+            const autoUploadEnabled = document.getElementById('autoUploadCheckbox').checked;
+            const uploadTiming = document.querySelector('input[name="uploadTiming"]:checked').value;
+            const uploadShorts = document.getElementById('uploadShorts').checked;
+            const uploadLong = document.getElementById('uploadLong').checked;
+
+            const autoUploadConfig = autoUploadEnabled ? {
+                enabled: true,
+                timing: uploadTiming,
+                upload_shorts: uploadShorts,
+                upload_long: uploadLong
+            } : null;
+
             // Disable create button
             const createButton = document.getElementById('createButton');
             createButton.disabled = true;
             createButton.textContent = 'Creating...';
-            
+
             // Check if multiple videos selected (batch mode)
             if (selectedMedia.length > 1) {
                 // Batch processing
-                await startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton);
+                await startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton, autoUploadConfig);
             } else {
                 // Single video processing (backward compatible)
                 const media = selectedMedia[0];
                 const mediaId = media.dataset.mediaId;
                 const videoPath = media.dataset.video;
                 const subtitlePath = media.dataset.subtitle;
-            
-            try {
-                const response = await fetch('/api/content/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        media_id: mediaId,
-                        video_path: videoPath,
-                        subtitle_path: subtitlePath,
-                        language_code: languageCode,
-                        target_languages: targetLanguages,  // Add target_languages parameter
-                        language_level: languageLevel,
-                        test_mode: testMode,
-                        short_form_max_duration: shortFormMaxDuration
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    // Close modal
-                    document.querySelector('div[style*="position: fixed"]').remove();
-                    
-                    // Show progress modal
-                    showJobProgressModal(result.job_id);
-                } else {
-                    alert(`Error: ${result.error}`);
+
+                try {
+                    const response = await fetch('/api/content/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            media_id: mediaId,
+                            video_path: videoPath,
+                            subtitle_path: subtitlePath,
+                            language_code: languageCode,
+                            target_languages: targetLanguages,
+                            language_level: languageLevel,
+                            test_mode: testMode,
+                            short_form_max_duration: shortFormMaxDuration,
+                            auto_upload_config: autoUploadConfig
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        // Close modal
+                        document.querySelector('div[style*="position: fixed"]').remove();
+
+                        // Show progress modal
+                        showJobProgressModal(result.job_id);
+                    } else {
+                        alert(`Error: ${result.error}`);
+                        createButton.disabled = false;
+                        createButton.textContent = 'Create Content';
+                    }
+                } catch (error) {
+                    alert(`Error: ${error.message}`);
                     createButton.disabled = false;
                     createButton.textContent = 'Create Content';
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-                createButton.disabled = false;
-                createButton.textContent = 'Create Content';
                 }
             }
         }
 
-        async function startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton) {
+        async function startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton, autoUploadConfig) {
             try {
                 // Collect all selected videos
                 const videos = Array.from(selectedMedia).map(checkbox => ({
@@ -1711,7 +1777,7 @@
                     episode_name: checkbox.dataset.episode,
                     show_name: checkbox.dataset.show || 'Suits'
                 }));
-                
+
                 // Validate batch size
                 if (videos.length > 50) {
                     alert('Maximum 50 videos allowed per batch');
@@ -1719,7 +1785,7 @@
                     createButton.textContent = 'Create Content';
                     return;
                 }
-                
+
                 // Call batch creation API
                 const response = await fetch('/api/content/batch', {
                     method: 'POST',
@@ -1729,19 +1795,20 @@
                     body: JSON.stringify({
                         videos: videos,
                         language_code: languageCode,
-                        target_languages: targetLanguages,  // Add target_languages parameter
+                        target_languages: targetLanguages,
                         language_level: languageLevel,
                         test_mode: testMode,
-                        short_form_max_duration: shortFormMaxDuration
+                        short_form_max_duration: shortFormMaxDuration,
+                        auto_upload_config: autoUploadConfig
                     })
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok) {
                     // Close modal
                     document.querySelector('div[style*="position: fixed"]').remove();
-                    
+
                     // Show batch progress modal
                     showBatchProgressModal(result.batch_id);
                 } else {
@@ -1759,13 +1826,13 @@
         async function showBatchProgressModal(batchId) {
             // Save batch ID to localStorage for persistence
             localStorage.setItem('langflix_active_batch', batchId);
-            
+
             // Remove any existing batch progress panel
             const existingPanel = document.getElementById('batchProgressPanel');
             if (existingPanel) {
                 existingPanel.remove();
             }
-            
+
             // Create bottom progress panel
             const progressPanel = document.createElement('div');
             progressPanel.id = 'batchProgressPanel';
@@ -1782,7 +1849,7 @@
                 z-index: 1000;
                 padding: 20px;
             `;
-            
+
             progressPanel.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0; color: #2c3e50; font-size: 1.2em;">📦 Batch Processing</h3>
@@ -1794,9 +1861,9 @@
                     <p>Loading batch status...</p>
                 </div>
             `;
-            
+
             document.body.appendChild(progressPanel);
-            
+
             // Poll for batch status
             const updateInterval = setInterval(async () => {
                 try {
@@ -1804,7 +1871,7 @@
                     if (response.ok) {
                         const batch = await response.json();
                         updateBatchProgressUI(batch);
-                        
+
                         // Stop polling if batch completed or failed
                         if (batch.status === 'COMPLETED' || batch.status === 'FAILED' || batch.status === 'PARTIALLY_FAILED') {
                             clearInterval(updateInterval);
@@ -1817,10 +1884,10 @@
                     console.error('Error polling batch status:', error);
                 }
             }, 2000);  // Poll every 2 seconds
-            
+
             // Store interval ID for cleanup
             progressPanel.dataset.intervalId = updateInterval;
-            
+
             // Initial update
             try {
                 const response = await fetch(`/api/content/batch/${batchId}`);
@@ -1836,12 +1903,12 @@
         function updateBatchProgressUI(batch) {
             const contentDiv = document.getElementById('batchProgressContent');
             if (!contentDiv) return;
-            
+
             const jobs = batch.job_details || [];
             const totalJobs = batch.total_jobs || 0;
             const completedJobs = batch.completed_jobs || 0;
             const failedJobs = batch.failed_jobs || 0;
-            
+
             // Batch summary
             let summaryHTML = `
                 <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
@@ -1854,22 +1921,22 @@
                     </div>
                 </div>
             `;
-            
+
             // Individual job cards
             let jobsHTML = '<div style="display: flex; flex-direction: column; gap: 10px;">';
-            
+
             jobs.forEach((job, index) => {
                 const status = job.status || 'UNKNOWN';
                 const progress = job.progress || 0;
                 const currentStep = job.current_step || '';
                 const episodeName = job.episode_name || `Job ${index + 1}`;
-                
+
                 let statusColor = '#7f8c8d';
                 if (status === 'COMPLETED') statusColor = '#27ae60';
                 else if (status === 'FAILED') statusColor = '#e74c3c';
                 else if (status === 'PROCESSING') statusColor = '#3498db';
                 else if (status === 'QUEUED') statusColor = '#f39c12';
-                
+
                 jobsHTML += `
                     <div style="padding: 15px; border: 1px solid #ecf0f1; border-radius: 8px; background: white;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -1884,9 +1951,9 @@
                     </div>
                 `;
             });
-            
+
             jobsHTML += '</div>';
-            
+
             contentDiv.innerHTML = summaryHTML + jobsHTML;
         }
 
@@ -1959,7 +2026,7 @@
         async function showJobProgressModal(jobId) {
             // Save job ID to localStorage for persistence across page refreshes
             localStorage.setItem('langflix_active_job', jobId);
-            
+
             // Create bottom progress bar instead of blocking modal
             const progressBar = document.createElement('div');
             progressBar.id = 'progressModal';
@@ -1978,7 +2045,7 @@
                 margin: 0 auto;
                 backdrop-filter: blur(10px);
             `;
-            
+
             progressBar.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0; color: white; font-size: 1.2em;">⚙️ Creating Content...</h3>
@@ -1998,21 +2065,21 @@
                     <div id="progressPercent" style="font-weight: bold; color: white;">0%</div>
                 </div>
             `;
-            
+
             document.body.appendChild(progressBar);
-            
+
             // Poll for progress
             const pollInterval = setInterval(async () => {
                 try {
                     const response = await fetch(`/api/content/jobs/${jobId}`);
                     const job = await response.json();
-                    
+
                     if (response.ok) {
                         // Update progress
                         document.getElementById('progressBar').style.width = `${job.progress}%`;
                         document.getElementById('progressPercent').textContent = `${job.progress}%`;
                         document.getElementById('progressText').textContent = job.current_step;
-                        
+
                         // Check if completed or failed
                         if (job.status === 'COMPLETED' || job.status === 'completed') {
                             clearInterval(pollInterval);
@@ -2047,12 +2114,12 @@
             if (!confirm('Are you sure you want to cancel this job?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch(`/api/content/jobs/${jobId}/cancel`, {
                     method: 'POST'
                 });
-                
+
                 if (response.ok) {
                     localStorage.removeItem('langflix_active_job'); // Clear on cancellation
                     const progressModal = document.getElementById('progressModal');
@@ -2069,7 +2136,7 @@
         // Batch Operations
         function setupBatchOperations() {
             // Update batch actions bar visibility when checkboxes change
-            document.addEventListener('change', function(e) {
+            document.addEventListener('change', function (e) {
                 if (e.target.classList.contains('video-checkbox')) {
                     updateBatchActionsBar();
                 }
@@ -2078,7 +2145,7 @@
             // Select All button (main video list)
             const selectAllBtn = document.getElementById('selectAllVideosBtn');
             if (selectAllBtn) {
-                selectAllBtn.addEventListener('click', function() {
+                selectAllBtn.addEventListener('click', function () {
                     // Select all visible video checkboxes (respects current filter)
                     document.querySelectorAll('.video-checkbox').forEach(cb => {
                         // Only select if the checkbox's parent row is visible (not filtered out)
@@ -2094,7 +2161,7 @@
             // Deselect All button (main video list)
             const deselectAllBtn = document.getElementById('deselectAllVideosBtn');
             if (deselectAllBtn) {
-                deselectAllBtn.addEventListener('click', function() {
+                deselectAllBtn.addEventListener('click', function () {
                     document.querySelectorAll('.video-checkbox').forEach(cb => {
                         cb.checked = false;
                     });
@@ -2105,24 +2172,24 @@
             // Clear selection button (batch actions bar)
             const clearSelectionBtn = document.getElementById('clearSelectionBtn');
             if (clearSelectionBtn) {
-                clearSelectionBtn.addEventListener('click', function() {
+                clearSelectionBtn.addEventListener('click', function () {
                     document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
                     updateBatchActionsBar();
                 });
             }
 
             // Delete selected button
-            document.getElementById('deleteSelectedBtn').addEventListener('click', async function() {
+            document.getElementById('deleteSelectedBtn').addEventListener('click', async function () {
                 await batchDeleteVideos();
             });
 
             // Upload immediate button
-            document.getElementById('uploadImmediateBtn').addEventListener('click', async function() {
+            document.getElementById('uploadImmediateBtn').addEventListener('click', async function () {
                 await batchUploadImmediate();
             });
 
             // Upload schedule button
-            document.getElementById('uploadScheduleBtn').addEventListener('click', async function() {
+            document.getElementById('uploadScheduleBtn').addEventListener('click', async function () {
                 await batchUploadSchedule();
             });
         }
@@ -2135,7 +2202,7 @@
             if (selected.length > 0) {
                 batchBar.style.display = 'block';
                 selectedCount.textContent = `${selected.length} selected`;
-                
+
                 // Enable/disable buttons based on selection
                 const hasUploadable = Array.from(selected).some(cb => cb.dataset.readyForUpload === 'true');
                 document.getElementById('uploadImmediateBtn').disabled = !hasUploadable;
@@ -2156,7 +2223,7 @@
 
         async function batchDeleteVideos() {
             const selected = getSelectedVideos();
-            
+
             if (selected.length === 0) {
                 alert('Please select at least one video to delete');
                 return;
@@ -2185,7 +2252,7 @@
                     } else {
                         alert(`Successfully deleted ${result.deleted_count} video(s)`);
                     }
-                    
+
                     // Clear selection and reload videos
                     document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
                     updateBatchActionsBar();
@@ -2200,7 +2267,7 @@
 
         async function batchUploadImmediate() {
             const selected = getSelectedVideos().filter(v => v.ready_for_upload);
-            
+
             if (selected.length === 0) {
                 alert('Please select at least one uploadable video');
                 return;
@@ -2238,13 +2305,13 @@
                 if (response.ok) {
                     const successCount = result.results.filter(r => r.success).length;
                     const failCount = result.results.length - successCount;
-                    
+
                     if (failCount > 0) {
                         alert(`Uploaded ${successCount} video(s). ${failCount} failed.\n\nCheck console for details.`);
                     } else {
                         alert(`Successfully uploaded ${successCount} video(s) to YouTube!`);
                     }
-                    
+
                     // Clear selection and reload videos
                     document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
                     updateBatchActionsBar();
@@ -2263,7 +2330,7 @@
 
         async function batchUploadSchedule() {
             const selected = getSelectedVideos().filter(v => v.ready_for_upload);
-            
+
             if (selected.length === 0) {
                 alert('Please select at least one uploadable video');
                 return;
@@ -2301,23 +2368,23 @@
                 if (response.ok) {
                     const successCount = result.results.filter(r => r.success).length;
                     const failCount = result.results.length - successCount;
-                    
+
                     if (failCount > 0) {
                         const scheduledTimes = result.results
                             .filter(r => r.success && r.scheduled_time)
                             .map(r => new Date(r.scheduled_time).toLocaleString('ko-KR'))
                             .join('\n');
-                        
+
                         alert(`Scheduled ${successCount} video(s). ${failCount} failed.\n\nScheduled times:\n${scheduledTimes}`);
                     } else {
                         const scheduledTimes = result.results
                             .filter(r => r.scheduled_time)
                             .map(r => new Date(r.scheduled_time).toLocaleString('ko-KR'))
                             .join('\n');
-                        
+
                         alert(`Successfully scheduled ${successCount} video(s)!\n\nScheduled times:\n${scheduledTimes}`);
                     }
-                    
+
                     // Clear selection and reload videos
                     document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
                     updateBatchActionsBar();
@@ -2335,4 +2402,5 @@
         }
     </script>
 </body>
+
 </html>

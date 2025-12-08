@@ -90,6 +90,30 @@ class DatabaseManager:
         from langflix.db.models import Base
         Base.metadata.create_all(bind=self.engine)
     
+    def check_connection(self) -> bool:
+        """
+        Check if database connection is available.
+        
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        if not self._initialized:
+            try:
+                self.initialize()
+            except Exception:
+                return False
+                
+        if not self.engine:
+            return False
+            
+        try:
+            with self.engine.connect() as connection:
+                from sqlalchemy import text
+                connection.execute(text("SELECT 1"))
+            return True
+        except Exception:
+            return False
+
     def close(self):
         """Close database connections."""
         if self.engine:

@@ -366,7 +366,7 @@ For short videos (≤ 60 seconds total):
 **OUTPUT FORMAT (JSON):**
 
 [
-  {
+  {{
     "dialogues": [
       // EXACT dialogue text from subtitles (NO speaker names like "Mike:" or "Harvey:")
       // ALL lines between context_start_time and context_end_time
@@ -390,7 +390,7 @@ For short videos (≤ 60 seconds total):
       "keyword 2 in {target_language} (3-6 words, punchy, engaging)",
       "keyword 3 in {target_language} (3-6 words, punchy, engaging)"
     ]
-  }
+  }}
 ]
 
 ---
@@ -439,7 +439,7 @@ Return ONLY expressions that pass ALL checks. Be selective. Quality matters more
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
 If you find expressions, respond with this exact format:
-{{"expressions":[{{"expression":"key phrase here","translation":"translation here","context":"context here","expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"start_time":"00:00:00.000","end_time":"00:00:00.000","catchy_keywords":["keyword1","keyword2","keyword3"]}}]}}
+{{"expressions":[{{"dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["keyword1","keyword2","keyword3"]}}]}}
 
 If you find NO expressions, respond with:
 {{"expressions":[]}}

@@ -198,11 +198,34 @@ async def process_video_task(
                                 
                             elif timing == 'scheduled':
                                 if schedule_manager:
-                                    # Schedule upload
+                                    # Schedule upload (reserve slot)
                                     publish_time = schedule_manager.get_next_available_slot(video_type)
                                     success, msg, scheduled_time = schedule_manager.schedule_video(video_path, video_type, publish_time)
+                                    
                                     if success:
-                                        logger.info(f"Scheduled upload for {scheduled_time}")
+                                        logger.info(f"Reserved schedule slot: {scheduled_time}")
+                                        
+                                        # Perform the actual upload with publish_at
+                                        # This ensures the video is uploaded now but goes live at the scheduled time
+                                        logger.info(f"Starting scheduled upload for {video_path} with publishAt: {scheduled_time}")
+                                        upload_result = uploader.upload_video(
+                                            video_path=video_path,
+                                            metadata=youtube_metadata,
+                                            publish_at=scheduled_time
+                                        )
+                                        
+                                        if upload_result.success:
+                                            logger.info(f"Scheduled upload success: {upload_result.video_id}")
+                                            # Update schedule with video ID and status
+                                            schedule_manager.update_schedule_with_video_id(
+                                                video_path, 
+                                                upload_result.video_id, 
+                                                'completed'
+                                            )
+                                        else:
+                                            logger.error(f"Scheduled upload failed: {upload_result.error_message}")
+                                            # Note: The schedule record remains in DB but without video_id, 
+                                            # indicating it was reserved but upload failed.
                                     else:
                                         logger.error(f"Scheduling failed: {msg}")
                                 else:

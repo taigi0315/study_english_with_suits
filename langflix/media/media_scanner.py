@@ -292,6 +292,13 @@ class MediaScanner:
                 f"returncode={e.returncode}, stderr={stderr}"
             )
             return {}
+        except ffmpeg.Error as e:
+            # ffmpeg-python Error - log stderr for debugging
+            stderr = e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr output"
+            logger.error(
+                f"FFprobe failed for {video_path}: {stderr}"
+            )
+            return {}
         except FileNotFoundError:
             logger.error(
                 f"FFprobe not found. Please ensure ffmpeg/ffprobe is installed and in PATH. "

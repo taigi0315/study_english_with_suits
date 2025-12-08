@@ -4,62 +4,62 @@ services:
   langflix:
     # Option 1: Use pre-built image (if you've built and pushed to registry)
     # image: langflix:latest
-    
+
     # Option 2: Build from Dockerfile (Dockge supports this)
     build:
-      context: /path/to/your/project  # Update this to your project path
+      context: /path/to/your/project # Update this to your project path
       dockerfile: Dockerfile.dev
       # Or use absolute path to Dockerfile
       # dockerfile: /path/to/your/project/Dockerfile.dev
-    
+
     container_name: langflix-app
     restart: unless-stopped
-    
+
     environment:
       # Required: Gemini API Key for LLM and TTS
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+
       # Logging
       - LANGFLIX_LOG_LEVEL=INFO
-      
+
       # Storage configuration - Network media path
       # This tells the app where to find media files
       - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
-      
+
       # Optional: Config file path
       - LANGFLIX_CONFIG_PATH=/app/config/config.yaml
-      
       # Database (if using PostgreSQL)
       # - DATABASE_URL=postgresql://user:password@postgres:5432/langflix
-      
+
       # Redis (if using Redis for caching/jobs)
       # - REDIS_URL=redis://redis:6379/0
-    
+
     volumes:
       # IMPORTANT: Mount your TrueNAS media directory
       # If 192.168.86.43/media/shows is accessible as /mnt/pool/media/shows on TrueNAS:
-      - /mnt/pool/media/shows:/media/shows:ro  # Read-only mount for safety
-      
+      - /mnt/pool/media/shows:/media/shows:ro # Read-only mount for safety
+
       # Or if it's a network mount already on TrueNAS host:
       # - /mnt/media-server:/media/shows:ro
-      
+
       # Application configuration
-      - /path/to/config/config.yaml:/app/config/config.yaml:ro  # Update path
-      - /path/to/.env:/app/.env:ro  # Update path (optional)
-      
+      - /path/to/config/config.yaml:/app/config/config.yaml:ro # Update path
+      - /path/to/.env:/app/.env:ro # Update path (optional)
+
       # Output directory - where generated videos will be saved
       # Create this directory on TrueNAS host first
       - /mnt/pool/langflix/output:/data/output
-      
+
       # Logs (optional)
       - /mnt/pool/langflix/logs:/data/logs
-    
+
     ports:
       # FastAPI backend API
       - "8000:8000"
       # Flask frontend (if using)
       - "5000:5000"
-    
+
     # Resource limits (adjust based on your TrueNAS capabilities)
     deploy:
       resources:
@@ -69,16 +69,15 @@ services:
         reservations:
           memory: 2G
           cpus: '1'
-    
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import langflix; print('OK')"]
+      test: [ "CMD", "python", "-c", "import langflix; print('OK')" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     # Optional: Add labels for better organization
     labels:
       - "com.langflix.description=LangFlix Video Processing"
       - "com.langflix.version=1.0"
-

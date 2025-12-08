@@ -26,8 +26,15 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Configure Gemini API - no timeout restrictions to let it take as long as needed
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
+    logger.info(f"Configuring Gemini API with key: {masked_key}")
+else:
+    logger.error("GEMINI_API_KEY not found in environment variables!")
+
 genai.configure(
-    api_key=os.getenv("GEMINI_API_KEY"),
+    api_key=api_key,
     client_options={
         "api_endpoint": "generativelanguage.googleapis.com",
     }
@@ -317,7 +324,13 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 logger.error(f"Full traceback: {traceback.format_exc()}")
                 # Log more details if it's a validation error
                 if hasattr(parse_error, 'errors'):
-                    logger.error(f"Validation errors: {parse_error.errors()}")
+                    try:
+                        if callable(parse_error.errors):
+                            logger.error(f"Validation errors: {parse_error.errors()}")
+                        else:
+                            logger.error(f"Validation errors: {parse_error.errors}")
+                    except Exception:
+                        logger.warning("Could not log validation errors")
                 # Log first 500 chars of response for debugging
                 response_preview = response_text[:500] if response_text else "No response text"
                 logger.error(f"Raw response preview: {response_preview}")
@@ -336,7 +349,13 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         logger.debug(f"Full traceback: {traceback.format_exc()}")
         # Log more details if it's a validation error
         if hasattr(e, 'errors'):
-            logger.error(f"Validation errors: {e.errors()}")
+            try:
+                if callable(e.errors):
+                    logger.error(f"Validation errors: {e.errors()}")
+                else:
+                    logger.error(f"Validation errors: {e.errors}")
+            except Exception:
+                logger.warning("Could not log validation errors")
         # Don't log as "No expressions found" - this is an actual error
         logger.warning(f"No expressions found in chunk due to error: {type(e).__name__}")
         return []

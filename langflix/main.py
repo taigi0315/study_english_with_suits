@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union, Callable
 from datetime import datetime
+import time
 import ffmpeg
 
 # Load environment variables from .env file
@@ -637,6 +638,10 @@ class LangFlixPipeline:
                     except (KeyError, AttributeError) as e:
                         logger.warning(f"Could not determine LLM output directory: {e}. LLM outputs will not be saved.")
                         output_dir = None
+                
+                # Add a delay between chunks to avoid rate limits
+                if i > 0:
+                    time.sleep(5)
                 
                 expressions = analyze_chunk(chunk, language_level, self.language_code, save_llm_output, output_dir)
                 if expressions:

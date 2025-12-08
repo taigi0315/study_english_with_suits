@@ -155,7 +155,7 @@ tts:
   google:
     # api_key: "set via GEMINI_API_KEY environment variable"
     language_code: "en-us"  # Original language (English) for audio generation
-    model_name: "gemini-2.5-flash-preview-tts"  # Gemini TTS model for high-quality synthesis
+    model_name: "gemini-1.5-flash"  # Gemini TTS model for high-quality synthesis
     response_format: "wav"  # Audio format (WAV for new API)
     # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
     speaking_rate: "high" 
@@ -258,7 +258,7 @@ expression:
   llm:
     # Parallel processing configuration for expression analysis
     parallel_processing:
-      enabled: true  # Enable parallel processing for multiple chunks
+      enabled: false  # Enable parallel processing for multiple chunks
       max_workers: null  # null = auto-detect (min(cpu_count(), 5))
       timeout_per_chunk: 300  # seconds (5 minutes per chunk)
       batch_size: null  # null = process all chunks at once

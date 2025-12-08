@@ -2,12 +2,13 @@ version: '3.8'
 
 services:
   langflix-ec2:
-    build: 
+    build:
       context: ..
       dockerfile: Dockerfile.ec2
     container_name: langflix-ec2-app
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - LANGFLIX_LOG_LEVEL=INFO
       - LANGFLIX_OUTPUT_DIR=/data/output
     volumes:
@@ -24,7 +25,7 @@ services:
           cpus: '4'
     # Health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import langflix"]
+      test: [ "CMD", "python", "-c", "import langflix" ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -2,12 +2,13 @@ version: '3.8'
 
 services:
   langflix-media:
-    build: 
+    build:
       context: ..
       dockerfile: deploy/Dockerfile.ec2
     container_name: langflix-media-app
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - LANGFLIX_LOG_LEVEL=INFO
       # Media storage path - mount network path here
       - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
@@ -16,16 +17,16 @@ services:
     volumes:
       # Mount network media path to container
       # Option A: If already mounted on host at /mnt/media-server
-      - /mnt/media-server:/media/shows:ro  # Read-only mount
-      
+      - /mnt/media-server:/media/shows:ro # Read-only mount
+
       # Option B: Direct NFS/CIFS mount (requires host configuration)
       # Host must have network share mounted first
       # Then reference the mount point above
-      
+
       # Application config
       - ../config/config.yaml:/app/config/config.yaml:ro
       - ../.env:/app/.env:ro
-      
+
       # Output directory (local storage for generated files)
       - ./output:/data/output
     restart: unless-stopped
@@ -35,8 +36,7 @@ services:
           memory: 8G
           cpus: '4'
     healthcheck:
-      test: ["CMD", "python", "-c", "import langflix"]
+      test: [ "CMD", "python", "-c", "import langflix" ]
       interval: 30s
       timeout: 10s
       retries: 3
-

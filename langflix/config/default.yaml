@@ -10,7 +10,7 @@ app:
   show_name: "Suits"
   
   # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt_v5.txt"
+  template_file: "expression_analysis_prompt_v6.txt"
 
 # ============================================================================
 # Database Configuration
@@ -35,7 +35,7 @@ database:
 llm:
   # Maximum characters of subtitle content per chunk
   # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
-  max_input_length: 2000
+  max_input_length: 800
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed

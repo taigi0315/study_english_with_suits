@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from langflix.db.models import YouTubeSchedule, YouTubeQuotaUsage
 from langflix.db.session import db_manager
+from langflix import settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class YouTubeScheduleManager:
     
     def __init__(self, config: Optional[ScheduleConfig] = None):
         self.config = config or ScheduleConfig()
-        # Removed: self.db_session = get_db_session()
+        self.db_enabled = settings.get_database_enabled()
+        if not self.db_enabled:
+            logger.info("Database disabled, ScheduleManager running in stateless mode")
         # Database sessions now use db_manager.session() context manager on-demand
     
     def get_next_available_slot(
@@ -122,7 +125,10 @@ class YouTubeScheduleManager:
         
         # Get existing scheduled times for this date
         try:
-            scheduled_times = self._get_schedules_for_date(target_date)
+            if self.db_enabled:
+                scheduled_times = self._get_schedules_for_date(target_date)
+            else:
+                scheduled_times = []
         except (OperationalError, SQLAlchemyError) as e:
             # Database connection error - return empty list to allow fallback time
             logger.warning(f"Database connection error getting schedules: {e}")
@@ -164,6 +170,9 @@ class YouTubeScheduleManager:
     
     def _count_daily_scheduled(self, target_date: date) -> int:
         """Count total scheduled uploads (any status except failed) for the date."""
+        if not self.db_enabled:
+            return 0
+            
         try:
             with db_manager.session() as db:
                 start_dt = datetime.combine(target_date, time.min)
@@ -269,19 +278,24 @@ class YouTubeScheduleManager:
             # Database connection error - return default status (assume no usage)
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
             logger.warning(f"Database connection error checking quota (assuming no usage): {error_msg}")
-            return DailyQuotaStatus(
-                date=target_date,
-                final_used=0,
-                final_remaining=self.config.daily_limits.get('final', 2),
-                short_used=0,
-                short_remaining=self.config.daily_limits.get('short', 5),
-                quota_used=0,
-                quota_remaining=self.config.quota_limit,
-                quota_percentage=0.0
-            )
+            return self._get_default_quota_status(target_date)
+            
         except Exception as e:
             logger.error(f"Database error checking daily quota for {target_date}: {e}")
             raise ValueError(f"Unable to connect to database. Please ensure PostgreSQL is running. Error: {str(e)}")
+
+    def _get_default_quota_status(self, target_date: date) -> DailyQuotaStatus:
+        """Return default quota status when DB is unavailable or disabled"""
+        return DailyQuotaStatus(
+            date=target_date,
+            final_used=0,
+            final_remaining=self.config.daily_limits.get('final', 2),
+            short_used=0,
+            short_remaining=self.config.daily_limits.get('short', 5),
+            quota_used=0,
+            quota_remaining=self.config.quota_limit,
+            quota_percentage=0.0
+        )
     
     def _check_quota_with_lock(self, db: Session, target_date: date) -> DailyQuotaStatus:
         """
@@ -419,6 +433,10 @@ class YouTubeScheduleManager:
             target_datetime = self.get_next_available_slot(video_type)
             target_date = target_datetime.date()
         
+        if not self.db_enabled:
+            logger.info(f"Database disabled, skipping persistence for {video_path}")
+            return True, f"Video scheduled for {target_datetime} (stateless)", target_datetime
+
         # Atomic operation: Check quota + Create schedule in single transaction
         try:
             with db_manager.session() as db:
@@ -531,6 +549,9 @@ class YouTubeScheduleManager:
     
     def update_quota_usage(self, video_type: str, quota_used: int = 1600):
         """Update quota usage after successful upload"""
+        if not self.db_enabled:
+            return
+
         try:
             today = date.today()
             
@@ -586,6 +607,9 @@ class YouTubeScheduleManager:
     
     def update_schedule_with_video_id(self, video_path: str, youtube_video_id: str, status: str = 'completed'):
         """Update schedule record with YouTube video ID after successful upload"""
+        if not self.db_enabled:
+            return True
+
         try:
             with db_manager.session() as db:
                 schedule = db.query(YouTubeSchedule).filter_by(video_path=video_path).first()

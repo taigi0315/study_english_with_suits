@@ -186,6 +186,23 @@ class YouTubeUploader:
                     creds = None
                     last_error = None
                     
+                    # In Docker/headless environments, we cannot open a browser or start a local server
+                    # that is accessible from the outside easily for the callback.
+                    # We should rely on the Web UI flow instead.
+                    is_headless = os.getenv("LANGFLIX_HEADLESS", "false").lower() in ("1", "true", "yes") or \
+                                  os.path.exists("/.dockerenv") or \
+                                  os.getenv("DOCKER_ENV") == "true"
+                    
+                    if is_headless:
+                        error_msg = (
+                            "Cannot start local OAuth server in headless/Docker environment. "
+                            "Please use the Web UI to authenticate with YouTube."
+                        )
+                        logger.warning(error_msg)
+                        # We don't raise an error here to allow the app to start up,
+                        # but we return False to indicate authentication failed.
+                        return False
+
                     for port in ports_to_try:
                         try:
                             # In Docker/headless environments, don't open browser
@@ -239,8 +256,8 @@ class YouTubeUploader:
                     "YouTube credentials are None. Cannot build YouTube service.\n"
                     "Please ensure youtube_credentials.json exists and OAuth flow completes successfully."
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                logger.warning(error_msg)
+                return False
             
             self.service = build('youtube', 'v3', credentials=creds)
             self.authenticated = True

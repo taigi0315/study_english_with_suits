@@ -143,11 +143,31 @@ class VideoFileManager:
             if metadata_path.exists():
                 try:
                     metadata_content = json.loads(metadata_path.read_text(encoding='utf-8'))
+                    
+                    # Extract language if available
+                    if "language" in metadata_content:
+                        language = metadata_content["language"]
+                    
+                    # Extract expression translation (TICKET-060)
+                    # Check top-level first
+                    if "expression_translation" in metadata_content:
+                        expression_translation = metadata_content["expression_translation"]
+                    
+                    # Check expressions list
                     expressions_included = metadata_content.get("expressions")
-                    if expressions_included and isinstance(expressions_included, list):
+                    if expressions_included and isinstance(expressions_included, list) and len(expressions_included) > 0:
                         primary = expressions_included[0]
-                        expression = primary.get("expression") or expression
-                        expression_translation = primary.get("translation") or expression_translation
+                        # Always prefer expression from metadata if available
+                        # This fixes the issue where filename parsing produces garbage (e.g. "Form Suits...")
+                        # that prevents the real expression from being loaded
+                        if primary.get("expression"):
+                            expression = primary.get("expression")
+                        
+                        # Update translation if not set
+                        if not expression_translation:
+                            expression_translation = primary.get("translation")
+                            
+                    logger.debug(f"Loaded metadata for {video_path.name}: expression='{expression}', translation='{expression_translation}'")
                 except Exception as e:
                     logger.warning(f"Failed to load metadata for {video_path.name}: {e}")
             

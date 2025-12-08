@@ -669,11 +669,11 @@ class YouTubeMetadataGenerator:
     
     def _get_translation(self, video_metadata: VideoMetadata) -> str:
         """Get translation for the expression"""
-        # This would ideally come from the video metadata or expression analysis
-        # For now, we'll use a placeholder
-        # Note: This method name conflicts with _get_translation(key, target_language) 
-        # but they serve different purposes - this one gets expression translation,
-        # the other gets template string translation
+        # Return the translation from metadata if available
+        if video_metadata.expression_translation:
+            return video_metadata.expression_translation
+            
+        # Fallback if no translation found
         return "Learn the meaning and usage in the video"
     
     def _get_expression_translation(self, video_metadata: VideoMetadata) -> str:

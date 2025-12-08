@@ -25,6 +25,13 @@ class DatabaseManager:
         if self._initialized:
             return
         
+        # Check if database is enabled
+        if not settings.get_database_enabled():
+            # If disabled, we don't initialize the engine
+            # Any attempt to use the session will raise an error, which is expected
+            # if the caller didn't check get_database_enabled() first.
+            return
+
         database_url = settings.get_database_url()
         self.engine = create_engine(
             database_url,

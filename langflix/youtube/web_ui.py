@@ -16,6 +16,7 @@ from langflix.youtube.schedule_manager import YouTubeScheduleManager, ScheduleCo
 from langflix.youtube.last_schedule import YouTubeLastScheduleService
 from langflix.db.models import YouTubeAccount, YouTubeQuotaUsage
 from langflix.db.session import db_manager
+from langflix import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -707,6 +708,13 @@ class VideoManagementUI:
                         "authenticated": False,
                         "message": "Not authenticated with YouTube"
                     })
+            except (FileNotFoundError, ValueError) as e:
+                # Expected errors when not authenticated or credentials missing
+                logger.info(f"YouTube account check failed (expected if not logged in): {e}")
+                return jsonify({
+                    "authenticated": False,
+                    "message": str(e)
+                })
             except Exception as e:
                 logger.error(f"Error getting YouTube account: {e}")
                 return jsonify({"error": str(e)}), 500
@@ -1594,21 +1602,28 @@ class VideoManagementUI:
                             
                             # Store schedule in DB for tracking when available
                             actual_scheduled_time = publish_time
-                            if self.schedule_manager:
+                            if self.schedule_manager and settings.get_database_enabled():
                                 try:
                                     success, message, scheduled_time = self.schedule_manager.schedule_video(
                                         video_path, schedule_video_type, publish_time
                                     )
                                     if success and scheduled_time:
                                         actual_scheduled_time = scheduled_time
+                                        self.schedule_manager.update_schedule_with_video_id(
+                                            video_path, result.video_id, 'completed'
+                                        )
+                                        self.schedule_manager.update_quota_usage(schedule_video_type)
+                                    else:
+                                        logger.warning(f"DB schedule failed: {message}")
                                 except Exception as e:
                                     logger.warning(f"DB schedule record failed (continuing): {e}")
-                            
-                            if success:
-                                self.schedule_manager.update_schedule_with_video_id(
-                                    video_path, result.video_id, 'completed'
-                                )
-                                self.schedule_manager.update_quota_usage(schedule_video_type)
+                            else:
+                                # Stateless mode: assume success for scheduling
+                                logger.info(f"Stateless mode: Scheduled {video_path} for {publish_time}")
+                                # In stateless mode, we don't have a DB to update, but we still need to track the actual_scheduled_time
+                                # The original code had `publish_timer.update_schedule_with_video_id` which is incorrect.
+                                # We just set actual_scheduled_time and proceed.
+                                actual_scheduled_time = publish_time
                             
                             # Update video status
                             self._update_video_upload_status(
@@ -1675,6 +1690,19 @@ class VideoManagementUI:
                 if not self.schedule_manager:
                     return jsonify({"error": "Schedule manager not available"}), 503
                 
+                # Check if DB is enabled for quota tracking
+                if not settings.get_database_enabled():
+                    # Return default/empty quota status if DB is disabled
+                    from datetime import date
+                    today = date.today()
+                    return jsonify({
+                        "date": today.isoformat(),
+                        "final_videos": {"used": 0, "remaining": 2, "limit": 2},
+                        "short_videos": {"used": 0, "remaining": 5, "limit": 5},
+                        "api_quota": {"used": 0, "remaining": 10000, "percentage": 0, "limit": 10000},
+                        "warnings": ["Database disabled - quota tracking unavailable"]
+                    })
+                
                 from datetime import date
                 today = date.today()
                 quota_status = self.schedule_manager.check_daily_quota(today)
@@ -1731,6 +1759,9 @@ class VideoManagementUI:
                 if not video_path.startswith('/'):
                     video_path = '/' + video_path
                 
+                if not settings.get_database_enabled():
+                    return jsonify({"error": "Database disabled"}), 404
+
                 with db_manager.session() as db:
                     schedule = db.query(YouTubeSchedule).filter_by(
                         video_path=video_path
@@ -1876,6 +1907,9 @@ class VideoManagementUI:
             if not self.schedule_manager:
                 return
                 
+            if not settings.get_database_enabled():
+                return
+
             from langflix.db.models import YouTubeSchedule
             
             with db_manager.session() as db:
@@ -1904,6 +1938,9 @@ class VideoManagementUI:
     def _save_youtube_account(self, channel_info: Dict[str, Any]):
         """Save YouTube account info to database"""
         try:
+            if not settings.get_database_enabled():
+                return
+
             from langflix.db.session import db_manager
             
             with db_manager.session() as db:

@@ -30,7 +30,8 @@ except ImportError:
 # YouTube API scopes
 SCOPES = [
     'https://www.googleapis.com/auth/youtube.upload',
-    'https://www.googleapis.com/auth/youtube.readonly'
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/youtube.force-ssl'
 ]
 
 @dataclass
@@ -802,15 +803,22 @@ class YouTubeUploader:
             if not video_info:
                 return False
             
-            # Update snippet
-            video_info['snippet']['title'] = metadata.title
-            video_info['snippet']['description'] = metadata.description
-            video_info['snippet']['tags'] = metadata.tags
+            # Construct minimal update body
+            update_body = {
+                'id': video_id,
+                'snippet': {
+                    'title': metadata.title,
+                    'description': metadata.description,
+                    'tags': metadata.tags,
+                    # Preserve existing categoryId if possible, or use default from metadata if provided
+                    'categoryId': video_info.get('snippet', {}).get('categoryId', metadata.category_id)
+                }
+            }
             
             # Update video
             self.service.videos().update(
                 part='snippet',
-                body=video_info
+                body=update_body
             ).execute()
             
             logger.info(f"Updated metadata for video: {video_id}")
@@ -835,19 +843,72 @@ class YouTubeUploader:
             return False
     
     def list_my_videos(self, max_results: int = 50) -> List[Dict[str, Any]]:
-        """List user's uploaded videos"""
+        """List user's uploaded videos. If max_results is 0, fetch ALL videos."""
         if not self.authenticated:
             return []
         
         try:
-            response = self.service.videos().list(
-                part='snippet,statistics',
-                mySubscriptions=False,
-                maxResults=max_results,
-                order='date'
-            ).execute()
+            logger.info("Fetching video list from YouTube...")
+            video_ids = []
+            next_page_token = None
+            total_fetched = 0
             
-            return response.get('items', [])
+            while True:
+                # Determine how many to fetch in this page
+                # YouTube API limit per page is usuall 50
+                fetch_limit = 50
+                if max_results > 0:
+                    remaining = max_results - total_fetched
+                    if remaining <= 0:
+                        break
+                    fetch_limit = min(50, remaining)
+
+                # Search for my videos to get IDs
+                search_params = {
+                    'part': 'id',
+                    'forMine': True,
+                    'type': 'video',
+                    'maxResults': fetch_limit,
+                    'order': 'date'
+                }
+                
+                if next_page_token:
+                    search_params['pageToken'] = next_page_token
+                    
+                search_response = self.service.search().list(**search_params).execute()
+                
+                # Extract video IDs from this page
+                page_video_ids = [item['id']['videoId'] for item in search_response.get('items', []) if 'videoId' in item.get('id', {})]
+                video_ids.extend(page_video_ids)
+                total_fetched += len(page_video_ids)
+                
+                next_page_token = search_response.get('nextPageToken')
+                
+                # Break if no more pages or if we gathered enough (though the loop condition handles the latter partly)
+                if not next_page_token:
+                    break
+                    
+                if max_results > 0 and total_fetched >= max_results:
+                    break
+            
+            if not video_ids:
+                return []
+                
+            logger.info(f"Found {len(video_ids)} video IDs. Fetching details...")
+            
+            # Fetch full details for these IDs in batches (videos().list also has limits, often 50)
+            all_video_details = []
+            batch_size = 50
+            
+            for i in range(0, len(video_ids), batch_size):
+                batch_ids = video_ids[i:i + batch_size]
+                response = self.service.videos().list(
+                    part='snippet,statistics',
+                    id=','.join(batch_ids)
+                ).execute()
+                all_video_details.extend(response.get('items', []))
+            
+            return all_video_details
             
         except Exception as e:
             logger.error(f"Failed to list videos: {e}")

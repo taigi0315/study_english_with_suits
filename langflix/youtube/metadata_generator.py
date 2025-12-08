@@ -42,9 +42,9 @@ class YouTubeMetadataGenerator:
                 "expression_label": "Expression",
                 "meaning_label": "의미",
                 "watch_and_learn": "좋아하는 쇼에서 보고 배우세요!",
-                "title_template": "{expression} | {translation} | from {episode}",
+                "title_template": "{expression} | {translation} | {episode}",
                 # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
+                "long_form_title": "{expression} | {translation} | {episode}",
                 "long_form_description_intro": "수트 드라마에서 배우는 실용적인 영어 표현들을 모았습니다.",
                 "final_title": "완전한 영어 레슨: {episode} | 수트에서 배우는 5개 이상의 표현",
                 "final_description_intro": "수트 {episode}의 완전한 영어 레슨!",
@@ -54,7 +54,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "맥락과 적절한 사용법",
                 "pronunciation": "발음과 억양",
                 "similar_expressions": "유사한 표현과 대안",
-                "watch_original": "원본 장면을 보고 자연스럽게 배우세요!"
+                "watch_original": "원본 장면을 보고 자연스럽게 배우세요!",
+                "check_meaning": "의미를 영상에서 확인하세요"
             },
             "English": {
                 "quick_lesson": "Quick English lesson from Suits!",
@@ -73,7 +74,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "Context and proper usage",
                 "pronunciation": "Pronunciation and intonation",
                 "similar_expressions": "Similar expressions and alternatives",
-                "watch_original": "Watch the original scenes and learn naturally!"
+                "watch_original": "Watch the original scenes and learn naturally!",
+                "check_meaning": "Check the meaning in the video"
             },
             "Japanese": {
                 "quick_lesson": "スーツから学ぶクイック英語レッスン！",
@@ -92,7 +94,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "文脈と適切な使用方法",
                 "pronunciation": "発音とイントネーション",
                 "similar_expressions": "類似した表現と代替案",
-                "watch_original": "オリジナルのシーンを見て自然に学びましょう！"
+                "watch_original": "オリジナルのシーンを見て自然に学びましょう！",
+                "check_meaning": "動画で意味を確認してください"
             },
             "Chinese": {
                 "quick_lesson": "从《金装律师》快速学习英语！",
@@ -111,7 +114,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "语境和正确用法",
                 "pronunciation": "发音和语调",
                 "similar_expressions": "类似表达和替代方案",
-                "watch_original": "观看原始场景并自然学习！"
+                "watch_original": "观看原始场景并自然学习！",
+                "check_meaning": "在视频中查看含义"
             },
             "Spanish": {
                 "quick_lesson": "¡Lección rápida de inglés de Suits!",
@@ -130,7 +134,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "Contexto y uso apropiado",
                 "pronunciation": "Pronunciación y entonación",
                 "similar_expressions": "Expresiones similares y alternativas",
-                "watch_original": "¡Mira las escenas originales y aprende naturalmente!"
+                "watch_original": "¡Mira las escenas originales y aprende naturalmente!",
+                "check_meaning": "Consulta el significado en el video"
             },
             "French": {
                 "quick_lesson": "Leçon d'anglais rapide de Suits !",
@@ -149,7 +154,8 @@ class YouTubeMetadataGenerator:
                 "context_usage": "Contexte et utilisation appropriée",
                 "pronunciation": "Prononciation et intonation",
                 "similar_expressions": "Expressions similaires et alternatives",
-                "watch_original": "Regardez les scènes originales et apprenez naturellement !"
+                "watch_original": "Regardez les scènes originales et apprenez naturellement !",
+                "check_meaning": "Vérifiez la signification dans la vidéo"
             }
         }
     
@@ -305,7 +311,7 @@ class YouTubeMetadataGenerator:
         # Use translated expression if available (TICKET-060)
         # Prefer expression_translation for target language, fallback to English expression
         expression = (video_metadata.expression or "").strip()
-        translation = (video_metadata.expression_translation or self._get_translation(video_metadata)).strip()
+        translation = (video_metadata.expression_translation or self._get_translation(video_metadata, target_language)).strip()
         
         if not expression:
             # Try to extract from filename if expression is empty
@@ -508,7 +514,7 @@ class YouTubeMetadataGenerator:
                 translation_text = translation_text or first_expression.get("translation")
 
             if not translation_text:
-                translation_text = self._get_translation(video_metadata)
+                translation_text = self._get_translation(video_metadata, target_language)
 
             # Ensure expression_text is the original expression (English)
             expression_text = expression_text or "Expression"
@@ -530,7 +536,7 @@ class YouTubeMetadataGenerator:
         
         # Get translated expression (TICKET-060)
         expression = video_metadata.expression
-        translation = video_metadata.expression_translation or self._get_translation(video_metadata)
+        translation = video_metadata.expression_translation or self._get_translation(video_metadata, target_language)
         
         # For final videos, list multiple expressions
         expressions_list = expression
@@ -667,14 +673,18 @@ class YouTubeMetadataGenerator:
             return f"Season 1 Episode {episode_num}"
         return episode
     
-    def _get_translation(self, video_metadata: VideoMetadata) -> str:
+    def _get_translation(self, video_metadata: VideoMetadata, target_language: Optional[str] = None) -> str:
         """Get translation for the expression"""
         # Return the translation from metadata if available
         if video_metadata.expression_translation:
             return video_metadata.expression_translation
             
         # Fallback if no translation found
-        return "Learn the meaning and usage in the video"
+        if target_language is None:
+            target_language = self._get_target_language()
+
+        # Use localized "check meaning" string, fallback to English
+        return self._get_template_translation("check_meaning", target_language)
     
     def _get_expression_translation(self, video_metadata: VideoMetadata) -> str:
         """Get translation for the expression (alias for clarity)"""

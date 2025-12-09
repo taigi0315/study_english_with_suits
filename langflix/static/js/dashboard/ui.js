@@ -196,7 +196,7 @@ export const ui = {
             background: white;
             padding: 30px;
             border-radius: 15px;
-            max-width: 800px;
+            max-width: 900px;
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
@@ -212,16 +212,16 @@ export const ui = {
                 mediaHTML = '<p style="color: #e74c3c;">No media files found. Please add video files to your media directory.</p>';
             } else {
                 mediaHTML = `
-                    <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                    <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #ecf0f1; border-radius: 8px; padding: 10px;">
                         ${mediaFiles.map(media => `
-                            <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #ecf0f1; border-radius: 5px; margin-bottom: 10px; cursor: pointer;">
+                            <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #ecf0f1; border-radius: 5px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
                                 <input type="checkbox" class="media-checkbox" value="${media.video_path}" 
                                     data-video="${media.video_path}" 
                                     data-subtitle="${media.subtitle_path || ''}"
                                     data-episode="${media.episode_name || ''}"
                                     data-show="${media.show_name || 'Suits'}"
-                                    style="margin-right: 10px;">
-                                <div>
+                                    style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <div style="flex: 1;">
                                     <div style="font-weight: 500;">${formatters.escapeHtml(media.episode_name || media.video_path)}</div>
                                     <div style="font-size: 0.9em; color: #7f8c8d;">${formatters.escapeHtml(media.show_name || '')}</div>
                                 </div>
@@ -243,23 +243,104 @@ export const ui = {
             </div>
 
             <div style="margin-bottom: 20px;">
-                <h3 style="color: #34495e; margin-bottom: 10px;">Language Settings</h3>
+                <h3 style="color: #34495e; margin-bottom: 10px;">Languages & Level</h3>
                 <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Source Language</label>
-                    <select id="languageCode" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
-                        <option value="en">English</option>
-                        <option value="ko">Korean</option>
-                        <option value="ja">Japanese</option>
-                    </select>
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Languages (Select multiple)</label>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="ko" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">Korean (한국어)</span>
+                        </label>
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="ja" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">Japanese (日本語)</span>
+                        </label>
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="zh" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">Chinese (中文)</span>
+                        </label>
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="en" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">English</span>
+                        </label>
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="es" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">Spanish (Español)</span>
+                        </label>
+                        <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
+                            <input type="checkbox" class="language-checkbox" value="fr" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <span style="font-weight: 500; color: #2c3e50;">French (Français)</span>
+                        </label>
+                    </div>
+                    <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">💡 Tip: Select multiple languages to generate videos for all selected languages at once!</p>
                 </div>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Language Level</label>
-                    <select id="languageLevel" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                    <select id="languageLevel" style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
                         <option value="beginner">Beginner</option>
                         <option value="intermediate">Intermediate</option>
                         <option value="advanced">Advanced</option>
+                        <option value="mixed">Mixed</option>
                     </select>
                 </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #34495e; margin-bottom: 10px;">Options</h3>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 15px;">
+                    <input type="checkbox" id="testModeCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span style="font-weight: 500;">Test Mode (Process only first chunk for testing)</span>
+                </label>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
+                    <input type="number" id="shortFormMaxDuration" value="180" min="60" max="300" step="10" 
+                           style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">Videos exceeding this duration will be dropped from batching (default: 180)</small>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Video Formats to Create</label>
+                    <div style="display: flex; gap: 20px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="createLongFormCheckbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">Long Form (Combined)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="createShortFormCheckbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">Short Form (Vertical)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px; border-top: 1px solid #ecf0f1; padding-top: 20px;">
+                <h3 style="color: #34495e; margin-bottom: 10px;">Auto Upload</h3>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 10px;">
+                    <input type="checkbox" id="autoUploadCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span style="font-weight: 500;">Auto Upload to YouTube</span>
+                </label>
+                
+                <div id="uploadOptions" style="display: none; margin-left: 28px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Timing</label>
+                        <div style="display: flex; gap: 20px;">
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                <input type="radio" name="uploadTiming" value="scheduled" checked> 
+                                <span>Scheduled (Recommended)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                <input type="radio" name="uploadTiming" value="immediate"> 
+                                <span>Immediate (Private)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <p style="margin-bottom: 8px; font-weight: 500;">Note: Videos will be uploaded based on "Video Formats to Create" selection above.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 3px solid #3498db;">
+                <strong>Note:</strong> This will create both a final video and short videos (2-3 minutes each). Expressions will be selected automatically by AI.
             </div>
 
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -272,11 +353,36 @@ export const ui = {
             </div>
         `;
 
+        // Add CSS for language checkbox hover effects
+        const style = document.createElement('style');
+        style.textContent = `
+            .language-checkbox-label:hover {
+                background: #e8f4f8 !important;
+                border-color: #3498db !important;
+            }
+            .language-checkbox-label:has(input:checked) {
+                background: #d4edda !important;
+                border-color: #27ae60 !important;
+            }
+        `;
+        document.head.appendChild(style);
+
         modal.appendChild(dialog);
         document.body.appendChild(modal);
 
+        // Setup auto-upload toggle
+        const autoUploadCheckbox = dialog.querySelector('#autoUploadCheckbox');
+        const uploadOptions = dialog.querySelector('#uploadOptions');
+        autoUploadCheckbox.addEventListener('change', () => {
+            uploadOptions.style.display = autoUploadCheckbox.checked ? 'block' : 'none';
+        });
+
         // Event listeners
-        dialog.querySelector('#cancelBtn').addEventListener('click', () => modal.remove());
+        dialog.querySelector('#cancelBtn').addEventListener('click', () => {
+            modal.remove();
+            style.remove();
+        });
+
         dialog.querySelector('#createBtn').addEventListener('click', async () => {
             const selectedMedia = Array.from(dialog.querySelectorAll('.media-checkbox:checked'));
             if (selectedMedia.length === 0) {
@@ -284,8 +390,24 @@ export const ui = {
                 return;
             }
 
-            const languageCode = dialog.querySelector('#languageCode').value;
+            const selectedLanguages = Array.from(dialog.querySelectorAll('.language-checkbox:checked')).map(cb => cb.value);
+            if (selectedLanguages.length === 0) {
+                alert('Please select at least one target language');
+                return;
+            }
+
             const languageLevel = dialog.querySelector('#languageLevel').value;
+            const testMode = dialog.querySelector('#testModeCheckbox').checked;
+            const shortFormMaxDuration = parseFloat(dialog.querySelector('#shortFormMaxDuration').value);
+            const createLongForm = dialog.querySelector('#createLongFormCheckbox').checked;
+            const createShortForm = dialog.querySelector('#createShortFormCheckbox').checked;
+            const autoUpload = dialog.querySelector('#autoUploadCheckbox').checked;
+            const uploadTiming = autoUpload ? dialog.querySelector('input[name="uploadTiming"]:checked').value : null;
+
+            // Disable button and show loading
+            const createBtn = dialog.querySelector('#createBtn');
+            createBtn.disabled = true;
+            createBtn.textContent = 'Creating...';
 
             // Create content for each selected media
             for (const checkbox of selectedMedia) {
@@ -297,10 +419,17 @@ export const ui = {
                             media_id: checkbox.value,
                             video_path: checkbox.dataset.video,
                             subtitle_path: checkbox.dataset.subtitle,
-                            language_code: languageCode,
+                            language_code: 'en', // Source language
+                            target_languages: selectedLanguages,
                             language_level: languageLevel,
-                            create_long_form: true,
-                            create_short_form: true
+                            test_mode: testMode,
+                            create_long_form: createLongForm,
+                            create_short_form: createShortForm,
+                            short_form_max_duration: shortFormMaxDuration,
+                            auto_upload_config: autoUpload ? {
+                                enabled: true,
+                                timing: uploadTiming
+                            } : null
                         })
                     });
 
@@ -309,19 +438,25 @@ export const ui = {
                         console.log('Job created:', result.job_id);
                     } else {
                         console.error('Error creating job:', result.error);
+                        alert(`Error creating job: ${result.error}`);
                     }
                 } catch (error) {
                     console.error('Error:', error);
+                    alert(`Error: ${error.message}`);
                 }
             }
 
             modal.remove();
+            style.remove();
             alert('Content creation started! Check the job status for progress.');
         });
 
         // Close on overlay click
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
+            if (e.target === modal) {
+                modal.remove();
+                style.remove();
+            }
         });
     }
 };

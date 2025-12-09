@@ -15,6 +15,7 @@ async function init() {
     setupNavigation();
     setupFilters();
     setupAuth();
+    setupCreateContent();
 }
 
 async function refreshView() {
@@ -69,6 +70,15 @@ function setupAuth() {
         await api.logout();
         await loadAccountInfo(); // Refresh state
     });
+}
+
+function setupCreateContent() {
+    const btn = document.getElementById('createContentBtn');
+    if (btn) {
+        btn.addEventListener('click', async () => {
+            await ui.showCreateContentModal();
+        });
+    }
 }
 
 // Start app

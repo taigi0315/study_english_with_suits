@@ -137,5 +137,39 @@ export const ui = {
              <button class="action-btn-icon" title="Delete" style="color: #e74c3c;">🗑️</button>
         </div>
         `;
+    },
+
+    renderAccountInfo(accountData) {
+        const container = document.getElementById('youtubeAccountSection');
+        if (!accountData || !accountData.authenticated) {
+            container.innerHTML = `
+                <div class="youtube-login-prompt">
+                    <p>Connect your YouTube account to upload videos</p>
+                    <button class="btn-login" id="btnLogin">Connect YouTube</button>
+                </div>
+            `;
+            const btn = document.getElementById('btnLogin');
+            if (btn) btn.addEventListener('click', () => eventBus.dispatchEvent(new CustomEvent('login')));
+            return;
+        }
+
+        // Assuming accountData structure matches: { authenticated: true, channel: { title: "...", thumbnail_url: "..." } }
+        // We handle fallback if structure is flat for some reason, but backend sends nested 'channel'.
+        const channel = accountData.channel || accountData;
+
+        container.innerHTML = `
+            <div class="youtube-account-info">
+                <div class="account-details">
+                    <img src="${channel.thumbnail_url || '/static/css/default-user.png'}" class="channel-thumbnail" alt="Channel">
+                    <div class="account-text">
+                        <div class="channel-title">${formatters.escapeHtml(channel.title || 'Unknown Channel')}</div>
+                        <div class="channel-email">${formatters.escapeHtml(channel.custom_url || '')}</div>
+                    </div>
+                </div>
+                <button class="btn-logout" id="btnLogout">Disconnect</button>
+            </div>
+        `;
+        const btn = document.getElementById('btnLogout');
+        if (btn) btn.addEventListener('click', () => eventBus.dispatchEvent(new CustomEvent('logout')));
     }
 };

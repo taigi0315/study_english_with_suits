@@ -9,10 +9,12 @@ async function init() {
     // Initial Load
     await refreshView();
     loadStats();
+    loadAccountInfo();
 
     // Setup Event Listeners
     setupNavigation();
     setupFilters();
+    setupAuth();
 }
 
 async function refreshView() {
@@ -44,6 +46,28 @@ function setupFilters() {
             state.currentFilter = e.target.dataset.filter;
             ui.renderDirectory(state.currentDirectoryItems.items || []);
         });
+    });
+}
+
+async function loadAccountInfo() {
+    const accountData = await api.fetchAccountInfo();
+    ui.renderAccountInfo(accountData);
+}
+
+function setupAuth() {
+    eventBus.addEventListener('login', async () => {
+        const result = await api.login();
+        if (result && result.auth_url) {
+            window.location.href = result.auth_url;
+        } else {
+            console.error('Login returned no auth URL', result);
+            alert('Failed to start login process');
+        }
+    });
+
+    eventBus.addEventListener('logout', async () => {
+        await api.logout();
+        await loadAccountInfo(); // Refresh state
     });
 }
 

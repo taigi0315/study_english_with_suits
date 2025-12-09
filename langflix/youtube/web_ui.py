@@ -196,9 +196,16 @@ class VideoManagementUI:
         processor = create_pipeline_processor(progress_callback)
         self.job_queue.set_job_processor(processor)
         
-        # Flask 앱 초기화 시 템플릿 디렉토리 경로 설정
-        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
-        self.app = Flask(__name__, template_folder=template_dir)
+        # Flask 앱 초기화 시 템플릿 및 정적 파일 디렉토리 설정
+        current_dir = os.path.dirname(os.path.abspath(__file__)) # langflix/youtube
+        parent_dir = os.path.dirname(current_dir) # langflix
+        template_dir = os.path.join(parent_dir, 'templates')
+        static_dir = os.path.join(parent_dir, 'static')
+        
+        self.app = Flask(__name__, 
+                        template_folder=template_dir,
+                        static_folder=static_dir,
+                        static_url_path='/static')
         
         # Disable Flask/Werkzeug HTTP request logging (too verbose and not useful)
         # Only log errors and warnings

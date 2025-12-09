@@ -29,7 +29,7 @@ from langflix.core.error_handler import handle_error, ErrorContext
 
 async def process_video_task(
     job_id: str,
-    job_id: str,
+
     video_path: str,
     subtitle_path: str,
     video_filename: str,

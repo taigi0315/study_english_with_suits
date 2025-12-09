@@ -1626,17 +1626,7 @@
                                 </div>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Content Types to Upload</label>
-                                <div style="display: flex; gap: 20px;">
-                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                        <input type="checkbox" id="uploadShorts" checked> 
-                                        <span>Short Form</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                        <input type="checkbox" id="uploadLong" checked> 
-                                        <span>Long Form</span>
-                                    </label>
-                                </div>
+                                <p style="margin-bottom: 8px; font-weight: 500;">Note: Videos will be uploaded based on "Video Formats to Create" selection above.</p>
                             </div>
                         </div>
                     </div>
@@ -1717,14 +1707,12 @@
             // Auto Upload Configuration
             const autoUploadEnabled = document.getElementById('autoUploadCheckbox').checked;
             const uploadTiming = document.querySelector('input[name="uploadTiming"]:checked').value;
-            const uploadShorts = document.getElementById('uploadShorts').checked;
-            const uploadLong = document.getElementById('uploadLong').checked;
 
             const autoUploadConfig = autoUploadEnabled ? {
                 enabled: true,
                 timing: uploadTiming,
-                upload_shorts: uploadShorts,
-                upload_long: uploadLong
+                upload_shorts: createShortForm,
+                upload_long: createLongForm
             } : null;
 
             // Disable create button

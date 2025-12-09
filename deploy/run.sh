@@ -37,6 +37,13 @@ echo -e "${GREEN}✅ .env 파일 확인 완료${NC}"
 
 # .env 파일에서 경로 읽기
 source "$SCRIPT_DIR/.env"
+
+# GEMINI_MODEL 확인 (기본값 설정)
+if [ -z "$GEMINI_MODEL" ]; then
+    echo -e "${YELLOW}⚠️  GEMINI_MODEL 변수가 설정되지 않았습니다. 기본값 'gemini-2.5-flash'를 사용합니다.${NC}"
+    export GEMINI_MODEL="gemini-2.5-flash"
+fi
+
 TRUENAS_DATA_PATH="${TRUENAS_DATA_PATH:-/mnt/Pool_2/Projects/langflix}"
 TRUENAS_MEDIA_PATH="${TRUENAS_MEDIA_PATH:-/mnt/Pool_2/Media}"
 
@@ -323,7 +330,7 @@ if sudo docker compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
         1)
             echo ""
             echo -e "${YELLOW}기존 컨테이너 중지 중...${NC}"
-            sudo docker compose -f "$COMPOSE_FILE" down
+            sudo -E docker compose -f "$COMPOSE_FILE" down
             echo -e "${GREEN}✅ 컨테이너 중지 완료${NC}"
             ;;
         2)
@@ -333,7 +340,7 @@ if sudo docker compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
                 echo -e "${YELLOW}⚠️  경고: 이전 마운트 설정이 사용 중입니다${NC}"
                 echo "   YouTube 인증이 작동하지 않을 수 있습니다."
             fi
-            sudo docker compose -f "$COMPOSE_FILE" ps
+            sudo -E docker compose -f "$COMPOSE_FILE" ps
             exit 0
             ;;
         3)
@@ -361,7 +368,7 @@ fi
 
 if [ "$REBUILD_IMAGES" = true ]; then
     echo -e "${YELLOW}🔨 이미지 재빌드 중...${NC}"
-    sudo docker compose -f "$COMPOSE_FILE" build --no-cache
+    sudo -E docker compose -f "$COMPOSE_FILE" build --no-cache
     echo -e "${GREEN}✅ 이미지 재빌드 완료${NC}"
     echo ""
 fi
@@ -370,13 +377,13 @@ fi
 if [ "$REBUILD_IMAGES" != true ]; then
     echo -e "${BLUE}📦 이미지 빌드 중 (변경사항 확인)...${NC}"
     # docker-compose build는 변경사항이 있으면 자동으로 빌드하고, 없으면 스킵합니다
-    sudo docker compose -f "$COMPOSE_FILE" build
+    sudo -E docker compose -f "$COMPOSE_FILE" build
     echo -e "${GREEN}✅ 이미지 빌드 완료${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}🚀 컨테이너 시작 중...${NC}"
-sudo docker compose -f "$COMPOSE_FILE" up -d
+sudo -E docker compose -f "$COMPOSE_FILE" up -d
 
 # 잠시 대기
 echo ""

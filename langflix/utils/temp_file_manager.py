@@ -157,6 +157,56 @@ class TempFileManager:
             self.temp_files.append(file_path)
             logger.debug(f"Registered file for cleanup: {file_path}")
     
+    def create_persistent_temp_file(self, suffix: str = "", prefix: Optional[str] = None) -> Path:
+        """
+        Create a temporary file that persists after creation until explicitly cleaned up.
+        
+        Args:
+            suffix: File suffix
+            prefix: Optional prefix override
+            
+        Returns:
+            Path to the created temporary file
+        """
+        file_prefix = prefix or self.prefix
+        
+        # Use NamedTemporaryFile to generate name and create file
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=suffix,
+            prefix=file_prefix,
+            dir=str(self.base_dir)
+        ) as f:
+            temp_path = Path(f.name)
+            
+        self.temp_files.append(temp_path)
+        logger.debug(f"Created persistent temp file: {temp_path}")
+        return temp_path
+
+    def cleanup_temp_file(self, file_path: Path) -> bool:
+        """
+        Clean up a specific temporary file and remove from tracking.
+        
+        Args:
+            file_path: Path to the file to clean up
+            
+        Returns:
+            True if cleanup happened, False if file didn't exist
+        """
+        try:
+            if file_path.exists():
+                file_path.unlink()
+                logger.debug(f"Cleaned up temp file: {file_path}")
+                
+            # Remove from tracking list if present
+            if file_path in self.temp_files:
+                self.temp_files.remove(file_path)
+                
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
+            return False
+
     def cleanup_all(self) -> None:
         """Clean up all registered temporary files and directories."""
         # Clean up files

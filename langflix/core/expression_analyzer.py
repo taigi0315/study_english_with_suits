@@ -72,10 +72,18 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
             import re
             timestamp_pattern = r'^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$'
             
+            if not expr.context_start_time:
+                logger.error(f"Dropping expression {i+1}: '{expr.expression}' - Missing context_start_time")
+                continue
+                
             if not re.match(timestamp_pattern, expr.context_start_time):
                 logger.error(f"Dropping expression {i+1}: '{expr.expression}' - Invalid context_start_time format: {expr.context_start_time}")
                 continue
                 
+            if not expr.context_end_time:
+                logger.error(f"Dropping expression {i+1}: '{expr.expression}' - Missing context_end_time")
+                continue
+
             if not re.match(timestamp_pattern, expr.context_end_time):
                 logger.error(f"Dropping expression {i+1}: '{expr.expression}' - Invalid context_end_time format: {expr.context_end_time}")
                 continue

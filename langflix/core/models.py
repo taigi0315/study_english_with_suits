@@ -33,11 +33,13 @@ class ExpressionAnalysis(BaseModel):
         description="Translation of the main expression",
         min_length=1
     )
-    context_start_time: str = Field(
+    context_start_time: Optional[str] = Field(
+        default=None,
         description="Timestamp where conversational context should BEGIN",
         pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
     )
-    context_end_time: str = Field(
+    context_end_time: Optional[str] = Field(
+        default=None,
         description="Timestamp where conversational context should END", 
         pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
     )

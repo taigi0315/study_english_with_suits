@@ -252,8 +252,7 @@ def get_llm_model_name() -> str:
     env_model = os.getenv("GEMINI_MODEL")
     if env_model:
         return env_model
-    # Get from config or default to 1.5-flash
-    return get_llm_config().get('model_name', 'gemini-1.5-flash')
+    return get_llm_config().get('model_name', 'gemini-2.5-flash')
 
 
 # ============================================================================

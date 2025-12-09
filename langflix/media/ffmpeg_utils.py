@@ -567,12 +567,23 @@ def concat_filter_with_explicit_map(
         except (ValueError, ZeroDivisionError):
             target_fps = 25.0
     
+    # Scale to target resolution (1280x720) to prevent resolution mismatch
+    # force_original_aspect_ratio='decrease' ensures we fit within the box
+    # pad ensures we fill the box exactly
+    left_v = ffmpeg.filter(left_in["v"], 'scale', 1280, 720, force_original_aspect_ratio='decrease')
+    left_v = ffmpeg.filter(left_v, 'pad', 1280, 720, '(ow-iw)/2', '(oh-ih)/2')
+    left_v = ffmpeg.filter(left_v, 'setsar', r='1')
+    
+    right_v = ffmpeg.filter(right_in["v"], 'scale', 1280, 720, force_original_aspect_ratio='decrease')
+    right_v = ffmpeg.filter(right_v, 'pad', 1280, 720, '(ow-iw)/2', '(oh-ih)/2')
+    right_v = ffmpeg.filter(right_v, 'setsar', r='1')
+
     # Apply fps filter to both videos to ensure consistent frame rate and prevent A-V sync issues
     # Reset timestamps after fps filter to prevent 0.5s delay and A-V sync issues
     # setpts=PTS-STARTPTS ensures timestamps start from 0 for proper concat
-    left_v = ffmpeg.filter(left_in["v"], 'fps', fps=target_fps)
+    left_v = ffmpeg.filter(left_v, 'fps', fps=target_fps)
     left_v = ffmpeg.filter(left_v, 'setpts', 'PTS-STARTPTS')
-    right_v = ffmpeg.filter(right_in["v"], 'fps', fps=target_fps)
+    right_v = ffmpeg.filter(right_v, 'fps', fps=target_fps)
     right_v = ffmpeg.filter(right_v, 'setpts', 'PTS-STARTPTS')
     
     # Reset audio timestamps as well to ensure A-V sync

@@ -37,8 +37,7 @@ llm:
   # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
   max_input_length: 800
   
-  # Gemini model name (defaults to gemini-1.5-flash for Tier 1 / Free Tier)
-  model_name: "gemini-1.5-flash"
+  model_name: "gemini-2.5-flash"
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
@@ -158,7 +157,7 @@ tts:
   google:
     # api_key: "set via GEMINI_API_KEY environment variable"
     language_code: "en-us"  # Original language (English) for audio generation
-    model_name: "gemini-1.5-flash"  # Gemini TTS model for high-quality synthesis
+    model_name: "gemini-2.5-flash"  # Gemini TTS model for high-quality synthesis
     response_format: "wav"  # Audio format (WAV for new API)
     # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
     speaking_rate: "high" 

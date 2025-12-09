@@ -271,8 +271,6 @@ UVICORN_RELOAD=false
 
 # API 키
 GEMINI_API_KEY=your_gemini_api_key_here
-GOOGLE_API_KEY_1=
-LEMONFOX_API_KEY=
 
 # 네트워크 설정
 API_PORT=8000

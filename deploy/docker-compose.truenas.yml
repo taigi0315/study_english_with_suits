@@ -85,9 +85,7 @@ services:
 
       # APIs
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - GOOGLE_API_KEY_1=${GOOGLE_API_KEY_1:-}
-      - LEMONFOX_API_KEY=${LEMONFOX_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL}
 
       # Media storage path (TrueNAS 미디어 경로)
       - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows

@@ -507,3 +507,69 @@ class TestQueueProcessor:
             # (The initial update and potentially callback updates)
             assert len(progress_calls) > 0
 
+
+    @pytest.mark.asyncio
+    async def test_process_job_parameter_parsing(self, queue_processor, mock_redis_manager):
+        """Test that string parameters in job data are correctly parsed to booleans"""
+        job_id = "test-job-params"
+        job_data = {
+            'job_id': job_id,
+            'status': 'QUEUED',
+            'video_path': '/path/to/video.mp4',
+            'subtitle_path': '/path/to/subtitle.srt',
+            'language_code': 'ko',
+            'show_name': 'Suits',
+            'episode_name': 'Episode 1',
+            'test_mode': 'False',          # String "False" should be False
+            'no_shorts': 'True',           # String "True" should be True
+            'create_long_form': 'False',   # String "False" should be False
+            'create_short_form': 'True',   # String "True" should be True
+            'short_form_max_duration': '60.5', # String float
+            'output_dir': 'output',
+            'batch_id': None
+        }
+        
+        mock_redis_manager.get_job.return_value = job_data
+        
+        mock_service = Mock()
+        mock_service.process_video = Mock(return_value={
+            'expressions': [],
+            'educational_videos': [],
+            'short_videos': [],
+            'final_video': ''
+        })
+        
+        mock_temp_manager = MagicMock()
+        mock_temp_file = MagicMock()
+        mock_temp_file.__enter__ = Mock(return_value=mock_temp_file)
+        mock_temp_file.__exit__ = Mock(return_value=False)
+        mock_temp_file.write_bytes = Mock()
+        mock_temp_manager.create_temp_file = Mock(return_value=mock_temp_file)
+        
+        with patch('langflix.services.queue_processor.get_temp_manager', return_value=mock_temp_manager), \
+             patch('langflix.services.video_pipeline_service.VideoPipelineService', return_value=mock_service), \
+             patch('builtins.open', create=True), \
+             patch('os.path.exists', return_value=True), \
+             patch('asyncio.get_event_loop') as mock_get_loop:
+            
+            mock_loop = Mock()
+            async def mock_run_in_executor(executor, func):
+                if callable(func):
+                    return func()
+                return {}
+            
+            mock_loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+            mock_get_loop.return_value = mock_loop
+            
+            await queue_processor._process_job(job_id)
+            
+            # Verify VideoPipelineService was initialized
+            assert mock_service.process_video.called
+            call_kwargs = mock_service.process_video.call_args[1]
+            
+            # Check boolean parsing
+            assert call_kwargs['test_mode'] is False, "test_mode should be parsed as False"
+            assert call_kwargs['no_shorts'] is True, "no_shorts should be parsed as True"
+            assert call_kwargs['create_long_form'] is False, "create_long_form should be parsed as False"
+            assert call_kwargs['create_short_form'] is True, "create_short_form should be parsed as True"
+            assert call_kwargs['short_form_max_duration'] == 60.5, "short_form_max_duration should be float"

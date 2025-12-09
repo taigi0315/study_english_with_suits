@@ -2038,7 +2038,9 @@ class VideoManagementUI:
                     "language_level": data['language_level'],
                     "test_mode": test_mode,
                     "no_shorts": False,
-                    "short_form_max_duration": short_form_max_duration
+                    "short_form_max_duration": short_form_max_duration,
+                    "create_long_form": data.get('create_long_form', True),
+                    "create_short_form": data.get('create_short_form', True)
                 }
                 
                 # Add target_languages if provided (for multi-language support)

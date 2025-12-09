@@ -214,9 +214,11 @@ class QueueProcessor:
             # Parse numeric and boolean fields
             max_expressions = int(job_data.get('max_expressions', 50))
             language_level = job_data.get('language_level', 'intermediate')
-            test_mode = job_data.get('test_mode', False)
-            no_shorts = job_data.get('no_shorts', False)
+            test_mode = job_data.get('test_mode', 'False') == 'True'
+            no_shorts = job_data.get('no_shorts', 'False') == 'True'
             short_form_max_duration = float(job_data.get('short_form_max_duration', get_short_video_max_duration()))
+            create_long_form = job_data.get('create_long_form', 'True') == 'True'
+            create_short_form = job_data.get('create_short_form', 'True') == 'True'
             output_dir = job_data.get('output_dir', 'output')
             
             if not video_path or not os.path.exists(video_path):
@@ -301,6 +303,8 @@ class QueueProcessor:
                             test_mode=test_mode,
                             no_shorts=no_shorts,
                             short_form_max_duration=short_form_max_duration,
+                            create_long_form=create_long_form,
+                            create_short_form=create_short_form,
                             progress_callback=update_progress
                         )
                     )

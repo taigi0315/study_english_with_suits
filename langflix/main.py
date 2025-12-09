@@ -256,7 +256,7 @@ class LangFlixPipeline:
         # TICKET-037: Profiling support
         self.profiler = profiler
         
-    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False, short_form_max_duration: float = 180.0, target_languages: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False, no_long_form: bool = False, short_form_max_duration: float = 180.0, target_languages: Optional[List[str]] = None, schedule_upload: bool = False) -> Dict[str, Any]:
         """
         Run the complete pipeline
         
@@ -403,7 +403,7 @@ class LangFlixPipeline:
                 if self.progress_callback:
                     self.progress_callback(70, "Creating educational videos...")
                 with profile_stage("create_educational_videos", self.profiler, metadata={"num_expressions": len(self.expressions)}):
-                    self._create_educational_videos()
+                    self._create_educational_videos(no_long_form=no_long_form)
                 
                 # Step 6: Create short-format videos (unless disabled)
                 if not no_shorts:
@@ -444,6 +444,70 @@ class LangFlixPipeline:
                                 continue
                 else:
                     logger.info("Step 6: Skipping short-format videos (--no-shorts flag)")
+                
+                # Step 6.5: Upload videos to YouTube if scheduled
+                if schedule_upload and not dry_run:
+                    logger.info("Step 6.5: Uploading videos to YouTube...")
+                    
+                    from langflix.youtube.uploader import YouTubeUploader
+                    from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
+                    from langflix.youtube.video_manager import VideoFileManager
+                    
+                    try:
+                        uploader = YouTubeUploader()
+                        metadata_gen = YouTubeMetadataGenerator()
+                        video_manager = VideoFileManager(str(self.output_dir))
+                        
+                        if uploader.authenticate():
+                            # Determine videos to upload - typically the combined long form ones
+                            videos_to_upload = []
+                            
+                            # Retrieve paths from previous step (stored in combined_videos if available locally in method scope)
+                            # Note: combined_videos variable from _create_educational_videos needs to be accessible here
+                            # Or we can scan for them.
+                            # But wait, combined_videos is local to _create_educational_videos...
+                            # We need to change _create_educational_videos to return paths or store in self.
+                            
+                            # Quick fix: scan for combined.mkv in language directories
+                            for lang in self.target_languages:
+                                lang_paths = self.paths.get('languages', {}).get(lang)
+                                if lang_paths and 'long' in lang_paths:
+                                    combo_path = lang_paths['long'] / "combined.mkv"
+                                    if combo_path.exists():
+                                        videos_to_upload.append((lang, combo_path))
+                            
+                            if not videos_to_upload:
+                                logger.warning("No combined videos found for upload.")
+                            
+                            for lang, video_path in videos_to_upload:
+                                try:
+                                     # Extract metadata
+                                     video_metadata = video_manager._extract_video_metadata(video_path)
+                                     if not video_metadata:
+                                         logger.warning(f"Could not extract metadata for {video_path}")
+                                         continue
+                                     
+                                     # Generate YouTube metadata
+                                     yt_metadata = metadata_gen.generate_metadata(
+                                         video_metadata,
+                                         target_language=lang,
+                                         privacy_status="private" # Default to private for safety
+                                     )
+                                     
+                                     logger.info(f"Uploading {video_path.name} to YouTube ({lang})...")
+                                     result = uploader.upload_video(video_path, yt_metadata)
+                                     if result.success:
+                                         logger.info(f"✅ Upload successful! Video ID: {result.video_id}")
+                                         logger.info(f"URL: {result.video_url}")
+                                     else:
+                                         logger.error(f"❌ Upload failed: {result.error_message}")
+                                except Exception as e:
+                                    logger.error(f"Error uploading video {video_path}: {e}")
+                        else:
+                            logger.error("❌ YouTube authentication failed - cannot upload")
+                            
+                    except Exception as e:
+                        logger.error(f"Upload process setup failed: {e}", exc_info=True)
             elif not dry_run and not self.expressions:
                 logger.warning("⚠️ Skipping expression processing - no expressions found")
                 if self.progress_callback:
@@ -829,7 +893,7 @@ class LangFlixPipeline:
                 logger.error(f"Error processing expression {expr_idx+1}: {e}")
                 continue
     
-    def _create_educational_videos(self):
+    def _create_educational_videos(self, no_long_form: bool = False):
         """
         Create long-form videos for each expression (1:1 context-expression mapping).
         For multi-language support, extracts video slices once and reuses for all languages.
@@ -964,12 +1028,19 @@ class LangFlixPipeline:
                 logger.warning(f"⚠️ No videos created for {lang}")
         
         # Step 3: Create combined long-form videos for each language
+        combined_videos = {}  # Store paths for uploading
         for lang, long_form_videos in all_long_form_videos.items():
             logger.info(f"Creating combined long-form video for {lang} from {len(long_form_videos)} videos...")
             try:
                 lang_paths = self.paths.get('languages', {}).get(lang)
                 if lang_paths:
-                    self._create_combined_long_form_video(long_form_videos, lang, lang_paths)
+                    # Create combined long-form video only if requested
+                    if not no_long_form:
+                        path = self._create_combined_long_form_video(long_form_videos, lang, lang_paths)
+                        if path:
+                            combined_videos[lang] = path
+                    else:
+                        logger.info(f"Skipping combined long-form video creation for {lang} (no_long_form=True)")
             except Exception as e:
                 logger.error(f"Error creating combined long-form video for {lang}: {e}")
                 continue
@@ -1289,12 +1360,13 @@ class LangFlixPipeline:
             logger.error(f"Error creating batched short videos: {e}", exc_info=True)
             raise
     
-    def _create_combined_long_form_video(self, long_form_videos: List[str], language_code: Optional[str] = None, lang_paths: Optional[Dict] = None):
+
+    def _create_combined_long_form_video(self, long_form_videos: List[str], language_code: Optional[str] = None, lang_paths: Optional[Dict] = None) -> Optional[Path]:
         """Create combined long-form video from all long-form videos"""
         try:
             if not long_form_videos:
                 logger.warning("No long-form videos provided for combination")
-                return
+                return None
             
             logger.info(f"Combining {len(long_form_videos)} long-form videos into one...")
             
@@ -1309,7 +1381,7 @@ class LangFlixPipeline:
             
             if not valid_videos:
                 logger.error("No valid long-form videos found for combination")
-                return
+                return None
             
             # Create output path for combined video in long/ directory
             # Simplified filename: just "combined.mkv"
@@ -1345,6 +1417,8 @@ class LangFlixPipeline:
                 
                 logger.info(f"✅ Combined long-form video created: {combined_video_path}")
                 
+                return combined_video_path
+                
                 # Note: Individual long_form videos are NOT deleted here
                 # They are needed for short video creation, and will be cleaned up after short videos are created
             finally:
@@ -1355,6 +1429,7 @@ class LangFlixPipeline:
             
         except Exception as e:
             logger.error(f"Error creating combined long-form video: {e}", exc_info=True)
+            return None
     
     def _create_final_video(self, educational_videos: List[str]):
         """Create final concatenated educational video with fade transitions"""
@@ -1720,6 +1795,12 @@ Examples:
         default=None,
         help="Path to save profiling report (default: profiles/profile_<timestamp>.json)"
     )
+
+    parser.add_argument(
+        "--schedule-upload",
+        action="store_true",
+        help="Upload generated videos to YouTube"
+    )
     
     args = parser.parse_args()
 
@@ -1766,7 +1847,8 @@ Examples:
             language_level=args.language_level,
             save_llm_output=args.save_llm_output,
             test_mode=args.test_mode,
-            no_shorts=args.no_shorts
+            no_shorts=args.no_shorts,
+            schedule_upload=args.schedule_upload  # Pass schedule_upload flag
         )
         
         # Print summary

@@ -31,6 +31,8 @@ class BatchCreateRequest(BaseModel):
     max_expressions: int = 50
     no_shorts: bool = False
     short_form_max_duration: float = 180.0
+    create_long_form: bool = True
+    create_short_form: bool = True
     output_dir: str = "output"
 
 
@@ -82,6 +84,8 @@ async def create_batch(request: BatchCreateRequest) -> Dict[str, Any]:
             'max_expressions': request.max_expressions,
             'no_shorts': request.no_shorts,
             'short_form_max_duration': request.short_form_max_duration,
+            'create_long_form': request.create_long_form,
+            'create_short_form': request.create_short_form,
             'output_dir': request.output_dir
         }
         

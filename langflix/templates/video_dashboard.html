@@ -1589,6 +1589,19 @@
                                    style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
                             <small style="color: #7f8c8d; display: block; margin-top: 5px;">Videos exceeding this duration will be dropped from batching (default: 180)</small>
                         </div>
+                        <div style="margin-top: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Video Formats to Create</label>
+                            <div style="display: flex; gap: 20px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="createLongFormCheckbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                    <span style="font-weight: 500;">Long Form (Combined)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="createShortFormCheckbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                    <span style="font-weight: 500;">Short Form (Vertical)</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="margin-bottom: 20px; border-top: 1px solid #ecf0f1; padding-top: 20px;">
@@ -1697,6 +1710,8 @@
 
             const languageLevel = document.getElementById('levelSelect').value;
             const testMode = document.getElementById('testModeCheckbox').checked;
+            const createLongForm = document.getElementById('createLongFormCheckbox').checked;
+            const createShortForm = document.getElementById('createShortFormCheckbox').checked;
             const shortFormMaxDuration = parseFloat(document.getElementById('shortFormMaxDuration').value) || 180;
 
             // Auto Upload Configuration
@@ -1720,7 +1735,7 @@
             // Check if multiple videos selected (batch mode)
             if (selectedMedia.length > 1) {
                 // Batch processing
-                await startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton, autoUploadConfig);
+                await startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createLongForm, createShortForm, createButton, autoUploadConfig);
             } else {
                 // Single video processing (backward compatible)
                 const media = selectedMedia[0];
@@ -1742,6 +1757,8 @@
                             target_languages: targetLanguages,
                             language_level: languageLevel,
                             test_mode: testMode,
+                            create_long_form: createLongForm,
+                            create_short_form: createShortForm,
                             short_form_max_duration: shortFormMaxDuration,
                             auto_upload_config: autoUploadConfig
                         })
@@ -1768,7 +1785,7 @@
             }
         }
 
-        async function startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createButton, autoUploadConfig) {
+        async function startBatchContentCreation(selectedMedia, languageCode, targetLanguages, languageLevel, testMode, shortFormMaxDuration, createLongForm, createShortForm, createButton, autoUploadConfig) {
             try {
                 // Collect all selected videos
                 const videos = Array.from(selectedMedia).map(checkbox => ({
@@ -1798,6 +1815,8 @@
                         target_languages: targetLanguages,
                         language_level: languageLevel,
                         test_mode: testMode,
+                        create_long_form: createLongForm,
+                        create_short_form: createShortForm,
                         short_form_max_duration: shortFormMaxDuration,
                         auto_upload_config: autoUploadConfig
                     })

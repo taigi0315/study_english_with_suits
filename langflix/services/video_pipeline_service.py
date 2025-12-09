@@ -45,7 +45,10 @@ class VideoPipelineService:
         language_level: str = "intermediate",
         test_mode: bool = False,
         no_shorts: bool = False,
+        create_long_form: bool = True,
+        create_short_form: bool = True,
         short_form_max_duration: float = 180.0,
+        schedule_upload: bool = False,
         progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> Dict[str, Any]:
         """
@@ -60,6 +63,9 @@ class VideoPipelineService:
             language_level: Target language level (beginner, intermediate, advanced, mixed)
             test_mode: If True, process only the first chunk for testing
             no_shorts: If True, skip creating short-format videos
+            create_long_form: If True, create combined long-form video (default: True)
+            create_short_form: If True, create short-form videos (default: True)
+            schedule_upload: If True, upload generated videos to YouTube
             progress_callback: Optional callback function(progress: int, message: str) -> None
             
         Returns:
@@ -97,6 +103,10 @@ class VideoPipelineService:
             if progress_callback:
                 progress_callback(20, "Running pipeline...")
             
+            # Determine flags
+            actual_no_shorts = no_shorts or (not create_short_form)
+            actual_no_long_form = not create_long_form
+            
             # Run the pipeline
             result = pipeline.run(
                 max_expressions=max_expressions,
@@ -104,8 +114,10 @@ class VideoPipelineService:
                 language_level=language_level,
                 save_llm_output=False,
                 test_mode=test_mode,
-                no_shorts=no_shorts,
-                short_form_max_duration=short_form_max_duration
+                no_shorts=actual_no_shorts,
+                no_long_form=actual_no_long_form,
+                short_form_max_duration=short_form_max_duration,
+                schedule_upload=schedule_upload
             )
             
             if progress_callback:

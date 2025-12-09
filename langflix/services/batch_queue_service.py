@@ -68,6 +68,8 @@ class BatchQueueService:
         max_expressions = config.get('max_expressions', 50)
         no_shorts = config.get('no_shorts', False)
         short_form_max_duration = config.get('short_form_max_duration', 180.0)
+        create_long_form = config.get('create_long_form', True)
+        create_short_form = config.get('create_short_form', True)
         output_dir = config.get('output_dir', 'output')
         
         if not language_code:
@@ -109,6 +111,8 @@ class BatchQueueService:
                 "test_mode": str(test_mode),
                 "no_shorts": str(no_shorts),
                 "short_form_max_duration": str(short_form_max_duration),
+                "create_long_form": str(create_long_form),
+                "create_short_form": str(create_short_form),
                 "output_dir": output_dir,
                 "progress": "0",
                 "error": ""
@@ -138,6 +142,8 @@ class BatchQueueService:
             "max_expressions": max_expressions,
             "no_shorts": no_shorts,
             "short_form_max_duration": short_form_max_duration,
+            "create_long_form": create_long_form,
+            "create_short_form": create_short_form,
             "output_dir": output_dir
         }
         

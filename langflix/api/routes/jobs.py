@@ -41,6 +41,8 @@ async def process_video_task(
     short_form_max_duration: float = 180.0,
     output_dir: str = "output",
     target_languages: Optional[List[str]] = None,
+    create_long_form: bool = True,
+    create_short_form: bool = True,
     auto_upload_config: Optional[Dict[str, Any]] = None
 ):
     """Process video in background task using unified VideoPipelineService."""
@@ -104,6 +106,8 @@ async def process_video_task(
                     language_level=language_level,
                     test_mode=test_mode,
                     no_shorts=no_shorts,
+                    create_long_form=create_long_form,
+                    create_short_form=create_short_form,
                     short_form_max_duration=short_form_max_duration,
                     progress_callback=update_progress
                 )
@@ -331,6 +335,8 @@ async def create_job(
     short_form_max_duration: float = Form(180.0),
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
+    create_long_form: bool = Form(True),
+    create_short_form: bool = Form(True),
     auto_upload_config: Optional[str] = Form(None), # JSON string
     background_tasks: BackgroundTasks = BackgroundTasks()
 ) -> Dict[str, Any]:
@@ -396,6 +402,8 @@ async def create_job(
             "test_mode": str(test_mode),
             "no_shorts": str(no_shorts),
             "short_form_max_duration": str(short_form_max_duration),
+            "create_long_form": str(create_long_form),
+            "create_short_form": str(create_short_form),
             "progress": "0",
             "error": ""
         }
@@ -420,6 +428,8 @@ async def create_job(
             short_form_max_duration=short_form_max_duration,
             output_dir=output_dir,
             target_languages=target_languages_list,
+            create_long_form=create_long_form,
+            create_short_form=create_short_form,
             auto_upload_config=auto_upload_config_dict
         )
         

@@ -404,14 +404,22 @@ export const ui = {
             const autoUpload = dialog.querySelector('#autoUploadCheckbox').checked;
             const uploadTiming = autoUpload ? dialog.querySelector('input[name="uploadTiming"]:checked').value : null;
 
-            // Disable button and show loading
-            const createBtn = dialog.querySelector('#createBtn');
-            createBtn.disabled = true;
-            createBtn.textContent = 'Creating...';
+            // Close modal immediately
+            modal.remove();
+            style.remove();
+
+            // Show progress panel at bottom
+            ui.showProgressPanel(selectedMedia.length);
 
             // Create content for each selected media
-            for (const checkbox of selectedMedia) {
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 0; i < selectedMedia.length; i++) {
+                const checkbox = selectedMedia[i];
                 try {
+                    ui.updateProgressPanel(i + 1, selectedMedia.length, `Processing ${checkbox.dataset.episode}...`);
+
                     const response = await fetch('/api/content/create', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -436,19 +444,27 @@ export const ui = {
                     const result = await response.json();
                     if (response.ok) {
                         console.log('Job created:', result.job_id);
+                        successCount++;
+                        ui.updateProgressPanel(i + 1, selectedMedia.length, `✓ Created job for ${checkbox.dataset.episode}`);
                     } else {
                         console.error('Error creating job:', result.error);
-                        alert(`Error creating job: ${result.error}`);
+                        errorCount++;
+                        ui.updateProgressPanel(i + 1, selectedMedia.length, `✗ Error: ${result.error}`);
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    alert(`Error: ${error.message}`);
+                    errorCount++;
+                    ui.updateProgressPanel(i + 1, selectedMedia.length, `✗ Error: ${error.message}`);
                 }
             }
 
-            modal.remove();
-            style.remove();
-            alert('Content creation started! Check the job status for progress.');
+            // Final update
+            ui.updateProgressPanel(
+                selectedMedia.length,
+                selectedMedia.length,
+                `Complete! ${successCount} succeeded, ${errorCount} failed.`,
+                true
+            );
         });
 
         // Close on overlay click
@@ -458,5 +474,83 @@ export const ui = {
                 style.remove();
             }
         });
+    },
+
+    showProgressPanel(totalJobs) {
+        // Remove any existing progress panel
+        const existing = document.getElementById('progressPanel');
+        if (existing) existing.remove();
+
+        // Create progress panel at bottom
+        const panel = document.createElement('div');
+        panel.id = 'progressPanel';
+        panel.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 1000;
+            padding: 20px;
+        `;
+
+        panel.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 1.2em;">📦 Creating Content</h3>
+                <button id="closeProgressBtn" style="padding: 8px 16px; border: none; border-radius: 6px; background: #ecf0f1; cursor: pointer;">
+                    Close
+                </button>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <div style="background: #ecf0f1; height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div id="progressBar" style="background: #3498db; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+            </div>
+            <div id="progressStatus" style="color: #7f8c8d; font-size: 0.9em;">
+                Starting...
+            </div>
+            <div id="progressLog" style="margin-top: 10px; max-height: 200px; overflow-y: auto; font-size: 0.85em; color: #555;">
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        // Close button handler
+        panel.querySelector('#closeProgressBtn').addEventListener('click', () => {
+            panel.remove();
+        });
+    },
+
+    updateProgressPanel(current, total, message, isComplete = false) {
+        const panel = document.getElementById('progressPanel');
+        if (!panel) return;
+
+        const progressBar = panel.querySelector('#progressBar');
+        const progressStatus = panel.querySelector('#progressStatus');
+        const progressLog = panel.querySelector('#progressLog');
+
+        // Update progress bar
+        const percentage = (current / total) * 100;
+        progressBar.style.width = `${percentage}%`;
+
+        if (isComplete) {
+            progressBar.style.background = '#27ae60';
+        }
+
+        // Update status
+        progressStatus.textContent = `${current} / ${total} - ${message}`;
+
+        // Add to log
+        const logEntry = document.createElement('div');
+        logEntry.style.cssText = 'padding: 4px 0; border-bottom: 1px solid #ecf0f1;';
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        progressLog.appendChild(logEntry);
+
+        // Auto-scroll to bottom
+        progressLog.scrollTop = progressLog.scrollHeight;
     }
 };

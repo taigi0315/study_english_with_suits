@@ -1,0 +1,354 @@
+import logging
+import tempfile
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Callable
+
+from langflix.core.models import ExpressionAnalysis
+from langflix.core.video_processor import VideoProcessor
+from langflix.core.subtitle_processor import SubtitleProcessor
+from langflix.core.video_editor import VideoEditor
+from langflix.utils.filename_utils import sanitize_for_expression_filename
+from langflix.services.output_manager import OutputManager
+from langflix.utils.temp_file_manager import get_temp_manager
+from langflix.media.ffmpeg_utils import get_duration_seconds
+from langflix import settings
+
+logger = logging.getLogger(__name__)
+
+class VideoFactory:
+    """Service for orchestrating video creation."""
+
+    def create_educational_videos(
+        self,
+        expressions: List[ExpressionAnalysis],
+        translated_expressions: Dict[str, List[ExpressionAnalysis]],
+        target_languages: List[str],
+        paths: Dict[str, Any],
+        video_processor: VideoProcessor,
+        subtitle_processor: SubtitleProcessor,
+        output_dir: Path,
+        episode_name: str,
+        subtitle_file: Path,
+        no_long_form: bool = False,
+        progress_callback: Optional[callable] = None
+    ):
+        """
+        Create long-form videos for each expression using extracted video slices.
+        """
+        logger.info(f"Creating long-form videos for {len(expressions)} expressions in {len(target_languages)} languages...")
+        
+        original_video = video_processor.find_video_file(str(subtitle_file))
+        if not original_video:
+            logger.error("No original video file found, cannot create long-form videos")
+            raise RuntimeError("Original video file not found")
+        
+        logger.info(f"Using original video file: {original_video}")
+        
+        # Step 1: Extract video slices (reused)
+        extracted_slices = self._extract_slices(expressions, video_processor, original_video)
+        
+        # Step 2: Create videos for each language
+        all_long_form_videos = {}
+        
+        for lang_idx, lang in enumerate(target_languages):
+            logger.info(f"Creating videos for language: {lang}")
+            if progress_callback:
+                 # Map 50-80% progress
+                lang_progress = 50 + int((lang_idx / len(target_languages)) * 30)
+                progress_callback(lang_progress, f"Creating videos for {lang} ({lang_idx+1}/{len(target_languages)})...")
+
+            if lang not in translated_expressions:
+                logger.warning(f"No translations found for language {lang}, skipping")
+                continue
+            
+            lang_expressions = translated_expressions[lang]
+            lang_paths = self._ensure_lang_paths(paths, lang, output_dir)
+            
+            lang_video_editor = VideoEditor(
+                str(lang_paths['final_videos']),
+                lang,
+                episode_name,
+                subtitle_processor=subtitle_processor
+            )
+            lang_video_editor.paths = lang_paths
+            
+            lang_long_form_videos = []
+            
+            for expr_idx, expression in enumerate(lang_expressions):
+                if expr_idx not in extracted_slices:
+                    continue
+                
+                try:
+                    long_form_video = lang_video_editor.create_long_form_video(
+                        expression,
+                        str(original_video),
+                        str(original_video),
+                        expression_index=expr_idx,
+                        pre_extracted_context_clip=extracted_slices[expr_idx]
+                    )
+                    lang_long_form_videos.append(long_form_video)
+                except Exception as e:
+                    logger.error(f"Error creating long-form video for {lang} - expr {expr_idx+1}: {e}")
+                    continue
+            
+            if lang_long_form_videos:
+                all_long_form_videos[lang] = lang_long_form_videos
+                
+            # Cleanup temp files for this editor
+            try:
+                lang_video_editor._cleanup_temp_files(preserve_short_format=False)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temp files for {lang}: {e}")
+
+        # Step 3: Combine videos
+        combined_videos = {}
+        for lang, videos in all_long_form_videos.items():
+            if not no_long_form:
+                 lang_paths = paths['languages'][lang]
+                 path = self._create_combined_long_form_video(videos, lang_paths)
+                 if path:
+                     combined_videos[lang] = path
+        
+        # Cleanup extracted slices (they were persistent temps)
+        temp_manager = get_temp_manager()
+        for slice_path in extracted_slices.values():
+            try:
+                if slice_path.exists():
+                    # If TempFileManager was used with delete=False, we should clean up if we tracked it or just unlink
+                    # Note: create_temp_file with delete=False doesn't auto-delete on exit.
+                    # We need to manually remove them or rely on temp_manager if it tracked them.
+                    # The implementation in main.py relied on `temp_manager` context but `delete=False`.
+                    # Actually `temp_manager.create_temp_file` returns a path and cleans up IF `delete=True`.
+                    # If `delete=False`, it yields path.
+                    slice_path.unlink()
+            except Exception as e:
+                logger.warning(f"Failed to delete extracted slice {slice_path}: {e}")
+                
+        return combined_videos
+
+    def create_short_videos(
+        self,
+        target_languages: List[str],
+        paths: Dict[str, Any],
+        translated_expressions: Dict[str, List[ExpressionAnalysis]],
+        base_expressions: List[ExpressionAnalysis],
+        episode_name: str,
+        subtitle_processor: SubtitleProcessor,
+        video_editor_factory_method: callable, # Should return a VideoEditor
+        short_form_max_duration: float = 180.0,
+        output_dir: Path = None,
+        progress_callback: Optional[callable] = None
+    ):
+        """Create short videos for target languages."""
+        
+        if not settings.is_short_video_enabled():
+            logger.info("Short video generation disabled in settings")
+            return
+
+        for lang_idx, lang in enumerate(target_languages):
+            logger.info(f"Creating short-format videos for language: {lang}")
+            if progress_callback:
+                 # Map 80-95% progress
+                 progress = 80 + int((lang_idx / len(target_languages)) * 15)
+                 progress_callback(progress, f"Creating short videos for {lang} ({lang_idx+1}/{len(target_languages)})...")
+                 
+            lang_paths = paths.get('languages', {}).get(lang)
+            if not lang_paths:
+                logger.error(f"Language paths not found for {lang}, skipping shorts")
+                continue
+                
+            # Create editor
+            video_editor = video_editor_factory_method(lang, lang_paths)
+            
+            try:
+                self._create_short_videos_for_lang(
+                    lang,
+                    lang_paths,
+                    video_editor,
+                    translated_expressions.get(lang, base_expressions),
+                    base_expressions,
+                    episode_name,
+                    short_form_max_duration
+                )
+            except Exception as e:
+                logger.error(f"Error creating short videos for {lang}: {e}")
+
+    def _extract_slices(self, expressions, video_processor, original_video) -> Dict[int, Path]:
+        logger.info("Extracting video slices...")
+        extracted_slices = {}
+        temp_manager = get_temp_manager()
+        
+        for expr_idx, base_expression in enumerate(expressions):
+            try:
+                safe_filename = sanitize_for_expression_filename(base_expression.expression)
+                # We need persistent temp file
+                # Using create_temp_file matches main.py logic (yields path)
+                with temp_manager.create_temp_file(
+                    prefix=f"context_clip_{expr_idx:02d}_{safe_filename[:30]}_",
+                    suffix=".mkv",
+                    delete=False
+                ) as temp_context_clip:
+                    success = video_processor.extract_clip(
+                        Path(original_video),
+                        base_expression.context_start_time,
+                        base_expression.context_end_time,
+                        temp_context_clip
+                    )
+                    if success:
+                        extracted_slices[expr_idx] = temp_context_clip
+                        
+            except Exception as e:
+                logger.error(f"Error extracting context clip for expression {expr_idx+1}: {e}")
+                continue
+        return extracted_slices
+
+    def _ensure_lang_paths(self, paths, lang, output_dir):
+        if lang in paths.get('languages', {}):
+             return paths['languages'][lang]
+        
+        output_manager = OutputManager(str(output_dir))
+        episode_paths = paths.get('episode', {})
+        lang_paths = output_manager.create_language_structure(episode_paths, lang)
+        
+        if 'languages' not in paths:
+            paths['languages'] = {}
+        paths['languages'][lang] = lang_paths
+        return lang_paths
+
+    def _create_combined_long_form_video(self, long_form_videos: List[str], lang_paths: Dict) -> Optional[Path]:
+        if not long_form_videos: 
+            return None
+            
+        valid_videos = [v for v in long_form_videos if Path(v).exists() and Path(v).stat().st_size > 1000]
+        if not valid_videos:
+            return None
+            
+        long_dir = lang_paths.get('long') or lang_paths.get('language_dir') / "long"
+        output_path = long_dir / "combined.mkv"
+        
+        # Instantiate editor to use combine_videos
+        # We don't need language/episode specific setting strictly for combination if we pass output path
+        # But we need to match constructor signature
+        editor = VideoEditor(
+             output_dir=str(long_dir),
+             language_code="unknown", # Not critical for combination
+             episode_name="combined"
+        )
+        return editor.combine_videos(valid_videos, str(output_path))
+
+    def _create_short_videos_for_lang(
+        self,
+        lang: str,
+        lang_paths: Dict,
+        video_editor: VideoEditor,
+        lang_expressions: List[ExpressionAnalysis],
+        base_expressions: List[ExpressionAnalysis],
+        episode_name: str,
+        max_duration: float
+    ):
+        expressions_dir = lang_paths.get('expressions') or lang_paths['language_dir'] / "expressions"
+        long_form_videos = sorted(list(Path(expressions_dir).glob("*.mkv")))
+        
+        if not long_form_videos:
+            return
+
+        long_form_video_map = {v.stem: v for v in long_form_videos}
+        short_format_videos = []
+        
+        for i, expression in enumerate(lang_expressions):
+            # Match using base expression if available logic from main.py
+            base_expression = base_expressions[i] if i < len(base_expressions) else expression
+            safe_name = sanitize_for_expression_filename(base_expression.expression)
+            
+            if safe_name in long_form_video_map:
+                long_form_video = long_form_video_map[safe_name]
+                try:
+                    output_path = video_editor.create_short_form_from_long_form(
+                        str(long_form_video),
+                        expression,
+                        expression_index=i
+                    )
+                    duration = get_duration_seconds(str(output_path))
+                    short_format_videos.append({
+                        "path": str(output_path),
+                        "duration": duration,
+                        "expression": expression.expression,
+                        "expression_translation": expression.expression_translation,
+                        "language": lang,
+                        "episode": episode_name,
+                        "source_short": Path(output_path).name
+                    })
+                except Exception as e:
+                    logger.error(f"Error creating short for expr {i+1}: {e}")
+
+        if short_format_videos:
+            self._batch_shorts(short_format_videos, max_duration, video_editor)
+            
+            # Cleanup individual shorts
+            for v in short_format_videos:
+                try:
+                    Path(v["path"]).unlink(missing_ok=True)
+                except: pass
+                
+        # Conserve expression videos? (Ticket-029 said preserve shorts, main.py says cleanup)
+        # Main.py:
+        # if target_video_editor:
+        #    target_video_editor._cleanup_temp_files(preserve_short_format=True)
+        # But also deletes individual long videos if short videos created.
+        
+        # logic from main.py lines 1211-1229: removes long_form videos from expressions/ dir
+        if short_format_videos and long_form_videos:
+             for v in long_form_videos:
+                 try: v.unlink(missing_ok=True)
+                 except: pass
+
+        video_editor._cleanup_temp_files(preserve_short_format=True)
+
+    def _batch_shorts(self, videos, max_duration, editor):
+        # ... logic for batching ...
+        # Copy logic from _create_batched_short_videos_with_max_duration
+        # To save space, implementing simplified version or copying fully if necessary
+        # Given this is a refactor, I should copy the logic.
+        
+        batch_videos = []
+        current_batch_videos = []
+        current_batch_metadata = []
+        current_duration = 0.0
+        batch_number = 1
+        
+        for video_data in videos:
+            if video_data['duration'] > max_duration: continue
+            
+            if current_duration + video_data['duration'] > max_duration and current_batch_videos:
+                # Create batch
+                batch_path = editor._create_video_batch(
+                    current_batch_videos,
+                    batch_number,
+                    metadata_entries=current_batch_metadata.copy()
+                )
+                batch_videos.append(batch_path)
+                
+                current_batch_videos = []
+                current_batch_metadata = []
+                current_duration = 0.0
+                batch_number += 1
+            
+            current_batch_videos.append(video_data['path'])
+            current_batch_metadata.append({
+                "expression": video_data.get("expression"),
+                "translation": video_data.get("expression_translation"),
+                "language": video_data.get("language"),
+                "episode": video_data.get("episode"),
+                "source_short": video_data.get("source_short")
+            })
+            current_duration += video_data['duration']
+            
+        if current_batch_videos:
+             batch_path = editor._create_video_batch(
+                current_batch_videos,
+                batch_number,
+                metadata_entries=current_batch_metadata.copy()
+            )
+             batch_videos.append(batch_path)
+             
+        return batch_videos

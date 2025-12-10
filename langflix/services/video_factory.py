@@ -168,7 +168,8 @@ class VideoFactory:
                     translated_expressions.get(lang, base_expressions),
                     base_expressions,
                     episode_name,
-                    short_form_max_duration
+                    short_form_max_duration,
+                    subtitle_processor
                 )
             except Exception as e:
                 logger.error(f"Error creating short videos for {lang}: {e}")
@@ -244,7 +245,8 @@ class VideoFactory:
         lang_expressions: List[ExpressionAnalysis],
         base_expressions: List[ExpressionAnalysis],
         episode_name: str,
-        max_duration: float
+        max_duration: float,
+        subtitle_processor: SubtitleProcessor
     ):
         expressions_dir = lang_paths.get('expressions') or lang_paths['language_dir'] / "expressions"
         long_form_videos = sorted(list(Path(expressions_dir).glob("*.mkv")))
@@ -253,6 +255,38 @@ class VideoFactory:
             return
 
         long_form_video_map = {v.stem: v for v in long_form_videos}
+        
+        # Generate subtitle files for all expressions before creating short videos
+        subtitle_dir = lang_paths.get('subtitles') or lang_paths['language_dir'] / "subtitles"
+        subtitle_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Generating subtitle files for {len(lang_expressions)} expressions...")
+        
+        for i, expression in enumerate(lang_expressions):
+            try:
+                # Get base expression for filename
+                base_expression = base_expressions[i] if i < len(base_expressions) else expression
+                safe_expression_short = sanitize_for_expression_filename(base_expression.expression)[:30]
+                
+                # Create subtitle filename matching the pattern expected by create_short_form_from_long_form
+                subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
+                subtitle_output_path = subtitle_dir / subtitle_filename
+                
+                # Generate subtitle file
+                success = subtitle_processor.create_dual_language_subtitle_file(
+                    expression,
+                    str(subtitle_output_path)
+                )
+                
+                if success:
+                    logger.info(f"Generated subtitle file: {subtitle_filename}")
+                else:
+                    logger.warning(f"Failed to generate subtitle file for expression {i+1}")
+                    
+            except Exception as e:
+                logger.error(f"Error generating subtitle for expression {i+1}: {e}")
+                continue
+        
         short_format_videos = []
         
         for i, expression in enumerate(lang_expressions):

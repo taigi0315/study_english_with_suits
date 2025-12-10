@@ -503,30 +503,73 @@ class SubtitleProcessor:
         return "\n".join(srt_lines)
     
     def _map_subtitles_to_dialogues(self, subtitles: List[Dict[str, Any]], dialogues: List[str]) -> List[int]:
-        """Map each subtitle to its corresponding dialogue index"""
+        """
+        Map each subtitle to its corresponding dialogue index.
+        
+        Improved algorithm that:
+        1. Accumulates consecutive subtitle chunks
+        2. Matches accumulated text to full dialogue lines
+        3. Handles cases where dialogue spans multiple subtitles
+        """
         subtitle_to_dialogue = []
         
         # Clean dialogues for matching
         clean_dialogues = [self._clean_text_for_matching(dialogue) for dialogue in dialogues]
         
-        # For each subtitle, find which dialogue it belongs to
+        # Accumulate subtitle text to match against full dialogues
+        accumulated_text = ""
+        current_dialogue_idx = -1
+        
         for i, subtitle in enumerate(subtitles):
-            best_match_idx = -1
-            best_score = 0
             clean_subtitle = self._clean_text_for_matching(subtitle['text'])
             
+            # Try to find which dialogue this subtitle belongs to
+            best_match_idx = -1
+            best_score = 0
+            
+            # Strategy 1: Check if current accumulated text + this subtitle matches a dialogue
+            test_accumulated = (accumulated_text + " " + clean_subtitle).strip()
+            
             for j, clean_dialogue in enumerate(clean_dialogues):
-                # Check if this subtitle text is part of this dialogue
+                # Check for exact substring match
                 if clean_subtitle in clean_dialogue:
-                    # Calculate word overlap score
-                    subtitle_words = set(clean_subtitle.split())
-                    dialogue_words = set(clean_dialogue.split())
-                    if subtitle_words and dialogue_words:
-                        overlap = len(subtitle_words.intersection(dialogue_words))
-                        score = overlap / len(subtitle_words)
-                        if score > best_score:
-                            best_score = score
-                            best_match_idx = j
+                    score = len(clean_subtitle.split()) / max(len(clean_dialogue.split()), 1)
+                    if score > best_score:
+                        best_score = score
+                        best_match_idx = j
+                
+                # Check if accumulated text matches this dialogue
+                if test_accumulated in clean_dialogue:
+                    accumulated_score = len(test_accumulated.split()) / max(len(clean_dialogue.split()), 1)
+                    if accumulated_score > best_score:
+                        best_score = accumulated_score
+                        best_match_idx = j
+                
+                # Fuzzy word overlap matching
+                subtitle_words = set(clean_subtitle.split())
+                dialogue_words = set(clean_dialogue.split())
+                if subtitle_words and dialogue_words:
+                    overlap = len(subtitle_words.intersection(dialogue_words))
+                    overlap_score = overlap / len(subtitle_words)
+                    # Only use overlap if it's significant and better than current best
+                    if overlap_score > 0.6 and overlap_score > best_score:
+                        best_score = overlap_score
+                        best_match_idx = j
+            
+            # Update accumulated text and current dialogue index
+            if best_match_idx >= 0:
+                if best_match_idx != current_dialogue_idx:
+                    # New dialogue detected, reset accumulation
+                    accumulated_text = clean_subtitle
+                    current_dialogue_idx = best_match_idx
+                else:
+                    # Same dialogue, accumulate
+                    accumulated_text = test_accumulated
+            else:
+                # No match found, try to continue with previous dialogue
+                if current_dialogue_idx >= 0:
+                    best_match_idx = current_dialogue_idx
+                    accumulated_text = test_accumulated
             
             subtitle_to_dialogue.append(best_match_idx)
         

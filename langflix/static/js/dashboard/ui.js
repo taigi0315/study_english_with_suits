@@ -140,27 +140,54 @@ export const ui = {
             thumbnailHtml = '<div style="font-size: 24px;">📄</div>';
         }
 
+        // Check if video is ready for upload (has metadata)
+        const matchingVideo = state.allVideos.find(v => v.path === item.absolute_path);
+        const readyForUpload = matchingVideo && matchingVideo.ready_for_upload;
+        const isUploaded = matchingVideo && matchingVideo.uploaded;
+
         return `
-        <div class="video-row" data-path="${item.path || item.name}" data-is-dir="${item.is_directory}" data-is-video="${item.is_video}">
+        <div class="video-row ${readyForUpload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}" 
+             data-path="${item.path || item.name}" 
+             data-is-dir="${item.is_directory}" 
+             data-is-video="${item.is_video}">
+            ${item.is_video ? `
+                <div style="margin-right: 10px;">
+                    <input type="checkbox" 
+                           class="video-checkbox" 
+                           data-video-path="${item.absolute_path}"
+                           data-video-type="${matchingVideo ? matchingVideo.video_type : 'unknown'}"
+                           data-ready-for-upload="${readyForUpload}"
+                           style="width: 18px; height: 18px; cursor: pointer;">
+                </div>
+            ` : ''}
             <div class="video-thumbnail-small">
                 ${thumbnailHtml}
             </div>
             <div class="video-info-compact">
                 <div class="video-title-compact">${formatters.escapeHtml(item.name)}</div>
                 <div class="video-meta-compact">
-                    ${item.size_mb ? `<span>${item.size_mb} MB</span>` : ''}
+                    ${item.size ? `<span>${formatters.formatSize(item.size)}</span>` : ''}
                     ${item.modified ? `<span>${new Date(item.modified).toLocaleDateString()}</span>` : ''}
+                    ${isUploaded ? '<span style="color: #27ae60; font-weight: 600;">✓ Uploaded</span>' : ''}
+                    ${readyForUpload && !isUploaded ? '<span style="color: #f39c12; font-weight: 600;">⚡ Ready</span>' : ''}
                 </div>
             </div>
-            ${item.is_video ? this.renderVideoActions(item) : ''}
+            ${item.is_video ? this.renderVideoActions(item, matchingVideo, readyForUpload, isUploaded) : ''}
         </div>`;
     },
 
-    renderVideoActions(item) {
+    renderVideoActions(item, matchingVideo, readyForUpload, isUploaded) {
         return `
         <div class="video-actions-compact">
-             <button class="action-btn-icon" title="Play Video">▶️</button>
-             <button class="action-btn-icon" title="Delete" style="color: #e74c3c;">🗑️</button>
+             <button class="action-btn-icon play-video-btn" data-path="${item.absolute_path}" title="Play Video">▶️</button>
+             ${readyForUpload && !isUploaded ? `
+                <button class="action-btn-icon upload-single-btn" 
+                        data-video-path="${item.absolute_path}"
+                        data-video-id="${matchingVideo ? matchingVideo.id : ''}"
+                        title="Upload to YouTube" 
+                        style="color: #27ae60;">📤</button>
+             ` : ''}
+             <button class="action-btn-icon delete-video-btn" data-path="${item.absolute_path}" title="Delete" style="color: #e74c3c;">🗑️</button>
         </div>
         `;
     },

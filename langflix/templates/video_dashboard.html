@@ -68,6 +68,35 @@
             <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
         </div>
 
+        <!-- Bulk Actions Bar -->
+        <div id="bulkActionsBar"
+            style="display: none; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 2px solid #e0e0e0;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="selectAllVideosBtn"
+                        style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;">
+                        ✓ Select All
+                    </button>
+                    <button id="deselectAllVideosBtn"
+                        style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;">
+                        ✗ Deselect All
+                    </button>
+                    <button id="uploadImmediateBtn" class="batch-action-btn"
+                        style="background: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        📤 Upload Selected (Immediate)
+                    </button>
+                    <button id="uploadScheduleBtn" class="batch-action-btn"
+                        style="background: #27ae60; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        📅 Upload Selected (Schedule)
+                    </button>
+                </div>
+                <div id="selectionCount" style="color: #7f8c8d; font-weight: 500;">
+                    0 videos selected
+                </div>
+            </div>
+        </div>
+
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-nav" id="breadcrumbNav">
             <!-- Rendered by JS -->

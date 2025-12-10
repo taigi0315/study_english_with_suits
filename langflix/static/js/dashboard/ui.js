@@ -68,8 +68,13 @@ export const ui = {
         // Attach click listeners to rows
         container.querySelectorAll('.video-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                // Prevent navigation if clicking buttons or checkboxes
-                if (e.target.closest('button') || e.target.closest('input[type="checkbox"]')) return;
+                // Prevent navigation if clicking buttons, checkboxes, or checkbox container
+                if (e.target.closest('button') ||
+                    e.target.closest('input[type="checkbox"]') ||
+                    e.target.classList.contains('video-checkbox') ||
+                    e.target.tagName === 'INPUT') {
+                    return;
+                }
 
                 if (row.dataset.isDir === 'true') {
                     eventBus.dispatchEvent(new CustomEvent('navigate', { detail: row.dataset.path }));
@@ -149,7 +154,8 @@ export const ui = {
         <div class="video-row ${readyForUpload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}" 
              data-path="${item.path || item.name}" 
              data-is-dir="${item.is_directory}" 
-             data-is-video="${item.is_video}">
+             data-is-video="${item.is_video}"
+             style="${item.is_directory ? 'cursor: pointer;' : ''}">
             ${item.is_video ? `
                 <div style="margin-right: 10px;">
                     <input type="checkbox" 

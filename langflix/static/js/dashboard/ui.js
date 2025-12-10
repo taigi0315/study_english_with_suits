@@ -44,6 +44,9 @@ export const ui = {
     renderDirectory(items) {
         const container = document.getElementById('videosContainer');
 
+        console.log('renderDirectory - received items:', items.length);
+        console.log('renderDirectory - currentFilter:', state.currentFilter);
+
         if (items.length === 0) {
             container.innerHTML = '<div class="loading">This directory is empty.</div>';
             return;
@@ -54,10 +57,13 @@ export const ui = {
         const files = items.filter(item => item.is_file).sort((a, b) => a.name.localeCompare(b.name));
         const sortedItems = [...directories, ...files];
 
+        console.log('renderDirectory - directories:', directories.length, 'files:', files.length);
+
         // Filter items based on current filter
         let displayItems = sortedItems;
         if (state.currentFilter !== 'all') {
             displayItems = this.filterItems(sortedItems, files, directories);
+            console.log('renderDirectory - after filtering:', displayItems.length);
         }
 
         // Render HTML

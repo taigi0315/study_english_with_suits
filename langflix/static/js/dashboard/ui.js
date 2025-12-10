@@ -159,6 +159,8 @@ export const ui = {
     },
 
     renderItemRow(item) {
+        console.log('renderItemRow called for:', item.name, 'is_video:', item.is_video, 'is_directory:', item.is_directory);
+
         // Determine icon/thumbnail
         let thumbnailHtml = '';
         if (item.is_directory) {

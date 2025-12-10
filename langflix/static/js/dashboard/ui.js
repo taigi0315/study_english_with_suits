@@ -199,7 +199,7 @@ export const ui = {
             <div class="video-info-compact">
                 <div class="video-title-compact">${formatters.escapeHtml(item.name)}</div>
                 <div class="video-meta-compact">
-                    ${item.size ? `<span>${formatters.formatSize(item.size)}</span>` : ''}
+                    ${item.size ? `<span>${formatters.size(item.size / (1024 * 1024))}</span>` : ''}
                     ${item.modified ? `<span>${new Date(item.modified).toLocaleDateString()}</span>` : ''}
                     ${isUploaded ? '<span style="color: #27ae60; font-weight: 600;">✓ Uploaded</span>' : ''}
                     ${readyForUpload && !isUploaded ? '<span style="color: #f39c12; font-weight: 600;">⚡ Ready</span>' : ''}

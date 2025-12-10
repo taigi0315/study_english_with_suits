@@ -42,7 +42,9 @@ export const ui = {
     },
 
     renderDirectory(items) {
+        console.log('[DEBUG] renderDirectory called with', items.length, 'items');
         const container = document.getElementById('videosContainer');
+        console.log('[DEBUG] container element:', container);
 
         if (items.length === 0) {
             container.innerHTML = '<div class="loading">This directory is empty.</div>';
@@ -53,17 +55,26 @@ export const ui = {
         const directories = items.filter(item => item.is_directory).sort((a, b) => a.name.localeCompare(b.name));
         const files = items.filter(item => item.is_file).sort((a, b) => a.name.localeCompare(b.name));
         const sortedItems = [...directories, ...files];
+        console.log('[DEBUG] sorted:', directories.length, 'dirs,', files.length, 'files');
 
         // Filter items based on current filter
         let displayItems = sortedItems;
         if (state.currentFilter !== 'all') {
             displayItems = this.filterItems(sortedItems, files, directories);
         }
+        console.log('[DEBUG] displayItems:', displayItems.length);
 
         // Render HTML
-        container.innerHTML = `<div class="video-list">
-            ${displayItems.map(item => this.renderItemRow(item)).join('')}
+        try {
+            const html = displayItems.map(item => this.renderItemRow(item)).join('');
+            console.log('[DEBUG] generated HTML length:', html.length);
+            container.innerHTML = `<div class="video-list">
+            ${html}
         </div>`;
+            console.log('[DEBUG] rendering complete');
+        } catch (error) {
+            console.error('[DEBUG] Error rendering:', error);
+        }
     },
 
     // Set up event delegation once (called from main.js init)

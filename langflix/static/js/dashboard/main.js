@@ -21,6 +21,7 @@ async function init() {
 async function refreshView() {
     state.currentDirectoryItems = await api.fetchDirectory(state.currentPath);
     state.allVideos = await api.fetchAllVideos(); // Cache for filtering
+    ui.updateBreadcrumb(state.currentPath); // Update breadcrumb
     ui.renderDirectory(state.currentDirectoryItems.items || []);
 }
 

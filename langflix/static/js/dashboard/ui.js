@@ -115,7 +115,7 @@ export const ui = {
         }
 
         return `
-        <div class="video-row" data-path="${item.relative_path}" data-is-dir="${item.is_directory}" data-is-video="${item.is_video}">
+        <div class="video-row" data-path="${item.path || item.name}" data-is-dir="${item.is_directory}" data-is-video="${item.is_video}">
             <div class="video-thumbnail-small">
                 ${thumbnailHtml}
             </div>
@@ -123,7 +123,7 @@ export const ui = {
                 <div class="video-title-compact">${formatters.escapeHtml(item.name)}</div>
                 <div class="video-meta-compact">
                     ${item.size_mb ? `<span>${item.size_mb} MB</span>` : ''}
-                    ${item.modified ? `<span>${new Date(item.modified * 1000).toLocaleDateString()}</span>` : ''}
+                    ${item.modified ? `<span>${new Date(item.modified).toLocaleDateString()}</span>` : ''}
                 </div>
             </div>
             ${item.is_video ? this.renderVideoActions(item) : ''}

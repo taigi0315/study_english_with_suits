@@ -65,25 +65,42 @@ export const ui = {
             ${displayItems.map(item => this.renderItemRow(item)).join('')}
         </div>`;
 
-        // Attach click listeners to rows
-        container.querySelectorAll('.video-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                // Prevent navigation if clicking buttons, checkboxes, or checkbox container
-                if (e.target.closest('button') ||
-                    e.target.closest('input[type="checkbox"]') ||
-                    e.target.classList.contains('video-checkbox') ||
-                    e.target.tagName === 'INPUT') {
-                    return;
-                }
+        // Use event delegation instead of attaching listeners to each row
+        // Remove any existing listener first
+        const oldContainer = container.cloneNode(true);
+        container.parentNode.replaceChild(oldContainer, container);
+        const newContainer = document.getElementById('videosContainer');
 
-                if (row.dataset.isDir === 'true') {
-                    eventBus.dispatchEvent(new CustomEvent('navigate', { detail: row.dataset.path }));
-                } else if (row.dataset.isVideo === 'true') {
-                    // Play video or action
-                    console.log('Video clicked:', row.dataset.path);
-                    // TODO: Implement video player modal trigger
-                }
+        newContainer.addEventListener('click', (e) => {
+            const row = e.target.closest('.video-row');
+            if (!row) return;
+
+            console.log('Row clicked:', {
+                target: e.target,
+                isDir: row.dataset.isDir,
+                path: row.dataset.path,
+                targetTag: e.target.tagName,
+                targetClasses: e.target.className
             });
+
+            // Prevent navigation if clicking buttons, checkboxes, or action buttons
+            if (e.target.closest('button') ||
+                e.target.closest('input[type="checkbox"]') ||
+                e.target.classList.contains('video-checkbox') ||
+                e.target.classList.contains('action-btn-icon') ||
+                e.target.tagName === 'INPUT') {
+                console.log('Click ignored - button or checkbox');
+                return;
+            }
+
+            if (row.dataset.isDir === 'true') {
+                console.log('Navigating to directory:', row.dataset.path);
+                eventBus.dispatchEvent(new CustomEvent('navigate', { detail: row.dataset.path }));
+            } else if (row.dataset.isVideo === 'true') {
+                // Play video or action
+                console.log('Video clicked:', row.dataset.path);
+                // TODO: Implement video player modal trigger
+            }
         });
     },
 

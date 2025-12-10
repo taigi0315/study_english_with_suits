@@ -1060,11 +1060,135 @@ class VideoEditor:
                     .run(quiet=True)
                 )
             
-            # Step 6: Skip subtitle overlay - long-form video already contains subtitles
-            # Long-form video already has subtitles embedded, so we don't need to add them again
-            logger.info("Skipping subtitle overlay - long-form video already contains subtitles")
-            import shutil
-            shutil.copy(str(temp_with_expression_path), str(output_path))
+            # Step 6: Apply dialogue subtitles at bottom (below expression text)
+            subtitle_dir = None
+            if hasattr(self, 'paths') and self.paths:
+                lang_paths = self.paths
+                if 'subtitles' in lang_paths:
+                    subtitle_dir = lang_paths['subtitles']
+                else:
+                    subtitle_dir = self.output_dir.parent / "subtitles"
+            else:
+                subtitle_dir = self.output_dir.parent / "subtitles"
+
+            subtitle_file = None
+            if subtitle_dir and Path(subtitle_dir).exists():
+                # Look for expression subtitle file by index and name
+                from langflix.utils.filename_utils import sanitize_for_expression_filename
+                safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                
+                # Try exact match first
+                subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
+                subtitle_file_path = Path(subtitle_dir) / subtitle_filename
+                
+                if subtitle_file_path.exists():
+                    subtitle_file = subtitle_file_path
+                    logger.info(f"Found subtitle file: {subtitle_file.name}")
+                else:
+                    # Try pattern matching
+                    pattern = f"expression_{expression_index+1:02d}_*.srt"
+                    matches = list(Path(subtitle_dir).glob(pattern))
+                    if matches:
+                        subtitle_file = matches[0]
+                        logger.info(f"Found subtitle file by pattern: {subtitle_file.name}")
+
+            if subtitle_file and subtitle_file.exists():
+                logger.info(f"Applying dialogue subtitles to short-form video from: {subtitle_file}")
+                
+                # Get subtitle styling configuration
+                dialogue_font_size = settings.get_dialogue_subtitle_font_size()
+                dialogue_margin_v = settings.get_dialogue_subtitle_margin_v()
+                dialogue_outline_width = settings.get_dialogue_subtitle_outline_width()
+                background_opacity = settings.get_dialogue_subtitle_background_opacity()
+                text_color = settings.get_dialogue_subtitle_text_color()
+                outline_color = settings.get_dialogue_subtitle_outline_color()
+
+                # Convert colors to ASS format (&HAABBGGRR - note: BGR not RGB)
+                # White = &H00FFFFFF, Black = &H00000000
+                def color_to_ass(color_name):
+                    color_map = {
+                        'white': '&H00FFFFFF',
+                        'black': '&H00000000',
+                        'yellow': '&H0000FFFF',
+                        'red': '&H000000FF',
+                        'blue': '&H00FF0000',
+                        'green': '&H0000FF00'
+                    }
+                    return color_map.get(color_name.lower(), '&H00FFFFFF')
+                
+                primary_colour = color_to_ass(text_color)
+                outline_colour = color_to_ass(outline_color)
+                
+                # Convert opacity to ASS alpha value (0 = opaque, 255 = transparent)
+                alpha_value = int(255 * (1 - background_opacity))
+                back_colour = f"&H{alpha_value:02X}000000"
+
+                # ASS styling using config values
+                custom_bottom_style = (
+                    "Alignment=2,"  # Bottom center
+                    f"PrimaryColour={primary_colour},"  # Text color from config
+                    f"OutlineColour={outline_colour},"  # Outline color from config
+                    f"BackColour={back_colour},"  # Background with opacity from config
+                    f"Outline={dialogue_outline_width},"  # Outline width from config
+                    "Shadow=0,"  # No shadow
+                    "Bold=0,"
+                    f"FontSize={dialogue_font_size},"
+                    "BorderStyle=3,"  # Opaque box background
+                    f"MarginV={dialogue_margin_v}"  # Margin from bottom
+                )
+
+                # Apply subtitles using FFmpeg filter
+                video_input = ffmpeg.input(str(temp_with_expression_path))
+                video_with_subs = video_input['v'].filter(
+                    'subtitles',
+                    str(subtitle_file),
+                    force_style=custom_bottom_style
+                )
+
+                # Get audio stream
+                audio_stream = None
+                try:
+                    audio_stream = video_input['a']
+                except (KeyError, AttributeError):
+                    logger.debug("No audio stream in video with expression")
+
+                # Output final video with subtitles
+                video_args = self._get_video_output_args(source_video_path=long_form_video_path)
+                if audio_stream:
+                    (
+                        ffmpeg.output(
+                            video_with_subs,
+                            audio_stream,
+                            str(output_path),
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            acodec=video_args.get('acodec', 'aac'),
+                            ac=2,
+                            ar=48000,
+                            preset=video_args.get('preset', 'medium'),
+                            crf=video_args.get('crf', 18)
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                else:
+                    (
+                        ffmpeg.output(
+                            video_with_subs,
+                            str(output_path),
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            preset=video_args.get('preset', 'medium'),
+                            crf=video_args.get('crf', 18)
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+
+                logger.info(f"✅ Dialogue subtitles applied to short-form video (FontSize={dialogue_font_size})")
+            else:
+                # No subtitle file found, use video with expression text only
+                logger.warning(f"No subtitle file found for expression, using video with expression text only")
+                import shutil
+                shutil.copy(str(temp_with_expression_path), str(output_path))
             
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
@@ -2634,6 +2758,57 @@ class VideoEditor:
             logger.error(f"Error creating transition video: {e}")
             return None
     
+    @handle_error_decorator(
+        ErrorContext(
+            operation="combine_videos",
+            component="core.video_editor"
+        ),
+        retry=False,
+        fallback=False
+    )
+    def combine_videos(self, video_paths: List[str], output_path: str) -> str:
+        """
+        Combine multiple videos into a single video file.
+
+        Args:
+            video_paths: List of paths to video files to combine.
+            output_path: Path where the combined video should be saved.
+
+        Returns:
+            str: Path to the combined video.
+        """
+        if not video_paths:
+            raise ValueError("No video paths provided for combination")
+
+        output_path_obj = Path(output_path)
+        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Combining {len(video_paths)} videos into {output_path}")
+
+        # Create concat file
+        concat_file = output_path_obj.parent / f"temp_concat_list_{output_path_obj.stem}.txt"
+        self._register_temp_file(concat_file)
+
+        try:
+            with open(concat_file, 'w') as f:
+                for video_path in video_paths:
+                    f.write(f"file '{Path(video_path).absolute()}'\n")
+
+            # Use shared utility for concatenation
+            from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
+            concat_demuxer_if_uniform(concat_file, output_path_obj, normalize_audio=True)
+            
+            logger.info(f"✅ Combined video created: {output_path}")
+            return str(output_path)
+
+        except ffmpeg.Error as e:
+            stderr_output = e.stderr.decode() if e.stderr else "No stderr details available"
+            logger.error(f"FFmpeg Error combining videos:\n{stderr_output}")
+            raise
+        except Exception as e:
+            logger.error(f"Error combining videos: {e}")
+            raise
+
     def _create_video_batch(
         self,
         video_paths: List[str],

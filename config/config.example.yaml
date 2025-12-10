@@ -241,7 +241,7 @@ short_video:
       font_size: 35              # Match expression font size
       margin_v: 50               # Close to bottom for better visibility
       text_color: 'white'
-      outline_width: 2
+      outline_width: 4
       outline_color: 'black'
       background_opacity: 0.5    # 50% opacity for background
 

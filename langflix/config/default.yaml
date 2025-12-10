@@ -240,12 +240,12 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 30              # Match expression font size
-      margin_v: 40               # Close to bottom for better visibility
+      font_size: 8
+      margin_v: 80
       text_color: 'white'
-      outline_width: 2
+      outline_width: 1
       outline_color: 'black'
-      background_opacity: 0.5    # 50% opacity for background
+      background_opacity: 0.75
 
 # ============================================================================
 # Expression-Based Learning Configuration

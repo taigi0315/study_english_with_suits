@@ -429,6 +429,8 @@ async def create_job(
             except Exception as e:
                 logger.warning(f"Failed to parse auto_upload_config: {e}")
         
+        logger.info(f"Creating job with test_mode={test_mode} (type: {type(test_mode)})")
+
         # Store job information in Redis
         job_data = {
             "job_id": job_id,

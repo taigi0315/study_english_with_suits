@@ -238,6 +238,20 @@ class VideoPipelineService:
         Returns:
             Path to final video, or None if not found
         """
+        # Try finding in the 'long' directory first (new structure)
+        long_dir = paths.get('language', {}).get('long')
+        if long_dir and isinstance(long_dir, Path) and long_dir.exists():
+            # Check for combined.mkv (standard name in VideoFactory)
+            combined = long_dir / "combined.mkv"
+            if combined.exists():
+                return str(combined)
+            
+            # Check for other patterns in long dir
+            for video_file in long_dir.glob("*.mkv"):
+                 if video_file.exists():
+                     return str(video_file)
+
+        # Fallback to legacy 'final_videos' directory
         final_videos_dir = paths.get('language', {}).get('final_videos')
         if not final_videos_dir:
             return None

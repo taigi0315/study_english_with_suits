@@ -270,6 +270,15 @@ class VideoEditor:
                         if matching_files:
                             subtitle_file = matching_files[0]
                             logger.info(f"Found matching subtitle file: {subtitle_file}")
+                        else:
+                            # Fallback: Try to find by index only (most reliable if order is preserved)
+                            pattern_index = f"expression_{expression_index+1:02d}_*.srt"
+                            matching_files_index = list(Path(subtitles_dir).glob(pattern_index))
+                            if matching_files_index:
+                                subtitle_file = matching_files_index[0]
+                                logger.info(f"Found subtitle file by index: {subtitle_file}")
+                            else:
+                                logger.warning(f"No subtitle file found for expression '{expression.expression}' (index {expression_index+1})")
                 
                 if subtitle_file and subtitle_file.exists():
                     logger.info(f"Applying subtitles from: {subtitle_file}")
@@ -1614,7 +1623,8 @@ class VideoEditor:
                     text = str(text)
                 
                 # Replace problematic characters for FFmpeg drawtext
-                cleaned = text.replace("'", "").replace('"', "").replace(":", "").replace(",", "")
+                # NOTE: We preserve ' and : and , because escape_drawtext_string will handle them
+                cleaned = text.replace('"', "") 
                 cleaned = cleaned.replace("\\", "").replace("[", "").replace("]", "")
                 cleaned = cleaned.replace("{", "").replace("}", "").replace("(", "").replace(")", "")
                 cleaned = cleaned.replace("\n", " ").replace("\t", " ")

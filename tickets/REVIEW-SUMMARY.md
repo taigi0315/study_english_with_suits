@@ -1,46 +1,40 @@
-# Code Review Summary - 2025-12-09
+# Code Review Summary - 2025-12-10
 
 ## Overview
 Total tickets created: 4
-- Critical: 0 (Ticket-080 upgraded to Critical/High borderline, marked High but impactful) -> *Wait, I marked TICKET-080 as High but potential Critical. I'll stick to High for now as it's not currently crashing prod, just a risk.*
-- High: 3 (TICKET-080, TICKET-081, TICKET-082)
-- Medium: 1 (TICKET-083)
+- Critical: 1
+- High: 2
+- Medium: 1
 - Low: 0
 
 ## Key Findings
-
 ### Major Issues
-1.  **Memory Scalability (TICKET-080)**: The `create_job` endpoint reads entire uploaded files into RAM. This is a Stability risk.
-2.  **Frontend Maintainability (TICKET-081)**: `video_dashboard.html` is a 2400-line monolith preventing effective frontend development.
-3.  **God Class Usage (TICKET-082)**: `LangFlixPipeline` does too much, making it hard to test or extend individual components.
-
-### Patterns Observed
-- **God Class/File Pattern**: `main.py` (Orchestrator + Logic), `video_dashboard.html` (HTML + CSS + JS), `run.sh` (Config + Deploy). There is a tendency to keep things in one file until they explode.
-- **Mixed Concerns**: API routes (`jobs.py`) contain deep business logic and file handling code.
+1. **Critical Bug**: Output videos missing dialogue subtitles. (TICKET-087)
+   - User reported. Investigated `video_editor.py` subtitle matching logic.
+2. **Web UI Monolith**: `web_ui.py` is over 2200 lines and unmaintainable. (TICKET-084)
+   - Recommended refactoring into Blueprint modules.
+3. **Dead Code**: `tasks/tasks.py` contains unused Celery mocks. (TICKET-085)
+   - Identified for deletion.
+4. **Pipeline Return Value**: `PipelineRunner` returns empty video paths. (TICKET-086)
+   - Prevents proper frontend integration.
 
 ## Test Coverage Analysis
-- **Strengths**: Good unit test coverage in `tests/unit/`.
-- **Gaps**: UI Testing (Frontend is untestable), and Integration Testing for the full pipeline is difficult due to the God Class structure.
+- Test suite runs (`make test`), but need to verify if `video_editor` subtitle logic is covered.
+- `web_ui` refactor will require regression testing of dashboard.
 
 ## Code Duplication Report
-- **Auto-Upload Logic**: Found in `jobs.py`. Likely partially duplicated in CLI tools or other services if they exist. Moving to a service (as proposed in tickets) will solve this.
+- `web_ui.py` logic likely duplicated in `main.py` (legacy pipeline) vs `services/*.py`.
 
 ## Recommended Prioritization
-
 ### Immediate Action Needed
-1.  **TICKET-080 (Optimize Upload Memory)**: This is a quick win and prevents server crashes. It should be done before any public release.
-2.  **TICKET-081 (Refactor Frontend)**: Before adding any new UI features (like "Multiple Platform Uploads"), this refactor is necessary to avoid "Spaghetti Code" hell.
+1. **TICKET-087 (Critical)**: Fix missing subtitles. This is a product-breaking bug.
+2. **TICKET-086 (High)**: Fix pipeline return values for UI feedback.
 
 ### Short-term (Next Sprint)
-1.  **TICKET-083 (Refactor run.sh)**: Improves developer experience and deployment reliability.
-
-### Long-term (Technical Roadmap)
-1.  **TICKET-082 (Deconstruct Pipeline)**: This is a large effort. Plan it over multiple sprints, extracting one service at a time.
+1. **TICKET-084 (High)**: Refactor Web UI to enable easier feature development.
+2. **TICKET-085 (Medium)**: Clean up dead code.
 
 ## Architectural Observations
-- **Strength**: The use of `QueueProcessor` and Redis for background jobs is a solid pattern. It decouples the API from long-running tasks.
-- **Weakness**: Service modularity is weak. `LangFlixPipeline` is a bottleneck for agility.
-
-## Notes for Architect
-- **Frontend Framework**: The current Jinja2 + jQuery-style JS is reaching its limit. Consider a gradual migration to a lightweight reactive framework (e.g., Vue.js or React via CDN) for the dashboard if interaction complexity grows. `TICKET-081` is a prerequisite for this.
-- **Infrastructure**: Moving `run.sh` to Python will align DevOps with the Dev stack, enabling better maintainability.
+- The codebase is transitioning from a script-based prototype (`main.py`, `tasks.py`) to a service-based architecture (`services/`, `api/`).
+- `web_ui.py` is the last major stronghold of "do everything in one place". Breaking it up is accurate.
+- Dependency on filesystem naming conventions (`expression_01_*.srt`) is brittle. Consider passing explicit paths in objects.

@@ -110,8 +110,23 @@ class YouTubeLastScheduleService:
         now = now or datetime.now()
         slots = self._parse_slots()
 
+        # Find the latest scheduled date from the map
+        latest_scheduled_date = now.date()
+        if self._schedule_map:
+            try:
+                # Keys are ISO date strings
+                dates = [date.fromisoformat(d) for d in self._schedule_map.keys()]
+                if dates:
+                    latest_scheduled_date = max(dates)
+            except Exception as e:
+                logger.warning(f"Error parsing dates from schedule map: {e}")
+
+        # Start searching from the latest of (today, latest_scheduled_date)
+        # This ensures we append to the end of the queue rather than backfilling gaps
+        start_date = max(now.date(), latest_scheduled_date)
+
         for days_ahead in range(self.config.window_days):
-            day = (now.date() + timedelta(days=days_ahead))
+            day = start_date + timedelta(days=days_ahead)
 
             # respect daily total cap
             if self._count_day_total(day) >= self.config.daily_max_total:

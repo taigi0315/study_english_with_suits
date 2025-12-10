@@ -16,6 +16,7 @@ async function init() {
     setupFilters();
     setupAuth();
     setupCreateContent();
+    setupVideoActions(); // New handler for individual video actions
     setupBulkActions();
     ui.setupVideoListEvents(); // Set up event delegation for video list
 }
@@ -84,6 +85,56 @@ function setupCreateContent() {
             await ui.showCreateContentModal();
         });
     }
+}
+
+function setupVideoActions() {
+    // Play Video
+    eventBus.addEventListener('play-video', (e) => {
+        const path = e.detail.path;
+        ui.showVideoPlayerModal(path);
+    });
+
+    // Upload Single Video
+    eventBus.addEventListener('upload-video', async (e) => {
+        const { path, id, type } = e.detail;
+        console.log('Uploading single video:', path);
+        // Reuse the upload logic
+        // Default to scheduled as it's the recommended path
+        await uploadSelectedVideos([{
+            path: path,
+            id: id,
+            type: type || 'unknown'
+        }], 'scheduled');
+    });
+
+    // Delete Video
+    eventBus.addEventListener('delete-video', async (e) => {
+        const path = e.detail.path;
+        if (!confirm('Are you sure you want to delete this video?\nThis cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/videos/batch/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videos: [path] })
+            });
+
+            const result = await response.json();
+            if (response.ok && (result.success || result.deleted_count > 0)) {
+                // visual feedback?
+                await refreshView();
+                // update stats
+                loadStats();
+            } else {
+                alert(`Failed to delete video: ${result.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Error deleting video:', error);
+            alert('An error occurred while deleting the video');
+        }
+    });
 }
 
 function setupBulkActions() {
@@ -169,22 +220,44 @@ async function uploadSelectedVideos(videos, timing) {
         try {
             ui.updateProgressPanel(i + 1, videos.length, `Uploading ${video.path.split('/').pop()}...`);
 
-            const response = await fetch('/api/upload/single', {
+            // Use batch endpoints with a single item to support the existing progress UI
+            // and prevent timeouts on large immediate batches.
+            const endpoint = timing === 'immediate'
+                ? '/api/upload/batch/immediate'
+                : '/api/upload/batch/schedule';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    video_id: video.id,
-                    timing: timing
+                    videos: [{
+                        video_path: video.path,
+                        video_type: video.type || 'unknown'
+                    }]
                 })
             });
 
+            const result = await response.json();
+
             if (response.ok) {
-                ui.updateProgressPanel(i + 1, videos.length, `✓ Uploaded ${video.path.split('/').pop()}`);
+                // Batch endpoint returns { success: bool, results: [...] }
+                // We sent 1 video, so check results[0]
+                if (result.results && result.results.length > 0) {
+                    const videoResult = result.results[0];
+                    if (videoResult.success) {
+                        ui.updateProgressPanel(i + 1, videos.length, `✓ Uploaded ${video.path.split('/').pop()}`);
+                    } else {
+                        ui.updateProgressPanel(i + 1, videos.length, `✗ Failed: ${videoResult.error || 'Unknown error'}`);
+                    }
+                } else {
+                    // Fallback if results are empty but request was ok (unlikely)
+                    ui.updateProgressPanel(i + 1, videos.length, `✓ Uploaded ${video.path.split('/').pop()}`);
+                }
             } else {
-                const error = await response.json();
-                ui.updateProgressPanel(i + 1, videos.length, `✗ Failed: ${error.error || 'Unknown error'}`);
+                ui.updateProgressPanel(i + 1, videos.length, `✗ Failed: ${result.error || 'Unknown error'}`);
             }
         } catch (error) {
+            console.error('Upload error:', error);
             ui.updateProgressPanel(i + 1, videos.length, `✗ Error: ${error.message}`);
         }
     }

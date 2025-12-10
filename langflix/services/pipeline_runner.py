@@ -88,23 +88,48 @@ class PipelineRunner:
             
             # Extract results from pipeline summary
             # Note: pipeline.run() returns summary dict, not direct video paths
-            expressions_processed = result.get('processed_expressions', 0)
-            total_expressions = result.get('total_expressions', 0)
+            expressions_processed = result.get('expressions_count', 0)
             
-            # Final video path is created by pipeline internally
-            # It's stored in paths['language']['final_videos'] with naming: long-form_{episode_name}_{filename}.mkv
-            # We can't easily extract it here without accessing pipeline.paths, so we return empty for now
-            # TODO: Consider using VideoPipelineService here for better result extraction
-            final_video_path = ''
+            # Extract video paths from pipeline.paths
+            # Structure: pipeline.paths['languages'][lang_code]['final_videos'] (dir path)
+            # We need to list actual files generated
+            final_videos = []
             short_videos = []
             
+            if hasattr(pipeline, 'paths') and 'languages' in pipeline.paths:
+                 for lang_code, lang_paths in pipeline.paths['languages'].items():
+                    # Find long-form videos
+                    if 'final_videos' in lang_paths:
+                        final_dir = Path(lang_paths['final_videos'])
+                        if final_dir.exists():
+                             # Get all generated .mkv files in the final folder
+                             # excluding temp files just in case
+                             videos = [str(p) for p in final_dir.glob("*.mkv") if not p.name.startswith("temp_")]
+                             final_videos.extend(videos)
+                    
+                    # Find short-form videos
+                    if 'shorts' in lang_paths:
+                        shorts_dir = Path(lang_paths['shorts'])
+                        if shorts_dir.exists():
+                             shorts = [str(p) for p in shorts_dir.glob("*.mkv") if not p.name.startswith("temp_")]
+                             short_videos.extend(shorts)
+
+            # Fallback if no specific language structure (single language mode)
+            if not final_videos and hasattr(pipeline, 'paths') and 'final_videos' in pipeline.paths:
+                 final_dir = Path(pipeline.paths['final_videos'])
+                 if final_dir.exists():
+                      videos = [str(p) for p in final_dir.glob("*.mkv") if not p.name.startswith("temp_")]
+                      final_videos.extend(videos)
+
+            logger.info(f"Pipeline finished. Found {len(final_videos)} long-form and {len(short_videos)} short-form videos.")
+
             # Step 6: Finalize (100%)
             update_progress(100, "Completed!")
             
             return {
-                "final_videos": [final_video_path] if final_video_path else [],
+                "final_videos": final_videos,
                 "short_videos": short_videos,
-                "expressions_processed": expressions_processed or total_expressions,
+                "expressions_processed": expressions_processed,
                 "show_name": show_name,
                 "episode": episode
             }

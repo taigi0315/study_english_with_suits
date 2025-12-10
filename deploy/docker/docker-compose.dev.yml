@@ -33,50 +33,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Celery Worker for background tasks
-  celery-worker:
-    build:
-      context: ../../
-      dockerfile: deploy/docker/Dockerfile.dev
-    container_name: langflix-celery-worker
-    environment:
-      - DATABASE_URL=postgresql://postgres:langflix123@postgres:5432/langflix
-      - REDIS_URL=redis://redis:6379/0
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-    volumes:
-      - ../../:/app
-      - ../../output:/app/output
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A langflix.tasks.celery_app worker --loglevel=info
-    restart: unless-stopped
-
-  # Celery Beat for scheduled tasks
-  celery-beat:
-    build:
-      context: ../../
-      dockerfile: deploy/docker/Dockerfile.dev
-    container_name: langflix-celery-beat
-    environment:
-      - DATABASE_URL=postgresql://postgres:langflix123@postgres:5432/langflix
-      - REDIS_URL=redis://redis:6379/0
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-    volumes:
-      - ../../:/app
-      - ../../output:/app/output
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A langflix.tasks.celery_app beat --loglevel=info
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   redis_data:

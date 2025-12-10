@@ -22,6 +22,19 @@ sys.path.insert(0, str(project_root))
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+LANGUAGE_CODE_MAP = {
+    'ko': 'Korean',
+    'en': 'English',
+    'ja': 'Japanese',
+    'zh': 'Chinese',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ru': 'Russian'
+}
+
 # Redis-based job storage for Phase 7 architecture
 from langflix.core.redis_client import get_redis_job_manager
 from langflix.utils.temp_file_manager import get_temp_manager
@@ -191,7 +204,17 @@ async def process_video_task(
                         logger.warning(f"Could not scan video for metadata: {video_path_upload}")
                         continue
                         
-                    youtube_metadata = metadata_generator.generate_metadata(video_meta)
+                    # Resolve target language name from code (TICKET-060 fix)
+                    # Use video metadata language if available, otherwise default to English
+                    target_lang_code = video_meta.language
+                    target_lang_name = LANGUAGE_CODE_MAP.get(target_lang_code, 'English')
+                    
+                    logger.info(f"Generating metadata with target language: {target_lang_name} (code: {target_lang_code})")
+                        
+                    youtube_metadata = metadata_generator.generate_metadata(
+                        video_meta,
+                        target_language=target_lang_name
+                    )
                     
                     # Determine action based on timing and availability
                     should_upload_now = False

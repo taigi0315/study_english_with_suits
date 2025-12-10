@@ -95,13 +95,50 @@ export const ui = {
                 targetClasses: e.target.className
             });
 
-            // Prevent navigation if clicking buttons, checkboxes, or action buttons
-            if (e.target.closest('button') ||
-                e.target.closest('input[type="checkbox"]') ||
+            // The click logic for buttons is handled by their specific event listeners
+            // or by specific checks below. We just want to ensure we don't trigger
+            // the row navigation.
+
+            // Handle Play Video
+            const playBtn = e.target.closest('.play-video-btn');
+            if (playBtn) {
+                console.log('Play clicked:', playBtn.dataset.path);
+                eventBus.dispatchEvent(new CustomEvent('play-video', {
+                    detail: { path: playBtn.dataset.path }
+                }));
+                return;
+            }
+
+            // Handle Single Upload
+            const uploadBtn = e.target.closest('.upload-single-btn');
+            if (uploadBtn) {
+                console.log('Upload clicked:', uploadBtn.dataset.videoPath);
+                eventBus.dispatchEvent(new CustomEvent('upload-video', {
+                    detail: {
+                        path: uploadBtn.dataset.videoPath,
+                        id: uploadBtn.dataset.videoId,
+                        type: uploadBtn.dataset.videoType
+                    }
+                }));
+                return;
+            }
+
+            // Handle Delete
+            const deleteBtn = e.target.closest('.delete-video-btn');
+            if (deleteBtn) {
+                console.log('Delete clicked:', deleteBtn.dataset.path);
+                // Confirm before dispatching? Or let main.js handle confirmation. 
+                // Let's let main.js handle it to keep UI logic simple.
+                eventBus.dispatchEvent(new CustomEvent('delete-video', {
+                    detail: { path: deleteBtn.dataset.path }
+                }));
+                return;
+            }
+
+            // Prevent navigation if clicking checkboxes
+            if (e.target.closest('input[type="checkbox"]') ||
                 e.target.classList.contains('video-checkbox') ||
-                e.target.classList.contains('action-btn-icon') ||
                 e.target.tagName === 'INPUT') {
-                console.log('Click ignored - button or checkbox');
                 return;
             }
 
@@ -219,6 +256,7 @@ export const ui = {
                 <button class="action-btn-icon upload-single-btn" 
                         data-video-path="${item.absolute_path}"
                         data-video-id="${matchingVideo ? matchingVideo.id : ''}"
+                        data-video-type="${matchingVideo ? matchingVideo.video_type : 'unknown'}"
                         title="Upload to YouTube" 
                         style="color: #27ae60;">📤</button>
              ` : ''}
@@ -560,6 +598,90 @@ export const ui = {
             if (e.target === modal) {
                 modal.remove();
                 style.remove();
+            }
+        });
+    },
+
+    showVideoPlayerModal(videoPath) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        `;
+
+        // Encode path for URL
+        const videoUrl = `/api/video/${encodeURIComponent(videoPath)}`;
+        const filename = videoPath.split('/').pop();
+
+        modal.innerHTML = `
+            <div style="position: relative; width: 90%; max-width: 1200px; background: transparent;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: white;">
+                    <h3 style="margin: 0; font-weight: 500; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">${formatters.escapeHtml(filename)}</h3>
+                    <button class="close-modal-btn" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 16px;">✕ Close</button>
+                </div>
+                <div style="background: black; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                    <video controls autoplay style="width: 100%; max-height: 80vh; display: block;">
+                        <source src="${videoUrl}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const closeBtn = modal.querySelector('.close-modal-btn');
+        const videoEl = modal.querySelector('video');
+
+        const close = () => {
+            if (videoEl) videoEl.pause();
+            modal.remove();
+        };
+
+        closeBtn.addEventListener('click', close);
+
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                close();
+            }
+        });
+
+        // Close on escape key
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                close();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        // Handle error (e.g., mkv not supported)
+        videoEl.addEventListener('error', (e) => {
+            console.error('Video playback error:', videoEl.error);
+            // If it's a format issue, show a message
+            if (filename.toLowerCase().endsWith('.mkv')) {
+                const container = modal.querySelector('div[style*="background: black"]');
+                container.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: white;">
+                        <div style="font-size: 40px; margin-bottom: 20px;">⚠️</div>
+                        <h3 style="margin-bottom: 10px;">Format Not Supported</h3>
+                        <p>This video appears to be an MKV file, which most browsers do not support directly.</p>
+                        <p style="margin-top: 20px;">
+                            <a href="${videoUrl}" target="_blank" style="color: #3498db; text-decoration: none; border-bottom: 1px solid #3498db;">Download / Open in External Player</a>
+                        </p>
+                    </div>
+                `;
             }
         });
     },

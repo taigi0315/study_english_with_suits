@@ -64,14 +64,15 @@ export const ui = {
         container.innerHTML = `<div class="video-list">
             ${displayItems.map(item => this.renderItemRow(item)).join('')}
         </div>`;
+    },
 
-        // Use event delegation instead of attaching listeners to each row
-        // Remove any existing listener first
-        const oldContainer = container.cloneNode(true);
-        container.parentNode.replaceChild(oldContainer, container);
-        const newContainer = document.getElementById('videosContainer');
+    // Set up event delegation once (called from main.js init)
+    setupVideoListEvents() {
+        const container = document.getElementById('videosContainer');
+        if (!container) return;
 
-        newContainer.addEventListener('click', (e) => {
+        // Use event delegation - single listener on container
+        container.addEventListener('click', (e) => {
             const row = e.target.closest('.video-row');
             if (!row) return;
 

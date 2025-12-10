@@ -17,6 +17,7 @@ async function init() {
     setupAuth();
     setupCreateContent();
     setupBulkActions();
+    ui.setupVideoListEvents(); // Set up event delegation for video list
 }
 
 async function refreshView() {

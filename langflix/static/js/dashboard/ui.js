@@ -159,24 +159,25 @@ export const ui = {
     },
 
     renderItemRow(item) {
-        console.log('renderItemRow called for:', item.name, 'is_video:', item.is_video, 'is_directory:', item.is_directory);
+        try {
+            console.log('renderItemRow called for:', item.name, 'is_video:', item.is_video, 'is_directory:', item.is_directory);
 
-        // Determine icon/thumbnail
-        let thumbnailHtml = '';
-        if (item.is_directory) {
-            thumbnailHtml = '<div style="font-size: 24px;">📁</div>';
-        } else if (item.is_video) {
-            thumbnailHtml = '<div style="font-size: 24px;">🎬</div>';
-        } else {
-            thumbnailHtml = '<div style="font-size: 24px;">📄</div>';
-        }
+            // Determine icon/thumbnail
+            let thumbnailHtml = '';
+            if (item.is_directory) {
+                thumbnailHtml = '<div style="font-size: 24px;">📁</div>';
+            } else if (item.is_video) {
+                thumbnailHtml = '<div style="font-size: 24px;">🎬</div>';
+            } else {
+                thumbnailHtml = '<div style="font-size: 24px;">📄</div>';
+            }
 
-        // Check if video is ready for upload (has metadata)
-        const matchingVideo = state.allVideos.find(v => v.path === item.absolute_path);
-        const readyForUpload = matchingVideo && matchingVideo.ready_for_upload;
-        const isUploaded = matchingVideo && matchingVideo.uploaded;
+            // Check if video is ready for upload (has metadata)
+            const matchingVideo = state.allVideos.find(v => v.path === item.absolute_path);
+            const readyForUpload = matchingVideo && matchingVideo.ready_for_upload;
+            const isUploaded = matchingVideo && matchingVideo.uploaded;
 
-        return `
+            return `
         <div class="video-row ${readyForUpload ? 'ready-for-upload' : ''} ${isUploaded ? 'uploaded' : ''}" 
              data-path="${item.path || item.name}" 
              data-is-dir="${item.is_directory}" 
@@ -206,6 +207,10 @@ export const ui = {
             </div>
             ${item.is_video ? this.renderVideoActions(item, matchingVideo, readyForUpload, isUploaded) : ''}
         </div>`;
+        } catch (error) {
+            console.error('Error in renderItemRow for', item.name, ':', error);
+            return ''; // Return empty string on error to continue rendering other items
+        }
     },
 
     renderVideoActions(item, matchingVideo, readyForUpload, isUploaded) {

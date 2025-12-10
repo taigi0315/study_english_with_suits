@@ -89,7 +89,17 @@ export const ui = {
             const filteredFiles = files.filter(file => {
                 if (!file.is_video) return false;
                 const matchingVideo = state.allVideos.find(v => v.path === file.absolute_path);
-                if (!matchingVideo) return false;
+
+                // If video is not in the database, infer type from path
+                if (!matchingVideo) {
+                    // Check if path contains 'shorts' or 'short-form' for short-form filter
+                    if (state.currentFilter === 'short-form') {
+                        return file.path.includes('/shorts/') || file.path.includes('short-form');
+                    } else {
+                        // For long-form, check for 'final' in path
+                        return file.path.includes('/final/') || file.path.includes('long-form');
+                    }
+                }
 
                 if (state.currentFilter === 'short-form') {
                     return matchingVideo.video_type === 'short-form' || matchingVideo.video_type === 'short';
@@ -99,7 +109,23 @@ export const ui = {
             });
             return [...directories, ...filteredFiles];
         }
-        // ... (other filters: uploaded, not-uploaded)
+
+        // For uploaded/not-uploaded filters
+        if (state.currentFilter === 'uploaded' || state.currentFilter === 'not-uploaded') {
+            const filteredFiles = files.filter(file => {
+                if (!file.is_video) return false;
+                const matchingVideo = state.allVideos.find(v => v.path === file.absolute_path);
+                if (!matchingVideo) return state.currentFilter === 'not-uploaded'; // If not in DB, assume not uploaded
+
+                if (state.currentFilter === 'uploaded') {
+                    return matchingVideo.uploaded === true;
+                } else {
+                    return matchingVideo.uploaded !== true;
+                }
+            });
+            return [...directories, ...filteredFiles];
+        }
+
         return displayItems; // Fallback
     },
 

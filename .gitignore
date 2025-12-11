@@ -11,6 +11,9 @@ venv/
 .vscode/
 .idea/
 
+# Agent configuration (tracked)
+!.agent/
+
 # Large files and output directories
 assets/
 test_output/

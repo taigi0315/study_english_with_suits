@@ -482,7 +482,11 @@ class VideoEditor:
                     # Load long-form video
                     long_form_input = ffmpeg.input(str(long_form_temp_path))
                     long_form_video = long_form_input['v']
-                    long_form_audio = long_form_input['a'] if 'a' in long_form_input else None
+                    # ffmpeg-python doesn't support 'in' operator - use direct access with try/except
+                    try:
+                        long_form_audio = long_form_input['a']
+                    except Exception:
+                        long_form_audio = None
                     
                     # Load logo image - use simple input without loop/framerate for PNG
                     logo_input = ffmpeg.input(str(logo_path))
@@ -740,6 +744,13 @@ class VideoEditor:
 
             # Escape text for drawtext (helper function used for all text)
             def escape_drawtext_string(text):
+                if not text:
+                    return ""
+                # First normalize all quote variants to straight quotes
+                text = text.replace("'", "'").replace("'", "'").replace("‚", "'").replace("‛", "'")
+                text = text.replace(""", '"').replace(""", '"').replace("„", '"')
+                text = text.replace('"', '')  # Remove double quotes
+                # Escape for FFmpeg drawtext
                 escaped = text.replace("\\", "\\\\")
                 escaped = escaped.replace(":", "\\:")
                 escaped = escaped.replace("'", "\\'")
@@ -1683,8 +1694,20 @@ class VideoEditor:
                 return cleaned[:100] if cleaned else "Expression"
             
             def escape_drawtext_string(text):
-                """Escape text for FFmpeg drawtext filter"""
-                # Escape single quotes and colons for drawtext
+                """Escape text for FFmpeg drawtext filter
+                
+                Handles: single quotes, curly quotes, colons, and other problematic characters
+                """
+                if not text:
+                    return ""
+                # First normalize all quote variants to straight quotes
+                # Curly/smart quotes: ' ' ‚ ‛ → '
+                text = text.replace("'", "'").replace("'", "'").replace("‚", "'").replace("‛", "'")
+                # Double curly quotes: " " „ → "
+                text = text.replace(""", '"').replace(""", '"').replace("„", '"')
+                # Remove double quotes entirely (they break FFmpeg)
+                text = text.replace('"', '')
+                # Escape single quotes and colons for drawtext (must use double backslash)
                 return text.replace(":", "\\:").replace("'", "\\'")
             
             # Prepare text content with proper cleaning

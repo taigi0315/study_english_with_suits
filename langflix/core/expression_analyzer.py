@@ -197,12 +197,22 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         
         try:
             # Use structured output with Pydantic model
-            # Generate JSON schema from Pydantic model and remove 'example' field
-            # which is not supported by Gemini API's structured output
+            # Generate JSON schema from Pydantic model and remove unsupported fields
             json_schema = ExpressionAnalysisResponse.model_json_schema()
-            # Remove 'example' field if present (from json_schema_extra)
-            if 'example' in json_schema:
-                del json_schema['example']
+            
+            # Helper function to recursively remove unsupported fields from schema
+            def clean_schema(obj):
+                """Remove 'title', 'example', 'default' fields that Gemini doesn't support."""
+                if isinstance(obj, dict):
+                    # Remove unsupported fields
+                    for field in ['title', 'example', 'default']:
+                        obj.pop(field, None)
+                    # Recursively clean nested objects
+                    for key, value in list(obj.items()):
+                        clean_schema(value)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        clean_schema(item)
             
             # Inline $defs references - Gemini API doesn't support $defs or $ref
             if '$defs' in json_schema:
@@ -217,32 +227,18 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                             if def_name in defs:
                                 # Replace $ref with inline schema
                                 expr_prop['items'] = defs[def_name].copy()
-                                # Also remove example from inlined schema
-                                if 'example' in expr_prop['items']:
-                                    del expr_prop['items']['example']
                                 logger.debug(f"Inlined {def_name} schema from $defs")
                 # Now remove $defs
                 del json_schema['$defs']
                 logger.debug("Removed $defs from JSON schema for Gemini compatibility")
             
-            # Also check 'definitions' (older Pydantic versions) and clean up examples
+            # Also check 'definitions' (older Pydantic versions)
             if 'definitions' in json_schema:
-                for def_name, def_schema in json_schema['definitions'].items():
-                    if isinstance(def_schema, dict):
-                        if 'example' in def_schema:
-                            del def_schema['example']
-                        if 'properties' in def_schema:
-                            for prop_name, prop_schema in def_schema['properties'].items():
-                                if isinstance(prop_schema, dict) and 'example' in prop_schema:
-                                    del prop_schema['example']
+                del json_schema['definitions']
             
-            # Clean up example fields from inlined ExpressionAnalysis schema properties
-            if 'properties' in json_schema and 'expressions' in json_schema['properties']:
-                expr_items = json_schema['properties']['expressions'].get('items', {})
-                if isinstance(expr_items, dict) and 'properties' in expr_items:
-                    for prop_name, prop_schema in expr_items['properties'].items():
-                        if isinstance(prop_schema, dict) and 'example' in prop_schema:
-                            del prop_schema['example']
+            # Clean all unsupported fields recursively (title, example, default)
+            clean_schema(json_schema)
+            logger.debug("Cleaned unsupported fields from JSON schema")
             
             # Create generation config dict
             gen_config_dict = {

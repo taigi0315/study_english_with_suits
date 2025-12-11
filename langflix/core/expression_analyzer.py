@@ -181,9 +181,9 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         # Save full prompt for debugging/testing
         _save_prompt_for_debugging(prompt, subtitle_chunk, language_level, output_dir)
         
-        # Check if total prompt is too long and warn
-        if len(prompt) > 15000:  # Warn if total prompt exceeds reasonable size
-            logger.warning(f"Total prompt length ({len(prompt)}) is very large. Consider reducing chunk size.")
+        # Check if total prompt is too long (debug only - large chunks are intentional for cost optimization)
+        if len(prompt) > 15000:
+            logger.debug(f"Large prompt length ({len(prompt)} chars) - expected with optimized chunk size")
         
         # Configure model with settings from YAML config
         model_name = settings.get_llm_model_name()

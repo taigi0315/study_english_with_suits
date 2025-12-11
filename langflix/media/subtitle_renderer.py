@@ -200,7 +200,10 @@ class SubtitleRenderer:
             '-i', video_path,
             '-vf', f"subtitles={srt_path}:fontsdir={fonts_dir}:force_style='FontName={font_name},FontSize={font_size},PrimaryColour={font_color},BackColour={background_color},OutlineColour={highlight_color}'",
             '-c:v', 'libx264',
+            '-preset', 'slow',  # Enforce slow preset for quality
+            '-crf', '18',       # Enforce CRF 18 for quality
             '-c:a', 'aac',
+            '-b:a', '256k',     # Enforce 256k audio bitrate
             '-movflags', '+faststart',
             '-y',
             output_path
@@ -285,6 +288,8 @@ class SubtitleRenderer:
             '-i', video_path,
             '-vf', f"subtitles={srt_path}:fontsdir=/System/Library/Fonts:force_style='FontName={font_name},FontSize={style_config.get('font_size', 24)},PrimaryColour={style_config.get('color', '#FFFFFF')}'",
             '-c:v', 'libx264',
+            '-preset', 'slow',  # Enforce slow preset
+            '-crf', '18',       # Enforce CRF 18
             '-c:a', 'copy',  # Copy audio without re-encoding
             '-y',
             output_path

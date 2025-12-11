@@ -210,7 +210,10 @@ def apply_subtitles_with_file(input_video: Path, subtitle_file: Path, output_pat
             vf=f"subtitles={subtitle_file}:fontsdir={fonts_dir}:force_style='{force_style}'",
             # video encoder decided by caller; keep default here
             vcodec="libx264",
+            preset="slow",  # Enforce slow preset
+            crf=18,         # Enforce CRF 18
             acodec="aac",
+            audio_bitrate="256k", # Enforce 256k audio
             ac=2,
             ar=48000,
         )
@@ -271,7 +274,10 @@ def apply_dual_subtitle_layers(
     # Output
     output_args = {
         'vcodec': 'libx264',
+        'preset': 'slow',   # Enforce slow preset
+        'crf': 18,          # Enforce CRF 18
         'acodec': 'aac',
+        'audio_bitrate': '256k', # Enforce 256k audio
         'ac': 2,
         'ar': 48000,
         # Note: ss and t are handled in input
@@ -337,7 +343,10 @@ def drawtext_fallback_single_line(input_video: Path, text: str, output_path: Pat
                 f"{font_opt}x=(w-text_w)/2:y=h-70"
             ),
             vcodec="libx264",
+            preset="slow",  # Enforce slow preset
+            crf=18,         # Enforce CRF 18
             acodec="aac",
+            audio_bitrate="256k", # Enforce 256k audio
             ac=2,
             ar=48000,
         )

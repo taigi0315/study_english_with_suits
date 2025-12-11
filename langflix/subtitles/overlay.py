@@ -248,18 +248,19 @@ def apply_dual_subtitle_layers(
     # Build force_style for original subtitle (bottom, white) - default behavior
     original_style = build_ass_force_style(is_expression=False)
     
-    # CRITICAL: Use output seeking instead of trim filter for accurate subtitle sync
-    # Trim filter works on frames, not timestamps, causing subtitle misalignment
-    # Output seeking (ss/t in output) decodes entire video and seeks to exact timestamp
-    # See: docs/core/subtitle_sync_guide_eng.md for details
-    video_input = ffmpeg.input(str(video_path))
+    # CRITICAL: Use INPUT seeking for correct subtitle sync
+    # When using relative subtitles (timestamps starting at 0), we must ensure
+    # the video stream seen by the filter also starts at 0.
+    # Input seeking (-ss before -i) resets timestamps to 0 at the seek point.
+    video_input = ffmpeg.input(str(video_path), ss=context_start_seconds, t=context_duration)
     
     # Get platform-specific fonts directory for FFmpeg
     from langflix.config.font_utils import get_fonts_dir
     fonts_dir = get_fonts_dir()
     
-    # Apply subtitle layer first (on full video for accurate timing)
-    # Use fontsdir parameter to help FFmpeg find fonts
+    # Apply subtitle layer
+    # Since input seeking was used, video T=0 corresponds to context_start_seconds
+    # The relative SRT (T=0) will sync perfectly.
     video_with_subtitles = video_input['v'].filter(
         'subtitles',
         original_subtitle_path,
@@ -267,15 +268,13 @@ def apply_dual_subtitle_layers(
         force_style=original_style
     )
     
-    # Output with output seeking for accurate timestamp-based extraction
-    # This ensures subtitles stay in sync with audio/video
+    # Output
     output_args = {
         'vcodec': 'libx264',
         'acodec': 'aac',
         'ac': 2,
         'ar': 48000,
-        'ss': context_start_seconds,  # Output seeking: accurate timestamp-based extraction
-        't': context_duration  # Duration limit
+        # Note: ss and t are handled in input
     }
     
     (
@@ -290,7 +289,7 @@ def apply_dual_subtitle_layers(
         .run(quiet=True)
     )
     
-    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied subtitle layer: original (bottom)")
+    logger.info(f"Extracted context segment ({context_duration:.2f}s) and applied subtitle layer using input seeking")
     return Path(output_path)
 
 

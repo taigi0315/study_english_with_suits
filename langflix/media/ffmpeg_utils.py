@@ -360,12 +360,13 @@ def make_video_encode_args_from_source(source_path: str, include_preset_crf: boo
         try:
             from langflix import settings
             video_config = settings.get_video_config()
-            args["preset"] = video_config.get("preset", "medium")
-            args["crf"] = video_config.get("crf", 18)
+            # High quality defaults: CRF 16/slow
+            args["preset"] = video_config.get("preset", "slow")
+            args["crf"] = video_config.get("crf", 16)
         except Exception:
             # Fallback if settings not available - use quality-focused defaults
-            args["preset"] = "medium"
-            args["crf"] = 18
+            args["preset"] = "slow"
+            args["crf"] = 16
         
         # Log encoding parameters for debugging and quality monitoring (TICKET-055)
         logger.info(

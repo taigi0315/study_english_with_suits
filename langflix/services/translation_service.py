@@ -19,6 +19,10 @@ class TranslationService:
         """
         Translate expressions to multiple target languages.
         
+        NOTE: The initial expression analysis LLM call already provides translations
+        in the target language specified in the prompt. This service is only needed
+        when translating to ADDITIONAL languages beyond the initial target.
+        
         Args:
             expressions: List of expressions to translate.
             source_language_code: The source language code (usually the code used for analysis).
@@ -30,33 +34,35 @@ class TranslationService:
         """
         translated_expressions = {}
         
+        # Check if expressions already have translations from initial LLM call
+        has_existing_translations = False
+        if expressions and len(expressions) > 0:
+            first_expr = expressions[0]
+            if (first_expr.translation and len(first_expr.translation) > 0 and 
+                first_expr.expression_translation):
+                has_existing_translations = True
+                logger.info(f"Expressions already have translations from initial LLM analysis")
+        
         for lang_idx, lang in enumerate(target_languages):
             # Normalize language codes for comparison (case-insensitive)
             lang_normalized = lang.lower().strip()
             source_normalized = source_language_code.lower().strip()
             
-            # Check if this is the source language - expressions already have translations
-            # from the initial expression analysis LLM call
-            if lang_normalized == source_normalized:
+            # Check if this is the source/target language from initial analysis
+            # Expressions already have translations from the initial LLM call
+            if lang_normalized == source_normalized or has_existing_translations:
                 # Use original expressions (already translated during analysis)
                 translated_expressions[lang] = expressions
-                logger.info(f"✅ Using existing translations for {lang} (already in ExpressionAnalysis from initial LLM call)")
+                logger.info(f"✅ Using existing translations for {lang} (from initial LLM analysis - no extra API calls needed)")
                 continue
             
-            # Check if expressions already have translations (sanity check)
-            if expressions and len(expressions) > 0:
-                first_expr = expressions[0]
-                if first_expr.translation and len(first_expr.translation) > 0:
-                    if first_expr.expression_translation:
-                        # Expressions already have translations - this is the source language
-                        logger.debug(f"Expressions already have translations, skipping redundant translation for {lang}")
-
-            logger.info(f"Translating {len(expressions)} expressions to {lang}...")
+            # Only make additional LLM calls if we need to translate to a NEW language
+            # that wasn't covered in the initial analysis
+            logger.info(f"Translating {len(expressions)} expressions to NEW language: {lang}...")
             lang_expressions = []
             
             for expr_idx, expr in enumerate(expressions):
                 if progress_callback:
-                    # Generic progress generic across languages isn't perfect but sufficient
                     progress_callback(lang_idx, len(target_languages), expr_idx, len(expressions))
                     
                 try:

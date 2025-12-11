@@ -688,8 +688,31 @@ def _generate_content_with_retry(model, prompt: str, max_retries: int = 3, gener
             last_error = e
             error_str = str(e)
             
-            # Check for specific error types that warrant retries
-            if any(keyword in error_str.lower() for keyword in ['timeout', '504', '503', '502', '500']):
+            # Check for rate limit errors (429) - use longer backoff
+            is_rate_limit = any(keyword in error_str.lower() for keyword in ['429', 'quota', 'resource exhausted', 'rate limit'])
+            
+            # Check for server errors that warrant retries
+            is_server_error = any(keyword in error_str.lower() for keyword in ['timeout', '504', '503', '502', '500'])
+            
+            if is_rate_limit:
+                # Rate limit: use longer backoff (30s, 60s, 120s)
+                rate_limit_backoff = [30, 60, 120]
+                wait_time = rate_limit_backoff[min(attempt, len(rate_limit_backoff) - 1)]
+                logger.warning(f"Rate limit hit on attempt {attempt + 1}: {error_str}")
+                logger.info(f"Waiting {wait_time}s before retry (rate limit backoff)...")
+                
+                error_context.additional_data["attempt"] = attempt + 1
+                error_context.additional_data["error_type"] = "rate_limit"
+                handle_error(e, error_context, retry=False, fallback=False)
+                
+                if attempt == max_retries:
+                    logger.error(f"Max retries reached for rate limit. Final error: {error_str}")
+                    break
+                    
+                time.sleep(wait_time)
+                continue  # Skip to next iteration
+                
+            elif is_server_error:
                 logger.warning(f"API error on attempt {attempt + 1}: {error_str}")
                 
                 # Report error to error handler (but don't raise yet if we can retry)

@@ -73,9 +73,9 @@ class ExpressionMediaSlicer:
                 'audio_bitrate': '128k'
             },
             'medium': {
-                'crf': 23,
-                'preset': 'medium',
-                'audio_bitrate': '192k'
+                'crf': 20,          # Upgraded from 23
+                'preset': 'slow',   # Upgraded from medium -> slow
+                'audio_bitrate': '256k' # Upgraded from 192k
             },
             'high': {
                 'crf': 18,

@@ -90,7 +90,9 @@ video:
   # Changed to "medium" for significantly better quality (TICKET-072)
   # Medium preset provides better compression and quality while maintaining reasonable encoding speed
   # ~2x slower than "fast" but much better quality, especially for 720p sources
-  preset: "medium"
+  # Changed from "medium" to "slow" to prioritize QUALITY over speed (User Request)
+  # Slow preset provides better compression and quality retention
+  preset: "slow"
 
   # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
   # Changed to 18 for high quality output (TICKET-072)

@@ -187,7 +187,8 @@ class VideoProcessor:
             
             # Determine extraction strategy
             from langflix import settings
-            effective_strategy = strategy or settings.get_clip_extraction_strategy()
+            # Default to 'encode' if not specified, to ensure frame accuracy (TICKET-SYNC-FIX)
+            effective_strategy = strategy or settings.get_clip_extraction_strategy() or 'encode'
             copy_threshold = settings.get_clip_copy_threshold_seconds()
             
             # Decide whether to attempt stream copy
@@ -201,8 +202,12 @@ class VideoProcessor:
                 success = self._extract_clip_copy(video_path, start_seconds, end_seconds, output_path)
                 
                 if success:
-                    logger.info(f"✅ Stream copy successful: {output_path}")
-                    return True
+                    # Validate output file
+                    if output_path.exists() and output_path.stat().st_size > 1000:
+                         logger.info(f"✅ Stream copy successful: {output_path}")
+                         return True
+                    else:
+                         logger.warning("Stream copy produced invalid file")
                 
                 if effective_strategy == 'copy':
                     # Copy-only mode failed
@@ -210,7 +215,7 @@ class VideoProcessor:
                     return False
                 
                 # Auto mode: fallback to re-encode
-                logger.warning(f"Stream copy failed, falling back to re-encode")
+                logger.warning(f"Stream copy failed/invalid, falling back to re-encode")
             
             # Re-encode path (original behavior or fallback)
             logger.debug(f"Using re-encode (strategy={effective_strategy})")
@@ -274,8 +279,9 @@ class VideoProcessor:
             # Get quality settings from config (TICKET-072: improved quality)
             from langflix import settings
             video_config = settings.get_video_config()
-            preset = video_config.get('preset', 'medium')
-            crf = video_config.get('crf', 18)
+            preset = video_config.get('preset', 'slow')  # Improved default
+            crf = video_config.get('crf', 18)            # High quality default
+            audio_bitrate = video_config.get('audio_bitrate', '256k')
             
             (
                 ffmpeg
@@ -283,6 +289,7 @@ class VideoProcessor:
                 .output(str(output_path), 
                        vcodec='libx264',  # Re-encode for frame accuracy
                        acodec='aac',
+                       audio_bitrate=audio_bitrate,
                        preset=preset,
                        crf=crf,
                        avoid_negative_ts='make_zero')

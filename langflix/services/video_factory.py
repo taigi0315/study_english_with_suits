@@ -278,7 +278,8 @@ class VideoFactory:
                         Path(original_video),
                         base_expression.context_start_time,
                         base_expression.context_end_time,
-                        temp_context_clip
+                        temp_context_clip,
+                        strategy='encode'  # Force encode for frame accuracy (fix sync issues)
                     )
                     if success:
                         extracted_slices[expr_idx] = temp_context_clip

@@ -366,7 +366,7 @@ def make_video_encode_args_from_source(source_path: str, include_preset_crf: boo
         except Exception:
             # Fallback if settings not available - use quality-focused defaults
             args["preset"] = "slow"
-            args["crf"] = 16
+            args["crf"] = 18
         
         # Log encoding parameters for debugging and quality monitoring (TICKET-055)
         logger.info(

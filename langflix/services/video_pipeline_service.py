@@ -80,6 +80,10 @@ class VideoPipelineService:
             }
         """
         try:
+            import uuid
+            job_id = str(uuid.uuid4())[:8]
+            logger.info(f"[{job_id}] Starting video processing for '{video_path}' (Episode: {episode_name})")
+
             if progress_callback:
                 progress_callback(10, "Initializing video processing...")
             

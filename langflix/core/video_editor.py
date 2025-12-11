@@ -1956,26 +1956,24 @@ class VideoEditor:
                             .output(video_input['v'], audio_input['a'], str(output_path),
                                    vcodec=video_args.get('vcodec', 'libx264'),
                                    acodec=video_args.get('acodec', 'aac'),
-                                   preset=video_args.get('preset', 'veryfast'),
-                                   crf=video_args.get('crf', 25))
+                                   audio_bitrate='256k',
+                                   preset=video_args.get('preset', 'slow'),
+                                   crf=video_args.get('crf', 18))
                             .overwrite_output()
-                            .run(quiet=True)
-                        )
+                            )
                     except Exception as emergency_error:
                         logger.error(f"Emergency fallback also failed: {emergency_error}")
-                        # Last resort: create basic video without audio
-                        video_args = self._get_video_output_args()
-                        (
-                            ffmpeg
-                            .input("color=c=0x1a1a2e:size=1280:720", f="lavfi", t=slide_duration)
-                            .output(str(output_path),
-                                   vcodec=video_args.get('vcodec', 'libx264'),
-                                   acodec=video_args.get('acodec', 'aac'),
-                                   preset=video_args.get('preset', 'veryfast'),
-                                   crf=video_args.get('crf', 25))
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
+                
+                # Check if output_path was actually created
+                if not output_path.exists() or output_path.stat().st_size < 100:
+                    logger.error(f"Fallback generation produced invalid file: {output_path}")
+                    raise RuntimeError("Fallback generation failed")
+
+            except Exception as slide_error:
+                # USER REQUEST (Fail-Fast): Stop entire process on failure.
+                # Do not produce garbage/blank output.
+                logger.critical(f"FATAL: Failed to create critical educational slide: {slide_error}", exc_info=True)
+                raise RuntimeError(f"Slide generation failed for expression '{expression.expression}': {slide_error}")
             
             # Move temp slide to final location in slides directory
             slides_dir = self.output_dir.parent / "slides"
@@ -1997,9 +1995,23 @@ class VideoEditor:
                 logger.info(f"Successfully created educational slide with TTS audio: {final_slide_path}")
             except Exception as copy_error:
                 logger.error(f"Error copying slide to final location: {copy_error}")
-                # Return the temp file path as fallback
-                final_slide_path = output_path
-            
+                # Check if we can fallback to using the temp file (if it exists)
+                if output_path.exists():
+                     logger.warning(f"Using temp file as fallback: {output_path}")
+                     # Try to ignore the fact that it's in temp dir, or return it
+                     # Ideally we should try to copy it again or just return it
+                     return str(output_path)
+                else:
+                    logger.error("Temp file also missing, cannot recover slide")
+                    raise
+
+            # Final verification
+            if not final_slide_path.exists() or final_slide_path.stat().st_size == 0:
+                logger.error(f"Final slide path is invalid: {final_slide_path}")
+                if output_path.exists():
+                    return str(output_path)
+                raise FileNotFoundError(f"Failed to create valid slide at {final_slide_path}")
+
             return str(final_slide_path)
             
         except Exception as e:
@@ -2654,12 +2666,13 @@ class VideoEditor:
                         video_stream,
                         audio_stream,
                         str(transition_output),
-                       vcodec=video_args.get('vcodec', 'libx264'),
-                       acodec=video_args.get('acodec', 'aac'),
-                        preset=video_args.get('preset', 'fast'),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
+                        audio_bitrate='256k',
+                        preset=video_args.get('preset', 'slow'), # High quality fallback
                         ac=2,
                         ar=sample_rate,
-                        crf=video_args.get('crf', 23)
+                        crf=video_args.get('crf', 18) # High quality fallback
                     )
                 .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)

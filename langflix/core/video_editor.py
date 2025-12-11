@@ -46,6 +46,25 @@ class VideoEditor:
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
+        # Initialize SlideGenerator (TICKET-090 refactoring)
+        from langflix.core.slide_generator import SlideGenerator
+        self.slide_generator = SlideGenerator(
+            output_dir=self.output_dir,
+            language_code=self.language_code,
+            episode_name=self.episode_name,
+            cache_manager=self.cache_manager,
+            temp_manager=self.temp_manager,
+            video_editor_ref=self
+        )
+        
+        # Initialize TransitionGenerator (TICKET-090 refactoring)
+        from langflix.core.transition_generator import TransitionGenerator
+        self.transition_generator = TransitionGenerator(
+            output_dir=self.output_dir,
+            temp_manager=self.temp_manager,
+            video_editor_ref=self
+        )
+        
         # Set up paths for different video types - all videos go to videos/ directory
         # Try to find videos directory in parent structure
         if hasattr(self.output_dir, 'parent'):
@@ -67,6 +86,18 @@ class VideoEditor:
         
         # Track short format temp files for preservation (TICKET-029)
         self.short_format_temp_files = []
+        
+        # Initialize VideoBatcher (TICKET-090 refactoring) - after paths are set
+        from langflix.core.video_batcher import VideoBatcher
+        self.video_batcher = VideoBatcher(
+            output_dir=self.output_dir,
+            language_code=self.language_code,
+            episode_name=self.episode_name,
+            temp_manager=self.temp_manager,
+            paths=getattr(self, 'paths', None),
+            video_editor_ref=self
+        )
+
     
     @staticmethod
     def _ensure_expression_dialogue(expression: ExpressionAnalysis) -> ExpressionAnalysis:

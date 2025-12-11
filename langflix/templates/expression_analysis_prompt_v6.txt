@@ -16,10 +16,10 @@ When selecting expressions, prioritize scenes with strong emotional impact or en
 
 Think about what would make a short video clip go viral. If the scene makes you laugh, gasp, or feel something strong, it's a prime candidate.
 
-**IMPORTANT:** You can extract ONLY ONE expression from each context.
-If you find multiple excellent expressions in one dialogue segment, choose ONLY THE BEST ONE.
-Even if multiple expressions are valuable, reusable, and clearly teachable, you must select only the single most valuable expression.
-Quality over quantity: One excellent expression is better than multiple good ones.
+**IMPORTANT:** You can extract UP TO {max_expressions} expressions from this dialogue segment.
+Choose the BEST expressions - prioritize quality over filling the quota.
+Each expression should come from a DIFFERENT, NON-OVERLAPPING time range.
+If there aren't enough high-quality expressions, it's OK to return fewer.
 
 **LANGUAGE LEVEL:** {level_description}
 
@@ -162,10 +162,10 @@ When all extracted clips are played in chronological order, learners should be a
 
 3. **WHEN EXPRESSIONS ARE CLOSE TOGETHER:**
    If multiple good expressions appear within the same context:
-   **You MUST choose only the BEST single expression**
-   - Select the single most valuable expression
-   - Skip all others, even if they're good
-   - This is a strict requirement: ONE expression per context only
+   **You may select MULTIPLE expressions if they don't overlap:**
+   - Each expression needs its own separate context (start/end times)
+   - Context time ranges must NOT overlap
+   - This is how to maximize value per API call
 
 4. **CONTEXT BOUNDARIES MUST NOT OVERLAP:**
    - **CRITICAL:** Different contexts (different `context_start_time`/`context_end_time`) must NEVER overlap
@@ -282,11 +282,10 @@ For short videos (≤ 60 seconds total):
 - If no suitable context ≤ 40 seconds exists, use the best available context but note it may not fit short video format
 
 **EXPRESSION COUNT:**
-- **STRICT RULE: Find exactly 1 expression per context**
-- You MUST select only ONE expression per context, even if multiple good expressions exist
-- Quality over quantity: Select the single most valuable expression
-- If you find multiple excellent expressions, choose the BEST one and skip the others
-- The goal is to find the BEST single expression per context
+- Find {min_expressions} to {max_expressions} expressions from this dialogue segment
+- Each expression MUST have a DIFFERENT, NON-OVERLAPPING context time range
+- Quality over quantity: Only extract expressions that pass ALL quality checks
+- It's OK to return fewer than {max_expressions} if there aren't enough high-quality expressions
 
 ---
 
@@ -359,7 +358,7 @@ For short videos (≤ 60 seconds total):
    - Ensure the expression appears naturally in the middle
    - Verify learners can follow what's happening and feel the impact
 
-**STEP 4:** Select the TOP expression only (exactly 1 per context). Quality over quantity.
+**STEP 4:** Select UP TO {max_expressions} expressions with NON-OVERLAPPING time ranges. Quality over quantity.
 
 ---
 
@@ -422,7 +421,7 @@ For short videos (≤ 60 seconds total):
 - ✓ Context is 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) and tells a complete mini-story
 - ✓ Learners can follow what's happening without knowing the show
 - ✓ Context has beginning (setup), middle (expression), end (reaction)
-- ✓ Exactly 1 expression per context (strict requirement)
+- ✓ {min_expressions} to {max_expressions} expressions with NON-OVERLAPPING time ranges
 - ✓ expression_dialogue is a COMPLETE, FULL sentence (NEVER cut in middle)
 - ✓ expression is expanded with context, not just bare phrase
 - ✓ Dialogue and translation arrays have EXACTLY the same number of items

@@ -34,8 +34,9 @@ database:
 # ============================================================================
 llm:
   # Maximum characters of subtitle content per chunk
-  # Total prompt = content (1680) + timestamps (~2.1x) + template overhead (~6500) ≈ 10K
-  max_input_length: 800
+  # Increased from 800 to 3000 for cost optimization (fewer API calls)
+  # Trade-off: Larger chunks = fewer calls but longer processing time
+  max_input_length: 3000
   
   model_name: "gemini-2.5-flash"
   
@@ -117,8 +118,9 @@ font:
 # ============================================================================
 processing:
   # Expression count limits per chunk
+  # Increased from 3 to 5 for cost optimization (more expressions per API call)
   min_expressions_per_chunk: 1
-  max_expressions_per_chunk: 3
+  max_expressions_per_chunk: 5
 
 # ============================================================================
 # Video Transition Settings

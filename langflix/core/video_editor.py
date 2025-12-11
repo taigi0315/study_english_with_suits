@@ -192,45 +192,10 @@ class VideoEditor:
                 logger.info(f"Reusing pre-extracted context clip: {pre_extracted_context_clip}")
                 context_clip_path = pre_extracted_context_clip
                 
-                # Still need to apply language-specific subtitles
-                subtitle_file = None
-                # Try to find subtitle file in subtitles directory (language-specific)
-                if hasattr(self, 'paths') and self.paths:
-                    # Use language-specific paths if available
-                    lang_paths = self.paths
-                    if 'subtitles' in lang_paths:
-                        subtitles_dir = lang_paths['subtitles']
-                    else:
-                        subtitles_dir = self.output_dir.parent / "subtitles"
-                else:
-                    subtitles_dir = self.output_dir.parent / "subtitles"
-                
-                if subtitles_dir.exists():
-                    from langflix.utils.filename_utils import sanitize_for_expression_filename
-                    safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
-                    subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
-                    subtitle_file_path = Path(subtitles_dir) / subtitle_filename
-                    
-                    if subtitle_file_path.exists():
-                        subtitle_file = subtitle_file_path
-                        logger.info(f"Found language-specific subtitle file: {subtitle_file}")
-                
-                # Apply language-specific subtitles to pre-extracted clip
-                if subtitle_file and subtitle_file.exists():
-                    logger.info(f"Applying language-specific subtitles from: {subtitle_file}")
-                    # Create a new clip with subtitles applied
-                    context_clip_with_subs = self.output_dir / f"temp_context_clip_with_subs_{safe_expression}.mkv"
-                    self._register_temp_file(context_clip_with_subs)
-                    
-                    subs_overlay.apply_dual_subtitle_layers(
-                        str(context_clip_path),
-                        str(subtitle_file),
-                        "",  # No expression subtitle for long-form video
-                        str(context_clip_with_subs),
-                        0,  # Start from beginning (clip already extracted)
-                        get_duration_seconds(str(context_clip_path))  # Use full clip duration
-                    )
-                    context_clip_path = context_clip_with_subs
+                # VideoFactory now handles subtitle embedding into this clip ("Master Clip").
+                # So we don't need to re-apply subtitles here.
+                # If this is called from old code without Factory mastery, it might lack subtitles,
+                # but we are assuming Factory control now.
             else:
                 # Extract context clip from original video WITH subtitles
                 self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -1092,72 +1057,27 @@ class VideoEditor:
                         subtitle_file = matches[0]
                         logger.info(f"Found subtitle file by pattern: {subtitle_file.name}")
 
-            if subtitle_file and subtitle_file.exists():
-                logger.info(f"Applying dialogue subtitles to short-form video from: {subtitle_file}")
+                # User request: remove the second "subtitle" layer and keep only the "embedded" one
+                # The "embedded" one comes from the long-form context clip which already has subtitles burned in via subs_overlay
+                # So we simply pass through the video without adding another subtitle layer
                 
-                # Get subtitle styling configuration
-                dialogue_font_size = settings.get_dialogue_subtitle_font_size()
-                dialogue_margin_v = settings.get_dialogue_subtitle_margin_v()
-                dialogue_outline_width = settings.get_dialogue_subtitle_outline_width()
-                background_opacity = settings.get_dialogue_subtitle_background_opacity()
-                text_color = settings.get_dialogue_subtitle_text_color()
-                outline_color = settings.get_dialogue_subtitle_outline_color()
-
-                # Convert colors to ASS format (&HAABBGGRR - note: BGR not RGB)
-                # White = &H00FFFFFF, Black = &H00000000
-                def color_to_ass(color_name):
-                    color_map = {
-                        'white': '&H00FFFFFF',
-                        'black': '&H00000000',
-                        'yellow': '&H0000FFFF',
-                        'red': '&H000000FF',
-                        'blue': '&H00FF0000',
-                        'green': '&H0000FF00'
-                    }
-                    return color_map.get(color_name.lower(), '&H00FFFFFF')
+                logger.info(f"Skipping second subtitle layer (keeping only embedded subtitles from context clip)")
                 
-                primary_colour = color_to_ass(text_color)
-                outline_colour = color_to_ass(outline_color)
-                
-                # Convert opacity to ASS alpha value (0 = opaque, 255 = transparent)
-                alpha_value = int(255 * (1 - background_opacity))
-                back_colour = f"&H{alpha_value:02X}000000"
-
-                # ASS styling using config values
-                custom_bottom_style = (
-                    "Alignment=2,"  # Bottom center
-                    f"PrimaryColour={primary_colour},"  # Text color from config
-                    f"OutlineColour={outline_colour},"  # Outline color from config
-                    f"BackColour={back_colour},"  # Background with opacity from config
-                    f"Outline={dialogue_outline_width},"  # Outline width from config
-                    "Shadow=0,"  # No shadow
-                    "Bold=0,"
-                    f"FontSize={dialogue_font_size},"
-                    "BorderStyle=3,"  # Opaque box background
-                    f"MarginV={dialogue_margin_v}"  # Margin from bottom
-                )
-
-                # Apply subtitles using FFmpeg filter
+                # Copy video to output (re-encoding to ensure format consistency)
                 video_input = ffmpeg.input(str(temp_with_expression_path))
-                video_with_subs = video_input['v'].filter(
-                    'subtitles',
-                    str(subtitle_file),
-                    force_style=custom_bottom_style
-                )
-
-                # Get audio stream
+                video_args = self._get_video_output_args(source_video_path=long_form_video_path)
+                
+                # Get audio stream if available
                 audio_stream = None
                 try:
                     audio_stream = video_input['a']
                 except (KeyError, AttributeError):
-                    logger.debug("No audio stream in video with expression")
-
-                # Output final video with subtitles
-                video_args = self._get_video_output_args(source_video_path=long_form_video_path)
+                    logger.debug("No audio stream in video")
+                    
                 if audio_stream:
                     (
                         ffmpeg.output(
-                            video_with_subs,
+                            video_input['v'],
                             audio_stream,
                             str(output_path),
                             vcodec=video_args.get('vcodec', 'libx264'),
@@ -1173,7 +1093,7 @@ class VideoEditor:
                 else:
                     (
                         ffmpeg.output(
-                            video_with_subs,
+                            video_input['v'],
                             str(output_path),
                             vcodec=video_args.get('vcodec', 'libx264'),
                             preset=video_args.get('preset', 'medium'),
@@ -1182,8 +1102,8 @@ class VideoEditor:
                         .overwrite_output()
                         .run(capture_stdout=True, capture_stderr=True)
                     )
-
-                logger.info(f"✅ Dialogue subtitles applied to short-form video (FontSize={dialogue_font_size})")
+                
+                logger.info(f"✅ Short-form video preserved with embedded subtitles")
             else:
                 # No subtitle file found, use video with expression text only
                 logger.warning(f"No subtitle file found for expression, using video with expression text only")
@@ -1228,24 +1148,25 @@ class VideoEditor:
             Dictionary with vcodec, acodec, preset, and crf values
         """
         video_config = settings.get_video_config()
-        base_crf = video_config.get('crf', 18)
-        base_preset = video_config.get('preset', 'medium')
+        # High quality defaults: CRF 16 is visually lossless for most content
+        base_crf = video_config.get('crf', 16)
+        # Slower preset provides better compression efficiency and quality retention
+        base_preset = video_config.get('preset', 'slow')
         
         # If source video provided, adjust quality based on resolution (TICKET-072)
         if source_video_path and os.path.exists(source_video_path):
             try:
                 from langflix.media.ffmpeg_utils import get_video_params
                 vp = get_video_params(source_video_path)
-                height = vp.height or 720
+                height = vp.height or 1080
                 
-                # Higher quality for lower resolution sources (720p needs more care)
+                # Higher quality logic
                 if height <= 720:
-                    crf = min(base_crf, 18)  # Ensure high quality for 720p
+                    crf = min(base_crf, 16)  # Ensure high quality for 720p
                     logger.debug(f"720p source detected, using CRF {crf} for better quality")
-                elif height <= 1080:
-                    crf = base_crf
                 else:
-                    crf = max(base_crf, 20)  # Can use slightly lower for 4K
+                    # Use base CRF for 1080p and 4K (don't degrade quality for 4K)
+                    crf = base_crf
                     
                 return {
                     'vcodec': video_config.get('codec', 'libx264'),
@@ -1260,8 +1181,8 @@ class VideoEditor:
         return {
             'vcodec': video_config.get('codec', 'libx264'),
             'acodec': video_config.get('audio_codec', 'aac'),
-            'preset': base_preset,  # Updated default for better quality (TICKET-072)
-            'crf': base_crf  # Updated default for better quality (TICKET-072)
+            'preset': base_preset,
+            'crf': base_crf
         }
     
     def _get_background_config(self) -> tuple[str, str]:

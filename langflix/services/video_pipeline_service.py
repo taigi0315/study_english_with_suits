@@ -213,17 +213,36 @@ class VideoPipelineService:
         Returns:
             List of short video file paths
         """
-        short_videos_dir = paths.get('language', {}).get('short_videos')
-        if not short_videos_dir:
-            return []
-        
         short_videos = []
-        if isinstance(short_videos_dir, Path):
-            # Look for short videos and batched short videos
-            for video_file in short_videos_dir.glob("*.mkv"):
-                if video_file.exists():
-                    short_videos.append(str(video_file))
         
+        # Collect all language directories to check
+        dirs_to_check = []
+        
+        # 1. Primary language
+        if 'language' in paths:
+             dirs_to_check.append(paths['language'])
+             
+        # 2. All other languages
+        if 'languages' in paths:
+            for lang_paths in paths['languages'].values():
+                dirs_to_check.append(lang_paths)
+                
+        logger.info(f"Checking for short videos in {len(dirs_to_check)} language directories")
+
+        for lang_paths in dirs_to_check:
+            short_videos_dir = lang_paths.get('short_videos')
+            if short_videos_dir and isinstance(short_videos_dir, Path):
+                logger.info(f"Scanning for shorts in: {short_videos_dir}")
+                # Look for short videos (mkv files)
+                # Exclude hidden files
+                for video_file in short_videos_dir.glob("*.mkv"):
+                    if video_file.exists() and not video_file.name.startswith('.'):
+                        path_str = str(video_file)
+                        if path_str not in short_videos:
+                            short_videos.append(path_str)
+                            logger.debug(f"Found short video: {video_file.name}")
+                            
+        logger.info(f"Total short videos found: {len(short_videos)}")
         return sorted(short_videos)
     
     def _find_final_video(self, paths: Dict[str, Any], episode_name: str, video_path: str) -> Optional[str]:
@@ -238,37 +257,43 @@ class VideoPipelineService:
         Returns:
             Path to final video, or None if not found
         """
-        # Try finding in the 'long' directory first (new structure)
-        long_dir = paths.get('language', {}).get('long')
-        if long_dir and isinstance(long_dir, Path) and long_dir.exists():
-            # Check for combined.mkv (standard name in VideoFactory)
-            combined = long_dir / "combined.mkv"
-            if combined.exists():
-                return str(combined)
-            
-            # Check for other patterns in long dir
-            for video_file in long_dir.glob("*.mkv"):
-                 if video_file.exists():
-                     return str(video_file)
+        # Collect checking directories
+        dirs_to_check = []
+        if 'language' in paths:
+             dirs_to_check.append(paths['language'])
+        if 'languages' in paths:
+            for lang_paths in paths['languages'].values():
+                dirs_to_check.append(lang_paths)
+                
+        for lang_paths in dirs_to_check:
+             # Try finding in the 'long' directory first (new structure)
+            long_dir = lang_paths.get('long')
+            if long_dir and isinstance(long_dir, Path) and long_dir.exists():
+                # Check for combined.mkv (standard name in VideoFactory)
+                combined = long_dir / "combined.mkv"
+                if combined.exists():
+                    return str(combined)
+                
+                # Check for other patterns in long dir
+                for video_file in long_dir.glob("*.mkv"):
+                     if video_file.exists():
+                         return str(video_file)
 
-        # Fallback to legacy 'final_videos' directory
-        final_videos_dir = paths.get('language', {}).get('final_videos')
-        if not final_videos_dir:
-            return None
-        
-        if isinstance(final_videos_dir, Path):
-            # Look for final video (long-form_*.mkv)
-            video_filename = Path(video_path).stem if video_path else "video"
-            final_video_pattern = f"long-form_{episode_name}_*.mkv"
-            
-            for video_file in final_videos_dir.glob(final_video_pattern):
-                if video_file.exists():
-                    return str(video_file)
-            
-            # Fallback: look for any long-form video
-            for video_file in final_videos_dir.glob("long-form_*.mkv"):
-                if video_file.exists():
-                    return str(video_file)
+            # Fallback to legacy 'final_videos' directory
+            final_videos_dir = lang_paths.get('final_videos')
+            if final_videos_dir and isinstance(final_videos_dir, Path):
+                # Look for final video (long-form_*.mkv)
+                video_filename = Path(video_path).stem if video_path else "video"
+                final_video_pattern = f"long-form_{episode_name}_*.mkv"
+                
+                for video_file in final_videos_dir.glob(final_video_pattern):
+                    if video_file.exists():
+                        return str(video_file)
+                
+                # Fallback: look for any long-form video
+                for video_file in final_videos_dir.glob("long-form_*.mkv"):
+                    if video_file.exists():
+                        return str(video_file)
         
         return None
 

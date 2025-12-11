@@ -59,9 +59,14 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
             translation_count = len(expr.translation) if expr.translation else 0
             
             if dialogues_count != translation_count:
-                logger.error(f"Dropping expression {i+1}: '{expr.expression}' - "
-                           f"Dialogue/translation count mismatch: {dialogues_count} dialogues vs {translation_count} translations")
-                continue
+                logger.warning(f"Expression {i+1}: '{expr.expression}' - "
+                           f"Dialogue/translation count mismatch: {dialogues_count} dialogues vs {translation_count} translations. "
+                           "Truncating to minimum length.")
+                min_len = min(dialogues_count, translation_count)
+                if expr.dialogues:
+                    expr.dialogues = expr.dialogues[:min_len]
+                if expr.translation:
+                    expr.translation = expr.translation[:min_len]
             
             # Check required fields
             if not expr.expression or not expr.expression_translation:

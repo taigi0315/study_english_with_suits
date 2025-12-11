@@ -2,6 +2,7 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
+import ffmpeg
 
 from langflix.core.models import ExpressionAnalysis
 from langflix.core.video_processor import VideoProcessor
@@ -12,6 +13,7 @@ from langflix.services.output_manager import OutputManager
 from langflix.utils.temp_file_manager import get_temp_manager
 from langflix.media.ffmpeg_utils import get_duration_seconds
 from langflix import settings
+from langflix.subtitles.overlay import apply_dual_subtitle_layers
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class VideoFactory:
         
         logger.info(f"Using original video file: {original_video}")
         
-        # Step 1: Extract video slices (reused)
+        # Step 1: Extract video slices (reused) - These are RAW clips (no subs)
         extracted_slices = self._extract_slices(expressions, video_processor, original_video)
         
         # Step 2: Create videos for each language
@@ -64,6 +66,74 @@ class VideoFactory:
             lang_expressions = translated_expressions[lang]
             lang_paths = self._ensure_lang_paths(paths, lang, output_dir)
             
+            # Asset Generation & Master Clip Creation
+            # We generate subtitles and create the "Master Clip" (burned subs) here.
+            # This ensures the video passed to VideoEditor ALREADY has perfect internal sync.
+            subtitle_dir = lang_paths.get('subtitles') or lang_paths['language_dir'] / "subtitles"
+            subtitle_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Helper to store master clips for this language
+            master_clips: Dict[int, Path] = {}
+            
+            logger.info(f"Preparing assets (Subtitles & Master Clips) for {len(lang_expressions)} expressions...")
+            
+            for i, expression in enumerate(lang_expressions):
+                if i not in extracted_slices:
+                    logger.warning(f"Skipping asset generation for expression {i+1}: No raw slice found")
+                    continue
+                    
+                raw_clip_path = extracted_slices[i]
+                
+                try:
+                    # 1. Generate Subtitle File
+                    base_expression = expressions[i] if i < len(expressions) else expression
+                    safe_expression_short = sanitize_for_expression_filename(base_expression.expression)[:30]
+                    subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
+                    subtitle_output_path = subtitle_dir / subtitle_filename
+                    
+                    success = subtitle_processor.create_dual_language_subtitle_file(
+                        expression,
+                        str(subtitle_output_path)
+                    )
+                    
+                    if not success:
+                        logger.warning(f"Failed to generate subtitle file for expression {i+1}, skipping master clip creation")
+                        continue
+                        
+                    # 2. Create Master Clip (Burn Subtitles into Raw Clip)
+                    # Input: Raw Clip (starts at 0)
+                    # Subtitles: Relative (starts at 0)
+                    # We use apply_dual_subtitle_layers with start=0, duration=full.
+                    # This uses "Input Seeking" (ss=0) which is valid and ensures sync.
+                    
+                    temp_master_clip = lang_paths['videos'] / f"temp_master_clip_burned_{i+1:02d}_{safe_expression_short}.mkv"
+                    temp_master_clip.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Note: apply_dual_subtitle_layers handles the ffmpeg call
+                    # We pass 0 as start time because the raw clip is already cut.
+                    # We MUST use the duration of the clip.
+                    duration = get_duration_seconds(str(raw_clip_path))
+                    
+                    apply_dual_subtitle_layers(
+                        str(raw_clip_path),
+                        str(subtitle_output_path),
+                        "", 
+                        str(temp_master_clip),
+                        0.0, 
+                        duration
+                    )
+                    
+                    if temp_master_clip.exists():
+                        master_clips[i] = temp_master_clip
+                        logger.debug(f"Created Master Clip with burned subtitles: {temp_master_clip.name}")
+                    else:
+                        logger.error(f"Failed to create Master Clip for expression {i+1}")
+
+                except ffmpeg.Error as e:
+                    logger.error(f"FFmpeg error preparing assets for expression {i+1}: {e.stderr.decode('utf8') if e.stderr else str(e)}")
+                except Exception as e:
+                    logger.error(f"Error preparing assets for expression {i+1}: {e}")
+            
             lang_video_editor = VideoEditor(
                 str(lang_paths['final_videos']),
                 lang,
@@ -75,16 +145,20 @@ class VideoFactory:
             lang_long_form_videos = []
             
             for expr_idx, expression in enumerate(lang_expressions):
-                if expr_idx not in extracted_slices:
+                if expr_idx not in master_clips:
+                    logger.warning(f"Skipping video creation for expression {expr_idx+1}: No master clip")
                     continue
                 
                 try:
+                    # We pass the MASTER CLIP (with burned subs) as the context clip.
+                    # VideoEditor will see it has a pre-extracted clip and use it.
+                    # Since it already has subs, we don't need to apply them again.
                     long_form_video = lang_video_editor.create_long_form_video(
                         expression,
-                        str(original_video),
+                        str(original_video), # Still passed for reference/audio extraction if needed
                         str(original_video),
                         expression_index=expr_idx,
-                        pre_extracted_context_clip=extracted_slices[expr_idx]
+                        pre_extracted_context_clip=master_clips[expr_idx]
                     )
                     lang_long_form_videos.append(long_form_video)
                 except Exception as e:
@@ -96,10 +170,21 @@ class VideoFactory:
                 
             # Cleanup temp files for this editor
             try:
+                # We could also clean up master_clips here if they are temps
+                # But VideoEditor might track them if we registered them?
+                # We didn't register them in temp_manager explicitly here, but they are in 'videos' dir
+                # VideoEditor.cleanup cleans 'videos' dir usually?
                 lang_video_editor._cleanup_temp_files(preserve_short_format=False)
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp files for {lang}: {e}")
-
+                
+            # Explicit cleanup of Master Clips (they are intermediate)
+            for clip in master_clips.values():
+                try:
+                    if clip.exists():
+                        clip.unlink()
+                except: pass
+        
         # Step 3: Combine videos
         combined_videos = {}
         for lang, videos in all_long_form_videos.items():

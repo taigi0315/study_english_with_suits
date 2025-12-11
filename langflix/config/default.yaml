@@ -103,12 +103,12 @@ video:
 # ============================================================================
 font:
   sizes:
-    default: 36                  # Default font size (increased from 32)
-    expression_dialogue: 42      # Full dialogue line containing expression (increased from 40)
-    expression: 48               # Main expression/phrase (emphasized, larger) (increased from 58)
-    expression_dialogue_trans: 42  # Translation of dialogue line (increased from 36)
-    expression_trans: 48         # Translation of expression (emphasized) (increased from 48)
-    similar: 42                  # Similar expressions text (increased from 32)
+    default: 28                  # Default font size (reduced from 36)
+    expression_dialogue: 32      # Full dialogue line containing expression (reduced from 42)
+    expression: 36               # Main expression/phrase (emphasized, larger) (reduced from 48)
+    expression_dialogue_trans: 36  # Translation of dialogue line (reduced from 42)
+    expression_trans: 36         # Translation of expression (emphasized) (reduced from 48)
+    similar: 36                  # Similar expressions text (reduced from 42)
 
 # ============================================================================
 # Processing Settings

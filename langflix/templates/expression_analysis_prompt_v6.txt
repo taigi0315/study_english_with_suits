@@ -4,6 +4,13 @@ Here is a segment of dialogue from the TV show "{show_name}":
 {dialogues}
 ---
 
+**⚠️ CRITICAL LANGUAGE REQUIREMENT:**
+- The **catchy_keywords** field MUST BE 100% IN {target_language} (Korean). NEVER WRITE ENGLISH KEYWORDS.
+- The **title** field MUST BE 100% IN {target_language} (Korean). NEVER WRITE ENGLISH TITLES.
+- Examples: "숨겨진 속내 드러나다", "상사의 뼈때리는 한마디", "직장 드라마 레전드"
+- ❌ WRONG: "Harvey's witty comeback", "Funny Food Banter"
+- ✅ CORRECT: "하비의 재치있는 반격", "웃기는 음식 농담"
+
 **YOUR MISSION:**
 Find the best expression that English learners would be EXCITED to learn - expressions they'd actually use and remember.
 

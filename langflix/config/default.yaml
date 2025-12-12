@@ -226,7 +226,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 65              # Main expression font size (increased by 10 from 45)
+      font_size: 50              # Main expression font size (increased by 10 from 45)
       y_position: 1530           # Adjusted for new layout (video ends at 1480)
       text_color: 'yellow'
       border_width: 2
@@ -234,7 +234,7 @@ short_video:
 
     # Expression translation (bottom padding area)
     translation:
-      font_size: 65
+      font_size: 50
       y_position: 1680           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
       text_color: 'yellow'
@@ -244,7 +244,7 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 9
+      font_size: 8
       margin_v: 90
       text_color: 'white'
       outline_width: 1
@@ -271,12 +271,12 @@ short_video:
 
     # Vocabulary annotations (dynamic overlays that appear when words are spoken)
     vocabulary_annotations:
-      font_size: 42                # Font size for vocabulary text
+      font_size: 45                # Font size for vocabulary text
       text_color: 'yellow'         # Text color
       border_width: 2              # Border width
       border_color: 'black'        # Border color
-      x_position: 20               # X position (px from left)
-      y_offset: 20                 # Y offset from top of video area
+      x_position: 25               # X position (px from left)
+      y_offset: 25                 # Y offset from top of video area
       duration: 4.0                # How long annotation appears (seconds)
 
 # ============================================================================
@@ -309,7 +309,7 @@ expression:
     default:
       color: '#FFFFFF'
       font_family: 'Arial'
-      font_size: 16              # Reduced by 5 from 22 (main dialogue subtitle)
+      font_size: 14
       font_weight: 'normal'
       background_color: '#000000'
       background_opacity: 0.5

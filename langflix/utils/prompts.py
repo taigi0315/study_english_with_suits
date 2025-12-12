@@ -40,6 +40,9 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     lang_config = LanguageConfig.get_config(language_code)
     target_language = lang_config['prompt_language']
     
+    # DEBUG: Log the language being used
+    logger.info(f"🌐 PROMPT LANGUAGE: language_code='{language_code}', target_language='{target_language}'")
+    
     # Get expression limits from configuration
     min_expressions = settings.get_min_expressions_per_chunk()
     max_expressions = settings.get_max_expressions_per_chunk()

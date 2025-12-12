@@ -40,10 +40,10 @@ class LanguageConfig:
         },
         'es': {
             'name': 'Spanish',
-            # Use custom project font for Spanish (in assets/fonts/es/)
-            'font_path': 'assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf',
+            # Use system fonts that fully support Spanish special characters (ñ, é, ó, etc.)
+            # F37 Moon was missing these glyphs
+            'font_path': '/System/Library/Fonts/HelveticaNeue.ttc',
             'font_fallback': [
-                '/System/Library/Fonts/HelveticaNeue.ttc',
                 '/System/Library/Fonts/Arial.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
                 '/System/Library/Fonts/Times.ttc',

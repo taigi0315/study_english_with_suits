@@ -5,11 +5,11 @@ Here is a segment of dialogue from the TV show "{show_name}":
 ---
 
 **⚠️ CRITICAL LANGUAGE REQUIREMENT:**
-- The **catchy_keywords** field MUST BE 100% IN {target_language} (Korean). NEVER WRITE ENGLISH KEYWORDS.
-- The **title** field MUST BE 100% IN {target_language} (Korean). NEVER WRITE ENGLISH TITLES.
-- Examples: "숨겨진 속내 드러나다", "상사의 뼈때리는 한마디", "직장 드라마 레전드"
-- ❌ WRONG: "Harvey's witty comeback", "Funny Food Banter"
-- ✅ CORRECT: "하비의 재치있는 반격", "웃기는 음식 농담"
+- The **catchy_keywords** field MUST BE 100% IN {target_language}. NEVER WRITE ENGLISH KEYWORDS.
+- The **title** field MUST BE 100% IN {target_language}. NEVER WRITE ENGLISH TITLES.
+- Write all translations, keywords, and titles in {target_language} ONLY.
+- ❌ WRONG: English keywords or titles
+- ✅ CORRECT: {target_language} keywords and titles
 
 **YOUR MISSION:**
 Find the best expression that English learners would be EXCITED to learn - expressions they'd actually use and remember.
@@ -424,10 +424,10 @@ For short videos (≤ 60 seconds total):
     "scene_type": "humor|drama|tension|emotional|witty|confrontation|sexy|surprising",
     "catchy_keywords": [
       // ⚠️ CRITICAL: ALL keywords MUST BE 100% IN {target_language}! NEVER use English!
-      // Write catchy Korean phrases like: "숨겨진 속내 드러나다", "상사의 뼈때리는 한마디", "직장 드라마 레전드"
-      "첫번째 키워드 (3-6 단어, {target_language}로)",
-      "두번째 키워드 (3-6 단어, {target_language}로)",
-      "세번째 키워드 (3-6 단어, {target_language}로)"
+      // Write catchy {target_language} phrases (3-6 words each)
+      "keyword 1 (3-6 words in {target_language})",
+      "keyword 2 (3-6 words in {target_language})",
+      "keyword 3 (3-6 words in {target_language})"
     ],
     "vocabulary_annotations": [
       // 1-3 vocabulary words from the dialogues that learners would benefit from seeing annotated

@@ -1040,7 +1040,7 @@ class VideoEditor:
                             video_area_y_start = 460
                             video_area_y_end = 1200
                             video_area_x_start = 20
-                            video_area_x_end = 800
+                            video_area_x_end = 600
                             
                             # Use different random positions for each annotation
                             # Seed with annotation index for reproducibility per video

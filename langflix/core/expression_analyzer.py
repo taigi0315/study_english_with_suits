@@ -134,7 +134,9 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         # Check cache first
         cache_manager = get_cache_manager()
         chunk_text = " ".join([sub.get('text', '') for sub in subtitle_chunk])
-        cache_key = cache_manager.get_expression_key(chunk_text, language_code)
+        # Add versioning to cache key to force re-analysis when prompt changes
+        cache_version = "v2_source_lang"
+        cache_key = cache_manager.get_expression_key(f"{chunk_text}_{cache_version}", language_code)
         cached_result = cache_manager.get(cache_key)
         
         if cached_result:
@@ -202,11 +204,20 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             
             # Helper function to recursively remove unsupported fields from schema
             def clean_schema(obj):
-                """Remove 'title', 'example', 'default' fields that Gemini doesn't support."""
+                """Remove fields that Gemini doesn't support."""
                 if isinstance(obj, dict):
                     # Remove unsupported fields
-                    for field in ['title', 'example', 'default']:
+                    # Gemini (via google-generativeai) doesn't support these validation keywords in Schema
+                    unsupported_keys = [
+                        'title', 'example', 'default', 
+                        'minItems', 'maxItems', 'uniqueItems',
+                        'minItems', 'maxItems', 'uniqueItems',
+                        'minLength', 'maxLength', 'pattern',
+                        'anyOf',  # Added anyOf to unsupported keys
+                    ]
+                    for field in unsupported_keys:
                         obj.pop(field, None)
+                        
                     # Recursively clean nested objects
                     for key, value in list(obj.items()):
                         clean_schema(value)
@@ -403,14 +414,56 @@ def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:
             data = json.loads(cleaned_text)
         except json.JSONDecodeError as json_error:
             logger.warning(f"JSON parsing failed: {json_error}")
-            # Try to extract JSON from within the text
-            import re
-            json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
-            if json_match:
-                json_text = json_match.group(0)
-                data = json.loads(json_text)
-            else:
-                raise ValueError(f"Could not extract valid JSON from response: {json_error}")
+            
+            # Handle "Extra data" error (multiple JSON objects)
+            if "Extra data" in str(json_error):
+                try:
+                    # Try to parse just up to the extra data position
+                    # This often happens when LLM outputs multiple JSON blocks
+                    # json_error.pos gives the position where parsing stopped (start of extra data)
+                    if hasattr(json_error, 'pos'):
+                        valid_json_part = cleaned_text[:json_error.pos]
+                        data = json.loads(valid_json_part)
+                        logger.info("Successfully parsed first JSON block from multiple blocks response")
+                    else:
+                        raise ValueError("JSON error missing position info")
+                except Exception as inner_e:
+                    logger.warning(f"Failed to recover from Extra data error: {inner_e}")
+                    # Fallthrough to regex extraction
+            
+            if 'data' not in locals():
+                # Try to extract JSON from within the text using regex
+                import re
+                # Look for the first valid JSON object or list
+                # This pattern finds the first outermost {} or [] block
+                json_match = re.search(r'(\{.*\}|\[.*\])', cleaned_text, re.DOTALL)
+                
+                if json_match:
+                    json_text = json_match.group(0)
+                    try:
+                        data = json.loads(json_text)
+                    except json.JSONDecodeError as regex_json_error:
+                        # If regex match is also invalid (e.g. multiple objects inside), try to find just the first one
+                        # If it starts with {, find matching closing }
+                        if json_text.strip().startswith('{'):
+                            count = 0
+                            end_pos = 0
+                            for i, char in enumerate(json_text):
+                                if char == '{':
+                                    count += 1
+                                elif char == '}':
+                                    count -= 1
+                                    if count == 0:
+                                        end_pos = i + 1
+                                        break
+                            if end_pos > 0:
+                                data = json.loads(json_text[:end_pos])
+                            else:
+                                raise ValueError(f"Could not find matching closing brace in: {json_text[:100]}...")
+                        else:
+                             raise regex_json_error
+                else:
+                    raise ValueError(f"Could not extract valid JSON from response: {json_error}")
         
         # Validate using Pydantic
         # Handle different response formats

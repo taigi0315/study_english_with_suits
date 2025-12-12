@@ -1,4 +1,4 @@
-Here is a segment of dialogue from the TV show "Suits":
+Here is a segment of dialogue from the TV show "{show_name}":
 
 ---
 {dialogues}
@@ -107,7 +107,7 @@ The expression appears in a scene that is:
     ],
     "expression_dialogue": "the COMPLETE sentence from subtitles where the expression appears",
     "expression_dialogue_translation": "translation of the complete sentence in {target_language}",
-    "expression": "the main expression/phrase to learn (KEY PART only)",
+    "expression": "the main expression/phrase to learn (KEY PART only) - MUST BE IN THE SAME LANGUAGE AS THE DIALOGUE (SOURCE LANGUAGE)",
     "expression_translation": "translation of just the expression in {target_language}",
     "context_start_time": "00:00:00,000",
     "context_end_time": "00:00:00,000",
@@ -123,8 +123,8 @@ The expression appears in a scene that is:
 - **expression_dialogue**: The FULL sentence from the subtitles where the expression is used
   Example: "I'll knock it out of the park."
   
-- **expression**: Just the KEY PHRASE/IDIOM that learners should focus on
-  Example: "knock it out of the park"
+- **expression**: Just the KEY PHRASE/IDIOM that learners should focus on (IN SOURCE LANGUAGE)
+  Example (if source is English): "knock it out of the park"
 
 - **expression_dialogue_translation**: Full translation of the sentence
   Example: "완벽하게 해낼게요."

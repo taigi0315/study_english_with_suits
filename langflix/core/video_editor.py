@@ -924,14 +924,11 @@ class VideoEditor:
                 logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
-            # Expression + translation displayed throughout video duration (positioning from config)
-            expression_text = expression.expression
-            expression_translation = expression.expression_translation
-            
-            # Get line breaking config and apply to long text
-            line_breaking = settings.get_educational_slide_line_breaking()
-            expr_max_words = line_breaking.get('expression_dialogue_max_words', 8)
-            trans_max_words = line_breaking.get('expression_translation_max_words', 6)
+            # Add expression text and translation combined at bottom (one line)
+            # Format: "Korean Expression // English Translation"
+            # Format expression text with newline separator for bottom overlay
+            # Use newline to split expression and translation as requested
+            combined_text = f"{expression.expression}\n{expression.expression_translation}"
             
             # Helper function to add line breaks
             def add_line_breaks_for_padding(text: str, max_words: int) -> str:
@@ -946,36 +943,41 @@ class VideoEditor:
                     lines.append(' '.join(words[i:i+max_words]))
                 return '\n'.join(lines)
             
-            # Apply line breaks to long text
-            expression_with_breaks = add_line_breaks_for_padding(expression_text, expr_max_words)
-            translation_with_breaks = add_line_breaks_for_padding(expression_translation, trans_max_words)
-
-            escaped_expression = escape_drawtext_string(expression_with_breaks)
-            escaped_translation = escape_drawtext_string(translation_with_breaks)
+            # Apply wrapping to individual parts if needed, though usually short for bottom overlay
+            # For bottom overlay, we want distinct lines for expression (Language A) and translation (Language B)
+            
+            escaped_text = escape_drawtext_string(combined_text)
 
             # Add expression text at bottom (configurable styling)
+            # Both lines use the same font and styling
             drawtext_args_1 = {
-                'text': escaped_expression,
+                'text': escaped_text,
                 'fontsize': settings.get_expression_font_size(),
                 'fontcolor': settings.get_expression_text_color(),
                 'x': '(w-text_w)/2',  # Center horizontally
                 'y': settings.get_expression_y_position(),
                 'borderw': settings.get_expression_border_width(),
-                'bordercolor': settings.get_expression_border_color()
+                'bordercolor': settings.get_expression_border_color(),
+                'line_spacing': 10  # Add some spacing between lines
             }
 
             # Get custom font for expression text (prioritize config, then language-specific)
+            # Use Maplestory Bold or configured educational font which supports multiple scripts
             try:
-                custom_font = settings.get_expression_font_path()
+                # Use educational slide font as primary choice for mixed scripts
+                custom_font = settings.get_educational_slide_font_path()
                 if custom_font and os.path.exists(custom_font):
                     drawtext_args_1['fontfile'] = custom_font
-                    logger.debug(f"Using custom font for expression text: {custom_font}")
+                    logger.debug(f"Using educational font for bottom expression: {custom_font}")
                 else:
-                    from langflix.config.font_utils import get_font_file_for_language
-                    font_path = get_font_file_for_language(self.language_code)
-                    if font_path and os.path.exists(font_path):
-                        drawtext_args_1['fontfile'] = font_path
-                        logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
+                    custom_font = settings.get_expression_font_path()
+                    if custom_font and os.path.exists(custom_font):
+                        drawtext_args_1['fontfile'] = custom_font
+                    else:
+                        from langflix.config.font_utils import get_font_file_for_language
+                        font_path = get_font_file_for_language(self.language_code)
+                        if font_path and os.path.exists(font_path):
+                            drawtext_args_1['fontfile'] = font_path
             except Exception as e:
                 logger.warning(f"Error getting font for expression text: {e}")
                 # Fallback to old method
@@ -985,37 +987,6 @@ class VideoEditor:
                         drawtext_args_1['fontfile'] = font_path
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_1)
-
-            # Add expression translation (line 2) below expression text
-            drawtext_args_2 = {
-                'text': escaped_translation,
-                'fontsize': settings.get_translation_font_size(),
-                'fontcolor': settings.get_translation_text_color(),
-                'x': '(w-text_w)/2',  # Center horizontally
-                'y': settings.get_translation_y_position(),
-                'borderw': settings.get_translation_border_width(),
-                'bordercolor': settings.get_translation_border_color()
-            }
-
-            # Get custom font for translation text (prioritize config, then language-specific)
-            try:
-                custom_font = settings.get_translation_font_path()
-                if custom_font and os.path.exists(custom_font):
-                    drawtext_args_2['fontfile'] = custom_font
-                else:
-                    from langflix.config.font_utils import get_font_file_for_language
-                    font_path = get_font_file_for_language(self.language_code)
-                    if font_path and os.path.exists(font_path):
-                        drawtext_args_2['fontfile'] = font_path
-            except Exception as e:
-                logger.warning(f"Error getting font for translation text: {e}")
-                # Fallback to old method
-                if font_file:
-                    font_path = font_file.replace('fontfile=', '').replace(':', '')
-                    if font_path and os.path.exists(font_path):
-                        drawtext_args_2['fontfile'] = font_path
-
-            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
             
             # Add dynamic vocabulary annotations (appear when the word is spoken)
             # These overlays show vocabulary words with translations synchronized to dialogue timing
@@ -1981,24 +1952,18 @@ class VideoEditor:
                 drawtext_filters = []
                 
                 # Get font option - use language-specific font for better character support
+                # Get font option - prioritize educational slide font setting (Maplestory Bold supports both KR/EN)
                 try:
-                    # For non-Asian languages (Spanish, French, English), use language-specific fonts
-                    # The default educational slide font (1HoonGrimdonghwa) is Korean and doesn't support
-                    # Latin accented characters like ñ, é, ó, etc.
-                    non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
-                    
-                    if self.language_code and self.language_code.lower() in non_asian_languages:
-                        # Use language-specific font that supports Latin characters
-                        font_file_option = self._get_font_option()
-                        logger.debug(f"Using language-specific font for {self.language_code} educational slide")
+                    # Use configured slide font which should now default to Maplestory Bold
+                    # This font supports both Korean (source) and English (target) characters
+                    slide_font_path = settings.get_educational_slide_font_path()
+                    if slide_font_path and os.path.exists(slide_font_path):
+                        font_file_option = f"fontfile={slide_font_path}:"
+                        logger.debug(f"Using configured educational slide font: {slide_font_path}")
                     else:
-                        # For Asian languages (Korean, Japanese, Chinese), use configured slide font
-                        slide_font_path = settings.get_educational_slide_font_path()
-                        if slide_font_path and os.path.exists(slide_font_path):
-                            font_file_option = f"fontfile={slide_font_path}:"
-                        else:
-                            # Fallback to language-specific font
-                            font_file_option = self._get_font_option()
+                        # Fallback to language-specific font if configured font not found
+                        font_file_option = self._get_font_option()
+                        logger.warning(f"Educational slide font not found, falling back to: {font_file_option}")
                     
                     if not isinstance(font_file_option, str):
                         font_file_option = str(font_file_option) if font_file_option else ""

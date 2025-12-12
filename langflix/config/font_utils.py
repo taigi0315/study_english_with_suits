@@ -71,6 +71,17 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
     # Import here to avoid circular imports
     try:
         from ..core.language_config import LanguageConfig
+        from langflix import settings
+        
+        # Priority 0: Check if educational slide font is configured and available (Maplestory Bold)
+        # This is the "safe" font that supports both Source (Korean) and Target (English)
+        try:
+            edu_font = settings.get_educational_slide_font_path()
+            if edu_font and os.path.exists(edu_font):
+                logger.debug(f"Using configured educational font as priority: {edu_font}")
+                return edu_font
+        except Exception as e:
+            logger.warning(f"Error checking educational font: {e}")
         
         # If language code is provided, try to get language-specific font
         if language_code:

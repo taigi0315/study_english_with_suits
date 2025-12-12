@@ -777,7 +777,8 @@ def get_educational_slide_config() -> Dict[str, Any]:
 
 def get_educational_slide_font_path() -> Optional[str]:
     """Get font path for educational slide (relative to assets/fonts)"""
-    font_rel = get_educational_slide_config().get('font', '1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf')
+    # Use Maplestory Bold by default as it supports both Korean and English well
+    font_rel = get_educational_slide_config().get('font', 'Maplestory Bold/Maplestory Bold.ttf')
     from pathlib import Path
     import os
     assets_fonts_dir = Path(__file__).parent.parent / "assets" / "fonts"

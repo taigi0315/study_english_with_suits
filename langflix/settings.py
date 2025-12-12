@@ -794,6 +794,19 @@ def get_educational_slide_line_breaking() -> Dict[str, int]:
     })
 
 
+def show_expression_highlight() -> bool:
+    """Check if expression highlight (yellow) should be shown on educational slide"""
+    config = get_educational_slide_config()
+    return config.get('show_expression_highlight', True)
+
+
+def show_translation_highlight() -> bool:
+    """Check if translation highlight (yellow) should be shown on educational slide"""
+    config = get_educational_slide_config()
+    return config.get('show_translation_highlight', True)
+
+
+
 # ============================================================================
 # Storage Configuration Accessors
 # ============================================================================

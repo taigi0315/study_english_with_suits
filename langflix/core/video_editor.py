@@ -490,11 +490,8 @@ class VideoEditor:
                     
                     # Load logo image - use simple input without loop/framerate for PNG
                     logo_input = ffmpeg.input(str(logo_path))
-                    # Scale logo to 25% of original size (height: 234 * 0.25 = 58.5 ≈ 59px)
-                    logo_video = logo_input['v'].filter('scale', -1, 100)
-                    # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
+                    logo_video = logo_input['v'].filter('scale', -1, 250)  # Logo height doubled
                     logo_video = logo_video.filter('format', 'rgba')
-                    # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)
                     logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
                     
                     # Get video dimensions for positioning
@@ -908,9 +905,31 @@ class VideoEditor:
             # Expression + translation displayed throughout video duration (positioning from config)
             expression_text = expression.expression
             expression_translation = expression.expression_translation
+            
+            # Get line breaking config and apply to long text
+            line_breaking = settings.get_educational_slide_line_breaking()
+            expr_max_words = line_breaking.get('expression_dialogue_max_words', 8)
+            trans_max_words = line_breaking.get('expression_translation_max_words', 6)
+            
+            # Helper function to add line breaks
+            def add_line_breaks_for_padding(text: str, max_words: int) -> str:
+                """Add newlines after every max_words words for FFmpeg drawtext"""
+                if not text:
+                    return text
+                words = text.split()
+                if len(words) <= max_words:
+                    return text
+                lines = []
+                for i in range(0, len(words), max_words):
+                    lines.append(' '.join(words[i:i+max_words]))
+                return '\n'.join(lines)
+            
+            # Apply line breaks to long text
+            expression_with_breaks = add_line_breaks_for_padding(expression_text, expr_max_words)
+            translation_with_breaks = add_line_breaks_for_padding(expression_translation, trans_max_words)
 
-            escaped_expression = escape_drawtext_string(expression_text)
-            escaped_translation = escape_drawtext_string(expression_translation)
+            escaped_expression = escape_drawtext_string(expression_with_breaks)
+            escaped_translation = escape_drawtext_string(translation_with_breaks)
 
             # Add expression text at bottom (configurable styling)
             drawtext_args_1 = {
@@ -1909,7 +1928,8 @@ class VideoEditor:
                     )
                 
                 # 2. Expression (key phrase) - highlighted in yellow, below dialogue
-                if expression_text and isinstance(expression_text, str):
+                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                if expression_text and isinstance(expression_text, str) and settings.show_expression_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
@@ -1929,7 +1949,8 @@ class VideoEditor:
                     )
                 
                 # 4. Expression translation (key phrase) - highlighted in yellow
-                if translation_text and isinstance(translation_text, str):
+                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                if translation_text and isinstance(translation_text, str) and settings.show_translation_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"

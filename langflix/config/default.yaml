@@ -300,22 +300,26 @@ short_video:
       # Font for educational slide (relative to assets/fonts)
       font: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
       
+      # Show/hide elements (set to false to disable)
+      show_expression_highlight: false      # Yellow expression line (disabled - duplicate)
+      show_translation_highlight: false     # Yellow translation line (disabled - duplicate)
+      
       # Font sizes for slide elements
       font_sizes:
-        expression_dialogue: 36      # Full dialogue sentence
-        expression: 48               # Key expression (highlighted)
-        expression_dialogue_trans: 32  # Dialogue translation
-        expression_translation: 44   # Expression translation (highlighted)
-        similar: 28                  # Similar expressions
+        expression_dialogue: 42      # Full dialogue sentence (increased for readability)
+        expression: 48               # Key expression (yellow) - not shown if show_expression_highlight=false
+        expression_dialogue_trans: 38  # Dialogue translation (increased)
+        expression_translation: 44   # Expression translation (yellow) - not shown if show_translation_highlight=false
+        similar: 38                  # Similar expressions (increased to match)
 
       # Positioning (Y offsets from center)
       positions:
-        expression_dialogue_y: -220  # Distance above center
+        expression_dialogue_y: -180  # Distance above center (moved down)
         expression_y: -150           # Expression (highlighted)
-        expression_dialogue_trans_y: 0  # At center
+        expression_dialogue_trans_y: 40  # At center (moved down slightly)
         expression_translation_y: 70  # Below center
-        similar_base_offset: 250     # Distance from bottom (higher = more visible)
-        similar_line_spacing: 36     # Space between similar expressions
+        similar_base_offset: 180     # Distance from bottom (lower = moved down from 250)
+        similar_line_spacing: 42     # Space between similar expressions
       
       # Line breaking for long text (max words before adding newline)
       line_breaking:

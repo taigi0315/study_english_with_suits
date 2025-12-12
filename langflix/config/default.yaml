@@ -208,16 +208,16 @@ short_video:
     target_height: 1920
 
     # Structured video height in middle section
-    long_form_video_height: 960  # Half of target height
+    long_form_video_height: 1040  # Expanded from 960 (1920 - 440*2 = 1040)
 
-    # Padding areas
-    top_padding_height: 480      # Top black padding (0-480px)
-    bottom_padding_height: 480   # Bottom black padding (1440-1920px)
+    # Padding areas (reduced from 480 to 440)
+    top_padding_height: 440      # Top black padding (0-440px)
+    bottom_padding_height: 440   # Bottom black padding (1480-1920px)
 
     # Catchy keywords (top padding area)
     keywords:
       font_size: 50
-      y_position: 250            # Starting Y position for first line
+      y_position: 220            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -227,7 +227,7 @@ short_video:
     # Expression text (bottom padding area)
     expression:
       font_size: 55              # Main expression font size (increased by 10 from 45)
-      y_position: 1500           # Y position for expression line
+      y_position: 1530           # Adjusted for new layout (video ends at 1480)
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
@@ -235,7 +235,7 @@ short_video:
     # Expression translation (bottom padding area)
     translation:
       font_size: 55              # Translation font size (slightly smaller)
-      y_position: 1650           # Y position for translation line
+      y_position: 1680           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
       text_color: 'yellow'
       border_width: 2

@@ -91,6 +91,33 @@ def get_transitions_config() -> Dict[str, Any]:
     return _config_loader.get_section('transitions') or {}
 
 
+def get_ending_credit_config() -> Dict[str, Any]:
+    """Get ending credit configuration"""
+    return get_transitions_config().get('ending_credit', {})
+
+
+def is_ending_credit_enabled() -> bool:
+    """Check if ending credit is enabled"""
+    return get_ending_credit_config().get('enabled', False)
+
+
+def get_ending_credit_duration() -> float:
+    """Get ending credit duration in seconds (default: 3.0)"""
+    return get_ending_credit_config().get('duration', 3.0)
+
+
+def get_ending_credit_video_path() -> Optional[str]:
+    """Get ending credit video path (relative to project root)"""
+    from pathlib import Path
+    video_rel = get_ending_credit_config().get('video_path', 'assets/ending_credit_mp4.mp4')
+    # Convert relative path to absolute
+    project_root = Path(__file__).parent.parent
+    video_path = project_root / video_rel
+    if video_path.exists():
+        return str(video_path)
+    return None
+
+
 def get_language_levels() -> Dict[str, Any]:
     """Get language proficiency levels"""
     return _config_loader.get_section('language_levels') or {}

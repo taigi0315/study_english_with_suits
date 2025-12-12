@@ -1225,6 +1225,63 @@ class VideoEditor:
                 import shutil
                 shutil.copy(str(temp_with_expression_path), str(output_path))
             
+            # Append ending credit if enabled
+            if settings.is_ending_credit_enabled():
+                ending_credit_path = settings.get_ending_credit_video_path()
+                if ending_credit_path and os.path.exists(ending_credit_path):
+                    try:
+                        ending_duration = settings.get_ending_credit_duration()
+                        logger.info(f"Appending ending credit ({ending_duration}s) from: {ending_credit_path}")
+                        
+                        # Create temp output with ending credit
+                        temp_with_credit = Path(output_path).parent / f"temp_with_credit_{Path(output_path).name}"
+                        
+                        # Get main video duration
+                        from langflix.media.ffmpeg_utils import get_video_params
+                        main_vp = get_video_params(str(output_path))
+                        main_duration = main_vp.duration or 0
+                        
+                        # Prepare inputs
+                        main_input = ffmpeg.input(str(output_path))
+                        credit_input = ffmpeg.input(ending_credit_path, t=ending_duration)
+                        
+                        # Scale ending credit to match main video dimensions (1080x1920 for 9:16)
+                        credit_scaled = credit_input['v'].filter('scale', 1080, 1920).filter('setsar', 1)
+                        
+                        # Ensure both have audio (add silent audio to credit if needed)
+                        credit_audio = credit_input['a']
+                        
+                        # Concatenate videos
+                        video_args = self._get_video_output_args(source_video_path=str(output_path))
+                        (
+                            ffmpeg.concat(
+                                main_input['v'], main_input['a'],
+                                credit_scaled, credit_audio,
+                                v=1, a=1
+                            )
+                            .output(
+                                str(temp_with_credit),
+                                vcodec=video_args.get('vcodec', 'libx264'),
+                                acodec=video_args.get('acodec', 'aac'),
+                                ac=2,
+                                ar=48000,
+                                preset=video_args.get('preset', 'medium'),
+                                crf=video_args.get('crf', 18)
+                            )
+                            .overwrite_output()
+                            .run(capture_stdout=True, capture_stderr=True)
+                        )
+                        
+                        # Replace original with version that has credit
+                        import shutil
+                        shutil.move(str(temp_with_credit), str(output_path))
+                        logger.info(f"✅ Ending credit appended successfully")
+                    except Exception as e:
+                        logger.warning(f"Failed to append ending credit: {e}")
+                        # Continue without ending credit
+                else:
+                    logger.warning(f"Ending credit enabled but video not found: {ending_credit_path}")
+            
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
             

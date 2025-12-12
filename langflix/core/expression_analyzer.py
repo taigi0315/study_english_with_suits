@@ -173,7 +173,11 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 logger.warning("Cleared invalid cache, will re-analyze")
         
         # Generate prompt
+        logger.info(f"🔍 ANALYZER: Generating prompt with language_code='{language_code}'")
         prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
+        
+        # DEBUG: Log first 500 chars of prompt to verify target_language substitution
+        logger.info(f"📝 PROMPT START (first 300 chars): {prompt[:300]}...")
         
         logger.info("Sending prompt to Gemini API with structured output...")
         logger.info(f"Prompt length: {len(prompt)} characters")

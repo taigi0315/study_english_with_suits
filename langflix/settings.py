@@ -667,6 +667,47 @@ def get_vocabulary_font_path() -> Optional[str]:
     return get_custom_font_path('vocabulary')
 
 
+def get_vocabulary_annotations_config() -> Dict[str, Any]:
+    """Get vocabulary annotations display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('vocabulary_annotations', {})
+
+
+def get_vocabulary_font_size() -> int:
+    """Get vocabulary annotation font size (default: 28)"""
+    return get_vocabulary_annotations_config().get('font_size', 28)
+
+
+def get_vocabulary_text_color() -> str:
+    """Get vocabulary annotation text color (default: 'yellow')"""
+    return get_vocabulary_annotations_config().get('text_color', 'yellow')
+
+
+def get_vocabulary_border_width() -> int:
+    """Get vocabulary annotation border width (default: 2)"""
+    return get_vocabulary_annotations_config().get('border_width', 2)
+
+
+def get_vocabulary_border_color() -> str:
+    """Get vocabulary annotation border color (default: 'black')"""
+    return get_vocabulary_annotations_config().get('border_color', 'black')
+
+
+def get_vocabulary_x_position() -> int:
+    """Get vocabulary annotation X position (default: 20)"""
+    return get_vocabulary_annotations_config().get('x_position', 20)
+
+
+def get_vocabulary_y_offset() -> int:
+    """Get vocabulary annotation Y offset from video area top (default: 20)"""
+    return get_vocabulary_annotations_config().get('y_offset', 20)
+
+
+def get_vocabulary_duration() -> float:
+    """Get vocabulary annotation display duration in seconds (default: 4.0)"""
+    return get_vocabulary_annotations_config().get('duration', 4.0)
+
+
 # ============================================================================
 # Storage Configuration Accessors
 # ============================================================================

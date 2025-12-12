@@ -269,6 +269,16 @@ short_video:
       # Vocabulary annotations (dynamic word overlays)
       vocabulary: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
 
+    # Vocabulary annotations (dynamic overlays that appear when words are spoken)
+    vocabulary_annotations:
+      font_size: 28                # Font size for vocabulary text
+      text_color: 'yellow'         # Text color
+      border_width: 2              # Border width
+      border_color: 'black'        # Border color
+      x_position: 20               # X position (px from left)
+      y_offset: 20                 # Y offset from top of video area
+      duration: 4.0                # How long annotation appears (seconds)
+
 # ============================================================================
 # Expression-Based Learning Configuration
 # ============================================================================

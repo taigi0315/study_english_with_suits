@@ -1006,24 +1006,25 @@ class VideoEditor:
                             # Calculate when this annotation should appear (relative to video start)
                             # Estimate: dialogue_index * time_per_dialogue
                             annot_start = max(0, dialogue_index * time_per_dialogue)
-                            annot_end = annot_start + 4.0  # Show annotation for 4 seconds
+                            annot_duration = settings.get_vocabulary_duration()
+                            annot_end = annot_start + annot_duration
                             
                             # Create annotation text: "word : translation"
                             annot_text = f"{word} : {translation}"
                             escaped_annot = escape_drawtext_string(annot_text)
                             
-                            # Position: left side of video area, top-left of the main video content
-                            # Y position: inside the video area (y_offset + small margin)
-                            annot_y = y_offset + 20  # 20px below top of video area
+                            # Position: configurable from settings
+                            vocab_y_offset = settings.get_vocabulary_y_offset()
+                            annot_y = y_offset + vocab_y_offset
                             
                             vocab_drawtext_args = {
                                 'text': escaped_annot,
-                                'fontsize': 28,
-                                'fontcolor': 'yellow',
-                                'x': 20,  # Left side margin
+                                'fontsize': settings.get_vocabulary_font_size(),
+                                'fontcolor': settings.get_vocabulary_text_color(),
+                                'x': settings.get_vocabulary_x_position(),
                                 'y': annot_y,
-                                'borderw': 2,
-                                'bordercolor': 'black',
+                                'borderw': settings.get_vocabulary_border_width(),
+                                'bordercolor': settings.get_vocabulary_border_color(),
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
                             }
                             

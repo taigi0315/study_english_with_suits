@@ -91,6 +91,33 @@ def get_transitions_config() -> Dict[str, Any]:
     return _config_loader.get_section('transitions') or {}
 
 
+def get_ending_credit_config() -> Dict[str, Any]:
+    """Get ending credit configuration"""
+    return get_transitions_config().get('ending_credit', {})
+
+
+def is_ending_credit_enabled() -> bool:
+    """Check if ending credit is enabled"""
+    return get_ending_credit_config().get('enabled', False)
+
+
+def get_ending_credit_duration() -> float:
+    """Get ending credit duration in seconds (default: 3.0)"""
+    return get_ending_credit_config().get('duration', 3.0)
+
+
+def get_ending_credit_video_path() -> Optional[str]:
+    """Get ending credit video path (relative to project root)"""
+    from pathlib import Path
+    video_rel = get_ending_credit_config().get('video_path', 'assets/ending_credit_mp4.mp4')
+    # Convert relative path to absolute
+    project_root = Path(__file__).parent.parent
+    video_path = project_root / video_rel
+    if video_path.exists():
+        return str(video_path)
+    return None
+
+
 def get_language_levels() -> Dict[str, Any]:
     """Get language proficiency levels"""
     return _config_loader.get_section('language_levels') or {}
@@ -309,14 +336,44 @@ def get_font_file(language_code: Optional[str] = None) -> str:
 # Processing Settings
 # ============================================================================
 
+def is_test_mode_enabled() -> bool:
+    """Check if test mode is enabled for development"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('enabled', False)
+
+
+def get_test_mode_max_chunks() -> int:
+    """Get max chunks to process in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_chunks', 1)
+
+
+def get_test_mode_max_expressions_per_chunk() -> int:
+    """Get max expressions per chunk in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_expressions_per_chunk', 1)
+
+
+def get_test_mode_max_total_expressions() -> int:
+    """Get max total expressions in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_total_expressions', 1)
+
+
 def get_min_expressions_per_chunk() -> int:
     """Get minimum expressions per chunk"""
     return get_processing_config().get('min_expressions_per_chunk', 1)
 
 
 def get_max_expressions_per_chunk() -> int:
-    """Get maximum expressions per chunk"""
-    return get_processing_config().get('max_expressions_per_chunk', 3)
+    """Get maximum expressions per chunk.
+    
+    In test mode, returns test_mode limit (default: 1).
+    In normal mode, returns configured limit (default: 5).
+    """
+    if is_test_mode_enabled():
+        return get_test_mode_max_expressions_per_chunk()
+    return get_processing_config().get('max_expressions_per_chunk', 5)
 
 
 # ============================================================================
@@ -602,6 +659,179 @@ def get_dialogue_subtitle_outline_color() -> str:
 def get_dialogue_subtitle_background_opacity() -> float:
     """Get dialogue subtitle background opacity (default: 0.5 for 50%)"""
     return get_dialogue_subtitle_config().get('background_opacity', 0.5)
+
+
+def get_layout_fonts_config() -> Dict[str, Any]:
+    """Get fonts configuration for short video layout"""
+    layout = get_short_video_layout_config()
+    return layout.get('fonts', {})
+
+
+def get_custom_font_path(font_type: str) -> Optional[str]:
+    """
+    Get custom font path for a specific text type.
+    
+    Args:
+        font_type: Type of font ('keywords', 'expression', 'translation', 'title', 'vocabulary')
+        
+    Returns:
+        Absolute path to font file, or None if not configured/not found
+    """
+    import os
+    from pathlib import Path
+    
+    fonts_config = get_layout_fonts_config()
+    relative_path = fonts_config.get(font_type)
+    
+    if not relative_path:
+        return None
+    
+    # Build absolute path from assets/fonts directory
+    # Get project root (assuming settings.py is in langflix/)
+    project_root = Path(__file__).parent.parent
+    font_path = project_root / "assets" / "fonts" / relative_path
+    
+    if font_path.exists():
+        return str(font_path)
+    
+    # Log warning if configured but not found
+    logger.warning(f"Custom font not found for {font_type}: {font_path}")
+    return None
+
+
+def get_keywords_font_path() -> Optional[str]:
+    """Get font path for catchy keywords (hashtags at top)"""
+    return get_custom_font_path('keywords')
+
+
+def get_expression_font_path() -> Optional[str]:
+    """Get font path for expression text (bottom)"""
+    return get_custom_font_path('expression')
+
+
+def get_translation_font_path() -> Optional[str]:
+    """Get font path for translation text (bottom)"""
+    return get_custom_font_path('translation')
+
+
+def get_title_font_path() -> Optional[str]:
+    """Get font path for title overlay"""
+    return get_custom_font_path('title')
+
+
+def get_vocabulary_font_path() -> Optional[str]:
+    """Get font path for vocabulary annotations"""
+    return get_custom_font_path('vocabulary')
+
+
+def get_vocabulary_annotations_config() -> Dict[str, Any]:
+    """Get vocabulary annotations display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('vocabulary_annotations', {})
+
+
+def get_vocabulary_font_size() -> int:
+    """Get vocabulary annotation font size (default: 28)"""
+    return get_vocabulary_annotations_config().get('font_size', 28)
+
+
+def get_vocabulary_text_color() -> str:
+    """Get vocabulary annotation text color (default: 'yellow')"""
+    return get_vocabulary_annotations_config().get('text_color', 'yellow')
+
+
+def get_vocabulary_border_width() -> int:
+    """Get vocabulary annotation border width (default: 2)"""
+    return get_vocabulary_annotations_config().get('border_width', 2)
+
+
+def get_vocabulary_border_color() -> str:
+    """Get vocabulary annotation border color (default: 'black')"""
+    return get_vocabulary_annotations_config().get('border_color', 'black')
+
+
+def get_vocabulary_x_position() -> int:
+    """Get vocabulary annotation X position (default: 20)"""
+    return get_vocabulary_annotations_config().get('x_position', 20)
+
+
+def get_vocabulary_y_offset() -> int:
+    """Get vocabulary annotation Y offset from video area top (default: 20)"""
+    return get_vocabulary_annotations_config().get('y_offset', 20)
+
+
+def get_vocabulary_duration() -> float:
+    """Get vocabulary annotation display duration in seconds (default: 4.0)"""
+    return get_vocabulary_annotations_config().get('duration', 4.0)
+
+
+# ============================================================================
+# Educational Slide Configuration Accessors
+# ============================================================================
+
+def get_educational_slide_config() -> Dict[str, Any]:
+    """Get educational slide display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('educational_slide', {})
+
+
+def get_educational_slide_font_path() -> Optional[str]:
+    """Get font path for educational slide (relative to assets/fonts)"""
+    font_rel = get_educational_slide_config().get('font', '1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf')
+    from pathlib import Path
+    import os
+    assets_fonts_dir = Path(__file__).parent.parent / "assets" / "fonts"
+    font_path = assets_fonts_dir / font_rel
+    if font_path.exists():
+        return str(font_path)
+    return None
+
+
+def get_educational_slide_font_sizes() -> Dict[str, int]:
+    """Get font sizes for educational slide elements"""
+    config = get_educational_slide_config()
+    return config.get('font_sizes', {
+        'expression_dialogue': 36,
+        'expression': 48,
+        'expression_dialogue_trans': 32,
+        'expression_translation': 44,
+        'similar': 28
+    })
+
+
+def get_educational_slide_positions() -> Dict[str, int]:
+    """Get Y positions for educational slide elements"""
+    config = get_educational_slide_config()
+    return config.get('positions', {
+        'expression_dialogue_y': -220,
+        'expression_y': -150,
+        'expression_dialogue_trans_y': 0,
+        'expression_translation_y': 70,
+        'similar_base_offset': 250,
+        'similar_line_spacing': 36
+    })
+
+
+def get_educational_slide_line_breaking() -> Dict[str, int]:
+    """Get line breaking configuration for educational slide"""
+    config = get_educational_slide_config()
+    return config.get('line_breaking', {
+        'expression_dialogue_max_words': 8,
+        'expression_translation_max_words': 6
+    })
+
+
+def show_expression_highlight() -> bool:
+    """Check if expression highlight (yellow) should be shown on educational slide"""
+    config = get_educational_slide_config()
+    return config.get('show_expression_highlight', True)
+
+
+def show_translation_highlight() -> bool:
+    """Check if translation highlight (yellow) should be shown on educational slide"""
+    config = get_educational_slide_config()
+    return config.get('show_translation_highlight', True)
+
 
 
 # ============================================================================

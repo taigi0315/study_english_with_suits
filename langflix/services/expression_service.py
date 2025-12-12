@@ -46,15 +46,20 @@ class ExpressionService:
         """
         import time
         
-        # In test mode, process only the first chunk if chunks exist
-        if test_mode and chunks:
-            chunks_to_process = [chunks[0]]
-            logger.info("🧪 TEST MODE: Processing only first chunk")
+        # Check if test mode is enabled via config (overrides parameter)
+        test_mode_config = settings.is_test_mode_enabled()
+        effective_test_mode = test_mode or test_mode_config
+        
+        # In test mode, limit chunks based on config
+        if effective_test_mode and chunks:
+            max_chunks = settings.get_test_mode_max_chunks()
+            chunks_to_process = chunks[:max_chunks]
+            logger.info(f"🧪 TEST MODE: Processing {len(chunks_to_process)} chunk(s) (config: max_chunks={max_chunks})")
         else:
             chunks_to_process = chunks
 
         parallel_enabled = settings.get_parallel_llm_processing_enabled()
-        should_use_parallel = parallel_enabled and len(chunks_to_process) > 1 and not test_mode
+        should_use_parallel = parallel_enabled and len(chunks_to_process) > 1 and not effective_test_mode
         
         expressions = []
         if should_use_parallel:
@@ -71,13 +76,18 @@ class ExpressionService:
                 max_expressions, 
                 language_level, 
                 save_llm_output, 
-                test_mode, 
+                effective_test_mode, 
                 output_dir,
                 progress_callback
             )
-            
-        # Limit to max_expressions
-        if max_expressions:
+        
+        # In test mode, limit total expressions based on config
+        if effective_test_mode:
+            max_total = settings.get_test_mode_max_total_expressions()
+            if len(expressions) > max_total:
+                logger.info(f"🧪 TEST MODE: Limiting to {max_total} expression(s) (found {len(expressions)})")
+                expressions = expressions[:max_total]
+        elif max_expressions:
             expressions = expressions[:max_expressions]
             
         logger.info(f"Total expressions found: {len(expressions)}")

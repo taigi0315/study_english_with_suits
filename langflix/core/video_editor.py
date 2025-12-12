@@ -490,11 +490,8 @@ class VideoEditor:
                     
                     # Load logo image - use simple input without loop/framerate for PNG
                     logo_input = ffmpeg.input(str(logo_path))
-                    # Scale logo to 25% of original size (height: 234 * 0.25 = 58.5 ≈ 59px)
-                    logo_video = logo_input['v'].filter('scale', -1, 100)
-                    # Apply 50% opacity: convert to rgba format and use geq filter to adjust alpha
+                    logo_video = logo_input['v'].filter('scale', -1, 250)  # Logo height doubled
                     logo_video = logo_video.filter('format', 'rgba')
-                    # Use geq filter to set alpha to 50% (0.5 * 255 = 127.5 ≈ 128)
                     logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
                     
                     # Get video dimensions for positioning
@@ -848,12 +845,16 @@ class VideoEditor:
                             'bordercolor': settings.get_keywords_border_color()
                         }
 
-                        # Add language-specific fontfile if available
+                        # Add custom font for keywords (prioritize config, then language-specific, then fallback)
                         try:
-                            from langflix.config.font_utils import get_font_file_for_language
-                            font_path = get_font_file_for_language(self.language_code)
-                            if font_path and os.path.exists(font_path):
-                                keyword_args['fontfile'] = font_path
+                            custom_font = settings.get_keywords_font_path()
+                            if custom_font and os.path.exists(custom_font):
+                                keyword_args['fontfile'] = custom_font
+                            else:
+                                from langflix.config.font_utils import get_font_file_for_language
+                                font_path = get_font_file_for_language(self.language_code)
+                                if font_path and os.path.exists(font_path):
+                                    keyword_args['fontfile'] = font_path
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method
@@ -904,9 +905,31 @@ class VideoEditor:
             # Expression + translation displayed throughout video duration (positioning from config)
             expression_text = expression.expression
             expression_translation = expression.expression_translation
+            
+            # Get line breaking config and apply to long text
+            line_breaking = settings.get_educational_slide_line_breaking()
+            expr_max_words = line_breaking.get('expression_dialogue_max_words', 8)
+            trans_max_words = line_breaking.get('expression_translation_max_words', 6)
+            
+            # Helper function to add line breaks
+            def add_line_breaks_for_padding(text: str, max_words: int) -> str:
+                """Add newlines after every max_words words for FFmpeg drawtext"""
+                if not text:
+                    return text
+                words = text.split()
+                if len(words) <= max_words:
+                    return text
+                lines = []
+                for i in range(0, len(words), max_words):
+                    lines.append(' '.join(words[i:i+max_words]))
+                return '\n'.join(lines)
+            
+            # Apply line breaks to long text
+            expression_with_breaks = add_line_breaks_for_padding(expression_text, expr_max_words)
+            translation_with_breaks = add_line_breaks_for_padding(expression_translation, trans_max_words)
 
-            escaped_expression = escape_drawtext_string(expression_text)
-            escaped_translation = escape_drawtext_string(expression_translation)
+            escaped_expression = escape_drawtext_string(expression_with_breaks)
+            escaped_translation = escape_drawtext_string(translation_with_breaks)
 
             # Add expression text at bottom (configurable styling)
             drawtext_args_1 = {
@@ -919,13 +942,18 @@ class VideoEditor:
                 'bordercolor': settings.get_expression_border_color()
             }
 
-            # Get language-specific font for drawtext
+            # Get custom font for expression text (prioritize config, then language-specific)
             try:
-                from langflix.config.font_utils import get_font_file_for_language
-                font_path = get_font_file_for_language(self.language_code)
-                if font_path and os.path.exists(font_path):
-                    drawtext_args_1['fontfile'] = font_path
-                    logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
+                custom_font = settings.get_expression_font_path()
+                if custom_font and os.path.exists(custom_font):
+                    drawtext_args_1['fontfile'] = custom_font
+                    logger.debug(f"Using custom font for expression text: {custom_font}")
+                else:
+                    from langflix.config.font_utils import get_font_file_for_language
+                    font_path = get_font_file_for_language(self.language_code)
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_1['fontfile'] = font_path
+                        logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
             except Exception as e:
                 logger.warning(f"Error getting font for expression text: {e}")
                 # Fallback to old method
@@ -947,12 +975,16 @@ class VideoEditor:
                 'bordercolor': settings.get_translation_border_color()
             }
 
-            # Use same language-specific font for translation
+            # Get custom font for translation text (prioritize config, then language-specific)
             try:
-                from langflix.config.font_utils import get_font_file_for_language
-                font_path = get_font_file_for_language(self.language_code)
-                if font_path and os.path.exists(font_path):
-                    drawtext_args_2['fontfile'] = font_path
+                custom_font = settings.get_translation_font_path()
+                if custom_font and os.path.exists(custom_font):
+                    drawtext_args_2['fontfile'] = custom_font
+                else:
+                    from langflix.config.font_utils import get_font_file_for_language
+                    font_path = get_font_file_for_language(self.language_code)
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_2['fontfile'] = font_path
             except Exception as e:
                 logger.warning(f"Error getting font for translation text: {e}")
                 # Fallback to old method
@@ -962,6 +994,92 @@ class VideoEditor:
                         drawtext_args_2['fontfile'] = font_path
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
+            
+            # Add dynamic vocabulary annotations (appear when the word is spoken)
+            # These overlays show vocabulary words with translations synchronized to dialogue timing
+            if hasattr(expression, 'vocabulary_annotations') and expression.vocabulary_annotations:
+                try:
+                    # Get subtitles for this expression to map dialogue_index → timestamp
+                    # Note: We need to get relative timestamps since video starts at 0
+                    context_start_seconds = self._time_to_seconds(expression.context_start_time) if expression.context_start_time else 0
+                    
+                    # Map dialogue to subtitles for timing
+                    # Each dialogue line roughly corresponds to subtitle timing
+                    dialogues = expression.dialogues if expression.dialogues else []
+                    translations = expression.translation if expression.translation else []
+                    
+                    # Calculate timing for each dialogue line (estimate based on position)
+                    # This is a simple estimation - each dialogue line gets equal time
+                    if len(dialogues) > 0:
+                        context_duration = self._time_to_seconds(expression.context_end_time) - context_start_seconds if expression.context_end_time else 30.0
+                        time_per_dialogue = context_duration / len(dialogues)
+                        
+                        for idx, vocab_annot in enumerate(expression.vocabulary_annotations[:5]):  # Max 5 annotations (increased)
+                            word = vocab_annot.word if hasattr(vocab_annot, 'word') else ''
+                            translation = vocab_annot.translation if hasattr(vocab_annot, 'translation') else ''
+                            dialogue_index = vocab_annot.dialogue_index if hasattr(vocab_annot, 'dialogue_index') else 0
+                            
+                            if not word or not translation:
+                                continue
+                            
+                            # Calculate when this annotation should appear (relative to video start)
+                            # Estimate: dialogue_index * time_per_dialogue
+                            annot_start = max(0, dialogue_index * time_per_dialogue)
+                            annot_duration = settings.get_vocabulary_duration()
+                            annot_end = annot_start + annot_duration
+                            
+                            # Create annotation text: "word : translation"
+                            annot_text = f"{word} : {translation}"
+                            escaped_annot = escape_drawtext_string(annot_text)
+                            
+                            # RANDOM POSITIONING within video area to avoid overlap and catch attention
+                            # Video area: Y from 440 to 1480 (1040px), X from 20 to 1000 (leaving padding)
+                            import random
+                            
+                            # Define the video area bounds (9:16 format)
+                            video_area_y_start = 460
+                            video_area_y_end = 1200
+                            video_area_x_start = 20
+                            video_area_x_end = 800
+                            
+                            # Use different random positions for each annotation
+                            # Seed with annotation index for reproducibility per video
+                            random.seed(hash(f"{word}_{idx}") % 2**32)
+                            
+                            # Pick random X and Y within bounds
+                            rand_x = random.randint(video_area_x_start, video_area_x_end)
+                            rand_y = random.randint(video_area_y_start, video_area_y_end)
+                            
+                            vocab_drawtext_args = {
+                                'text': escaped_annot,
+                                'fontsize': settings.get_vocabulary_font_size(),
+                                'fontcolor': settings.get_vocabulary_text_color(),
+                                'x': rand_x,
+                                'y': rand_y,
+                                'borderw': settings.get_vocabulary_border_width(),
+                                'bordercolor': settings.get_vocabulary_border_color(),
+                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
+                            }
+                            
+                            # Add custom font for vocabulary (prioritize config, then language-specific)
+                            try:
+                                custom_font = settings.get_vocabulary_font_path()
+                                if custom_font and os.path.exists(custom_font):
+                                    vocab_drawtext_args['fontfile'] = custom_font
+                                else:
+                                    from langflix.config.font_utils import get_font_file_for_language
+                                    font_path = get_font_file_for_language(self.language_code)
+                                    if font_path and os.path.exists(font_path):
+                                        vocab_drawtext_args['fontfile'] = font_path
+                            except Exception:
+                                pass
+                            
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **vocab_drawtext_args)
+                            logger.debug(f"Added vocabulary annotation: '{word}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s")
+                        
+                        logger.info(f"Added {len(expression.vocabulary_annotations[:5])} vocabulary annotations with random positions")
+                except Exception as vocab_error:
+                    logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
             
             # Add logo at the very end to ensure it stays at absolute top (y=0)
             # Logo position: absolute top (y=0) of black padding, above hashtags
@@ -1120,6 +1238,80 @@ class VideoEditor:
                 logger.warning(f"No subtitle file found for expression, using video with expression text only")
                 import shutil
                 shutil.copy(str(temp_with_expression_path), str(output_path))
+            
+            # Append ending credit if enabled
+            if settings.is_ending_credit_enabled():
+                ending_credit_path = settings.get_ending_credit_video_path()
+                if ending_credit_path and os.path.exists(ending_credit_path):
+                    try:
+                        ending_duration = settings.get_ending_credit_duration()
+                        logger.info(f"Appending ending credit ({ending_duration}s) from: {ending_credit_path}")
+                        
+                        # Create temp output with ending credit
+                        temp_with_credit = Path(output_path).parent / f"temp_with_credit_{Path(output_path).name}"
+                        
+                        # Use subprocess for more reliable concat with filter_complex
+                        import subprocess
+                        
+                        # Build ffmpeg command manually for better control
+                        cmd = [
+                            'ffmpeg', '-y',
+                            '-i', str(output_path),
+                            '-i', ending_credit_path,
+                            '-filter_complex',
+                            f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
+                            f'[0:v][0:a][credit_v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+                            '-map', '[outv]',
+                            '-map', '[outa]',
+                            '-t', str(ending_duration + 120),  # Max duration (main + credit)
+                            '-c:v', 'libx264',
+                            '-c:a', 'aac',
+                            '-preset', 'medium',
+                            '-crf', '18',
+                            str(temp_with_credit)
+                        ]
+                        
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        
+                        if result.returncode == 0 and temp_with_credit.exists():
+                            # Replace original with version that has credit
+                            import shutil
+                            shutil.move(str(temp_with_credit), str(output_path))
+                            logger.info(f"✅ Ending credit appended successfully")
+                        else:
+                            # Try simpler approach without audio from credit
+                            logger.info(f"Retrying ending credit with silent audio fallback...")
+                            cmd_simple = [
+                                'ffmpeg', '-y',
+                                '-i', str(output_path),
+                                '-i', ending_credit_path,
+                                '-filter_complex',
+                                f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
+                                f'anullsrc=r=48000:cl=stereo[silent];'
+                                f'[silent]atrim=0:{ending_duration}[credit_a];'
+                                f'[0:v][0:a][credit_v][credit_a]concat=n=2:v=1:a=1[outv][outa]',
+                                '-map', '[outv]',
+                                '-map', '[outa]',
+                                '-c:v', 'libx264',
+                                '-c:a', 'aac',
+                                '-preset', 'medium',
+                                '-crf', '18',
+                                str(temp_with_credit)
+                            ]
+                            
+                            result2 = subprocess.run(cmd_simple, capture_output=True, text=True)
+                            
+                            if result2.returncode == 0 and temp_with_credit.exists():
+                                import shutil
+                                shutil.move(str(temp_with_credit), str(output_path))
+                                logger.info(f"✅ Ending credit appended with silent audio")
+                            else:
+                                logger.warning(f"Failed to append ending credit: {result2.stderr[:500] if result2.stderr else 'Unknown error'}")
+                    except Exception as e:
+                        logger.warning(f"Failed to append ending credit: {e}")
+                        # Continue without ending credit
+                else:
+                    logger.warning(f"Ending credit enabled but video not found: {ending_credit_path}")
             
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
@@ -1697,6 +1889,7 @@ class VideoEditor:
                 """Escape text for FFmpeg drawtext filter
                 
                 Handles: single quotes, curly quotes, colons, and other problematic characters
+                Note: Removes single quotes entirely to prevent FFmpeg filter parsing issues
                 """
                 if not text:
                     return ""
@@ -1705,10 +1898,10 @@ class VideoEditor:
                 text = text.replace("'", "'").replace("'", "'").replace("‚", "'").replace("‛", "'")
                 # Double curly quotes: " " „ → "
                 text = text.replace(""", '"').replace(""", '"').replace("„", '"')
-                # Remove double quotes entirely (they break FFmpeg)
-                text = text.replace('"', '')
-                # Escape single quotes and colons for drawtext (must use double backslash)
-                return text.replace(":", "\\:").replace("'", "\\'")
+                # Remove all quotes entirely (they break FFmpeg drawtext filter)
+                text = text.replace('"', '').replace("'", '')
+                # Escape colons for drawtext
+                return text.replace(":", "\\:")
             
             # Prepare text content with proper cleaning
             # NEW: Add expression_dialogue and expression_dialogue_translation
@@ -1762,81 +1955,98 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # Get font option safely
+                # Get font option - use educational slide config font
                 try:
-                    font_file_option = self._get_font_option()
+                    slide_font_path = settings.get_educational_slide_font_path()
+                    if slide_font_path and os.path.exists(slide_font_path):
+                        font_file_option = f"fontfile={slide_font_path}:"
+                    else:
+                        # Fallback to language-specific font
+                        font_file_option = self._get_font_option()
                     if not isinstance(font_file_option, str):
                         font_file_option = str(font_file_option) if font_file_option else ""
                 except Exception as e:
                     logger.warning(f"Error getting font option: {e}")
                     font_file_option = ""
                 
-                # Safe font size retrieval with NEW font size keys
-                try:
-                    dialogue_font_size = settings.get_font_size('expression_dialogue')
-                    if not isinstance(dialogue_font_size, (int, float)):
-                        dialogue_font_size = 40
-                except:
-                    dialogue_font_size = 40
+                # Get font sizes from config
+                font_sizes = settings.get_educational_slide_font_sizes()
+                dialogue_font_size = font_sizes.get('expression_dialogue', 36)
+                expr_font_size = font_sizes.get('expression', 48)
+                dialogue_trans_font_size = font_sizes.get('expression_dialogue_trans', 32)
+                trans_font_size = font_sizes.get('expression_translation', 44)
+                similar_font_size = font_sizes.get('similar', 28)
                 
-                try:
-                    expr_font_size = settings.get_font_size('expression')
-                    if not isinstance(expr_font_size, (int, float)):
-                        expr_font_size = 58
-                except:
-                    expr_font_size = 58
-                    
-                try:
-                    dialogue_trans_font_size = settings.get_font_size('expression_dialogue_trans')
-                    if not isinstance(dialogue_trans_font_size, (int, float)):
-                        dialogue_trans_font_size = 36
-                except:
-                    dialogue_trans_font_size = 36
+                # Get positions from config
+                positions = settings.get_educational_slide_positions()
+                dialogue_y = positions.get('expression_dialogue_y', -220)
+                expr_y = positions.get('expression_y', -150)
+                dialogue_trans_y = positions.get('expression_dialogue_trans_y', 0)
+                trans_y = positions.get('expression_translation_y', 70)
+                similar_base_offset = positions.get('similar_base_offset', 250)
+                similar_line_spacing = positions.get('similar_line_spacing', 36)
                 
-                try:
-                    trans_font_size = settings.get_font_size('expression_trans')
-                    if not isinstance(trans_font_size, (int, float)):
-                        trans_font_size = 48
-                except:
-                    trans_font_size = 48
+                # Get line breaking config
+                line_breaking = settings.get_educational_slide_line_breaking()
+                dialogue_max_words = line_breaking.get('expression_dialogue_max_words', 8)
+                trans_max_words = line_breaking.get('expression_translation_max_words', 6)
                 
-                # 1. Expression dialogue (full sentence) - upper area
+                # Helper function to add line breaks for long text
+                def add_line_breaks(text: str, max_words: int) -> str:
+                    """Add newlines after every max_words words for FFmpeg drawtext"""
+                    if not text:
+                        return text
+                    words = text.split()
+                    if len(words) <= max_words:
+                        return text
+                    lines = []
+                    for i in range(0, len(words), max_words):
+                        lines.append(' '.join(words[i:i+max_words]))
+                    return '\n'.join(lines)
+                
+                # 1. Expression dialogue (full sentence) - upper area (with line break if needed)
                 if expression_dialogue and isinstance(expression_dialogue, str):
+                    dialogue_with_breaks = add_line_breaks(expression_dialogue, dialogue_max_words)
+                    dialogue_with_breaks_escaped = escape_drawtext_string(dialogue_with_breaks)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_dialogue}':fontsize={dialogue_font_size}:fontcolor=white:"
+                        f"drawtext=text='{dialogue_with_breaks_escaped}':fontsize={dialogue_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-220:"
+                        f"x=(w-text_w)/2:y=h/2{dialogue_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
                 # 2. Expression (key phrase) - highlighted in yellow, below dialogue
-                if expression_text and isinstance(expression_text, str):
+                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                if expression_text and isinstance(expression_text, str) and settings.show_expression_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-150:"
+                        f"x=(w-text_w)/2:y=h/2{expr_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 3. Expression dialogue translation - middle area
+                # 3. Expression dialogue translation - middle area (with line break if needed)
                 if expression_dialogue_trans and isinstance(expression_dialogue_trans, str):
+                    trans_with_breaks = add_line_breaks(expression_dialogue_trans, trans_max_words)
+                    trans_with_breaks_escaped = escape_drawtext_string(trans_with_breaks)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_dialogue_trans}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
+                        f"drawtext=text='{trans_with_breaks_escaped}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2:"
+                        f"x=(w-text_w)/2:y=h/2+{dialogue_trans_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
                 # 4. Expression translation (key phrase) - highlighted in yellow
-                if translation_text and isinstance(translation_text, str):
+                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                if translation_text and isinstance(translation_text, str) and settings.show_translation_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2+70:"
+                        f"x=(w-text_w)/2:y=h/2+{trans_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 5. Similar expressions (bottom area, positioned higher and with line breaks)
+                # 5. Similar expressions (bottom area, positioned based on config)
                 if similar_expressions:
                     # Ensure all items are strings before processing
                     safe_similar = []
@@ -1855,20 +2065,11 @@ class VideoEditor:
                             logger.warning(f"Could not process similar expression {sim}: {e}")
                             continue
                     
-                    # Safe font size retrieval
-                    try:
-                        similar_font_size = settings.get_font_size('similar')
-                    except:
-                        similar_font_size = 32
-                    
                     # Add each similar expression as a separate drawtext for proper line spacing
-                    base_y = 160  # Distance from bottom (moved 3% lower: 130 -> 160)
-                    line_spacing = 40  # Space between lines
-                    
                     for i, similar_text in enumerate(safe_similar[:2]):  # Limit to 2 expressions
                         if similar_text:
                             similar_text_escaped = escape_drawtext_string(similar_text)
-                            y_position = f"h-{base_y + (i * line_spacing)}"
+                            y_position = f"h-{similar_base_offset - (i * similar_line_spacing)}"
                             drawtext_filters.append(
                                 f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
                                 f"{font_file_option}"
@@ -1933,7 +2134,15 @@ class VideoEditor:
                         logger.warning(f"Slide video may not have audio stream: {output_path}")
                         
                 except Exception as ffmpeg_error:
+                    # Try to get stderr from the FFmpeg error for debugging
+                    stderr_output = ""
+                    if hasattr(ffmpeg_error, 'stderr'):
+                        stderr_output = ffmpeg_error.stderr.decode('utf-8') if isinstance(ffmpeg_error.stderr, bytes) else str(ffmpeg_error.stderr)
                     logger.error(f"FFmpeg error creating slide: {ffmpeg_error}")
+                    if stderr_output:
+                        logger.error(f"FFmpeg stderr: {stderr_output[:2000]}")  # Limit to 2000 chars
+                    # Also log the video_filter that was used
+                    logger.error(f"Video filter used: {video_filter[:500] if video_filter else 'empty'}")
                     raise
                 
                 logger.info("Educational slide created successfully with text overlay")

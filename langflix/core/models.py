@@ -5,10 +5,31 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field, field_validator
 
 
+class VocabularyAnnotation(BaseModel):
+    """
+    Model for a vocabulary word annotation that appears dynamically in the video
+    """
+    word: str = Field(
+        description="The vocabulary word or phrase to annotate"
+    )
+    translation: str = Field(
+        description="Translation of the word in the target language"
+    )
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in the dialogues array where this word appears",
+        ge=0
+    )
+
+
 class ExpressionAnalysis(BaseModel):
     """
     Model for a single expression analysis result
     """
+    title: Optional[str] = Field(
+        default=None,
+        description="Catchy Korean title (8-15 words) for video, in target language NOT English. Examples: '회사에서 상사에게 참교육 당하는 순간', '어제 나를 해고한 상사가 백지수표를 들고 찾아왔다'"
+    )
     dialogues: List[str] = Field(
         description="Complete dialogue lines in the scene",
         min_length=1
@@ -63,7 +84,11 @@ class ExpressionAnalysis(BaseModel):
     )
     catchy_keywords: Optional[List[str]] = Field(
         default=None,
-        description="2-3 short, punchy phrases (3-6 words each) that hook viewers"
+        description="2-3 catchy Korean phrases (3-6 words each) in target language, NOT English. Examples: '상사의 뼈때리는 한마디', '숨겨진 속내 드러나다'"
+    )
+    vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
+        default=None,
+        description="2-5 vocabulary words with translations for dynamic video overlays"
     )
 
     # New fields for expression-based learning

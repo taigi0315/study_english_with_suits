@@ -739,6 +739,62 @@ def get_vocabulary_duration() -> float:
 
 
 # ============================================================================
+# Educational Slide Configuration Accessors
+# ============================================================================
+
+def get_educational_slide_config() -> Dict[str, Any]:
+    """Get educational slide display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('educational_slide', {})
+
+
+def get_educational_slide_font_path() -> Optional[str]:
+    """Get font path for educational slide (relative to assets/fonts)"""
+    font_rel = get_educational_slide_config().get('font', '1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf')
+    from pathlib import Path
+    import os
+    assets_fonts_dir = Path(__file__).parent.parent / "assets" / "fonts"
+    font_path = assets_fonts_dir / font_rel
+    if font_path.exists():
+        return str(font_path)
+    return None
+
+
+def get_educational_slide_font_sizes() -> Dict[str, int]:
+    """Get font sizes for educational slide elements"""
+    config = get_educational_slide_config()
+    return config.get('font_sizes', {
+        'expression_dialogue': 36,
+        'expression': 48,
+        'expression_dialogue_trans': 32,
+        'expression_translation': 44,
+        'similar': 28
+    })
+
+
+def get_educational_slide_positions() -> Dict[str, int]:
+    """Get Y positions for educational slide elements"""
+    config = get_educational_slide_config()
+    return config.get('positions', {
+        'expression_dialogue_y': -220,
+        'expression_y': -150,
+        'expression_dialogue_trans_y': 0,
+        'expression_translation_y': 70,
+        'similar_base_offset': 250,
+        'similar_line_spacing': 36
+    })
+
+
+def get_educational_slide_line_breaking() -> Dict[str, int]:
+    """Get line breaking configuration for educational slide"""
+    config = get_educational_slide_config()
+    return config.get('line_breaking', {
+        'expression_dialogue_max_words': 8,
+        'expression_translation_max_words': 6
+    })
+
+
+# ============================================================================
 # Storage Configuration Accessors
 # ============================================================================
 

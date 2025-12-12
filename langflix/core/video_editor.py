@@ -1848,50 +1848,63 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # Get font option safely
+                # Get font option - use educational slide config font
                 try:
-                    font_file_option = self._get_font_option()
+                    slide_font_path = settings.get_educational_slide_font_path()
+                    if slide_font_path and os.path.exists(slide_font_path):
+                        font_file_option = f"fontfile={slide_font_path}:"
+                    else:
+                        # Fallback to language-specific font
+                        font_file_option = self._get_font_option()
                     if not isinstance(font_file_option, str):
                         font_file_option = str(font_file_option) if font_file_option else ""
                 except Exception as e:
                     logger.warning(f"Error getting font option: {e}")
                     font_file_option = ""
                 
-                # Safe font size retrieval with NEW font size keys
-                try:
-                    dialogue_font_size = settings.get_font_size('expression_dialogue')
-                    if not isinstance(dialogue_font_size, (int, float)):
-                        dialogue_font_size = 40
-                except:
-                    dialogue_font_size = 40
+                # Get font sizes from config
+                font_sizes = settings.get_educational_slide_font_sizes()
+                dialogue_font_size = font_sizes.get('expression_dialogue', 36)
+                expr_font_size = font_sizes.get('expression', 48)
+                dialogue_trans_font_size = font_sizes.get('expression_dialogue_trans', 32)
+                trans_font_size = font_sizes.get('expression_translation', 44)
+                similar_font_size = font_sizes.get('similar', 28)
                 
-                try:
-                    expr_font_size = settings.get_font_size('expression')
-                    if not isinstance(expr_font_size, (int, float)):
-                        expr_font_size = 58
-                except:
-                    expr_font_size = 58
-                    
-                try:
-                    dialogue_trans_font_size = settings.get_font_size('expression_dialogue_trans')
-                    if not isinstance(dialogue_trans_font_size, (int, float)):
-                        dialogue_trans_font_size = 36
-                except:
-                    dialogue_trans_font_size = 36
+                # Get positions from config
+                positions = settings.get_educational_slide_positions()
+                dialogue_y = positions.get('expression_dialogue_y', -220)
+                expr_y = positions.get('expression_y', -150)
+                dialogue_trans_y = positions.get('expression_dialogue_trans_y', 0)
+                trans_y = positions.get('expression_translation_y', 70)
+                similar_base_offset = positions.get('similar_base_offset', 250)
+                similar_line_spacing = positions.get('similar_line_spacing', 36)
                 
-                try:
-                    trans_font_size = settings.get_font_size('expression_trans')
-                    if not isinstance(trans_font_size, (int, float)):
-                        trans_font_size = 48
-                except:
-                    trans_font_size = 48
+                # Get line breaking config
+                line_breaking = settings.get_educational_slide_line_breaking()
+                dialogue_max_words = line_breaking.get('expression_dialogue_max_words', 8)
+                trans_max_words = line_breaking.get('expression_translation_max_words', 6)
                 
-                # 1. Expression dialogue (full sentence) - upper area
+                # Helper function to add line breaks for long text
+                def add_line_breaks(text: str, max_words: int) -> str:
+                    """Add newlines after every max_words words for FFmpeg drawtext"""
+                    if not text:
+                        return text
+                    words = text.split()
+                    if len(words) <= max_words:
+                        return text
+                    lines = []
+                    for i in range(0, len(words), max_words):
+                        lines.append(' '.join(words[i:i+max_words]))
+                    return '\n'.join(lines)
+                
+                # 1. Expression dialogue (full sentence) - upper area (with line break if needed)
                 if expression_dialogue and isinstance(expression_dialogue, str):
+                    dialogue_with_breaks = add_line_breaks(expression_dialogue, dialogue_max_words)
+                    dialogue_with_breaks_escaped = escape_drawtext_string(dialogue_with_breaks)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_dialogue}':fontsize={dialogue_font_size}:fontcolor=white:"
+                        f"drawtext=text='{dialogue_with_breaks_escaped}':fontsize={dialogue_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-220:"
+                        f"x=(w-text_w)/2:y=h/2{dialogue_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -1900,16 +1913,18 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2-150:"
+                        f"x=(w-text_w)/2:y=h/2{expr_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 3. Expression dialogue translation - middle area
+                # 3. Expression dialogue translation - middle area (with line break if needed)
                 if expression_dialogue_trans and isinstance(expression_dialogue_trans, str):
+                    trans_with_breaks = add_line_breaks(expression_dialogue_trans, trans_max_words)
+                    trans_with_breaks_escaped = escape_drawtext_string(trans_with_breaks)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_dialogue_trans}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
+                        f"drawtext=text='{trans_with_breaks_escaped}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2:"
+                        f"x=(w-text_w)/2:y=h/2+{dialogue_trans_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
@@ -1918,11 +1933,11 @@ class VideoEditor:
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{font_file_option}"
-                        f"x=(w-text_w)/2:y=h/2+70:"
+                        f"x=(w-text_w)/2:y=h/2+{trans_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 5. Similar expressions (bottom area, positioned higher and with line breaks)
+                # 5. Similar expressions (bottom area, positioned based on config)
                 if similar_expressions:
                     # Ensure all items are strings before processing
                     safe_similar = []
@@ -1941,20 +1956,11 @@ class VideoEditor:
                             logger.warning(f"Could not process similar expression {sim}: {e}")
                             continue
                     
-                    # Safe font size retrieval
-                    try:
-                        similar_font_size = settings.get_font_size('similar')
-                    except:
-                        similar_font_size = 32
-                    
                     # Add each similar expression as a separate drawtext for proper line spacing
-                    base_y = 160  # Distance from bottom (moved 3% lower: 130 -> 160)
-                    line_spacing = 40  # Space between lines
-                    
                     for i, similar_text in enumerate(safe_similar[:2]):  # Limit to 2 expressions
                         if similar_text:
                             similar_text_escaped = escape_drawtext_string(similar_text)
-                            y_position = f"h-{base_y + (i * line_spacing)}"
+                            y_position = f"h-{similar_base_offset - (i * similar_line_spacing)}"
                             drawtext_filters.append(
                                 f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
                                 f"{font_file_option}"

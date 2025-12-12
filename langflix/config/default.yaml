@@ -295,6 +295,33 @@ short_video:
       y_offset: 25                 # Y offset from top of video area
       duration: 4.0                # How long annotation appears (seconds)
 
+    # Educational slide configuration (displayed during expression replay)
+    educational_slide:
+      # Font for educational slide (relative to assets/fonts)
+      font: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      
+      # Font sizes for slide elements
+      font_sizes:
+        expression_dialogue: 36      # Full dialogue sentence
+        expression: 48               # Key expression (highlighted)
+        expression_dialogue_trans: 32  # Dialogue translation
+        expression_translation: 44   # Expression translation (highlighted)
+        similar: 28                  # Similar expressions
+
+      # Positioning (Y offsets from center)
+      positions:
+        expression_dialogue_y: -220  # Distance above center
+        expression_y: -150           # Expression (highlighted)
+        expression_dialogue_trans_y: 0  # At center
+        expression_translation_y: 70  # Below center
+        similar_base_offset: 250     # Distance from bottom (higher = more visible)
+        similar_line_spacing: 36     # Space between similar expressions
+      
+      # Line breaking for long text (max words before adding newline)
+      line_breaking:
+        expression_dialogue_max_words: 8
+        expression_translation_max_words: 6
+
 # ============================================================================
 # Expression-Based Learning Configuration
 # ============================================================================
@@ -302,7 +329,7 @@ expression:
   # Global expression repeat count for TTS, original audio, and short videos
   # This unified setting controls how many times expressions are repeated
   # for educational purposes across all video types (educational videos, short videos)
-  repeat_count: 3
+  repeat_count: 2
   
   # LLM processing configuration
   llm:

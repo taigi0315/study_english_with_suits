@@ -5,6 +5,23 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field, field_validator
 
 
+class VocabularyAnnotation(BaseModel):
+    """
+    Model for a vocabulary word annotation that appears dynamically in the video
+    """
+    word: str = Field(
+        description="The vocabulary word or phrase to annotate"
+    )
+    translation: str = Field(
+        description="Translation of the word in the target language"
+    )
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in the dialogues array where this word appears",
+        ge=0
+    )
+
+
 class ExpressionAnalysis(BaseModel):
     """
     Model for a single expression analysis result
@@ -64,6 +81,10 @@ class ExpressionAnalysis(BaseModel):
     catchy_keywords: Optional[List[str]] = Field(
         default=None,
         description="2-3 short, punchy phrases (3-6 words each) that hook viewers"
+    )
+    vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
+        default=None,
+        description="1-3 vocabulary words with translations for dynamic video overlays"
     )
 
     # New fields for expression-based learning

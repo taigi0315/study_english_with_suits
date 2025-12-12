@@ -963,6 +963,73 @@ class VideoEditor:
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_2)
             
+            # Add dynamic vocabulary annotations (appear when the word is spoken)
+            # These overlays show vocabulary words with translations synchronized to dialogue timing
+            if hasattr(expression, 'vocabulary_annotations') and expression.vocabulary_annotations:
+                try:
+                    # Get subtitles for this expression to map dialogue_index → timestamp
+                    # Note: We need to get relative timestamps since video starts at 0
+                    context_start_seconds = self._time_to_seconds(expression.context_start_time) if expression.context_start_time else 0
+                    
+                    # Map dialogue to subtitles for timing
+                    # Each dialogue line roughly corresponds to subtitle timing
+                    dialogues = expression.dialogues if expression.dialogues else []
+                    translations = expression.translation if expression.translation else []
+                    
+                    # Calculate timing for each dialogue line (estimate based on position)
+                    # This is a simple estimation - each dialogue line gets equal time
+                    if len(dialogues) > 0:
+                        context_duration = self._time_to_seconds(expression.context_end_time) - context_start_seconds if expression.context_end_time else 30.0
+                        time_per_dialogue = context_duration / len(dialogues)
+                        
+                        for vocab_annot in expression.vocabulary_annotations[:3]:  # Max 3 annotations
+                            word = vocab_annot.word if hasattr(vocab_annot, 'word') else ''
+                            translation = vocab_annot.translation if hasattr(vocab_annot, 'translation') else ''
+                            dialogue_index = vocab_annot.dialogue_index if hasattr(vocab_annot, 'dialogue_index') else 0
+                            
+                            if not word or not translation:
+                                continue
+                            
+                            # Calculate when this annotation should appear (relative to video start)
+                            # Estimate: dialogue_index * time_per_dialogue
+                            annot_start = max(0, dialogue_index * time_per_dialogue)
+                            annot_end = annot_start + 4.0  # Show annotation for 4 seconds
+                            
+                            # Create annotation text: "word : translation"
+                            annot_text = f"{word} : {translation}"
+                            escaped_annot = escape_drawtext_string(annot_text)
+                            
+                            # Position: left side of video area, top-left of the main video content
+                            # Y position: inside the video area (y_offset + small margin)
+                            annot_y = y_offset + 20  # 20px below top of video area
+                            
+                            vocab_drawtext_args = {
+                                'text': escaped_annot,
+                                'fontsize': 28,
+                                'fontcolor': 'yellow',
+                                'x': 20,  # Left side margin
+                                'y': annot_y,
+                                'borderw': 2,
+                                'bordercolor': 'black',
+                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
+                            }
+                            
+                            # Add language-specific font
+                            try:
+                                from langflix.config.font_utils import get_font_file_for_language
+                                font_path = get_font_file_for_language(self.language_code)
+                                if font_path and os.path.exists(font_path):
+                                    vocab_drawtext_args['fontfile'] = font_path
+                            except Exception:
+                                pass
+                            
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **vocab_drawtext_args)
+                            logger.debug(f"Added vocabulary annotation: '{word}' at t={annot_start:.2f}-{annot_end:.2f}s")
+                        
+                        logger.info(f"Added {len(expression.vocabulary_annotations[:3])} vocabulary annotations with dynamic timing")
+                except Exception as vocab_error:
+                    logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
+            
             # Add logo at the very end to ensure it stays at absolute top (y=0)
             # Logo position: absolute top (y=0) of black padding, above hashtags
             # Logo size: 25% of original (59px height), 50% opacity

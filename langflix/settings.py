@@ -309,14 +309,44 @@ def get_font_file(language_code: Optional[str] = None) -> str:
 # Processing Settings
 # ============================================================================
 
+def is_test_mode_enabled() -> bool:
+    """Check if test mode is enabled for development"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('enabled', False)
+
+
+def get_test_mode_max_chunks() -> int:
+    """Get max chunks to process in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_chunks', 1)
+
+
+def get_test_mode_max_expressions_per_chunk() -> int:
+    """Get max expressions per chunk in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_expressions_per_chunk', 1)
+
+
+def get_test_mode_max_total_expressions() -> int:
+    """Get max total expressions in test mode (default: 1)"""
+    test_mode = get_processing_config().get('test_mode', {})
+    return test_mode.get('max_total_expressions', 1)
+
+
 def get_min_expressions_per_chunk() -> int:
     """Get minimum expressions per chunk"""
     return get_processing_config().get('min_expressions_per_chunk', 1)
 
 
 def get_max_expressions_per_chunk() -> int:
-    """Get maximum expressions per chunk"""
-    return get_processing_config().get('max_expressions_per_chunk', 3)
+    """Get maximum expressions per chunk.
+    
+    In test mode, returns test_mode limit (default: 1).
+    In normal mode, returns configured limit (default: 5).
+    """
+    if is_test_mode_enabled():
+        return get_test_mode_max_expressions_per_chunk()
+    return get_processing_config().get('max_expressions_per_chunk', 5)
 
 
 # ============================================================================

@@ -64,6 +64,22 @@ llm:
     fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
 
 # ============================================================================
+# Processing Configuration
+# ============================================================================
+processing:
+  # Test mode configuration for development
+  # When enabled, limits processing to speed up testing
+  test_mode:
+    enabled: true                     # Set to true for development, false for production
+    max_chunks: 1                     # Only process 1 chunk of subtitles
+    max_expressions_per_chunk: 1      # Only extract 1 expression per chunk
+    max_total_expressions: 1          # Total expressions limit for entire video
+  
+  # Normal mode expression limits (when test_mode.enabled is false)
+  min_expressions_per_chunk: 1
+  max_expressions_per_chunk: 5        # Up to 5 expressions per chunk in production
+
+# ============================================================================
 # Language Proficiency Levels
 # ============================================================================
 language_levels:

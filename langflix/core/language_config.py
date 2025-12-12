@@ -20,7 +20,8 @@ class LanguageConfig:
             'font_fallback': '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
             'prompt_language': 'Korean',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'intro_question': '영어로는 뭐라고 할까?'
         },
         'ja': {
             'name': 'Japanese',
@@ -28,7 +29,8 @@ class LanguageConfig:
             'font_fallback': '/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc',
             'prompt_language': 'Japanese',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'intro_question': '英語でなんと言う？'
         },
         'zh': {
             'name': 'Chinese',
@@ -36,7 +38,8 @@ class LanguageConfig:
             'font_fallback': '/System/Library/Fonts/STHeiti Medium.ttc',
             'prompt_language': 'Chinese',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'intro_question': '英语怎么说？'
         },
         'es': {
             'name': 'Spanish',
@@ -53,7 +56,8 @@ class LanguageConfig:
             'prompt_language': 'Spanish',
             'translation_style': 'natural',
             'character_encoding': 'utf-8',
-            'special_characters': 'ñáéíóúüÑÁÉÍÓÚÜ¿¡'
+            'special_characters': 'ñáéíóúüÑÁÉÍÓÚÜ¿¡',
+            'intro_question': '¿Cómo se dice en inglés?'
         },
         'fr': {
             'name': 'French',
@@ -61,7 +65,8 @@ class LanguageConfig:
             'font_fallback': '/System/Library/Fonts/Arial.ttf',
             'prompt_language': 'French',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'intro_question': 'Comment dit-on en anglais ?'
         },
         'en': {
             'name': 'English',
@@ -69,7 +74,8 @@ class LanguageConfig:
             'font_fallback': '/System/Library/Fonts/Arial.ttf',
             'prompt_language': 'English',
             'translation_style': 'natural',
-            'character_encoding': 'utf-8'
+            'character_encoding': 'utf-8',
+            'intro_question': 'How do you say it in English?'
         }
     }
     

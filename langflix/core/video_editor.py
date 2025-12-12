@@ -453,6 +453,7 @@ class VideoEditor:
             # Extract expression audio and repeat it 2 times
             educational_slide = self._create_educational_slide(
                     expression_video_path,
+
                     expression,
                     expression_index,
                     target_duration=context_expr_duration,
@@ -634,6 +635,11 @@ class VideoEditor:
             # Get layout configuration from settings
             target_width, target_height = settings.get_short_video_dimensions()
             long_form_video_height = settings.get_long_form_video_height()
+            
+
+            # --- Step 2: Extract vertical expression video ---
+            # Extract expression part for the center video (vertical crop)
+            logger.info("Extracting vertical center video for expression...")
             
             # Step 1: Scale long-form video to height 960px, maintain aspect ratio, crop left/right
             # This ensures no stretching - video is cropped if needed
@@ -1656,6 +1662,9 @@ class VideoEditor:
         # TempFileManager handles cleanup automatically via atexit
         # Individual files are tracked globally, so no action needed here
         pass
+
+
+
 
     def _create_educational_slide(self, expression_source_video: str, expression: ExpressionAnalysis, expression_index: int = 0, target_duration: Optional[float] = None, use_expression_audio: bool = False, expression_video_clip_path: Optional[str] = None) -> str:
         """Create educational slide with background image, text, and audio.

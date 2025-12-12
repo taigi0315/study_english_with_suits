@@ -418,6 +418,7 @@ For short videos (≤ 60 seconds total):
     "expression_dialogue_translation": "natural translation of the complete sentence in {target_language} (의역)",
     "expression": "expanded phrase with context (4-8 words typical) - not just bare minimum",
     "expression_translation": "natural translation of the expression in {target_language} (의역)",
+    "intro_hook": "Short, engaging hook question in {target_language} (e.g. '¿Estás de broma?')",
     "context_start_time": "00:00:00,000",
     "context_end_time": "00:00:00,000",
     "similar_expressions": ["alternative 1", "alternative 2"],
@@ -456,6 +457,7 @@ For short videos (≤ 60 seconds total):
   Example: "제가 완벽하게 처리해드릴게요."
   
 - **expression_translation**: Natural translation of the key phrase (의역)
+- **intro_hook**: Short, engaging hook question/statement in {target_language} (e.g., "¿Estás de broma?" or "Comment dit-on 'No way'?"). Used for intro video.
   Example: "완벽하게 해내다"
 
 ---
@@ -489,7 +491,7 @@ Return ONLY expressions that pass ALL checks. Be selective. Quality matters more
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
 If you find expressions, respond with this exact format (ALL translations, titles, keywords in {target_language}):
-{{"expressions":[{{"title":"[catchy title in {target_language}]","dialogues":["line 1","line 2"],"translation":["[trans 1 in {target_language}]","[trans 2 in {target_language}]"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"[full translation in {target_language}]","expression":"key phrase here","expression_translation":"[translation in {target_language}]","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["[keyword 1 in {target_language}]","[keyword 2 in {target_language}]","[keyword 3 in {target_language}]"],"vocabulary_annotations":[{{"word":"interesting word","translation":"[translation in {target_language}]","dialogue_index":0}}]}}]}}
+{{"expressions":[{{"title":"[catchy title in {target_language}]","dialogues":["line 1","line 2"],"translation":["[trans 1 in {target_language}]","[trans 2 in {target_language}]"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"[full translation in {target_language}]","expression":"key phrase here","expression_translation":"[translation in {target_language}]","intro_hook":"[Short hook question in {target_language}]","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["[keyword 1 in {target_language}]","[keyword 2 in {target_language}]","[keyword 3 in {target_language}]"],"vocabulary_annotations":[{{"word":"interesting word","translation":"[translation in {target_language}]","dialogue_index":0}}]}}]}}
 
 If you find NO expressions, respond with:
 {{"expressions":[]}}

@@ -44,6 +44,7 @@ class LanguageConfig:
             # F37 Moon was missing these glyphs
             'font_path': '/System/Library/Fonts/HelveticaNeue.ttc',
             'font_fallback': [
+                '/System/Library/Fonts/HelveticaNeue.ttc',
                 '/System/Library/Fonts/Arial.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
                 '/System/Library/Fonts/Times.ttc',

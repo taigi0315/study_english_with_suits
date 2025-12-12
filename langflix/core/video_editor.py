@@ -1955,14 +1955,26 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # Get font option - use educational slide config font
+                # Get font option - use language-specific font for better character support
                 try:
-                    slide_font_path = settings.get_educational_slide_font_path()
-                    if slide_font_path and os.path.exists(slide_font_path):
-                        font_file_option = f"fontfile={slide_font_path}:"
-                    else:
-                        # Fallback to language-specific font
+                    # For non-Asian languages (Spanish, French, English), use language-specific fonts
+                    # The default educational slide font (1HoonGrimdonghwa) is Korean and doesn't support
+                    # Latin accented characters like ñ, é, ó, etc.
+                    non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
+                    
+                    if self.language_code and self.language_code.lower() in non_asian_languages:
+                        # Use language-specific font that supports Latin characters
                         font_file_option = self._get_font_option()
+                        logger.debug(f"Using language-specific font for {self.language_code} educational slide")
+                    else:
+                        # For Asian languages (Korean, Japanese, Chinese), use configured slide font
+                        slide_font_path = settings.get_educational_slide_font_path()
+                        if slide_font_path and os.path.exists(slide_font_path):
+                            font_file_option = f"fontfile={slide_font_path}:"
+                        else:
+                            # Fallback to language-specific font
+                            font_file_option = self._get_font_option()
+                    
                     if not isinstance(font_file_option, str):
                         font_file_option = str(font_file_option) if font_file_option else ""
                 except Exception as e:

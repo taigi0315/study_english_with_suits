@@ -482,7 +482,7 @@ Return ONLY expressions that pass ALL checks. Be selective. Quality matters more
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
 If you find expressions, respond with this exact format:
-{{"expressions":[{{"title":"회사에서 상사에게 참교육 당하는 순간","dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["keyword1","keyword2","keyword3"],"vocabulary_annotations":[{{"word":"interesting word","translation":"translation","dialogue_index":0}}]}}]}}
+{{"expressions":[{{"title":"회사에서 상사에게 참교육 당하는 순간","dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["숨겨진 속내 드러나는 순간","상사의 뼈때리는 한마디","직장 드라마 레전드 장면"],"vocabulary_annotations":[{{"word":"interesting word","translation":"translation","dialogue_index":0}}]}}]}}
 
 If you find NO expressions, respond with:
 {{"expressions":[]}}

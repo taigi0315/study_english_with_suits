@@ -1782,6 +1782,7 @@ class VideoEditor:
                 """Escape text for FFmpeg drawtext filter
                 
                 Handles: single quotes, curly quotes, colons, and other problematic characters
+                Note: Removes single quotes entirely to prevent FFmpeg filter parsing issues
                 """
                 if not text:
                     return ""
@@ -1790,10 +1791,10 @@ class VideoEditor:
                 text = text.replace("'", "'").replace("'", "'").replace("‚", "'").replace("‛", "'")
                 # Double curly quotes: " " „ → "
                 text = text.replace(""", '"').replace(""", '"').replace("„", '"')
-                # Remove double quotes entirely (they break FFmpeg)
-                text = text.replace('"', '')
-                # Escape single quotes and colons for drawtext (must use double backslash)
-                return text.replace(":", "\\:").replace("'", "\\'")
+                # Remove all quotes entirely (they break FFmpeg drawtext filter)
+                text = text.replace('"', '').replace("'", '')
+                # Escape colons for drawtext
+                return text.replace(":", "\\:")
             
             # Prepare text content with proper cleaning
             # NEW: Add expression_dialogue and expression_dialogue_translation
@@ -2018,7 +2019,15 @@ class VideoEditor:
                         logger.warning(f"Slide video may not have audio stream: {output_path}")
                         
                 except Exception as ffmpeg_error:
+                    # Try to get stderr from the FFmpeg error for debugging
+                    stderr_output = ""
+                    if hasattr(ffmpeg_error, 'stderr'):
+                        stderr_output = ffmpeg_error.stderr.decode('utf-8') if isinstance(ffmpeg_error.stderr, bytes) else str(ffmpeg_error.stderr)
                     logger.error(f"FFmpeg error creating slide: {ffmpeg_error}")
+                    if stderr_output:
+                        logger.error(f"FFmpeg stderr: {stderr_output[:2000]}")  # Limit to 2000 chars
+                    # Also log the video_filter that was used
+                    logger.error(f"Video filter used: {video_filter[:500] if video_filter else 'empty'}")
                     raise
                 
                 logger.info("Educational slide created successfully with text overlay")

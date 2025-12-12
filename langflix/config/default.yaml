@@ -226,7 +226,7 @@ short_video:
 
     # Expression text (bottom padding area)
     expression:
-      font_size: 45              # Main expression font size (increased by 10 from 45)
+      font_size: 55              # Main expression font size (increased by 10 from 45)
       y_position: 1500           # Y position for expression line
       text_color: 'yellow'
       border_width: 2
@@ -234,8 +234,8 @@ short_video:
 
     # Expression translation (bottom padding area)
     translation:
-      font_size: 45              # Translation font size (slightly smaller)
-      y_position: 1600           # Y position for translation line
+      font_size: 55              # Translation font size (slightly smaller)
+      y_position: 1650           # Y position for translation line
       gap_from_expression: 60    # Gap between expression and translation
       text_color: 'yellow'
       border_width: 2
@@ -271,7 +271,7 @@ short_video:
 
     # Vocabulary annotations (dynamic overlays that appear when words are spoken)
     vocabulary_annotations:
-      font_size: 28                # Font size for vocabulary text
+      font_size: 38                # Font size for vocabulary text
       text_color: 'yellow'         # Text color
       border_width: 2              # Border width
       border_color: 'black'        # Border color

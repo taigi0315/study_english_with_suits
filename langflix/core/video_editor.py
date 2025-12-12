@@ -845,16 +845,32 @@ class VideoEditor:
                             'bordercolor': settings.get_keywords_border_color()
                         }
 
-                        # Add custom font for keywords (prioritize config, then language-specific, then fallback)
+                        # Add custom font for keywords
                         try:
+                            # For non-Asian languages (Spanish, French, English), use language-specific fonts
+                            # Prioritize system fonts that support Latin characters over the configured custom font (which might be Korean-only)
+                            non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
+                            is_non_asian = self.language_code and self.language_code.lower() in non_asian_languages
+                            
                             custom_font = settings.get_keywords_font_path()
-                            if custom_font and os.path.exists(custom_font):
-                                keyword_args['fontfile'] = custom_font
-                            else:
+                            
+                            if is_non_asian:
+                                # For non-Asian, try language specific font FIRST
                                 from langflix.config.font_utils import get_font_file_for_language
                                 font_path = get_font_file_for_language(self.language_code)
                                 if font_path and os.path.exists(font_path):
                                     keyword_args['fontfile'] = font_path
+                                elif custom_font and os.path.exists(custom_font):
+                                    keyword_args['fontfile'] = custom_font
+                            else:
+                                # For Asian languages, try configured custom font FIRST
+                                if custom_font and os.path.exists(custom_font):
+                                    keyword_args['fontfile'] = custom_font
+                                else:
+                                    from langflix.config.font_utils import get_font_file_for_language
+                                    font_path = get_font_file_for_language(self.language_code)
+                                    if font_path and os.path.exists(font_path):
+                                        keyword_args['fontfile'] = font_path
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method
@@ -1040,7 +1056,7 @@ class VideoEditor:
                             video_area_y_start = 460
                             video_area_y_end = 1200
                             video_area_x_start = 20
-                            video_area_x_end = 800
+                            video_area_x_end = 600
                             
                             # Use different random positions for each annotation
                             # Seed with annotation index for reproducibility per video
@@ -1955,14 +1971,26 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # Get font option - use educational slide config font
+                # Get font option - use language-specific font for better character support
                 try:
-                    slide_font_path = settings.get_educational_slide_font_path()
-                    if slide_font_path and os.path.exists(slide_font_path):
-                        font_file_option = f"fontfile={slide_font_path}:"
-                    else:
-                        # Fallback to language-specific font
+                    # For non-Asian languages (Spanish, French, English), use language-specific fonts
+                    # The default educational slide font (1HoonGrimdonghwa) is Korean and doesn't support
+                    # Latin accented characters like ñ, é, ó, etc.
+                    non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
+                    
+                    if self.language_code and self.language_code.lower() in non_asian_languages:
+                        # Use language-specific font that supports Latin characters
                         font_file_option = self._get_font_option()
+                        logger.debug(f"Using language-specific font for {self.language_code} educational slide")
+                    else:
+                        # For Asian languages (Korean, Japanese, Chinese), use configured slide font
+                        slide_font_path = settings.get_educational_slide_font_path()
+                        if slide_font_path and os.path.exists(slide_font_path):
+                            font_file_option = f"fontfile={slide_font_path}:"
+                        else:
+                            # Fallback to language-specific font
+                            font_file_option = self._get_font_option()
+                    
                     if not isinstance(font_file_option, str):
                         font_file_option = str(font_file_option) if font_file_option else ""
                 except Exception as e:

@@ -329,7 +329,7 @@ short_video:
       
       # Line breaking for long text (max words before adding newline)
       line_breaking:
-        expression_dialogue_max_words: 8
+        expression_dialogue_max_words: 5
         expression_translation_max_words: 6
 
 # ============================================================================

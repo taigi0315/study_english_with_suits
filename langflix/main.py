@@ -125,7 +125,10 @@ class LangFlixPipeline:
 
         # Initialize Services
         self.subtitle_service = SubtitleService()
-        self.expression_service = ExpressionService(language_code)
+        # ExpressionService needs the TARGET language (for LLM translations), not source language
+        # target_languages[0] is the primary language we want translations in
+        translation_target_language = self.target_languages[0] if self.target_languages else language_code
+        self.expression_service = ExpressionService(translation_target_language)
         self.translation_service = TranslationService()
         self.video_factory = VideoFactory()
         self.upload_service = UploadService()

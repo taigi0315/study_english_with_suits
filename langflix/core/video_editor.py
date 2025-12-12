@@ -845,16 +845,32 @@ class VideoEditor:
                             'bordercolor': settings.get_keywords_border_color()
                         }
 
-                        # Add custom font for keywords (prioritize config, then language-specific, then fallback)
+                        # Add custom font for keywords
                         try:
+                            # For non-Asian languages (Spanish, French, English), use language-specific fonts
+                            # Prioritize system fonts that support Latin characters over the configured custom font (which might be Korean-only)
+                            non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
+                            is_non_asian = self.language_code and self.language_code.lower() in non_asian_languages
+                            
                             custom_font = settings.get_keywords_font_path()
-                            if custom_font and os.path.exists(custom_font):
-                                keyword_args['fontfile'] = custom_font
-                            else:
+                            
+                            if is_non_asian:
+                                # For non-Asian, try language specific font FIRST
                                 from langflix.config.font_utils import get_font_file_for_language
                                 font_path = get_font_file_for_language(self.language_code)
                                 if font_path and os.path.exists(font_path):
                                     keyword_args['fontfile'] = font_path
+                                elif custom_font and os.path.exists(custom_font):
+                                    keyword_args['fontfile'] = custom_font
+                            else:
+                                # For Asian languages, try configured custom font FIRST
+                                if custom_font and os.path.exists(custom_font):
+                                    keyword_args['fontfile'] = custom_font
+                                else:
+                                    from langflix.config.font_utils import get_font_file_for_language
+                                    font_path = get_font_file_for_language(self.language_code)
+                                    if font_path and os.path.exists(font_path):
+                                        keyword_args['fontfile'] = font_path
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method

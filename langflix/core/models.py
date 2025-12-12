@@ -28,7 +28,7 @@ class ExpressionAnalysis(BaseModel):
     """
     title: Optional[str] = Field(
         default=None,
-        description="Catchy, dramatic title in target language (8-15 words) for video thumbnail/hook"
+        description="Catchy Korean title (8-15 words) for video, in target language NOT English. Examples: '회사에서 상사에게 참교육 당하는 순간', '어제 나를 해고한 상사가 백지수표를 들고 찾아왔다'"
     )
     dialogues: List[str] = Field(
         description="Complete dialogue lines in the scene",
@@ -84,7 +84,7 @@ class ExpressionAnalysis(BaseModel):
     )
     catchy_keywords: Optional[List[str]] = Field(
         default=None,
-        description="2-3 short, punchy phrases (3-6 words each) that hook viewers"
+        description="2-3 catchy Korean phrases (3-6 words each) in target language, NOT English. Examples: '상사의 뼈때리는 한마디', '숨겨진 속내 드러나다'"
     )
     vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
         default=None,

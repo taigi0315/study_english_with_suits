@@ -40,8 +40,10 @@ class LanguageConfig:
         },
         'es': {
             'name': 'Spanish',
-            'font_path': '/System/Library/Fonts/HelveticaNeue.ttc',
+            # Use custom project font for Spanish (in assets/fonts/es/)
+            'font_path': 'assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf',
             'font_fallback': [
+                '/System/Library/Fonts/HelveticaNeue.ttc',
                 '/System/Library/Fonts/Arial.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
                 '/System/Library/Fonts/Times.ttc',
@@ -100,8 +102,17 @@ class LanguageConfig:
         """
         config = cls.get_config(language_code)
         
+        # Helper to resolve paths (relative paths are relative to project root)
+        def resolve_font_path(font_path_str: str) -> Path:
+            p = Path(font_path_str)
+            if p.is_absolute():
+                return p
+            # Relative path - resolve from project root
+            project_root = Path(__file__).parent.parent.parent  # langflix/core -> langflix -> project_root
+            return project_root / font_path_str
+        
         # Check if primary font exists
-        font_path = Path(config['font_path'])
+        font_path = resolve_font_path(config['font_path'])
         if font_path.exists():
             return str(font_path)
         
@@ -111,12 +122,12 @@ class LanguageConfig:
             if isinstance(fallback, list):
                 # Try each fallback font in order
                 for fallback_font in fallback:
-                    fallback_path = Path(fallback_font)
+                    fallback_path = resolve_font_path(fallback_font)
                     if fallback_path.exists():
                         return str(fallback_path)
             else:
                 # Single fallback font (backward compatibility)
-                fallback_path = Path(fallback)
+                fallback_path = resolve_font_path(fallback)
                 if fallback_path.exists():
                     return str(fallback_path)
         

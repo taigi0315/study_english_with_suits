@@ -54,6 +54,10 @@ class ExpressionAnalysis(BaseModel):
         description="Translation of the main expression",
         min_length=1
     )
+    intro_hook: Optional[str] = Field(
+        default=None,
+        description="A short, catchy version of the translation to use as an intro hook question."
+    )
     context_start_time: Optional[str] = Field(
         default=None,
         description="Timestamp where conversational context should BEGIN",

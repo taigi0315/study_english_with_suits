@@ -117,11 +117,24 @@ class LangFlixPipeline:
         self.subtitle_file = Path(subtitle_file)
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
+        self.video_file = Path(video_file) if video_file else None
+        
+        # If series_name is not provided, try to extract it from video filename
+        if not series_name and self.video_file:
+            from langflix.utils.filename_utils import extract_show_name
+            extracted_name = extract_show_name(self.video_file.name)
+            if extracted_name and extracted_name != "Unknown Show":
+                series_name = extracted_name
+                logging.info(f"Extracted show name from filename: {series_name}")
+        
+        # If still no series_name, fallback to config (legacy behavior)
+        if not series_name:
+            series_name = settings.get_show_name()
+            
         self.language_code = language_code
         self.target_languages = target_languages or [language_code]
-        self.progress_callback = progress_callback
-        self.video_file = Path(video_file) if video_file else None
         self.profiler = profiler
+        self.progress_callback = progress_callback
 
         # Initialize Services
         self.subtitle_service = SubtitleService()

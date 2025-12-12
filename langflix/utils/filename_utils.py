@@ -116,3 +116,47 @@ def sanitize_for_context_video_name(expression: str) -> str:
     """
     return sanitize_for_expression_filename(expression, max_length=50)
 
+
+def extract_show_name(filename: str) -> str:
+    """
+    Extract show name from filename using common naming conventions.
+    
+    Handles patterns like:
+    - Show.Name.S01E01... -> Show Name
+    - Show Name - S01E01... -> Show Name
+    - [Group] Show Name - 01... -> Show Name
+    
+    Args:
+        filename: Input filename (with or without extension)
+        
+    Returns:
+        Extracted show name, or sanitized filename if no pattern found.
+    """
+    if not filename:
+        return "Unknown Show"
+        
+    # Remove extension
+    base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+    
+    # Remove release group tags at start like [Group] or (Group)
+    base_name = re.sub(r'^[\[\(].*?[\]\)]\s*', '', base_name)
+    
+    # Pattern 1: Standard S01E01 or S01 patterns
+    # Matches: "Show.Name.S01", "Show Name S01", "Show_Name_S01"
+    match = re.search(r'(.+?)[._\s-]+S\d{1,2}(?:E\d{1,2})?', base_name, re.IGNORECASE)
+    if match:
+        raw_name = match.group(1)
+        # Replace dots/underscores with spaces
+        return raw_name.replace('.', ' ').replace('_', ' ').strip()
+        
+    # Pattern 2: Anime/Cartoon style " - 01" or " - 01 "
+    # Matches: "Show Name - 01", "Show Name - 105"
+    match = re.search(r'(.+?)\s+-\s+\d{2,3}', base_name)
+    if match:
+        return match.group(1).strip()
+        
+    # Fallback: Use the base name, replacing dots/underscores
+    cleaned = base_name.replace('.', ' ').replace('_', ' ').strip()
+    return cleaned
+
+

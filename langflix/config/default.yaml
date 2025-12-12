@@ -251,6 +251,24 @@ short_video:
       outline_color: 'black'
       background_opacity: 0.75
 
+    # Font configuration for short-form video text overlays
+    # Font paths are relative to the 'assets/fonts' directory
+    fonts:
+      # Catchy keywords (hashtags at top)
+      keywords: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      
+      # Expression text (bottom - main English/Korean expression)
+      expression: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      
+      # Expression translation (bottom - translated expression)
+      translation: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      
+      # Title (catchy title overlay - future use)
+      title: "Maplestory Bold/Maplestory Bold.ttf"
+      
+      # Vocabulary annotations (dynamic word overlays)
+      vocabulary: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+
 # ============================================================================
 # Expression-Based Learning Configuration
 # ============================================================================

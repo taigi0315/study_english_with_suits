@@ -604,6 +604,69 @@ def get_dialogue_subtitle_background_opacity() -> float:
     return get_dialogue_subtitle_config().get('background_opacity', 0.5)
 
 
+def get_layout_fonts_config() -> Dict[str, Any]:
+    """Get fonts configuration for short video layout"""
+    layout = get_short_video_layout_config()
+    return layout.get('fonts', {})
+
+
+def get_custom_font_path(font_type: str) -> Optional[str]:
+    """
+    Get custom font path for a specific text type.
+    
+    Args:
+        font_type: Type of font ('keywords', 'expression', 'translation', 'title', 'vocabulary')
+        
+    Returns:
+        Absolute path to font file, or None if not configured/not found
+    """
+    import os
+    from pathlib import Path
+    
+    fonts_config = get_layout_fonts_config()
+    relative_path = fonts_config.get(font_type)
+    
+    if not relative_path:
+        return None
+    
+    # Build absolute path from assets/fonts directory
+    # Get project root (assuming settings.py is in langflix/)
+    project_root = Path(__file__).parent.parent
+    font_path = project_root / "assets" / "fonts" / relative_path
+    
+    if font_path.exists():
+        return str(font_path)
+    
+    # Log warning if configured but not found
+    logger.warning(f"Custom font not found for {font_type}: {font_path}")
+    return None
+
+
+def get_keywords_font_path() -> Optional[str]:
+    """Get font path for catchy keywords (hashtags at top)"""
+    return get_custom_font_path('keywords')
+
+
+def get_expression_font_path() -> Optional[str]:
+    """Get font path for expression text (bottom)"""
+    return get_custom_font_path('expression')
+
+
+def get_translation_font_path() -> Optional[str]:
+    """Get font path for translation text (bottom)"""
+    return get_custom_font_path('translation')
+
+
+def get_title_font_path() -> Optional[str]:
+    """Get font path for title overlay"""
+    return get_custom_font_path('title')
+
+
+def get_vocabulary_font_path() -> Optional[str]:
+    """Get font path for vocabulary annotations"""
+    return get_custom_font_path('vocabulary')
+
+
 # ============================================================================
 # Storage Configuration Accessors
 # ============================================================================

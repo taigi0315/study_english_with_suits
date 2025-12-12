@@ -848,12 +848,16 @@ class VideoEditor:
                             'bordercolor': settings.get_keywords_border_color()
                         }
 
-                        # Add language-specific fontfile if available
+                        # Add custom font for keywords (prioritize config, then language-specific, then fallback)
                         try:
-                            from langflix.config.font_utils import get_font_file_for_language
-                            font_path = get_font_file_for_language(self.language_code)
-                            if font_path and os.path.exists(font_path):
-                                keyword_args['fontfile'] = font_path
+                            custom_font = settings.get_keywords_font_path()
+                            if custom_font and os.path.exists(custom_font):
+                                keyword_args['fontfile'] = custom_font
+                            else:
+                                from langflix.config.font_utils import get_font_file_for_language
+                                font_path = get_font_file_for_language(self.language_code)
+                                if font_path and os.path.exists(font_path):
+                                    keyword_args['fontfile'] = font_path
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method
@@ -919,13 +923,18 @@ class VideoEditor:
                 'bordercolor': settings.get_expression_border_color()
             }
 
-            # Get language-specific font for drawtext
+            # Get custom font for expression text (prioritize config, then language-specific)
             try:
-                from langflix.config.font_utils import get_font_file_for_language
-                font_path = get_font_file_for_language(self.language_code)
-                if font_path and os.path.exists(font_path):
-                    drawtext_args_1['fontfile'] = font_path
-                    logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
+                custom_font = settings.get_expression_font_path()
+                if custom_font and os.path.exists(custom_font):
+                    drawtext_args_1['fontfile'] = custom_font
+                    logger.debug(f"Using custom font for expression text: {custom_font}")
+                else:
+                    from langflix.config.font_utils import get_font_file_for_language
+                    font_path = get_font_file_for_language(self.language_code)
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_1['fontfile'] = font_path
+                        logger.debug(f"Using font for expression text (language {self.language_code}): {font_path}")
             except Exception as e:
                 logger.warning(f"Error getting font for expression text: {e}")
                 # Fallback to old method
@@ -947,12 +956,16 @@ class VideoEditor:
                 'bordercolor': settings.get_translation_border_color()
             }
 
-            # Use same language-specific font for translation
+            # Get custom font for translation text (prioritize config, then language-specific)
             try:
-                from langflix.config.font_utils import get_font_file_for_language
-                font_path = get_font_file_for_language(self.language_code)
-                if font_path and os.path.exists(font_path):
-                    drawtext_args_2['fontfile'] = font_path
+                custom_font = settings.get_translation_font_path()
+                if custom_font and os.path.exists(custom_font):
+                    drawtext_args_2['fontfile'] = custom_font
+                else:
+                    from langflix.config.font_utils import get_font_file_for_language
+                    font_path = get_font_file_for_language(self.language_code)
+                    if font_path and os.path.exists(font_path):
+                        drawtext_args_2['fontfile'] = font_path
             except Exception as e:
                 logger.warning(f"Error getting font for translation text: {e}")
                 # Fallback to old method
@@ -1014,12 +1027,16 @@ class VideoEditor:
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
                             }
                             
-                            # Add language-specific font
+                            # Add custom font for vocabulary (prioritize config, then language-specific)
                             try:
-                                from langflix.config.font_utils import get_font_file_for_language
-                                font_path = get_font_file_for_language(self.language_code)
-                                if font_path and os.path.exists(font_path):
-                                    vocab_drawtext_args['fontfile'] = font_path
+                                custom_font = settings.get_vocabulary_font_path()
+                                if custom_font and os.path.exists(custom_font):
+                                    vocab_drawtext_args['fontfile'] = custom_font
+                                else:
+                                    from langflix.config.font_utils import get_font_file_for_language
+                                    font_path = get_font_file_for_language(self.language_code)
+                                    if font_path and os.path.exists(font_path):
+                                        vocab_drawtext_args['fontfile'] = font_path
                             except Exception:
                                 pass
                             

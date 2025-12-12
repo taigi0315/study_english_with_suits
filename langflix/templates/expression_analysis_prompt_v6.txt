@@ -396,6 +396,7 @@ For short videos (≤ 60 seconds total):
 
 [
   {{
+    "title": "Catchy, dramatic title in {target_language} (8-15 words). Should make viewers curious and want to watch. Examples: '회사 복사실에서 썸타다가 벌어진 일', '어제 나를 해고한 상사가 백지수표를 들고 찾아왔다'",
     "dialogues": [
       // EXACT dialogue text from subtitles (NO speaker names like "Mike:" or "Harvey:")
       // ALL lines between context_start_time and context_end_time
@@ -472,13 +473,14 @@ For short videos (≤ 60 seconds total):
 - ✓ Keywords reveal the dramatic hook without spoiling everything
 - ✓ Keywords would make someone stop scrolling and think "I need to see this!"
 - ✓ vocabulary_annotations has 1-3 interesting words with correct dialogue_index
+- ✓ title is catchy, dramatic, in {target_language}, 8-15 words, makes viewers curious
 
 Return ONLY expressions that pass ALL checks. Be selective. Quality matters more than quantity.
 
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
 If you find expressions, respond with this exact format:
-{{"expressions":[{{"dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["keyword1","keyword2","keyword3"],"vocabulary_annotations":[{{"word":"interesting word","translation":"translation","dialogue_index":0}}]}}]}}
+{{"expressions":[{{"title":"회사에서 상사에게 참교육 당하는 순간","dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["keyword1","keyword2","keyword3"],"vocabulary_annotations":[{{"word":"interesting word","translation":"translation","dialogue_index":0}}]}}]}}
 
 If you find NO expressions, respond with:
 {{"expressions":[]}}

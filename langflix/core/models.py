@@ -26,6 +26,10 @@ class ExpressionAnalysis(BaseModel):
     """
     Model for a single expression analysis result
     """
+    title: Optional[str] = Field(
+        default=None,
+        description="Catchy, dramatic title in target language (8-15 words) for video thumbnail/hook"
+    )
     dialogues: List[str] = Field(
         description="Complete dialogue lines in the scene",
         min_length=1

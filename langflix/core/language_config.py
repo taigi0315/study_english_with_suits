@@ -83,9 +83,16 @@ class LanguageConfig:
         Returns:
             Language configuration dictionary
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if language_code not in cls.LANGUAGE_CONFIGS:
-            # Fallback to Korean if language not supported
+            # Log warning when falling back to Korean
+            logger.warning(f"⚠️ Language '{language_code}' not supported! Falling back to Korean. "
+                          f"Supported languages: {list(cls.LANGUAGE_CONFIGS.keys())}")
             language_code = 'ko'
+        else:
+            logger.debug(f"Using language config for: {language_code} ({cls.LANGUAGE_CONFIGS[language_code]['name']})")
         
         return cls.LANGUAGE_CONFIGS[language_code]
     

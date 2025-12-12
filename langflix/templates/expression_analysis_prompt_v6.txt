@@ -365,8 +365,8 @@ For short videos (≤ 60 seconds total):
 **FORMAT:**
 ```json
 "vocabulary_annotations": [
-  {{"word": "douchebag", "translation": "멍청이", "dialogue_index": 0}},
-  {{"word": "code red", "translation": "강력한 경고", "dialogue_index": 5}}
+  {{"word": "douchebag", "translation": "[translation in {target_language}]", "dialogue_index": 0}},
+  {{"word": "code red", "translation": "[translation in {target_language}]", "dialogue_index": 5}}
 ]
 ```
 
@@ -488,8 +488,8 @@ Return ONLY expressions that pass ALL checks. Be selective. Quality matters more
 
 **CRITICAL: You MUST respond with ONLY valid JSON. No explanations, no markdown, no additional text.**
 
-If you find expressions, respond with this exact format:
-{{"expressions":[{{"title":"회사에서 상사에게 참교육 당하는 순간","dialogues":["line 1","line 2"],"translation":["trans 1","trans 2"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"full translation of the sentence","expression":"key phrase here","expression_translation":"translation of just the key phrase","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["숨겨진 속내 드러나는 순간","상사의 뼈때리는 한마디","직장 드라마 레전드 장면"],"vocabulary_annotations":[{{"word":"interesting word","translation":"translation","dialogue_index":0}}]}}]}}
+If you find expressions, respond with this exact format (ALL translations, titles, keywords in {target_language}):
+{{"expressions":[{{"title":"[catchy title in {target_language}]","dialogues":["line 1","line 2"],"translation":["[trans 1 in {target_language}]","[trans 2 in {target_language}]"],"expression_dialogue":"complete sentence from subtitles","expression_dialogue_translation":"[full translation in {target_language}]","expression":"key phrase here","expression_translation":"[translation in {target_language}]","similar_expressions":["similar1","similar2"],"context_start_time":"00:00:00.000","context_end_time":"00:00:00.000","catchy_keywords":["[keyword 1 in {target_language}]","[keyword 2 in {target_language}]","[keyword 3 in {target_language}]"],"vocabulary_annotations":[{{"word":"interesting word","translation":"[translation in {target_language}]","dialogue_index":0}}]}}]}}
 
 If you find NO expressions, respond with:
 {{"expressions":[]}}

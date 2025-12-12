@@ -88,7 +88,7 @@ class ExpressionAnalysis(BaseModel):
     )
     vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
         default=None,
-        description="1-3 vocabulary words with translations for dynamic video overlays"
+        description="2-5 vocabulary words with translations for dynamic video overlays"
     )
 
     # New fields for expression-based learning

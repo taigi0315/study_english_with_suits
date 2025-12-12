@@ -1014,7 +1014,7 @@ class VideoEditor:
                         context_duration = self._time_to_seconds(expression.context_end_time) - context_start_seconds if expression.context_end_time else 30.0
                         time_per_dialogue = context_duration / len(dialogues)
                         
-                        for vocab_annot in expression.vocabulary_annotations[:3]:  # Max 3 annotations
+                        for idx, vocab_annot in enumerate(expression.vocabulary_annotations[:5]):  # Max 5 annotations (increased)
                             word = vocab_annot.word if hasattr(vocab_annot, 'word') else ''
                             translation = vocab_annot.translation if hasattr(vocab_annot, 'translation') else ''
                             dialogue_index = vocab_annot.dialogue_index if hasattr(vocab_annot, 'dialogue_index') else 0
@@ -1032,16 +1032,30 @@ class VideoEditor:
                             annot_text = f"{word} : {translation}"
                             escaped_annot = escape_drawtext_string(annot_text)
                             
-                            # Position: configurable from settings
-                            vocab_y_offset = settings.get_vocabulary_y_offset()
-                            annot_y = y_offset + vocab_y_offset
+                            # RANDOM POSITIONING within video area to avoid overlap and catch attention
+                            # Video area: Y from 440 to 1480 (1040px), X from 20 to 1000 (leaving padding)
+                            import random
+                            
+                            # Define the video area bounds (9:16 format)
+                            video_area_y_start = 460   # Just below top padding (440 + 20 margin)
+                            video_area_y_end = 1400    # Just above bottom padding (1480 - 80 for text height)
+                            video_area_x_start = 20    # Left margin
+                            video_area_x_end = 800     # Leave room for text width on right
+                            
+                            # Use different random positions for each annotation
+                            # Seed with annotation index for reproducibility per video
+                            random.seed(hash(f"{word}_{idx}") % 2**32)
+                            
+                            # Pick random X and Y within bounds
+                            rand_x = random.randint(video_area_x_start, video_area_x_end)
+                            rand_y = random.randint(video_area_y_start, video_area_y_end)
                             
                             vocab_drawtext_args = {
                                 'text': escaped_annot,
                                 'fontsize': settings.get_vocabulary_font_size(),
                                 'fontcolor': settings.get_vocabulary_text_color(),
-                                'x': settings.get_vocabulary_x_position(),
-                                'y': annot_y,
+                                'x': rand_x,
+                                'y': rand_y,
                                 'borderw': settings.get_vocabulary_border_width(),
                                 'bordercolor': settings.get_vocabulary_border_color(),
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
@@ -1061,9 +1075,9 @@ class VideoEditor:
                                 pass
                             
                             final_video = ffmpeg.filter(final_video, 'drawtext', **vocab_drawtext_args)
-                            logger.debug(f"Added vocabulary annotation: '{word}' at t={annot_start:.2f}-{annot_end:.2f}s")
+                            logger.debug(f"Added vocabulary annotation: '{word}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s")
                         
-                        logger.info(f"Added {len(expression.vocabulary_annotations[:3])} vocabulary annotations with dynamic timing")
+                        logger.info(f"Added {len(expression.vocabulary_annotations[:5])} vocabulary annotations with random positions")
                 except Exception as vocab_error:
                     logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
             
@@ -1236,46 +1250,63 @@ class VideoEditor:
                         # Create temp output with ending credit
                         temp_with_credit = Path(output_path).parent / f"temp_with_credit_{Path(output_path).name}"
                         
-                        # Get main video duration
-                        from langflix.media.ffmpeg_utils import get_video_params
-                        main_vp = get_video_params(str(output_path))
-                        main_duration = main_vp.duration or 0
+                        # Use subprocess for more reliable concat with filter_complex
+                        import subprocess
                         
-                        # Prepare inputs
-                        main_input = ffmpeg.input(str(output_path))
-                        credit_input = ffmpeg.input(ending_credit_path, t=ending_duration)
+                        # Build ffmpeg command manually for better control
+                        cmd = [
+                            'ffmpeg', '-y',
+                            '-i', str(output_path),
+                            '-i', ending_credit_path,
+                            '-filter_complex',
+                            f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
+                            f'[0:v][0:a][credit_v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+                            '-map', '[outv]',
+                            '-map', '[outa]',
+                            '-t', str(ending_duration + 120),  # Max duration (main + credit)
+                            '-c:v', 'libx264',
+                            '-c:a', 'aac',
+                            '-preset', 'medium',
+                            '-crf', '18',
+                            str(temp_with_credit)
+                        ]
                         
-                        # Scale ending credit to match main video dimensions (1080x1920 for 9:16)
-                        credit_scaled = credit_input['v'].filter('scale', 1080, 1920).filter('setsar', 1)
+                        result = subprocess.run(cmd, capture_output=True, text=True)
                         
-                        # Ensure both have audio (add silent audio to credit if needed)
-                        credit_audio = credit_input['a']
-                        
-                        # Concatenate videos
-                        video_args = self._get_video_output_args(source_video_path=str(output_path))
-                        (
-                            ffmpeg.concat(
-                                main_input['v'], main_input['a'],
-                                credit_scaled, credit_audio,
-                                v=1, a=1
-                            )
-                            .output(
-                                str(temp_with_credit),
-                                vcodec=video_args.get('vcodec', 'libx264'),
-                                acodec=video_args.get('acodec', 'aac'),
-                                ac=2,
-                                ar=48000,
-                                preset=video_args.get('preset', 'medium'),
-                                crf=video_args.get('crf', 18)
-                            )
-                            .overwrite_output()
-                            .run(capture_stdout=True, capture_stderr=True)
-                        )
-                        
-                        # Replace original with version that has credit
-                        import shutil
-                        shutil.move(str(temp_with_credit), str(output_path))
-                        logger.info(f"✅ Ending credit appended successfully")
+                        if result.returncode == 0 and temp_with_credit.exists():
+                            # Replace original with version that has credit
+                            import shutil
+                            shutil.move(str(temp_with_credit), str(output_path))
+                            logger.info(f"✅ Ending credit appended successfully")
+                        else:
+                            # Try simpler approach without audio from credit
+                            logger.info(f"Retrying ending credit with silent audio fallback...")
+                            cmd_simple = [
+                                'ffmpeg', '-y',
+                                '-i', str(output_path),
+                                '-i', ending_credit_path,
+                                '-filter_complex',
+                                f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
+                                f'anullsrc=r=48000:cl=stereo[silent];'
+                                f'[silent]atrim=0:{ending_duration}[credit_a];'
+                                f'[0:v][0:a][credit_v][credit_a]concat=n=2:v=1:a=1[outv][outa]',
+                                '-map', '[outv]',
+                                '-map', '[outa]',
+                                '-c:v', 'libx264',
+                                '-c:a', 'aac',
+                                '-preset', 'medium',
+                                '-crf', '18',
+                                str(temp_with_credit)
+                            ]
+                            
+                            result2 = subprocess.run(cmd_simple, capture_output=True, text=True)
+                            
+                            if result2.returncode == 0 and temp_with_credit.exists():
+                                import shutil
+                                shutil.move(str(temp_with_credit), str(output_path))
+                                logger.info(f"✅ Ending credit appended with silent audio")
+                            else:
+                                logger.warning(f"Failed to append ending credit: {result2.stderr[:500] if result2.stderr else 'Unknown error'}")
                     except Exception as e:
                         logger.warning(f"Failed to append ending credit: {e}")
                         # Continue without ending credit

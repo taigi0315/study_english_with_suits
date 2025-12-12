@@ -148,7 +148,7 @@ transitions:
   # Context to expression transition (dedicated transition video segment)
   context_to_expression_transition:
     enabled: true
-    duration: 0.3 
+    duration: 1.2 
     image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
     image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
     sound_effect_path: "assets/sound_effect.mp3"
@@ -293,7 +293,7 @@ short_video:
 
     # Vocabulary annotations (dynamic overlays that appear when words are spoken)
     vocabulary_annotations:
-      font_size: 45                # Font size for vocabulary text
+      font_size: 50                # Font size for vocabulary text
       text_color: 'yellow'         # Text color
       border_width: 2              # Border width
       border_color: 'black'        # Border color

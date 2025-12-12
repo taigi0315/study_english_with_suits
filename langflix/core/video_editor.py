@@ -1037,10 +1037,10 @@ class VideoEditor:
                             import random
                             
                             # Define the video area bounds (9:16 format)
-                            video_area_y_start = 460   # Just below top padding (440 + 20 margin)
-                            video_area_y_end = 1400    # Just above bottom padding (1480 - 80 for text height)
-                            video_area_x_start = 20    # Left margin
-                            video_area_x_end = 800     # Leave room for text width on right
+                            video_area_y_start = 460
+                            video_area_y_end = 1200
+                            video_area_x_start = 20
+                            video_area_x_end = 800
                             
                             # Use different random positions for each annotation
                             # Seed with annotation index for reproducibility per video

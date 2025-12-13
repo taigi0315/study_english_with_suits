@@ -196,24 +196,31 @@ class LangFlixPipeline:
             # DB Integration
             media_id = self._init_db_media() if DB_AVAILABLE and settings.get_database_enabled() else None
 
-            # Step 1: Parse & Chunk Subtitles
-            self._update_progress(10, "Parsing subtitles...")
-            subtitles = self.subtitle_service.parse(self.subtitle_file)
-            chunks = self.subtitle_service.chunk(subtitles)
+            # V2 MODE: Check if dual-language mode is enabled
+            if settings.is_dual_language_enabled():
+                # V2 Workflow: Use dual subtitles from Netflix
+                logger.info("🆕 V2 Mode: Using dual-language subtitle workflow")
+                self.expressions = self._run_v2_analysis(language_level, max_expressions)
+            else:
+                # V1 Workflow: Traditional single subtitle + LLM translation
+                # Step 1: Parse & Chunk Subtitles
+                self._update_progress(10, "Parsing subtitles...")
+                subtitles = self.subtitle_service.parse(self.subtitle_file)
+                chunks = self.subtitle_service.chunk(subtitles)
 
-            # Step 2: Analyze Expressions
-            self._update_progress(30, "Analyzing expressions...")
-            self.expressions = self.expression_service.analyze(
-                chunks, 
-                self.subtitle_processor,
-                max_expressions=max_expressions,
-                language_level=language_level,
-                save_llm_output=save_llm_output,
-                test_mode=test_mode,
-                output_dir=self._get_llm_output_dir() if save_llm_output else None,
-                target_duration=short_form_max_duration,
-                progress_callback=lambda p, m=None: None
-            )
+                # Step 2: Analyze Expressions
+                self._update_progress(30, "Analyzing expressions...")
+                self.expressions = self.expression_service.analyze(
+                    chunks, 
+                    self.subtitle_processor,
+                    max_expressions=max_expressions,
+                    language_level=language_level,
+                    save_llm_output=save_llm_output,
+                    test_mode=test_mode,
+                    output_dir=self._get_llm_output_dir() if save_llm_output else None,
+                    target_duration=short_form_max_duration,
+                    progress_callback=lambda p, m=None: None
+                )
 
             # Step 3: Translate
             # Optimization: If we only have 1 target language, the Analysis step already did the work (translation in target lang).
@@ -348,6 +355,85 @@ class LangFlixPipeline:
     def _cleanup_resources(self):
         from langflix.utils.temp_file_manager import get_temp_manager
         get_temp_manager().cleanup_all()
+
+    def _run_v2_analysis(self, language_level: str = None, max_expressions: int = None) -> List[Dict[str, Any]]:
+        """
+        V2 Analysis: Use dual-language subtitles from Netflix.
+        
+        Instead of LLM translating, we load both source and target subtitles
+        and let the LLM focus purely on content selection.
+        
+        Returns:
+            List of V1-compatible expression dicts
+        """
+        from langflix.core.dual_subtitle import get_dual_subtitle_service
+        from langflix.core.content_selection_analyzer import analyze_with_dual_subtitles
+        from langflix.utils.language_utils import language_name_to_code
+        from langflix.utils.path_utils import get_subtitle_folder, discover_subtitle_languages
+        
+        self._update_progress(10, "Loading dual-language subtitles...")
+        
+        # Get media path from video file
+        media_path = self.video_file if self.video_file else self.video_dir
+        
+        # Discover available languages
+        subtitle_folder = get_subtitle_folder(media_path)
+        if not subtitle_folder:
+            logger.warning("No subtitle folder found, falling back to V1")
+            return []
+        
+        languages = discover_subtitle_languages(subtitle_folder)
+        if not languages:
+            logger.warning("No subtitle languages found, falling back to V1")
+            return []
+        
+        # Get source and target languages from config
+        source_lang = settings.get_default_source_language()  # e.g., "English"
+        target_lang = settings.get_default_target_language()  # e.g., "Korean"
+        
+        # Validate availability
+        lang_names = list(languages.keys())
+        if source_lang not in lang_names or target_lang not in lang_names:
+            logger.warning(f"Required languages not available. Need {source_lang} + {target_lang}, have: {lang_names}")
+            return []
+        
+        # Load dual subtitles
+        self._update_progress(20, f"Loading {source_lang} + {target_lang} subtitles...")
+        try:
+            service = get_dual_subtitle_service()
+            dual_sub = service.load_dual_subtitles(
+                media_path=media_path,
+                source_language=source_lang,
+                target_language=target_lang,
+            )
+        except Exception as e:
+            logger.error(f"Failed to load dual subtitles: {e}")
+            return []
+        
+        # Analyze for content selection
+        self._update_progress(40, "Selecting educational content...")
+        try:
+            expressions = analyze_with_dual_subtitles(
+                dual_subtitle=dual_sub,
+                show_name=self.series_name,
+                language_level=language_level or "intermediate",
+                min_expressions=1,
+                max_expressions=max_expressions or 5,
+                target_duration=45.0,
+            )
+            
+            # Store source language code for video editor
+            source_lang_code = language_name_to_code(source_lang)
+            for expr in expressions:
+                expr['_source_language_code'] = source_lang_code
+            
+            logger.info(f"V2 analysis found {len(expressions)} expressions")
+            return expressions
+            
+        except Exception as e:
+            logger.error(f"V2 content selection failed: {e}")
+            return []
+
 
 def validate_input_arguments(args) -> None:
     """Validate all input arguments before processing."""

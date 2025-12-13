@@ -7,6 +7,8 @@ Creates educational video sequences with context, expression clips, and educatio
 import json
 import ffmpeg
 import logging
+import shutil
+import textwrap
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
@@ -147,8 +149,9 @@ class VideoEditor:
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            # Simplified filename: just expression name (e.g., "throw_em_off.mkv")
-            output_filename = f"{safe_expression}.mkv"
+            # Use index to ensure uniqueness and order (e.g., "expression_01_throw_em_off.mkv")
+            # Truncate safe_expression to avoid too long filenames
+            output_filename = f"expression_{expression_index+1:02d}_{safe_expression[:50]}.mkv"
             
             # Use expressions/ directory from paths (created by output_manager)
             if hasattr(self, 'output_dir') and hasattr(self.output_dir, 'parent'):
@@ -310,36 +313,76 @@ class VideoEditor:
                 .run(capture_stdout=True, capture_stderr=True)
             )
 
-            # Step 1b: Extract expression video clip from context clip
+            # Step 1b: Extract expression video clip from ORIGINAL SOURCE for timing accuracy
+            # (Avoids timing drift from "cut of a cut")
             expression_video_clip_path = self.output_dir / f"temp_expr_clip_long_form_{safe_expression}.mkv"
             self._register_temp_file(expression_video_clip_path)
-            logger.info(f"Extracting expression clip from context ({expression_duration:.2f}s)")
+            logger.info(f"Extracting expression clip from SOURCE: {expression_start_seconds:.2f}s - {expression_end_seconds:.2f}s ({expression_duration:.2f}s)")
             
-            input_stream = ffmpeg.input(str(context_clip_reset_path))
-            video_stream = input_stream['v']
-            audio_stream = input_stream['a']
+            # Re-resolve subtitle file if needed (reuse variable from Step 1a if available, otherwise resolving again)
+            # Note: variable 'subtitle_file' might be from local scope in "else" block above. 
+            # Ideally we should elevate the subtitle resolution scope, but for now let's reuse if set, or resolve if not.
             
             try:
-                # Extract with output seeking
-                # Get quality settings from config (TICKET-072: improved quality)
-                video_args = self._get_video_output_args(source_video_path=context_video_path)
-                (
-                    ffmpeg.output(
-                        video_stream,
-                        audio_stream,
+                # Check if we have the subtitle file context from above
+                current_subtitle_file = locals().get('subtitle_file')
+                
+                if current_subtitle_file and os.path.exists(current_subtitle_file):
+                     # Create adjusted subtitle file for the expression clip
+                     # Since we are extracting from absolute time 'expression_start_seconds', 
+                     # we need subtitles to start from 0 relative to that point.
+                     # So we subtract 'expression_start_seconds' from all timestamps.
+                     adjusted_subtitle_path = self.output_dir / f"temp_adjusted_subtitle_{safe_expression}.srt"
+                     self._register_temp_file(adjusted_subtitle_path)
+                     
+                     logger.info(f"Adjusting subtitles by -{expression_start_seconds:.2f}s for expression clip")
+                     subs_overlay.adjust_subtitle_timestamps(
+                         Path(current_subtitle_file), 
+                         expression_start_seconds, 
+                         adjusted_subtitle_path
+                     )
+                     
+                     # Apply subtitles using subs_overlay directly on source for the expression clip
+                     # Note: We use the adjusted subtitle file, but since we are extracting from source
+                     # we might need to be careful. 
+                     # Wait, apply_dual_subtitle_layers uses input seeking (-ss) on the video.
+                     # If we use input seeking on video, the video timestamps reset to 0.
+                     # The adjusted subtitles also start at 0. So they should match!
+                     # BUT apply_dual_subtitle_layers takes 'expression_start_seconds' as argument 
+                     # and does input seeking inside.
+                     # Let's see: video input has -ss expression_start_seconds.
+                     # Video stream starts at 0.
+                     # Adjusted subtitles start at 0.
+                     # Perfect match.
+                     
+                     logger.info(f"Applying subtitles to expression clip from: {adjusted_subtitle_path}")
+                     subs_overlay.apply_dual_subtitle_layers(
+                        str(context_video_path),
+                        str(adjusted_subtitle_path),
+                        "",
                         str(expression_video_clip_path),
-                        vcodec=video_args.get('vcodec', 'libx264'),
-                        acodec=video_args.get('acodec', 'aac'),
-                        ac=2,
-                        ar=48000,
-                        preset=video_args.get('preset', 'medium'),
-                        crf=video_args.get('crf', 18),
-                        ss=relative_start,
-                        t=expression_duration
+                        expression_start_seconds,
+                        expression_end_seconds
                     )
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
+                else:
+                    # Direct extraction without subtitles
+                    video_args = self._get_video_output_args(source_video_path=context_video_path)
+                    (
+                        ffmpeg.input(str(context_video_path))
+                        .output(
+                            str(expression_video_clip_path),
+                            vcodec=video_args.get('vcodec', 'libx264'),
+                            acodec=video_args.get('acodec', 'aac'),
+                            ac=2,
+                            ar=48000,
+                            preset=video_args.get('preset', 'medium'),
+                            crf=video_args.get('crf', 18),
+                            ss=expression_start_seconds,
+                            t=expression_duration
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
                 
                 # Reset timestamps
                 temp_clip_path = self.output_dir / f"temp_expr_clip_long_form_reset_{safe_expression}.mkv"
@@ -491,7 +534,7 @@ class VideoEditor:
                     
                     # Load logo image - use simple input without loop/framerate for PNG
                     logo_input = ffmpeg.input(str(logo_path))
-                    logo_video = logo_input['v'].filter('scale', -1, 250)  # Logo height doubled
+                    logo_video = logo_input['v'].filter('scale', -1, 80)  # Logo height reduced to 80px (approx 3x smaller)
                     logo_video = logo_video.filter('format', 'rgba')
                     logo_video = logo_video.filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', a='0.5*alpha(X,Y)')
                     
@@ -510,7 +553,7 @@ class VideoEditor:
                     )
                     
                     # Output video with logo - Get quality settings from config (TICKET-072)
-                    video_args = self._get_video_output_args(source_video_path=long_form_video_path)
+                    video_args = self._get_video_output_args(source_video_path=str(long_form_temp_path))
                     if long_form_audio:
                         (
                             ffmpeg.output(
@@ -592,7 +635,8 @@ class VideoEditor:
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
             safe_expression = sanitize_for_expression_filename(expression.expression)
-            output_filename = f"short_form_{safe_expression}.mkv"
+            # Use index to ensure uniqueness and order
+            output_filename = f"short_form_{expression_index+1:02d}_{safe_expression[:50]}.mkv"
             
             # Use shorts/ directory from paths (created by output_manager)
             # Priority: 1) self.paths['shorts'], 2) self.paths['language']['shorts'], 3) fallback to output_dir structure
@@ -648,20 +692,45 @@ class VideoEditor:
             long_form_width = long_form_vp.width or target_width
             long_form_height = long_form_vp.height or target_height
             
-            # Calculate scale to fit height 960px
-            scale_factor = long_form_video_height / long_form_height
-            scaled_width = int(long_form_width * scale_factor)
+            # Smart Crop Detection (TICKET-090)
+            # Detect actual content area to avoid scaling black bars
+            from langflix.media.ffmpeg_utils import detect_black_bars
+            crop_params = detect_black_bars(long_form_video_path)
+            
+            content_width = long_form_width
+            content_height = long_form_height
+            crop_filter_str = None
+            
+            if crop_params:
+                try:
+                    # crop_params is "w:h:x:y"
+                    c_w, c_h, c_x, c_y = map(int, crop_params.split(':'))
+                    # Verify validity (avoid noise)
+                    if c_w > 0 and c_h > 0 and (c_w < long_form_width or c_h < long_form_height):
+                        content_width = c_w
+                        content_height = c_h
+                        crop_filter_str = crop_params
+                        logger.info(f"Detected active content area: {c_w}x{c_h} (crop={crop_params})")
+                except Exception as e:
+                    logger.warning(f"Error parsing crop params '{crop_params}': {e}")
+            
+            # Calculate scale based on CONTENT dimensions to fit target height (960px)
+            # This effectively "zooms in" if black bars were detected
+            scale_factor = long_form_video_height / content_height
+            scaled_width = int(content_width * scale_factor)
             scaled_height = long_form_video_height
             
             # If scaled width exceeds target width, crop from center
             crop_x = 0
             if scaled_width > target_width:
                 crop_x = (scaled_width - target_width) // 2
-                scaled_width = target_width
+                final_width = target_width
+            else:
+                final_width = scaled_width
             
             logger.info(
-                f"Scaling long-form video: {long_form_width}x{long_form_height} -> "
-                f"{scaled_width}x{scaled_height} (crop_x={crop_x})"
+                f"Scaling long-form video based on content ({content_width}x{content_height}) -> "
+                f"{scaled_width}x{scaled_height} (final crop_x={crop_x})"
             )
             
             # Step 2: Create scaled and cropped long-form video
@@ -671,10 +740,15 @@ class VideoEditor:
             long_form_input = ffmpeg.input(str(long_form_video_path))
             video_stream = long_form_input['v']
             
-            # Scale to height 960px
+            # 1. Apply black bar crop if detected
+            if crop_filter_str:
+                 cw, ch, cx, cy = crop_filter_str.split(':')
+                 video_stream = ffmpeg.filter(video_stream, 'crop', cw, ch, cx, cy)
+            
+            # 2. Scale to height 960px (based on content height)
             video_stream = ffmpeg.filter(video_stream, 'scale', -1, scaled_height)
             
-            # Crop from center if width exceeds target
+            # 3. Crop from center if width exceeds target
             if crop_x > 0:
                 video_stream = ffmpeg.filter(
                     video_stream,
@@ -853,30 +927,16 @@ class VideoEditor:
 
                         # Add custom font for keywords
                         try:
-                            # For non-Asian languages (Spanish, French, English), use language-specific fonts
-                            # Prioritize system fonts that support Latin characters over the configured custom font (which might be Korean-only)
-                            non_asian_languages = ['es', 'fr', 'en', 'de', 'it', 'pt']
-                            is_non_asian = self.language_code and self.language_code.lower() in non_asian_languages
-                            
-                            custom_font = settings.get_keywords_font_path()
-                            
-                            if is_non_asian:
-                                # For non-Asian, try language specific font FIRST
-                                from langflix.config.font_utils import get_font_file_for_language
-                                font_path = get_font_file_for_language(self.language_code)
-                                if font_path and os.path.exists(font_path):
-                                    keyword_args['fontfile'] = font_path
-                                elif custom_font and os.path.exists(custom_font):
-                                    keyword_args['fontfile'] = custom_font
-                            else:
-                                # For Asian languages, try configured custom font FIRST
-                                if custom_font and os.path.exists(custom_font):
-                                    keyword_args['fontfile'] = custom_font
-                                else:
-                                    from langflix.config.font_utils import get_font_file_for_language
-                                    font_path = get_font_file_for_language(self.language_code)
-                                    if font_path and os.path.exists(font_path):
-                                        keyword_args['fontfile'] = font_path
+                            # Use new per-language font config logic
+                            # This handles language specific fonts including Spanish (via font_utils)
+                            # Key: 'keywords'
+                            font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
+                            if font_path and os.path.exists(font_path):
+                                keyword_args['fontfile'] = font_path
+                        except Exception as e:
+                            logger.warning(f"Error getting font for keywords: {e}")
+                            # Fallback to old logic if needed
+                            pass
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method
@@ -908,85 +968,94 @@ class VideoEditor:
                             }
                             # Use language-specific font for comma
                             try:
-                                from langflix.config.font_utils import get_font_file_for_language
-                                font_path = get_font_file_for_language(self.language_code)
+                                font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
                                 if font_path and os.path.exists(font_path):
                                     comma_args['fontfile'] = font_path
                             except Exception as e:
                                 logger.warning(f"Error getting font for comma: {e}")
-                                # Fallback to old method
-                                if font_file:
-                                    font_path = font_file.replace('fontfile=', '').replace(':', '')
-                                    if font_path and os.path.exists(font_path):
-                                        comma_args['fontfile'] = font_path
                             final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
 
                 logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
-            # Add expression text and translation combined at bottom (one line)
-            # Format: "Korean Expression // English Translation"
-            # Format expression text with newline separator for bottom overlay
-            # Use newline to split expression and translation as requested
-            combined_text = f"{expression.expression}\n{expression.expression_translation}"
+            # Split expression and translation into separate drawtext filters for better control
+            # This avoids newline escaping issues and allows independent positioning
             
-            # Helper function to add line breaks
-            def add_line_breaks_for_padding(text: str, max_words: int) -> str:
-                """Add newlines after every max_words words for FFmpeg drawtext"""
-                if not text:
-                    return text
-                words = text.split()
-                if len(words) <= max_words:
-                    return text
-                lines = []
-                for i in range(0, len(words), max_words):
-                    lines.append(' '.join(words[i:i+max_words]))
-                return '\n'.join(lines)
-            
-            # Apply wrapping to individual parts if needed, though usually short for bottom overlay
-            # For bottom overlay, we want distinct lines for expression (Language A) and translation (Language B)
-            
-            escaped_text = escape_drawtext_string(combined_text)
+            # Wrapper function for consistent text wrapping width
+            def wrap_text(text, width=20):
+                return textwrap.fill(text, width=width)
 
-            # Add expression text at bottom (configurable styling)
-            # Both lines use the same font and styling
-            drawtext_args_1 = {
-                'text': escaped_text,
-                'fontsize': settings.get_expression_font_size(),
+            # 1. Expression (Top line)
+            expression_text = expression.expression
+            # Wrap text to avoid cutoff (width=20 chars for narrower column/more lines)
+            wrapped_expression = wrap_text(expression_text, width=20)
+            escaped_expression = escape_drawtext_string(wrapped_expression)
+            
+            expression_y_pos_str = settings.get_expression_y_position() # e.g. h-150
+            # We need to know the offset to push translation down.
+            # Count lines in wrapped text
+            expr_line_count = wrapped_expression.count('\n') + 1
+            expression_font_size = settings.get_expression_font_size()
+            
+            # Approx line height (font size * 1.2)
+            expr_height_px = expression_font_size * 1.2 * expr_line_count
+            
+            drawtext_args_expr = {
+                'text': escaped_expression,
+                'fontsize': expression_font_size, 
                 'fontcolor': settings.get_expression_text_color(),
-                'x': '(w-text_w)/2',  # Center horizontally
-                'y': settings.get_expression_y_position(),
+                'x': '(w-text_w)/2',
+                'y': expression_y_pos_str, 
                 'borderw': settings.get_expression_border_width(),
                 'bordercolor': settings.get_expression_border_color(),
-                'line_spacing': 10  # Add some spacing between lines
+                'line_spacing': 10 # Add some spacing between wrapped lines
             }
 
-            # Get custom font for expression text (prioritize config, then language-specific)
-            # Use Maplestory Bold or configured educational font which supports multiple scripts
+            # Get font for expression
             try:
-                # Use educational slide font as primary choice for mixed scripts
-                custom_font = settings.get_educational_slide_font_path()
-                if custom_font and os.path.exists(custom_font):
-                    drawtext_args_1['fontfile'] = custom_font
-                    logger.debug(f"Using educational font for bottom expression: {custom_font}")
-                else:
-                    custom_font = settings.get_expression_font_path()
-                    if custom_font and os.path.exists(custom_font):
-                        drawtext_args_1['fontfile'] = custom_font
-                    else:
-                        from langflix.config.font_utils import get_font_file_for_language
-                        font_path = get_font_file_for_language(self.language_code)
-                        if font_path and os.path.exists(font_path):
-                            drawtext_args_1['fontfile'] = font_path
+                # Use 'expression' use case
+                font_path = self._get_font_path_for_use_case(self.language_code, "expression")
+                if font_path and os.path.exists(font_path):
+                    drawtext_args_expr['fontfile'] = font_path
             except Exception as e:
-                logger.warning(f"Error getting font for expression text: {e}")
-                # Fallback to old method
-                if font_file:
-                    font_path = font_file.replace('fontfile=', '').replace(':', '')
-                    if font_path and os.path.exists(font_path):
-                        drawtext_args_1['fontfile'] = font_path
+                logger.warning(f"Error getting font for expression: {e}")
+            except Exception as e:
+                logger.warning(f"Error getting font for expression: {e}")
 
-            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_1)
+            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_expr)
+
+            # 2. Translation (Bottom line)
+            translation_text = expression.expression_translation
+            # Wrap translation as well
+            wrapped_translation = wrap_text(translation_text, width=20)
+            escaped_translation = escape_drawtext_string(wrapped_translation)
+            
+            # Position translation below expression
+            # Use fixed basic offset (60) + extra height from wrapped lines
+            # If expression has 1 line, use default. If 2 lines, add height difference.
+            # Base logic: expression_y + (line_count * line_height) + padding
+            # But expression_y is a string 'h-150'.
+            # We can construct the string: f"{expression_y_pos_str}+{int(expr_height_px)}+20"
+            
+            padding_between = 20
+            translation_y = f"{expression_y_pos_str}+{int(expr_height_px) + padding_between}"
+            
+            drawtext_args_trans = {
+                'text': escaped_translation,
+                'fontsize': settings.get_translation_font_size(),
+                'fontcolor': settings.get_translation_text_color(),
+                'x': '(w-text_w)/2',
+                'y': translation_y,
+                'borderw': settings.get_translation_border_width(),
+                'bordercolor': settings.get_translation_border_color(),
+                'line_spacing': 10
+            } 
+            
+            # Use same font for translation
+            if 'fontfile' in drawtext_args_expr:
+                drawtext_args_trans['fontfile'] = drawtext_args_expr['fontfile']
+
+            final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_trans)
             
             # Add dynamic vocabulary annotations (appear when the word is spoken)
             # These overlays show vocabulary words with translations synchronized to dialogue timing
@@ -1023,14 +1092,16 @@ class VideoEditor:
                             
                             # Create annotation text: "word : translation"
                             annot_text = f"{word} : {translation}"
-                            escaped_annot = escape_drawtext_string(annot_text)
+                            # Wrap text to avoid cutoff
+                            wrapped_annot = textwrap.fill(annot_text, width=30)
+                            escaped_annot = escape_drawtext_string(wrapped_annot)
                             
                             # RANDOM POSITIONING within video area to avoid overlap and catch attention
                             # Video area: Y from 440 to 1480 (1040px), X from 20 to 1000 (leaving padding)
                             import random
                             
                             # Define the video area bounds (9:16 format)
-                            video_area_y_start = 460
+                            video_area_y_start = 260
                             video_area_y_end = 1200
                             video_area_x_start = 20
                             video_area_x_end = 600
@@ -1051,19 +1122,16 @@ class VideoEditor:
                                 'y': rand_y,
                                 'borderw': settings.get_vocabulary_border_width(),
                                 'bordercolor': settings.get_vocabulary_border_color(),
-                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})"  # Dynamic timing!
+                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",  # Dynamic timing!
+                                'line_spacing': 4
                             }
                             
-                            # Add custom font for vocabulary (prioritize config, then language-specific)
+                            # Font selection for vocabulary:
+                            # Use 'vocabulary' use case
                             try:
-                                custom_font = settings.get_vocabulary_font_path()
-                                if custom_font and os.path.exists(custom_font):
-                                    vocab_drawtext_args['fontfile'] = custom_font
-                                else:
-                                    from langflix.config.font_utils import get_font_file_for_language
-                                    font_path = get_font_file_for_language(self.language_code)
-                                    if font_path and os.path.exists(font_path):
-                                        vocab_drawtext_args['fontfile'] = font_path
+                                font_path = self._get_font_path_for_use_case(self.language_code, "vocabulary")
+                                if font_path and os.path.exists(font_path):
+                                    vocab_drawtext_args['fontfile'] = font_path
                             except Exception:
                                 pass
                             
@@ -1314,25 +1382,34 @@ class VideoEditor:
             raise
     
     def _get_font_option(self) -> str:
-        """Get font file option for ffmpeg drawtext using language-specific font"""
+        """Get font file option for ffmpeg drawtext using language-specific font (default use case)"""
         try:
-            from langflix.config.font_utils import get_font_file_for_language
-            font_path = get_font_file_for_language(self.language_code)
+            font_path = self._get_font_path_for_use_case(self.language_code, "default")
             if font_path and os.path.exists(font_path):
-                logger.debug(f"Using font for drawtext (language {self.language_code}): {font_path}")
                 return f"fontfile={font_path}:"
-            else:
-                logger.warning(f"Font not found for language {self.language_code}, using default")
         except Exception as e:
             logger.warning(f"Error getting font option: {e}")
-            # Fallback to old method
-            try:
-                font_file = settings.get_font_file(self.language_code)
-                if isinstance(font_file, str) and font_file and os.path.exists(font_file):
-                    return f"fontfile={font_file}:"
-            except Exception:
-                pass
         return ""
+    
+    def _get_font_path_for_use_case(self, language_code: Optional[str] = None, use_case: str = "default") -> Optional[str]:
+        """
+        Get absolute path to font file for specific language and use case
+        
+        Args:
+            language_code: Target language code
+            use_case: Specific use case (e.g. 'keywords', 'expression', 'educational_slide')
+            
+        Returns:
+            Absolute path to font file or None
+        """
+        try:
+            from langflix.config.font_utils import get_font_file_for_language
+            font_path = get_font_file_for_language(language_code, use_case)
+            if font_path and os.path.exists(font_path):
+                return font_path
+        except Exception as e:
+            logger.warning(f"Error resolving font path for {language_code}/{use_case}: {e}")
+        return None
     
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
         """Get video output arguments from configuration with optional resolution-aware quality.
@@ -1368,7 +1445,10 @@ class VideoEditor:
                     'vcodec': video_config.get('codec', 'libx264'),
                     'acodec': video_config.get('audio_codec', 'aac'),
                     'preset': base_preset,
-                    'crf': crf
+                    'crf': crf,
+                    'b:a': '256k',
+                    'ac': 2,
+                    'ar': 48000
                 }
             except Exception as e:
                 logger.warning(f"Could not detect source resolution, using base settings: {e}")
@@ -1378,7 +1458,10 @@ class VideoEditor:
             'vcodec': video_config.get('codec', 'libx264'),
             'acodec': video_config.get('audio_codec', 'aac'),
             'preset': base_preset,
-            'crf': base_crf
+            'crf': base_crf,
+            'b:a': '256k',
+            'ac': 2,
+            'ar': 48000
         }
     
     def _get_background_config(self) -> tuple[str, str]:
@@ -1956,17 +2039,14 @@ class VideoEditor:
                 try:
                     # Use configured slide font which should now default to Maplestory Bold
                     # This font supports both Korean (source) and English (target) characters
-                    slide_font_path = settings.get_educational_slide_font_path()
-                    if slide_font_path and os.path.exists(slide_font_path):
-                        font_file_option = f"fontfile={slide_font_path}:"
-                        logger.debug(f"Using configured educational slide font: {slide_font_path}")
+                    # Now managed via per-language config in font_utils
+                    font_path = self._get_font_path_for_use_case(self.language_code, "educational_slide")
+                    if font_path and os.path.exists(font_path):
+                         font_file_option = f"fontfile={font_path}:"
+                         logger.debug(f"Using educational slide font: {font_path}")
                     else:
-                        # Fallback to language-specific font if configured font not found
-                        font_file_option = self._get_font_option()
-                        logger.warning(f"Educational slide font not found, falling back to: {font_file_option}")
-                    
-                    if not isinstance(font_file_option, str):
-                        font_file_option = str(font_file_option) if font_file_option else ""
+                        font_file_option = ""
+                        logger.warning(f"Educational slide font not found, falling back to default")
                 except Exception as e:
                     logger.warning(f"Error getting font option: {e}")
                     font_file_option = ""

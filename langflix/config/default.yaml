@@ -10,7 +10,7 @@ app:
   show_name: "Suits"
   
   # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt_v6.txt"
+  template_file: "expression_analysis_prompt_v7.txt"
 
 # ============================================================================
 # Database Configuration
@@ -128,6 +128,41 @@ font:
     expression_dialogue_trans: 36  # Translation of dialogue line (reduced from 42)
     expression_trans: 36         # Translation of expression (emphasized) (reduced from 48)
     similar: 36                  # Similar expressions text (reduced from 42)
+
+  # Per-Language Font Configuration
+  # Maps language codes to specific fonts for different use cases
+  # Paths are relative to the project root (or absolute)
+  language_fonts:
+    # Fallback defaults if language is not specified
+    default:
+      default: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      dialogue: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      keywords: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      expression: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      translation: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      vocabulary: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      educational_slide: "assets/fonts/Maplestory Bold/Maplestory Bold.ttf"
+      title: "assets/fonts/Maplestory Bold/Maplestory Bold.ttf"
+
+    # Korean (Source/Target)
+    ko:
+      default: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      dialogue: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      keywords: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      expression: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      translation: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      vocabulary: "assets/fonts/1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
+      educational_slide: "assets/fonts/Maplestory Bold/Maplestory Bold.ttf"
+
+    # Spanish
+    es:
+      default: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      dialogue: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      keywords: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      expression: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      translation: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      vocabulary: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
+      educational_slide: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
 
 # ============================================================================
 # Processing Settings
@@ -312,11 +347,11 @@ short_video:
       
       # Font sizes for slide elements
       font_sizes:
-        expression_dialogue: 42      # Full dialogue sentence (increased for readability)
-        expression: 48               # Key expression (yellow) - not shown if show_expression_highlight=false
-        expression_dialogue_trans: 38  # Dialogue translation (increased)
-        expression_translation: 44   # Expression translation (yellow) - not shown if show_translation_highlight=false
-        similar: 38                  # Similar expressions (increased to match)
+        expression_dialogue: 36      # Full dialogue sentence (increased for readability)
+        expression: 36               # Key expression (yellow) - not shown if show_expression_highlight=false
+        expression_dialogue_trans: 36  # Dialogue translation (increased)
+        expression_translation: 36   # Expression translation (yellow) - not shown if show_translation_highlight=false
+        similar: 32                  # Similar expressions (increased to match)
 
       # Positioning (Y offsets from center)
       positions:
@@ -362,12 +397,12 @@ expression:
     default:
       color: '#FFFFFF'
       font_family: 'Arial'
-      font_size: 14
+      font_size: 12
       font_weight: 'normal'
       background_color: '#000000'
       background_opacity: 0.5
       position: 'bottom'
-      margin_bottom: 50
+      margin_bottom: 40
     expression_highlight:
       color: '#FFD700'
       font_weight: 'bold'

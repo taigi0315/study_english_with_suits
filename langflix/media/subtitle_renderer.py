@@ -105,8 +105,12 @@ class SubtitleRenderer:
         end_time = self._format_timestamp(expression_data.get('end_time', 0))
         
         # Create highlighted expression subtitle
-        expression_text = f"<font color='{self.expression_style.get('color', '#FFD700')}'>{expression.expression}</font>"
-        translation_text = f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{expression.expression_translation}</font>"
+        wrapped_expression = self._wrap_text(expression.expression)
+        expression_text = f"<font color='{self.expression_style.get('color', '#FFD700')}'>{wrapped_expression}</font>"
+        # Wrap translation text
+        wrapped_translation = self._wrap_text(expression.expression_translation)
+        # Translation in Yellow
+        translation_text = f"<font color='#FFFF00'>{wrapped_translation}</font>"
         
         srt_content.append("1")
         srt_content.append(f"{start_time} --> {end_time}")
@@ -123,12 +127,52 @@ class SubtitleRenderer:
                     
                     srt_content.append(str(i))
                     srt_content.append(f"{self._format_timestamp(context_start)} --> {self._format_timestamp(context_end)}")
-                    srt_content.append(f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{dialogue}</font>")
+                    # Wrap dialogue text
+                    wrapped_dialogue = self._wrap_text(dialogue)
+                    srt_content.append(f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{wrapped_dialogue}</font>")
                     if hasattr(expression, 'translation') and i - 2 < len(expression.translation):
-                        srt_content.append(f"<font color='{self.default_style.get('color', '#CCCCCC')}'>{expression.translation[i-2]}</font>")
+                        # Wrap translation text
+                        wrapped_trans = self._wrap_text(expression.translation[i-2])
+                        # Context translation in Yellow
+                        srt_content.append(f"<font color='#FFFF00'>{wrapped_trans}</font>")
                     srt_content.append("")
         
         return "\n".join(srt_content)
+    
+    def _wrap_text(self, text: str, max_chars: int = 15) -> str:
+        """
+        Wrap text to ensure it doesn't exceed max characters per line.
+        Preserves words.
+        
+        Args:
+            text: Text to wrap
+            max_chars: Maximum characters per line
+            
+        Returns:
+            str: Wrapped text with newlines
+        """
+        if not text:
+            return ""
+            
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) + (1 if current_line else 0) <= max_chars:
+                current_line.append(word)
+                current_length += len(word) + (1 if current_line else 0)
+            else:
+                if current_line:
+                    lines.append(" ".join(current_line))
+                current_line = [word]
+                current_length = len(word)
+        
+        if current_line:
+            lines.append(" ".join(current_line))
+            
+        return "\n".join(lines)
     
     def _format_timestamp(self, seconds: float) -> str:
         """

@@ -211,11 +211,14 @@ class LangFlixPipeline:
                 save_llm_output=save_llm_output,
                 test_mode=test_mode,
                 output_dir=self._get_llm_output_dir() if save_llm_output else None,
+                target_duration=short_form_max_duration,
                 progress_callback=lambda p, m=None: None
             )
 
             # Step 3: Translate
-            if len(self.target_languages) > 1 or (len(self.target_languages) == 1 and self.target_languages[0] != self.language_code):
+            # Optimization: If we only have 1 target language, the Analysis step already did the work (translation in target lang).
+            # We only need TranslationService if we have *multiple* target languages (to translate to the others).
+            if len(self.target_languages) > 1:
                 self._update_progress(40, f"Translating to {len(self.target_languages)} languages...")
                 self.translated_expressions = self.translation_service.translate(
                     self.expressions, 
@@ -223,7 +226,9 @@ class LangFlixPipeline:
                     self.target_languages
                 )
             else:
-                self.translated_expressions = {self.language_code: self.expressions}
+                # Single target language -> Expression Analysis already provided it
+                target_lang = self.target_languages[0]
+                self.translated_expressions = {target_lang: self.expressions}
 
             # DB Save
             if media_id:

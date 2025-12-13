@@ -52,17 +52,21 @@ def sanitize_filename(
                 break
     
     # Remove or replace invalid characters
-    # Keep: ASCII alphanumeric, spaces, hyphens, underscores
-    # Dots in base name are removed (only extension dots are preserved)
-    # Use ASCII-only regex: [a-zA-Z0-9_\s-]
+    # Support Unicode characters (Korean, etc) by removing only specific unsafe characters
+    # unsafe chars: / \ : * ? " < > | and control chars
+    # We also keep spaces (if configured), underscores, and hyphens.
+    
     if replace_spaces:
-        # Replace spaces with underscores, then remove invalid chars
-        sanitized = re.sub(r'[^a-zA-Z0-9_\s-]', '', base_name)  # ASCII only
-        sanitized = re.sub(r'[-\s]+', '_', sanitized)
+        base_name = re.sub(r'[-\s]+', '_', base_name)
     else:
-        # Keep spaces but still remove invalid chars
-        sanitized = re.sub(r'[^a-zA-Z0-9_\s-]', '', base_name)  # ASCII only
-        sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+        base_name = re.sub(r'\s+', ' ', base_name).strip()
+        
+    # Remove filesystem unsafe characters
+    # This regex removes anything that IS one of the forbidden chars
+    sanitized = re.sub(r'[\\/*?:"<>|]', '', base_name)
+    
+    # Remove control characters
+    sanitized = "".join(c for c in sanitized if c.isprintable())
     
     # Remove leading/trailing dots and underscores (invalid in some filesystems)
     sanitized = sanitized.strip('._-')
@@ -157,6 +161,18 @@ def extract_show_name(filename: str) -> str:
         
     # Fallback: Use the base name, replacing dots/underscores
     cleaned = base_name.replace('.', ' ').replace('_', ' ').strip()
+    
+    # Remove common release tags (Year, Resolution, Source, Codec)
+    # e.g., "2025", "1080p", "WEBRip", "x264", "AAC"
+    # Regex to match year (parentheses or not), resolution, source, codec
+    # Matches: (2025), 2025, 1080p, 720p, WEBRip, BluRay, x264, h264, etc.
+    tags_pattern = r'\b(19\d{2}|20\d{2}|2100)\b|\b\d{3,4}p\b|\b(?:WEB|HD)?Rip\b|\bBluRay\b|\bHDTV\b|\b[xh]26[45]\b|\bAAC\b|\bAC3\b|\bHEVC\b'
+    cleaned = re.sub(tags_pattern, '', cleaned, flags=re.IGNORECASE).strip()
+    
+    # Clean up multiple spaces and trailing junk characters
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = cleaned.strip(' -,.')
+    
     return cleaned
 
 

@@ -57,13 +57,14 @@ def get_platform_default_font() -> str:
         return ""
 
 
-def get_font_file_for_language(language_code: Optional[str] = None) -> str:
+def get_font_file_for_language(language_code: Optional[str] = None, use_case: str = "default") -> str:
     """
     Get font file path for the given language or default.
     Prioritizes TTF/TTC files that work with FFmpeg drawtext filter.
     
     Args:
         language_code: Optional language code (e.g., 'ko', 'ja', 'zh', 'es')
+        use_case: Specific use case ('default', 'dialogue', 'keywords', 'expression', 'translation', 'vocabulary', 'educational_slide', 'title')
         
     Returns:
         str: Path to appropriate font file
@@ -73,7 +74,72 @@ def get_font_file_for_language(language_code: Optional[str] = None) -> str:
         from ..core.language_config import LanguageConfig
         from langflix import settings
         
-        # Priority 0: Check if educational slide font is configured and available (Maplestory Bold)
+        # Priority 0: Check for Spanish specifically to avoid missing glyphs in Maplestory (AND to support mixed CJK/Latin content)
+        # TICKET-093: On macOS, use Apple SD Gothic Neo for Spanish because it supports CJK (Korean) + Latin (Spanish).
+        if language_code == 'es' and platform.system() == "Darwin":
+             try:
+                safe_font = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+                if os.path.exists(safe_font):
+                    logger.debug(f"Using Apple SD Gothic Neo for Spanish (mixed content safety): {safe_font}")
+                    return safe_font
+             except Exception:
+                 pass
+        
+        # Retrieve per-language font configuration
+        try:
+            language_fonts_config = settings.get_language_fonts_config()
+            
+            # Helper to check and resolve font path
+            def resolve_font(config_section, key):
+                if not config_section or key not in config_section:
+                    return None
+                
+                font_rel_path = config_section[key]
+                # If path contains 'assets/fonts', verify it relative to project root
+                if "assets/fonts" in font_rel_path:
+                    # Construct absolute path: current_file -> config -> langflix -> ROOT
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    abs_path = os.path.join(project_root, font_rel_path)
+                    if os.path.exists(abs_path):
+                        return abs_path
+                    else:
+                        logger.warning(f"Configured font path not found: {abs_path}")
+                
+                # If just a direct path, check it
+                if os.path.exists(font_rel_path):
+                    return font_rel_path
+                return None
+
+            # 1. Lookup: language_code -> use_case
+            if language_code and language_code in language_fonts_config:
+                font = resolve_font(language_fonts_config[language_code], use_case)
+                if font: 
+                    logger.debug(f"Using configured font for {language_code}/{use_case}: {font}")
+                    return font
+
+                # 2. Lookup: language_code -> default
+                font = resolve_font(language_fonts_config[language_code], "default")
+                if font: 
+                    logger.debug(f"Using configured default font for {language_code}: {font}")
+                    return font
+
+            # 3. Lookup: default -> use_case
+            if "default" in language_fonts_config:
+                font = resolve_font(language_fonts_config["default"], use_case)
+                if font: 
+                    logger.debug(f"Using global default font for {use_case}: {font}")
+                    return font
+            
+            # 4. Lookup: default -> default
+            if "default" in language_fonts_config:
+                font = resolve_font(language_fonts_config["default"], "default")
+                if font: return font
+
+        except Exception as e:
+            logger.warning(f"Error accessing per-language font config: {e}")
+
+        # Fallback to existing logic if config lookup fails
+        # Priority 1: Check if educational slide font is configured and available (Maplestory Bold)
         # This is the "safe" font that supports both Source (Korean) and Target (English)
         try:
             edu_font = settings.get_educational_slide_font_path()

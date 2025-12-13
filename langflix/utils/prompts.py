@@ -20,7 +20,7 @@ def _load_prompt_template() -> str:
     except Exception as e:
         raise RuntimeError(f"Failed to load prompt template: {e}")
 
-def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko") -> str:
+def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", target_duration: float = 180.0) -> str:
     """
     Generates the prompt for the LLM based on a chunk of subtitles.
     
@@ -28,6 +28,7 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         subtitle_chunk: List of subtitle dictionaries
         language_level: Target language level (beginner, intermediate, advanced, mixed)
         language_code: Target language code (ko, ja, zh, es, fr)
+        target_duration: Target duration for the context video (default: 180.0s)
     """
     # Use default language level if not specified
     if language_level is None:
@@ -67,6 +68,7 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         min_expressions=min_expressions,
         max_expressions=max_expressions,
         target_language=target_language,
-        show_name=show_name
+        show_name=show_name,
+        target_duration=target_duration
     )
     return prompt

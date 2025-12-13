@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from langflix.youtube.uploader import YouTubeVideoMetadata
 from langflix.youtube.video_manager import VideoMetadata
+from langflix.utils.filename_utils import extract_show_name
 from langflix import settings
 
 logger = logging.getLogger(__name__)
@@ -446,48 +447,33 @@ class YouTubeMetadataGenerator:
         import re
         # Extract S01E02 pattern
         episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_raw)
+        
+        # If we have a show name in the string, extract it cleanly
+        # Use our improved extract_show_name to clean up garbage (WEB-RIP, 1080p, etc)
+        # Check if the raw string is just garbage metadata (e.g. "2025.1080p.webrip")
+        # If it doesn't look like an episode code or show name, be careful
+        
+        cleaned_name = extract_show_name(episode_raw)
+        if cleaned_name == "Unknown Show":
+             # Try to find "Suits" or just use "Suits" as fallback if it looks really bad
+             if "suits" in episode_raw.lower():
+                 cleaned_name = "Suits"
+             else:
+                 # If we have an episode code, use that at least
+                 if episode_match:
+                     return f"Suits.S{episode_match.group(1)}E{episode_match.group(2)}"
+                 return "Suits"
+
         if episode_match:
-            episode_code = f"S{episode_match.group(1)}E{episode_match.group(2)}"
-            # Check if "Suits" is already in the episode string
-            if "Suits" in episode_raw or "suits" in episode_raw.lower():
-                # If "Suits" is present, extract just "Suits.S01E02" part
-                # Remove quality/resolution info (e.g., .720p.HDTV.x264)
-                parts = episode_raw.split('.')
-                suits_part = None
-                episode_part = None
-                for part in parts:
-                    if "suits" in part.lower():
-                        suits_part = "Suits"
-                    if re.match(r'[Ss]\d+[Ee]\d+', part):
-                        episode_part = part
-                        break
-                
-                if suits_part and episode_part:
-                    return f"{suits_part}.{episode_part}"
-                elif episode_part:
-                    return f"Suits.{episode_part}"
+            # We have SxxExx
+            # If cleaned_name already has SxxExx, return it
+            if re.search(r'[Ss]\d+[Ee]\d+', cleaned_name):
+                return cleaned_name
             else:
-                # If "Suits" is not present, add it
-                return f"Suits.{episode_code}"
+                 return f"{cleaned_name}.S{episode_match.group(1)}E{episode_match.group(2)}"
         
-        # Fallback: if no episode pattern found, try to extract from full string
-        if "Suits" in episode_raw or "suits" in episode_raw.lower():
-            # Extract "Suits.S01E02" part, removing quality info
-            parts = episode_raw.split('.')
-            result_parts = []
-            for part in parts:
-                if "suits" in part.lower() or re.match(r'[Ss]\d+[Ee]\d+', part):
-                    if "suits" in part.lower():
-                        result_parts.append("Suits")
-                    else:
-                        result_parts.append(part)
-                    if len(result_parts) >= 2:
-                        break
-            if result_parts:
-                return '.'.join(result_parts)
-        
-        # Final fallback
-        return "Suits" if not episode_raw else episode_raw
+        # No episode code, but improved name
+        return cleaned_name
     
     def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str], target_language: Optional[str] = None) -> str:
         """Generate video description (TICKET-056: Updated to use target language)"""
@@ -691,7 +677,7 @@ class YouTubeMetadataGenerator:
         return self._get_translation(video_metadata)
     
     def _generate_localized_tags(self, video_metadata: VideoMetadata, target_language: str) -> str:
-        """Generate hashtags in target language (TICKET-060)
+        """Generate hashtags in target language with dynamic show name (TICKET-060)
         
         Args:
             video_metadata: Video metadata object
@@ -700,60 +686,95 @@ class YouTubeMetadataGenerator:
         Returns:
             String of localized hashtags
         """
+        # Determine show name for hashtag
+        # Try extracting from video path first, then episode string, default to "Suits"
+        show_name = "Suits" # Default
+        
+        # Helper to check if extracted name is valid (not generic)
+        generic_names = {"video", "unknown", "untitled", "short", "expression", "form"}
+        def is_valid_show_name(name: str) -> bool:
+            if not name or name == "Unknown Show":
+                return False
+            # Check if it's a generic/invalid name
+            name_lower = name.lower().replace(" ", "").replace("_", "")
+            for generic in generic_names:
+                if name_lower == generic or name_lower.startswith(generic + "0") or name_lower.endswith(generic):
+                    return False
+            # Valid if it has at least 2 significant words or >5 chars
+            return len(name) > 5 or len(name.split()) >= 2
+        
+        # Try extracting from video path first (most reliable source)
+        if video_metadata.path:
+            from pathlib import Path
+            video_filename = Path(video_metadata.path).stem
+            extracted = extract_show_name(video_filename)
+            if is_valid_show_name(extracted):
+                show_name = extracted
+        
+        # Fallback: Try extracting from episode string
+        if show_name == "Suits" and video_metadata.episode:
+             # Try clean extraction
+             extracted = extract_show_name(video_metadata.episode)
+             if is_valid_show_name(extracted):
+                 show_name = extracted
+        
+        # Remove spaces for hashtag
+        show_hashtag = f"#{show_name.replace(' ', '')}"
+        
+        # Dynamic #Learn{TargetLanguage}
+        # e.g., #LearnKorean, #LearnEnglish
+        learn_target_hashtag = f"#Learn{target_language.replace(' ', '')}"
+
         tag_translations = {
             "Korean": {
                 "shorts": "#쇼츠",
                 "english_learning": "#영어학습",
-                "suits": "#수트",
                 "english_expressions": "#영어표현",
-                "learn_english": "#영어공부"
+                # "suits" and "learn_english" are now dynamic
             },
             "English": {
                 "shorts": "#Shorts",
                 "english_learning": "#EnglishLearning",
-                "suits": "#Suits",
                 "english_expressions": "#EnglishExpressions",
-                "learn_english": "#LearnEnglish"
             },
+            # ... preserve other languages structure but we use dynamic logic mainly
             "Japanese": {
                 "shorts": "#ショート",
                 "english_learning": "#英語学習",
-                "suits": "#スーツ",
                 "english_expressions": "#英語表現",
-                "learn_english": "#英語勉強"
             },
             "Chinese": {
                 "shorts": "#短片",
                 "english_learning": "#英语学习",
-                "suits": "#金装律师",
                 "english_expressions": "#英语表达",
-                "learn_english": "#学英语"
             },
             "Spanish": {
                 "shorts": "#Shorts",
                 "english_learning": "#AprenderInglés",
-                "suits": "#Suits",
                 "english_expressions": "#ExpresionesInglesas",
-                "learn_english": "#AprendeInglés"
             },
             "French": {
                 "shorts": "#Shorts",
                 "english_learning": "#ApprendreAnglais",
-                "suits": "#Suits",
                 "english_expressions": "#ExpressionsAnglaises",
-                "learn_english": "#ApprendsAnglais"
             }
         }
         
-        # Get translations for target language, fallback to Korean if not found
-        translations = tag_translations.get(target_language, tag_translations.get("Korean", {}))
+        # Get translations for target language, fallback to English
+        translations = tag_translations.get(target_language, tag_translations.get("English", {}))
         
-        # For short videos, use all tags. For other types, use a subset
+        # Construct hashtags: #Shorts #EnglishLearning #ShowName #EnglishExpressions #LearnTarget
+        # Base tags
+        shorts_tag = translations.get('shorts', '#Shorts')
+        learning_tag = translations.get('english_learning', '#EnglishLearning')
+        exp_tag = translations.get('english_expressions', '#EnglishExpressions')
+        
+        # For short videos, use all tags.
         if video_metadata.video_type == "short":
-            return f"{translations.get('shorts', '#Shorts')} {translations.get('english_learning', '#EnglishLearning')} {translations.get('suits', '#Suits')} {translations.get('english_expressions', '#EnglishExpressions')} {translations.get('learn_english', '#LearnEnglish')}"
+            return f"{shorts_tag} {learning_tag} {show_hashtag} {exp_tag} {learn_target_hashtag}"
         else:
             # For long-form/final videos, use core tags
-            return f"{translations.get('english_learning', '#EnglishLearning')} {translations.get('suits', '#Suits')} {translations.get('english_expressions', '#EnglishExpressions')} {translations.get('learn_english', '#LearnEnglish')}"
+            return f"{learning_tag} {show_hashtag} {exp_tag} {learn_target_hashtag}"
     
     def generate_batch_metadata(
         self, 

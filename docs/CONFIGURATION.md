@@ -151,10 +151,12 @@ media:
   subtitles:
     style: "expression_highlight"
     font_size: 24
-    font_color: "#FFFFFF"
+    font_color: "#FFFFFF"           # Source dialogue color (White)
+    translation_color: "#FFFF00"    # Translation color (Yellow)
     background_color: "#000000"
     highlight_color: "#FFD700"
     encoding: "utf-8"
+    max_chars_per_line: 25          # Maximum characters before line wrap
 
 # Slide Generation
 slides:

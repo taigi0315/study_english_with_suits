@@ -116,7 +116,7 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
     retry=False,  # Retry is handled by _generate_content_with_retry
     fallback=False
 )
-def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None) -> List[ExpressionAnalysis]:
+def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None, target_duration: float = 180.0) -> List[ExpressionAnalysis]:
     """
     Analyzes a chunk of subtitles using Gemini API with structured output (with caching).
     
@@ -175,7 +175,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                 logger.warning("Cleared invalid cache, will re-analyze")
         
         # Generate prompt
-        prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code)
+        prompt = get_prompt_for_chunk(subtitle_chunk, language_level, language_code, target_duration=target_duration)
         
         logger.info("Sending prompt to Gemini API with structured output...")
         logger.info(f"Prompt length: {len(prompt)} characters")

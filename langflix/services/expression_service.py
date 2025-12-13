@@ -26,6 +26,7 @@ class ExpressionService:
         save_llm_output: bool = False,
         test_mode: bool = False,
         output_dir: Optional[Union[str, Path]] = None,
+        target_duration: float = 120.0,
         progress_callback: Optional[callable] = None
     ) -> List[ExpressionAnalysis]:
         """
@@ -68,6 +69,7 @@ class ExpressionService:
                 language_level, 
                 save_llm_output, 
                 output_dir, 
+                target_duration,
                 progress_callback
             )
         else:
@@ -78,6 +80,7 @@ class ExpressionService:
                 save_llm_output, 
                 effective_test_mode, 
                 output_dir,
+                target_duration,
                 progress_callback
             )
         
@@ -103,6 +106,7 @@ class ExpressionService:
         language_level: str,
         save_llm_output: bool,
         output_dir: Optional[str],
+        target_duration: float,
         progress_callback: Optional[callable]
     ) -> List[ExpressionAnalysis]:
         logger.info(f"Using PARALLEL processing for {len(chunks)} chunks")
@@ -126,6 +130,7 @@ class ExpressionService:
             language_code=self.language_code,
             save_output=save_llm_output,
             output_dir=output_dir,
+            target_duration=target_duration,
             progress_callback=local_callback
         )
         duration = time.time() - start_time
@@ -146,6 +151,7 @@ class ExpressionService:
         save_llm_output: bool,
         test_mode: bool,
         output_dir: Optional[str],
+        target_duration: float,
         progress_callback: Optional[callable]
     ) -> List[ExpressionAnalysis]:
         logger.info(f"Using SEQUENTIAL processing for {len(chunks)} chunks")
@@ -168,7 +174,8 @@ class ExpressionService:
                     language_level, 
                     self.language_code, 
                     save_llm_output, 
-                    output_dir
+                    output_dir,
+                    target_duration=target_duration
                 )
                 if expressions:
                     all_expressions.extend(expressions)

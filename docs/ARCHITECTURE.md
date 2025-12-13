@@ -70,6 +70,12 @@ LangFlix is an AI-powered language learning platform that extracts educational e
 |--------|---------|
 | `ffmpeg_utils.py` | FFmpeg wrapper functions |
 | `audio_optimizer.py` | Audio processing utilities |
+| `subtitle_renderer.py` | SRT generation with wrapping and color styling |
+
+### `langflix/subtitles/`
+| Module | Purpose |
+|--------|---------|
+| `overlay.py` | Apply subtitles via FFmpeg with forced wrapping and styling |
 
 ---
 

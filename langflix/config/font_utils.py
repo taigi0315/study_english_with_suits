@@ -74,20 +74,20 @@ def get_font_file_for_language(language_code: Optional[str] = None, use_case: st
         from ..core.language_config import LanguageConfig
         from langflix import settings
         
-        # Priority 0: Check for Spanish specifically to avoid missing glyphs
-        # FIXED: AppleSDGothicNeo doesn't support Latin accents (é, ó, etc.) properly
-        # Use Helvetica Neue for Spanish as it has full Latin Unicode support
+        # Priority 0: For target languages that need to display mixed content (Korean source + translated text),
+        # we need a font that supports BOTH CJK (Korean) AND Latin accents (Spanish é, ó, etc.)
+        # AppleSDGothicNeo supports BOTH - Korean chars + Latin Extended including accents
         if language_code == 'es' and platform.system() == "Darwin":
              try:
-                # Priority: Helvetica Neue (full Latin support) > SF Pro > Arial Unicode MS
-                spanish_fonts = [
-                    "/System/Library/Fonts/HelveticaNeue.ttc",
-                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",
-                    "/System/Library/Fonts/Avenir.ttc",
+                # AppleSDGothicNeo is ideal: supports Korean (CJK) + Spanish accents (Latin Extended)
+                # Tested: é (U+E9), ó (U+F3), ñ (U+F1), ¿ (U+BF), ¡ (U+A1) all render correctly
+                mixed_content_fonts = [
+                    "/System/Library/Fonts/AppleSDGothicNeo.ttc",  # Supports Korean + Spanish accents
+                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",  # Universal fallback
                 ]
-                for safe_font in spanish_fonts:
+                for safe_font in mixed_content_fonts:
                     if os.path.exists(safe_font):
-                        logger.debug(f"Using {safe_font} for Spanish (full Latin accent support)")
+                        logger.debug(f"Using {safe_font} for Spanish (mixed Korean+Spanish content)")
                         return safe_font
              except Exception:
                  pass

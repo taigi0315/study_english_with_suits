@@ -301,7 +301,7 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 8
+      font_size: 9
       margin_v: 90
       text_color: 'white'
       outline_width: 1

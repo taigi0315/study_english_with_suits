@@ -379,8 +379,24 @@ export const ui = {
 
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #34495e; margin-bottom: 10px;">Languages & Level</h3>
+                
+                <!-- V2: Source Language (language to learn FROM) -->
                 <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Languages (Select multiple)</label>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Source Language (Learning FROM)</label>
+                    <select id="sourceLanguage" style="width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 8px; font-size: 16px;">
+                        <option value="en" selected>English</option>
+                        <option value="ko">Korean (한국어)</option>
+                        <option value="es">Spanish (Español)</option>
+                        <option value="ja">Japanese (日本語)</option>
+                        <option value="zh">Chinese (中文)</option>
+                        <option value="fr">French (Français)</option>
+                    </select>
+                    <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">🎓 The language in the video that viewers want to LEARN.</p>
+                </div>
+                
+                <!-- Target Language (user's native language) -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Language (Translate TO)</label>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
                         <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
                             <input type="checkbox" class="language-checkbox" value="ko" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
@@ -407,7 +423,7 @@ export const ui = {
                             <span style="font-weight: 500; color: #2c3e50;">French (Français)</span>
                         </label>
                     </div>
-                    <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">💡 Tip: Select multiple languages to generate videos for all selected languages at once!</p>
+                    <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">💡 The viewer's native language - translations and titles will be in this language.</p>
                 </div>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Language Level</label>
@@ -538,6 +554,7 @@ export const ui = {
                 return;
             }
 
+            const sourceLanguage = dialog.querySelector('#sourceLanguage').value;  // V2: Source language
             const languageLevel = dialog.querySelector('#languageLevel').value;
             const testMode = dialog.querySelector('#testModeCheckbox').checked;
             const shortFormMaxDuration = parseFloat(dialog.querySelector('#shortFormMaxDuration').value);
@@ -570,7 +587,8 @@ export const ui = {
                             video_path: checkbox.dataset.video,
                             subtitle_path: checkbox.dataset.subtitle,
                             show_name: showName,  // User-provided show name
-                            language_code: 'en', // Source language
+                            language_code: sourceLanguage, // V2: Source language (learned from)
+                            source_language: sourceLanguage, // V2: Explicit source language
                             target_languages: selectedLanguages,
                             language_level: languageLevel,
                             test_mode: testMode,

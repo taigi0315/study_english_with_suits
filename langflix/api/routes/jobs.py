@@ -397,6 +397,7 @@ async def create_job(
     short_form_max_duration: float = Form(180.0),
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
+    source_language: Optional[str] = Form(None),  # V2: Explicit source language code
     create_long_form: bool = Form(True),
     create_short_form: bool = Form(True),
     auto_upload_config: Optional[str] = Form(None), # JSON string
@@ -475,6 +476,7 @@ async def create_job(
             "video_size": str(video_size),
             "subtitle_size": str(subtitle_size),
             "language_code": language_code,
+            "source_language": source_language or language_code,  # V2: Source language for video
             "show_name": show_name,
             "episode_name": episode_name,
             "max_expressions": str(max_expressions),

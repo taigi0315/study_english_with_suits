@@ -7,7 +7,7 @@ import logging
 import os
 import asyncio
 
-from .routes import health, jobs, files, batch
+from .routes import health, jobs, files, batch, media
 from .exceptions import APIException, api_exception_handler
 from .middleware import LoggingMiddleware
 
@@ -133,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router, prefix="/api/v1", tags=["jobs"])
     app.include_router(files.router, prefix="/api/v1", tags=["files"])
     app.include_router(batch.router, prefix="/api/v1", tags=["batch"])
+    app.include_router(media.router, prefix="/api/v2", tags=["media"])  # V2 endpoints
     
     # API-only endpoint (no UI)
     @app.get("/")

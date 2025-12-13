@@ -298,7 +298,61 @@ def get_audio_params(path: str) -> AudioParams:
         codec=a.get("codec_name"),
         channels=int(a.get("channels")) if a.get("channels") else None,
         sample_rate=int(sr) if isinstance(sr, str) and sr.isdigit() else (int(sr) if isinstance(sr, int) else None),
+        duration=float(a.get("duration")) if a.get("duration") else None,
     )
+
+
+def detect_black_bars(video_path: str, duration: float = 2.0) -> Optional[str]:
+    """
+    Detect black bars in video using cropdetect filter.
+    Returns crop parameters string (w:h:x:y) or None if detection fails or is invalid.
+    
+    Args:
+        video_path: Path to video file
+        duration: Duration to analyze (seconds)
+        
+    Returns:
+        String crop parameters "w:h:x:y" for ffmpeg crop filter, or None
+    """
+    try:
+        # Run ffmpeg with cropdetect filter for a few frames
+        # We process a small segment from the middle to avoid intro/outro black frames
+        probe = run_ffprobe(video_path)
+        format_info = probe.get('format', {})
+        total_duration = float(format_info.get('duration', 0))
+        
+        start_time = total_duration / 2 if total_duration > 0 else 0
+        
+        cmd = [
+            'ffmpeg',
+            '-ss', str(start_time),
+            '-i', str(video_path),
+            '-t', str(duration),
+            '-vf', 'cropdetect=24:16:0',
+            '-f', 'null',
+            '-'
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stderr
+        
+        # Parse last cropdetect output
+        # Output format: ... crop=1920:800:0:140 ...
+        import re
+        from collections import Counter
+        matches = re.findall(r'crop=(\d+:\d+:\d+:\d+)', output)
+        
+        if matches:
+            # Use the most frequent crop value to avoid noise
+            most_common = Counter(matches).most_common(1)
+            if most_common:
+                return most_common[0][0]
+                
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to detect black bars for {video_path}: {e}")
+        return None
 
 
 def log_media_params(path: str, label: str = "media") -> None:
@@ -1006,14 +1060,16 @@ def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: f
             'vcodec': 'copy',
             'acodec': 'aac',
             'ac': 2,
-            'ar': 48000
+            'ar': 48000,
+            'b:a': '256k'
         }
     else:
         encode_args = {
             **make_video_encode_args_from_source(str(input_path)),
             'acodec': 'aac',
             'ac': 2,
-            'ar': 48000
+            'ar': 48000,
+            'b:a': '256k'
         }
     
     (

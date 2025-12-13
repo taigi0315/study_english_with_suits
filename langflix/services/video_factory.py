@@ -377,11 +377,14 @@ class VideoFactory:
         
         for i, expression in enumerate(lang_expressions):
             # Match using base expression if available logic from main.py
-            base_expression = base_expressions[i] if i < len(base_expressions) else expression
-            safe_name = sanitize_for_expression_filename(base_expression.expression)
+            # Match using constructed filename pattern (matching video_editor.py logic)
+            # Use 'expression' (localized) because create_long_form_video uses localized expression for filenames
+            safe_name = sanitize_for_expression_filename(expression.expression)
+            # Must match creation format: expression_{index}_{safe[:50]}
+            expected_stem = f"expression_{i+1:02d}_{safe_name[:50]}"
             
-            if safe_name in long_form_video_map:
-                long_form_video = long_form_video_map[safe_name]
+            if expected_stem in long_form_video_map:
+                long_form_video = long_form_video_map[expected_stem]
                 try:
                     output_path = video_editor.create_short_form_from_long_form(
                         str(long_form_video),
@@ -400,75 +403,13 @@ class VideoFactory:
                     })
                 except Exception as e:
                     logger.error(f"Error creating short for expr {i+1}: {e}")
+            else:
+                 logger.warning(f"Could not find long-form video for expression {i+1} (expected: {expected_stem}.mkv)")
 
-        if short_format_videos:
-            self._batch_shorts(short_format_videos, max_duration, video_editor)
-            
-            # Cleanup individual shorts
-            for v in short_format_videos:
-                try:
-                    Path(v["path"]).unlink(missing_ok=True)
-                except: pass
-                
-        # Conserve expression videos? (Ticket-029 said preserve shorts, main.py says cleanup)
-        # Main.py:
-        # if target_video_editor:
-        #    target_video_editor._cleanup_temp_files(preserve_short_format=True)
-        # But also deletes individual long videos if short videos created.
+        # No batching - 1 expression = 1 short video (TICKET-090)
+        # Each short video is already created in the 'shorts' directory
+        logger.info(f"Created {len(short_format_videos)} individual short videos")
         
-        # logic from main.py lines 1211-1229: removes long_form videos from expressions/ dir
-        if short_format_videos and long_form_videos:
-             for v in long_form_videos:
-                 try: v.unlink(missing_ok=True)
-                 except: pass
-
         video_editor._cleanup_temp_files(preserve_short_format=True)
 
-    def _batch_shorts(self, videos, max_duration, editor):
-        # ... logic for batching ...
-        # Copy logic from _create_batched_short_videos_with_max_duration
-        # To save space, implementing simplified version or copying fully if necessary
-        # Given this is a refactor, I should copy the logic.
-        
-        batch_videos = []
-        current_batch_videos = []
-        current_batch_metadata = []
-        current_duration = 0.0
-        batch_number = 1
-        
-        for video_data in videos:
-            if video_data['duration'] > max_duration: continue
-            
-            if current_duration + video_data['duration'] > max_duration and current_batch_videos:
-                # Create batch
-                batch_path = editor._create_video_batch(
-                    current_batch_videos,
-                    batch_number,
-                    metadata_entries=current_batch_metadata.copy()
-                )
-                batch_videos.append(batch_path)
-                
-                current_batch_videos = []
-                current_batch_metadata = []
-                current_duration = 0.0
-                batch_number += 1
-            
-            current_batch_videos.append(video_data['path'])
-            current_batch_metadata.append({
-                "expression": video_data.get("expression"),
-                "translation": video_data.get("expression_translation"),
-                "language": video_data.get("language"),
-                "episode": video_data.get("episode"),
-                "source_short": video_data.get("source_short")
-            })
-            current_duration += video_data['duration']
-            
-        if current_batch_videos:
-             batch_path = editor._create_video_batch(
-                current_batch_videos,
-                batch_number,
-                metadata_entries=current_batch_metadata.copy()
-            )
-             batch_videos.append(batch_path)
-             
-        return batch_videos
+

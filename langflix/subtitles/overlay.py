@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import ffmpeg
+import textwrap
+import tempfile
+import os
 
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
@@ -155,6 +158,60 @@ def adjust_subtitle_timestamps(subtitle_file: Path, offset_seconds: float, outpu
     return output_file
 
 
+
+def wrap_subtitle_lines(input_path: Path, output_path: Path, max_chars: int = 15) -> Path:
+    """
+    Read an SRT file and wrap text lines to a maximum width.
+    This ensures subtitles do not overflow the screen.
+    
+    Args:
+        input_path: Source SRT file
+        output_path: Destination SRT file
+        max_chars: Maximum characters per line (default: 15 for narrow screens)
+        
+    Returns:
+        Path to the wrapped SRT file
+    """
+    try:
+        content = input_path.read_text(encoding='utf-8')
+    except Exception as e:
+        logger.warning(f"Failed to read SRT for wrapping ({input_path}): {e}")
+        return input_path
+        
+    lines = content.split('\n')
+    wrapped_lines = []
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Pass through empty lines, numbers, and timestamps unchanged
+        if not line or line.isdigit() or '-->' in line:
+            wrapped_lines.append(lines[i])
+            i += 1
+            continue
+            
+        # This is a text line. Check for HTML tags.
+        # If line contains tags, we skip simplistic wrapping to avoid breaking valid HTML/SRT styling.
+        # If it's plain text, we wrap it.
+        if len(line) > max_chars and not ('<' in line and '>' in line):
+             try:
+                 # Use textwrap to break lines, respecting words
+                 wrapped = textwrap.fill(line, width=max_chars, break_long_words=False)
+                 wrapped_lines.append(wrapped)
+             except Exception:
+                 wrapped_lines.append(line)
+        else:
+             wrapped_lines.append(line)
+        
+        i += 1
+        
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text('\n'.join(wrapped_lines), encoding='utf-8')
+    logger.info(f"Wrapped subtitles to {max_chars} chars: {output_path}")
+    return output_path
+
+
 def create_dual_language_copy(source_subtitle_file: Path, target_subtitle_file: Path) -> Path:
     target_subtitle_file.parent.mkdir(parents=True, exist_ok=True)
     content = source_subtitle_file.read_text(encoding="utf-8")
@@ -175,8 +232,8 @@ def build_ass_force_style(is_expression: bool = False) -> str:
         cfg = settings.get_expression_subtitle_styling()
     except Exception:
         cfg = {
-            "default": {"color": "#FFFFFF", "font_size": 24, "font_weight": "normal", "background_color": "#000000"},
-            "expression_highlight": {"color": "#FFD700", "font_size": 28, "font_weight": "bold", "background_color": "#1A1A1A"},
+            "default": {"color": "#FFFFFF", "font_size": 28, "font_weight": "normal", "background_color": "#000000"},
+            "expression_highlight": {"color": "#FFD700", "font_size": 32, "font_weight": "bold", "background_color": "#1A1A1A"},
         }
     style_cfg = cfg.get("expression_highlight" if is_expression else "default", {})
     color = _hex_to_ass_bgr(style_cfg.get("color", "#FFFFFF"))
@@ -184,6 +241,10 @@ def build_ass_force_style(is_expression: bool = False) -> str:
     font_size = int(style_cfg.get("font_size", 24))
     bold = 1 if style_cfg.get("font_weight", "normal") == "bold" else 0
     outline_w = max(2, font_size // 12)
+    
+    # Increase vertical margin to avoid cropping at bottom (TICKET-090)
+    margin_v = style_cfg.get("margin_v", 50) # Default increased to 50
+    
     parts = [
         f"FontSize={font_size}",
         f"PrimaryColour={color}",
@@ -191,11 +252,20 @@ def build_ass_force_style(is_expression: bool = False) -> str:
         f"Outline={outline_w}",
         f"Bold={bold}",
         "BorderStyle=3",
+        f"MarginV={margin_v}", # Added explicit vertical margin
     ]
     return ",".join(parts)
 
 
 def apply_subtitles_with_file(input_video: Path, subtitle_file: Path, output_path: Path, is_expression: bool = False) -> Path:
+    # Wrap subtitles to ensure no overflow
+    try:
+        wrapped_path = subtitle_file.parent / f"wrapped_{subtitle_file.name}"
+        # Use 25 chars for wrapping
+        subtitle_file = wrap_subtitle_lines(Path(subtitle_file), wrapped_path, max_chars=25)
+    except Exception as e:
+        logger.warning(f"Failed to wrap subtitles for application: {e}")
+
     force_style = build_ass_force_style(is_expression=is_expression)
     
     # Get platform-specific fonts directory for FFmpeg
@@ -246,6 +316,15 @@ def apply_dual_subtitle_layers(
     Returns:
         Path to output video with subtitles
     """
+    # Wrap subtitles to ensure no overflow
+    try:
+        path_obj = Path(original_subtitle_path)
+        wrapped_path = path_obj.parent / f"wrapped_{path_obj.name}"
+        # Use 25 chars for wrapping
+        original_subtitle_path = str(wrap_subtitle_lines(path_obj, wrapped_path, max_chars=25))
+    except Exception as e:
+        logger.warning(f"Failed to wrap subtitles for dual application: {e}")
+
     context_duration = context_end_seconds - context_start_seconds
     
     # Build force_style for original subtitle (bottom, white) - default behavior

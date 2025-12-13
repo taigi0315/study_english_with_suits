@@ -914,5 +914,138 @@ class TestTargetLanguageMetadata:
         assert "Not the point" in description or "Expression" in description
 
 
+class TestGenerateLocalizedTags:
+    """Test _generate_localized_tags method and series name extraction"""
+    
+    @pytest.fixture
+    def generator(self):
+        """Create YouTubeMetadataGenerator instance"""
+        return YouTubeMetadataGenerator()
+    
+    def test_extract_series_name_from_video_path(self, generator):
+        """Test that series name is extracted from video path"""
+        video_metadata = VideoMetadata(
+            path="/path/to/output/Yadang.The.Snitch.2025.1080p.WEBRip/en/shorts/short_form_01_expression.mkv",
+            filename="short_form_01_expression.mkv",
+            size_mb=50.0,
+            duration_seconds=60.0,
+            resolution="1080x1920",
+            format="h264",
+            created_at=datetime.now(),
+            episode="Yadang.The.Snitch.2025.1080p.WEBRip",
+            expression="test expression",
+            video_type="short",
+            language="en",
+            expression_translation=None,
+            expressions_included=None
+        )
+        
+        tags = generator._generate_localized_tags(video_metadata, "English")
+        
+        # Should extract "Yadang The Snitch" (cleaned from path) or at least not crash
+        assert tags is not None
+        assert len(tags) > 0
+        # Should contain some hashtags
+        assert "#" in tags
+    
+    def test_fallback_to_episode_when_path_extraction_fails(self, generator):
+        """Test fallback to episode string when path extraction fails"""
+        video_metadata = VideoMetadata(
+            path="/simple/path/video.mkv",
+            filename="video.mkv",
+            size_mb=50.0,
+            duration_seconds=60.0,
+            resolution="1080x1920",
+            format="h264",
+            created_at=datetime.now(),
+            episode="Suits.S01E01.720p.HDTV.x264",
+            expression="test expression",
+            video_type="short",
+            language="en",
+            expression_translation=None,
+            expressions_included=None
+        )
+        
+        tags = generator._generate_localized_tags(video_metadata, "English")
+        
+        # Should extract "Suits" from episode string
+        assert "#Suits" in tags
+    
+    def test_default_show_name_when_all_extraction_fails(self, generator):
+        """Test default show name when all extraction methods fail"""
+        video_metadata = VideoMetadata(
+            path="/path/to/unknown_video.mkv",
+            filename="unknown_video.mkv",
+            size_mb=50.0,
+            duration_seconds=60.0,
+            resolution="1080x1920",
+            format="h264",
+            created_at=datetime.now(),
+            episode="",  # Empty episode
+            expression="test expression",
+            video_type="short",
+            language="en",
+            expression_translation=None,
+            expressions_included=None
+        )
+        
+        tags = generator._generate_localized_tags(video_metadata, "English")
+        
+        # Should use default "Suits" as fallback
+        assert "#Suits" in tags
+    
+    def test_korean_localized_tags(self, generator):
+        """Test Korean localized tags generation"""
+        video_metadata = VideoMetadata(
+            path="/path/to/Suits.S01E01/ko/shorts/short_form_01.mkv",
+            filename="short_form_01.mkv",
+            size_mb=50.0,
+            duration_seconds=60.0,
+            resolution="1080x1920",
+            format="h264",
+            created_at=datetime.now(),
+            episode="Suits.S01E01",
+            expression="test expression",
+            video_type="short",
+            language="ko",
+            expression_translation=None,
+            expressions_included=None
+        )
+        
+        tags = generator._generate_localized_tags(video_metadata, "Korean")
+        
+        # Should contain Korean tags
+        assert "#쇼츠" in tags
+        assert "#영어학습" in tags
+        assert "#LearnKorean" in tags
+    
+    def test_long_form_video_tags(self, generator):
+        """Test tags for long-form video (no #Shorts)"""
+        video_metadata = VideoMetadata(
+            path="/path/to/Suits.S01E01/en/expressions/expression_01.mkv",
+            filename="expression_01.mkv",
+            size_mb=200.0,
+            duration_seconds=300.0,
+            resolution="1920x1080",
+            format="h264",
+            created_at=datetime.now(),
+            episode="Suits.S01E01",
+            expression="test expression",
+            video_type="educational",  # Long-form
+            language="en",
+            expression_translation=None,
+            expressions_included=None
+        )
+        
+        tags = generator._generate_localized_tags(video_metadata, "English")
+        
+        # Should NOT contain #Shorts for long-form
+        assert "#Shorts" not in tags
+        # Should contain other tags
+        assert "#EnglishLearning" in tags
+        assert "#Suits" in tags
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

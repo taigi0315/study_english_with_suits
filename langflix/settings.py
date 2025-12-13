@@ -245,7 +245,7 @@ def get_show_name() -> str:
 
 def get_template_file() -> str:
     """Get the template file name from configuration"""
-    return get_app_config().get('template_file', 'expression_analysis_prompt.txt')
+    return get_app_config().get('template_file', 'expression_analysis_prompt_v7.txt')
 
 
 # ============================================================================
@@ -302,11 +302,11 @@ def get_font_size(size_type: str = "default") -> int:
     # Default fallbacks if not in config (updated with larger sizes)
     default_sizes = {
         'default': 36,
-        'expression_dialogue': 48,      # Full dialogue line containing expression
+        'expression_dialogue': 36,      # Reduced from 48
         'expression': 72,               # Main expression/phrase (emphasized)
-        'expression_dialogue_trans': 44, # Translation of dialogue line
+        'expression_dialogue_trans': 28, # Reduced from 44
         'expression_trans': 60,         # Translation of expression (emphasized)
-        'translation': 48,              # Legacy: Translation text (for backward compatibility)
+        'translation': 36,              # Reduced from 48
         'similar': 38                   # Similar expressions text
     }
     
@@ -330,6 +330,12 @@ def get_font_file(language_code: Optional[str] = None) -> str:
     
     # Use font_utils for platform detection and language-specific fonts
     return get_font_file_for_language(language_code)
+
+
+def get_language_fonts_config() -> Dict[str, Any]:
+    """Get per-language font configuration"""
+    font_cfg = get_font_config()
+    return font_cfg.get('language_fonts', {})
 
 
 # ============================================================================
@@ -792,11 +798,11 @@ def get_educational_slide_font_sizes() -> Dict[str, int]:
     """Get font sizes for educational slide elements"""
     config = get_educational_slide_config()
     return config.get('font_sizes', {
-        'expression_dialogue': 36,
-        'expression': 48,
-        'expression_dialogue_trans': 32,
-        'expression_translation': 44,
-        'similar': 28
+        'expression_dialogue': 30,      # Reduced from 36
+        'expression': 40,               # Reduced from 48
+        'expression_dialogue_trans': 26, # Reduced from 32
+        'expression_translation': 36,   # Reduced from 44
+        'similar': 24                   # Reduced from 28
     })
 
 
@@ -817,8 +823,8 @@ def get_educational_slide_line_breaking() -> Dict[str, int]:
     """Get line breaking configuration for educational slide"""
     config = get_educational_slide_config()
     return config.get('line_breaking', {
-        'expression_dialogue_max_words': 8,
-        'expression_translation_max_words': 6
+        'expression_dialogue_max_words': 6,     # Reduced from 8
+        'expression_translation_max_words': 4   # Reduced from 6
     })
 
 

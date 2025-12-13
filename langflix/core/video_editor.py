@@ -28,15 +28,23 @@ class VideoEditor:
     Creates educational video sequences from expression analysis results
     """
     
-    def __init__(self, output_dir: str = "output", language_code: str = None, episode_name: str = None, subtitle_processor = None):
+    def __init__(
+        self,
+        output_dir: str = "output",
+        language_code: str = None,
+        episode_name: str = None,
+        subtitle_processor = None,
+        source_language_code: str = None,
+    ):
         """
         Initialize VideoEditor
         
         Args:
             output_dir: Directory for output files
-            language_code: Target language code for font selection
+            language_code: Target language code for font selection (user's native language)
             episode_name: Episode name for file naming
             subtitle_processor: Optional SubtitleProcessor instance for generating expression subtitles
+            source_language_code: Source language code (language being learned, e.g., "en" for English)
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)  # Create parent directories if needed
@@ -44,7 +52,12 @@ class VideoEditor:
         from langflix.utils.temp_file_manager import get_temp_manager
         self.temp_manager = get_temp_manager()
         self.cache_manager = get_cache_manager()  # Cache manager for TTS and other data
-        self.language_code = language_code
+        
+        # V2: Support both source and target language codes
+        self.language_code = language_code  # Target language (user's native, e.g., "ko")
+        self.target_language_code = language_code  # Alias for clarity
+        self.source_language_code = source_language_code or "en"  # Source language (being learned)
+        
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
@@ -1090,14 +1103,11 @@ class VideoEditor:
                             annot_duration = settings.get_vocabulary_duration()
                             annot_end = annot_start + annot_duration
                             
-                            # Create annotation text: "word : translation"
-                            annot_text = f"{word} : {translation}"
-                            # Wrap text to avoid cutoff
-                            wrapped_annot = textwrap.fill(annot_text, width=30)
-                            escaped_annot = escape_drawtext_string(wrapped_annot)
+                            # V2: DUAL-FONT RENDERING
+                            # Render word (source lang) and translation (target lang) with SEPARATE fonts
+                            # This fixes the issue where Korean text breaks when rendered with Spanish font
                             
                             # RANDOM POSITIONING within video area to avoid overlap and catch attention
-                            # Video area: Y from 440 to 1480 (1040px), X from 20 to 1000 (leaving padding)
                             import random
                             
                             # Define the video area bounds (9:16 format)
@@ -1107,38 +1117,83 @@ class VideoEditor:
                             video_area_x_end = 600
                             
                             # Use different random positions for each annotation
-                            # Seed with annotation index for reproducibility per video
                             random.seed(hash(f"{word}_{idx}") % 2**32)
-                            
-                            # Pick random X and Y within bounds
                             rand_x = random.randint(video_area_x_start, video_area_x_end)
                             rand_y = random.randint(video_area_y_start, video_area_y_end)
                             
-                            vocab_drawtext_args = {
-                                'text': escaped_annot,
-                                'fontsize': settings.get_vocabulary_font_size(),
+                            font_size = settings.get_vocabulary_font_size()
+                            char_width_estimate = font_size * 0.6  # Approximate char width
+                            
+                            # Escape text for drawtext
+                            escaped_word = escape_drawtext_string(word)
+                            escaped_separator = " : "
+                            escaped_translation = escape_drawtext_string(translation)
+                            
+                            # Calculate widths for positioning
+                            word_width = len(word) * char_width_estimate
+                            separator_width = len(escaped_separator) * char_width_estimate
+                            
+                            # Common drawtext args
+                            common_args = {
+                                'fontsize': font_size,
                                 'fontcolor': settings.get_vocabulary_text_color(),
-                                'x': rand_x,
-                                'y': rand_y,
                                 'borderw': settings.get_vocabulary_border_width(),
                                 'bordercolor': settings.get_vocabulary_border_color(),
-                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",  # Dynamic timing!
-                                'line_spacing': 4
+                                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
                             }
                             
-                            # Font selection for vocabulary:
-                            # Use 'vocabulary' use case
+                            # 1. Render SOURCE WORD with SOURCE language font
+                            word_args = {
+                                **common_args,
+                                'text': escaped_word,
+                                'x': rand_x,
+                                'y': rand_y,
+                            }
                             try:
-                                font_path = self._get_font_path_for_use_case(self.language_code, "vocabulary")
-                                if font_path and os.path.exists(font_path):
-                                    vocab_drawtext_args['fontfile'] = font_path
+                                # Use SOURCE language font for the word being learned
+                                source_font = self._get_font_path_for_use_case(self.source_language_code, "vocabulary")
+                                if source_font and os.path.exists(source_font):
+                                    word_args['fontfile'] = source_font
                             except Exception:
                                 pass
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **word_args)
                             
-                            final_video = ffmpeg.filter(final_video, 'drawtext', **vocab_drawtext_args)
-                            logger.debug(f"Added vocabulary annotation: '{word}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s")
+                            # 2. Render SEPARATOR with neutral/target font
+                            separator_x = rand_x + word_width
+                            separator_args = {
+                                **common_args,
+                                'text': escaped_separator,
+                                'x': int(separator_x),
+                                'y': rand_y,
+                            }
+                            try:
+                                target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
+                                if target_font and os.path.exists(target_font):
+                                    separator_args['fontfile'] = target_font
+                            except Exception:
+                                pass
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **separator_args)
+                            
+                            # 3. Render TRANSLATION with TARGET language font
+                            translation_x = separator_x + separator_width
+                            translation_args = {
+                                **common_args,
+                                'text': escaped_translation,
+                                'x': int(translation_x),
+                                'y': rand_y,
+                            }
+                            try:
+                                # Use TARGET language font for the translation
+                                target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
+                                if target_font and os.path.exists(target_font):
+                                    translation_args['fontfile'] = target_font
+                            except Exception:
+                                pass
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **translation_args)
+                            
+                            logger.debug(f"Added vocabulary annotation: '{word}' : '{translation}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s (dual-font)")
                         
-                        logger.info(f"Added {len(expression.vocabulary_annotations[:5])} vocabulary annotations with random positions")
+                        logger.info(f"Added {len(expression.vocabulary_annotations[:5])} vocabulary annotations with dual-font rendering")
                 except Exception as vocab_error:
                     logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
             

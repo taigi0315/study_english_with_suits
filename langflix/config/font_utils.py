@@ -74,14 +74,21 @@ def get_font_file_for_language(language_code: Optional[str] = None, use_case: st
         from ..core.language_config import LanguageConfig
         from langflix import settings
         
-        # Priority 0: Check for Spanish specifically to avoid missing glyphs in Maplestory (AND to support mixed CJK/Latin content)
-        # TICKET-093: On macOS, use Apple SD Gothic Neo for Spanish because it supports CJK (Korean) + Latin (Spanish).
+        # Priority 0: Check for Spanish specifically to avoid missing glyphs
+        # FIXED: AppleSDGothicNeo doesn't support Latin accents (é, ó, etc.) properly
+        # Use Helvetica Neue for Spanish as it has full Latin Unicode support
         if language_code == 'es' and platform.system() == "Darwin":
              try:
-                safe_font = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
-                if os.path.exists(safe_font):
-                    logger.debug(f"Using Apple SD Gothic Neo for Spanish (mixed content safety): {safe_font}")
-                    return safe_font
+                # Priority: Helvetica Neue (full Latin support) > SF Pro > Arial Unicode MS
+                spanish_fonts = [
+                    "/System/Library/Fonts/HelveticaNeue.ttc",
+                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",
+                    "/System/Library/Fonts/Avenir.ttc",
+                ]
+                for safe_font in spanish_fonts:
+                    if os.path.exists(safe_font):
+                        logger.debug(f"Using {safe_font} for Spanish (full Latin accent support)")
+                        return safe_font
              except Exception:
                  pass
         

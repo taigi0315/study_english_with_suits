@@ -90,9 +90,81 @@ class TestFontConfiguration:
         assert font_path.endswith('DefaultKeywords.ttf')
 
     def test_spanish_macos_override(self, mock_settings):
-        # Initial check for 'es' on 'Darwin' should return AppleSDGothicNeo
+        # Spanish on macOS should return Helvetica Neue (not AppleSDGothicNeo)
+        # because Helvetica Neue has full Latin accent support (é, ó, ñ, etc.)
         with patch('platform.system', return_value='Darwin'), \
-             patch('os.path.exists', return_value=True):  # checking /System/Library/Fonts/...
+             patch('os.path.exists', return_value=True):
             
             font_path = get_font_file_for_language('es', 'any_use_case')
-            assert font_path == "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+            # Should be Helvetica Neue for proper Spanish accent support
+            assert font_path == "/System/Library/Fonts/HelveticaNeue.ttc"
+
+
+class TestSpanishFontSupport:
+    """Tests specifically for Spanish language font support with accented characters."""
+    
+    def test_spanish_font_returns_valid_path_macos(self):
+        """Test that Spanish font returns a valid existing path on macOS."""
+        import platform
+        if platform.system() != "Darwin":
+            pytest.skip("macOS-specific test")
+        
+        font_path = get_font_file_for_language('es', 'keywords')
+        assert font_path is not None
+        assert len(font_path) > 0
+        
+        import os
+        assert os.path.exists(font_path), f"Font file not found: {font_path}"
+    
+    def test_spanish_font_is_not_cjk_font(self):
+        """Verify Spanish doesn't use AppleSDGothicNeo (lacks Latin accent support)."""
+        import platform
+        if platform.system() != "Darwin":
+            pytest.skip("macOS-specific test")
+        
+        font_path = get_font_file_for_language('es', 'keywords')
+        # AppleSDGothicNeo doesn't properly support Latin accents (é, ó, ñ)
+        assert "AppleSDGothicNeo" not in font_path, \
+            f"Spanish should not use AppleSDGothicNeo: {font_path}"
+    
+    def test_spanish_font_supports_accents(self):
+        """Test that the selected Spanish font is known to support accented characters."""
+        import platform
+        if platform.system() != "Darwin":
+            pytest.skip("macOS-specific test")
+        
+        font_path = get_font_file_for_language('es', 'keywords')
+        
+        # These fonts are known to have full Latin Unicode support
+        latin_compatible_fonts = [
+            "HelveticaNeue",
+            "Arial",
+            "Avenir",
+            "SF-Pro",
+            "Times",
+        ]
+        
+        assert any(f in font_path for f in latin_compatible_fonts), \
+            f"Spanish font {font_path} may not support accented characters"
+    
+    def test_spanish_font_fallback_priority(self):
+        """Test Spanish font fallback order on macOS."""
+        import platform
+        if platform.system() != "Darwin":
+            pytest.skip("macOS-specific test")
+        
+        # Mock first font not existing to test fallback
+        with patch('os.path.exists') as mock_exists:
+            def side_effect(path):
+                # Only Arial Unicode MS exists
+                if "Arial Unicode MS" in path:
+                    return True
+                if "HelveticaNeue" in path:
+                    return False
+                return True
+            
+            mock_exists.side_effect = side_effect
+            
+            font_path = get_font_file_for_language('es', 'keywords')
+            assert "Arial Unicode MS" in font_path
+

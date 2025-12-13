@@ -133,12 +133,14 @@ This understanding will help you:
    - **Include full sentences at boundaries** - no partial phrases
 
 **LENGTH GUIDELINES:**
-- **Target Duration:** +-15 seconds around the expression usage
-- **Minimum:** 15 seconds (for very punchy, quick exchanges)
-- **Maximum:** 30 seconds (keep it tight and focused)
+- **Target Duration:** Aim for a context of approximately **{target_duration} seconds** total
+- **Minimum:** {target_duration} - 15 seconds (for shorter scenes)
+- **Maximum:** {target_duration} + 15 seconds (if needed for story completion)
+- **IMPORTANT:** Each extracted context WILL become a standalone short video
 
-**TARGET DURATION:**
-- Aim for a context window of approximately {target_duration} seconds.
+**TARGET DURATION (CRITICAL):**
+- The context window should be approximately **{target_duration} seconds**.
+- This is the FINAL video duration - design the context to fit this target.
 - You can expand the context to include more preceding/succeeding dialogue to reach this target.
 - Do not cut off expressions mid-sentence to meet this target, prioritize natural flow.
 - If the scene is short, it's okay to be shorter than target.
@@ -473,7 +475,7 @@ For short videos:
 - ✓ Expression includes enough context to show usage (4-8 words typical, not bare minimum)
 - ✓ Each scene is ENGAGING, HIGH-ENERGY (Humor/Drama/Tension/Sexy)
 - ✓ The expression fits the target level: {level_description}
-- ✓ Context is 25-45 seconds for regular videos (or ≤ 40 seconds for short videos) and tells a complete mini-story
+- ✓ Context duration is approximately {target_duration} seconds (each context = 1 standalone short video)
 - ✓ Learners can follow what's happening without knowing the show
 - ✓ Context has beginning (setup), middle (expression), end (reaction)
 - ✓ {min_expressions} to {max_expressions} expressions with NON-OVERLAPPING time ranges

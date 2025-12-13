@@ -2844,7 +2844,11 @@ class VideoEditor:
     def create_batched_short_videos(self, short_format_videos: List[Tuple[str, float]], 
                                     target_duration: float = 120.0) -> List[str]:
         """
-        Combine short format videos into batches of ~120 seconds each.
+        DEPRECATED: Combine short format videos into batches of ~120 seconds each.
+        
+        This method is deprecated as of the single-expression-per-short feature.
+        The new architecture creates 1 short video per expression without batching.
+        Use individual context videos directly as shorts instead.
         
         Args:
             short_format_videos: List of (video_path, duration) tuples
@@ -2853,6 +2857,16 @@ class VideoEditor:
         Returns:
             List of created batch video paths
         """
+        import warnings
+        warnings.warn(
+            "create_batched_short_videos is deprecated. "
+            "The new architecture uses 1 expression = 1 short video without batching. "
+            "Context videos are now created directly at target duration.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        logger.warning("⚠️ DEPRECATED: create_batched_short_videos is no longer used. 1 expression = 1 short video.")
+        
         try:
             logger.info(f"Creating batched short videos from {len(short_format_videos)} videos")
             logger.info(f"Target duration per batch: {target_duration}s")

@@ -44,11 +44,29 @@ def _load_prompt_template() -> str:
     return template_path.read_text(encoding='utf-8')
 
 
-def _format_dialogues_for_prompt(dialogues: List[dict]) -> str:
-    """Format dialogue list for the prompt."""
+def _format_dialogues_for_prompt(dialogues: List[dict], include_timestamps: bool = False) -> str:
+    """
+    Format dialogue list for the prompt.
+    
+    V2 Optimization: By default, excludes timestamps to reduce token usage.
+    The LLM returns indices, and timestamps are looked up post-processing.
+    
+    Args:
+        dialogues: List of dialogue dicts with 'text', 'start', 'end'
+        include_timestamps: If True, include timestamps (V1 mode). Default False.
+        
+    Returns:
+        Formatted string for prompt
+    """
     lines = []
     for i, d in enumerate(dialogues):
-        lines.append(f"[{i}] ({d.get('start', '')} - {d.get('end', '')}): {d.get('text', '')}")
+        text = d.get('text', '')
+        if include_timestamps:
+            # V1 mode: include timestamps (higher token usage)
+            lines.append(f"[{i}] ({d.get('start', '')} - {d.get('end', '')}): {text}")
+        else:
+            # V2 mode: index + text only (optimized token usage)
+            lines.append(f"[{i}] {text}")
     return "\n".join(lines)
 
 

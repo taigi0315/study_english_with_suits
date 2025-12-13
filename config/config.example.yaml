@@ -183,7 +183,7 @@ short_video:
   # Video resolution (width x height) - 9:16 format for social media
   resolution: "1080x1920"
 
-  # Target duration for each batch (seconds)
+  # Target duration for each short-form video (seconds)
   target_duration: 120
 
   # Allow variance (+/- seconds)

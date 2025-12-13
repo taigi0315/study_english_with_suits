@@ -91,6 +91,45 @@ def get_transitions_config() -> Dict[str, Any]:
     return _config_loader.get_section('transitions') or {}
 
 
+# ============================================================================
+# V2: Dual Language Settings
+# ============================================================================
+
+def get_dual_language_config() -> Dict[str, Any]:
+    """Get V2 dual language configuration section"""
+    return _config_loader.get_section('dual_language') or {}
+
+
+def is_dual_language_enabled() -> bool:
+    """Check if V2 dual-language mode is enabled"""
+    return get_dual_language_config().get('enabled', False)
+
+
+def get_default_source_language() -> str:
+    """Get default source language for learning"""
+    return get_dual_language_config().get('default_source_language', 'English')
+
+
+def get_default_target_language() -> str:
+    """Get default target language (user's native language)"""
+    return get_dual_language_config().get('default_target_language', 'Korean')
+
+
+def get_subtitle_pattern() -> str:
+    """Get subtitle filename pattern"""
+    return get_dual_language_config().get('subtitle_pattern', '{index}_{Language}.srt')
+
+
+def get_variant_selection() -> str:
+    """Get variant selection strategy when multiple subtitle files exist"""
+    return get_dual_language_config().get('variant_selection', 'first')
+
+
+def get_v2_template_file() -> str:
+    """Get V2 content selection prompt template file"""
+    return get_dual_language_config().get('v2_template_file', 'content_selection_prompt_v1.txt')
+
+
 def get_ending_credit_config() -> Dict[str, Any]:
     """Get ending credit configuration"""
     return get_transitions_config().get('ending_credit', {})

@@ -10,7 +10,33 @@ app:
   show_name: "Suits"
   
   # Template file for expression analysis prompt
+  # V1: expression_analysis_prompt_v7.txt (includes translation)
+  # V2: content_selection_prompt_v1.txt (uses dual subtitles, no translation)
   template_file: "expression_analysis_prompt_v7.txt"
+
+# ============================================================================
+# V2: Dual Language Subtitle Configuration
+# ============================================================================
+dual_language:
+  # Enable V2 dual-language mode (uses Netflix subtitles for both languages)
+  enabled: false  # Set to true to use V2 workflow
+  
+  # Default source language (language being learned)
+  default_source_language: "English"
+  
+  # Default target language (user's native language)
+  default_target_language: "Korean"
+  
+  # Subtitle file naming pattern
+  # Netflix format: {index}_{Language}.srt (e.g., "3_Korean.srt", "6_English.srt")
+  subtitle_pattern: "{index}_{Language}.srt"
+  
+  # Variant selection when multiple subtitle files exist for same language
+  # Options: "first" (use first file), "last" (use last file), "largest" (use largest file)
+  variant_selection: "first"
+  
+  # V2 prompt template (used when dual_language.enabled is true)
+  v2_template_file: "content_selection_prompt_v1.txt"
 
 # ============================================================================
 # Database Configuration
@@ -57,11 +83,13 @@ llm:
   top_k: 40
   
   # Expression ranking configuration (Phase 2)
-  ranking:
-    difficulty_weight: 0.4           # Weight for difficulty level (0-1)
-    frequency_weight: 0.3             # Weight for expression frequency (0-1)
-    educational_value_weight: 0.3     # Weight for educational value (0-1)
-    fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
+  # NOTE: These settings are NOT currently used in the codebase
+  # Keeping them commented for future reference
+  # ranking:
+  #   difficulty_weight: 0.4           # Weight for difficulty level (0-1)
+  #   frequency_weight: 0.3             # Weight for expression frequency (0-1)
+  #   educational_value_weight: 0.3     # Weight for educational value (0-1)
+  #   fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
 
 # ============================================================================
 # Processing Configuration
@@ -164,14 +192,8 @@ font:
       vocabulary: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
       educational_slide: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
 
-# ============================================================================
-# Processing Settings
-# ============================================================================
-processing:
-  # Expression count limits per chunk
-  # Increased from 3 to 5 for cost optimization (more expressions per API call)
-  min_expressions_per_chunk: 1
-  max_expressions_per_chunk: 5
+# NOTE: Processing section already defined above (lines 69-80)
+# Duplicate section removed in V2 cleanup
 
 # ============================================================================
 # Video Transition Settings

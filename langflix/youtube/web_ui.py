@@ -2039,7 +2039,7 @@ class VideoManagementUI:
                 
                 form_data = {
                     "language_code": data['language_code'],
-                    "show_name": "Suits",  # Extract from path or use default
+                    "show_name": data.get('show_name', ''),  # User-provided show name from UI
                     "episode_name": os.path.splitext(os.path.basename(data['video_path']))[0],
                     "max_expressions": 50,
                     "language_level": data['language_level'],

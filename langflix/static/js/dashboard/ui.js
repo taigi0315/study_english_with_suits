@@ -369,6 +369,15 @@ export const ui = {
             </div>
 
             <div style="margin-bottom: 20px;">
+                <h3 style="color: #34495e; margin-bottom: 10px;">Show Name</h3>
+                <input type="text" id="showNameInput" 
+                       placeholder="e.g., Suits, Breaking Bad, Friends" 
+                       style="width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                       required>
+                <p style="margin-top: 8px; font-size: 0.9em; color: #7f8c8d;">📺 This name will be used in YouTube titles and descriptions for all selected videos.</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
                 <h3 style="color: #34495e; margin-bottom: 10px;">Languages & Level</h3>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Languages (Select multiple)</label>
@@ -516,6 +525,13 @@ export const ui = {
                 return;
             }
 
+            const showName = dialog.querySelector('#showNameInput').value.trim();
+            if (!showName) {
+                alert('Please enter a Show Name');
+                dialog.querySelector('#showNameInput').focus();
+                return;
+            }
+
             const selectedLanguages = Array.from(dialog.querySelectorAll('.language-checkbox:checked')).map(cb => cb.value);
             if (selectedLanguages.length === 0) {
                 alert('Please select at least one target language');
@@ -553,6 +569,7 @@ export const ui = {
                             media_id: checkbox.value,
                             video_path: checkbox.dataset.video,
                             subtitle_path: checkbox.dataset.subtitle,
+                            show_name: showName,  // User-provided show name
                             language_code: 'en', // Source language
                             target_languages: selectedLanguages,
                             language_level: languageLevel,

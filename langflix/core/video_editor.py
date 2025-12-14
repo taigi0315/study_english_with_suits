@@ -35,6 +35,7 @@ class VideoEditor:
         episode_name: str = None,
         subtitle_processor = None,
         source_language_code: str = None,
+        test_mode: bool = False,
     ):
         """
         Initialize VideoEditor
@@ -45,6 +46,7 @@ class VideoEditor:
             episode_name: Episode name for file naming
             subtitle_processor: Optional SubtitleProcessor instance for generating expression subtitles
             source_language_code: Source language code (language being learned, e.g., "en" for English)
+            test_mode: If True, use fast encoding (ultrafast/crf28). If False, use quality encoding (slow/crf18).
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)  # Create parent directories if needed
@@ -57,6 +59,9 @@ class VideoEditor:
         self.language_code = language_code  # Target language (user's native, e.g., "ko")
         self.target_language_code = language_code  # Alias for clarity
         self.source_language_code = source_language_code or "en"  # Source language (being learned)
+        
+        # Encoding mode: fast (test) vs quality (production)
+        self.test_mode = test_mode
         
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
@@ -855,8 +860,8 @@ class VideoEditor:
             if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
                 import random
                 
-                # Get all keywords (no limit, display all in one line)
-                keywords = expression.catchy_keywords
+                # Get keywords (limit to 3 per user spec)
+                keywords = expression.catchy_keywords[:3]
                 
                 # Format keywords: add "#" prefix to each
                 formatted_keywords = [f"#{keyword}" for keyword in keywords]
@@ -1000,8 +1005,8 @@ class VideoEditor:
 
             # 1. Expression (Top line)
             expression_text = expression.expression
-            # Wrap text to avoid cutoff (width=20 chars for narrower column/more lines)
-            wrapped_expression = wrap_text(expression_text, width=20)
+            # Wrap text to avoid cutoff (width=28 chars for better readability)
+            wrapped_expression = wrap_text(expression_text, width=28)
             escaped_expression = escape_drawtext_string(wrapped_expression)
             
             expression_y_pos_str = settings.get_expression_y_position() # e.g. h-150
@@ -1040,7 +1045,7 @@ class VideoEditor:
             # 2. Translation (Bottom line)
             translation_text = expression.expression_translation
             # Wrap translation as well
-            wrapped_translation = wrap_text(translation_text, width=20)
+            wrapped_translation = wrap_text(translation_text, width=28)
             escaped_translation = escape_drawtext_string(wrapped_translation)
             
             # Position translation below expression
@@ -1107,19 +1112,17 @@ class VideoEditor:
                             # Render word (source lang) and translation (target lang) with SEPARATE fonts
                             # This fixes the issue where Korean text breaks when rendered with Spanish font
                             
-                            # RANDOM POSITIONING within video area to avoid overlap and catch attention
-                            import random
+                            # V2 LAYOUT: Fixed position at TOP OF MEDIA DISPLAY (not random)
+                            # Per user layout spec: voca-annotation should be at "top of media display"
+                            # Video area starts around y=260 (after logo + catchy keywords padding)
                             
-                            # Define the video area bounds (9:16 format)
-                            video_area_y_start = 260
-                            video_area_y_end = 1200
-                            video_area_x_start = 20
-                            video_area_x_end = 600
+                            # Video area bounds (9:16 format, 1080x1920)
+                            video_area_y_start = 270  # Top of media display
+                            video_area_x_center = 360  # Center x for 720px width media
                             
-                            # Use different random positions for each annotation
-                            random.seed(hash(f"{word}_{idx}") % 2**32)
-                            rand_x = random.randint(video_area_x_start, video_area_x_end)
-                            rand_y = random.randint(video_area_y_start, video_area_y_end)
+                            # Fixed position: top of media, horizontally centered
+                            rand_x = video_area_x_center - 100  # Offset left for text centering
+                            rand_y = video_area_y_start + (idx * 45)  # Stack vertically with spacing
                             
                             font_size = settings.get_vocabulary_font_size()
                             char_width_estimate = font_size * 0.6  # Approximate char width
@@ -1469,52 +1472,57 @@ class VideoEditor:
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
         """Get video output arguments from configuration with optional resolution-aware quality.
         
+        Uses fast encoding (ultrafast/crf28) in test mode, quality encoding (slow/crf18) in production.
+        
         Args:
             source_video_path: Optional path to source video for resolution-based quality adjustment
             
         Returns:
             Dictionary with vcodec, acodec, preset, and crf values
         """
-        video_config = settings.get_video_config()
-        # High quality defaults: CRF 16 is visually lossless for most content
-        base_crf = video_config.get('crf', 16)
-        # Slower preset provides better compression efficiency and quality retention
-        base_preset = video_config.get('preset', 'slow')
+        # Get encoding preset based on test_mode (fast vs quality)
+        encoding_preset = settings.get_encoding_preset(self.test_mode)
+        base_preset = encoding_preset['preset']
+        base_crf = encoding_preset['crf']
+        audio_bitrate = encoding_preset['audio_bitrate']
         
-        # If source video provided, adjust quality based on resolution (TICKET-072)
-        if source_video_path and os.path.exists(source_video_path):
+        # Log which mode is being used
+        mode_name = "FAST (test)" if self.test_mode else "QUALITY (production)"
+        logger.debug(f"Using {mode_name} encoding: preset={base_preset}, crf={base_crf}")
+        
+        # If source video provided and NOT in test mode, adjust quality based on resolution (TICKET-072)
+        if source_video_path and os.path.exists(source_video_path) and not self.test_mode:
             try:
                 from langflix.media.ffmpeg_utils import get_video_params
                 vp = get_video_params(source_video_path)
                 height = vp.height or 1080
                 
-                # Higher quality logic
+                # Higher quality logic for production mode only
                 if height <= 720:
                     crf = min(base_crf, 16)  # Ensure high quality for 720p
                     logger.debug(f"720p source detected, using CRF {crf} for better quality")
                 else:
-                    # Use base CRF for 1080p and 4K (don't degrade quality for 4K)
                     crf = base_crf
                     
                 return {
-                    'vcodec': video_config.get('codec', 'libx264'),
-                    'acodec': video_config.get('audio_codec', 'aac'),
+                    'vcodec': 'libx264',
+                    'acodec': 'aac',
                     'preset': base_preset,
                     'crf': crf,
-                    'b:a': '256k',
+                    'b:a': audio_bitrate,
                     'ac': 2,
                     'ar': 48000
                 }
             except Exception as e:
                 logger.warning(f"Could not detect source resolution, using base settings: {e}")
         
-        # Default: use config values
+        # Default: use preset values
         return {
-            'vcodec': video_config.get('codec', 'libx264'),
-            'acodec': video_config.get('audio_codec', 'aac'),
+            'vcodec': 'libx264',
+            'acodec': 'aac',
             'preset': base_preset,
             'crf': base_crf,
-            'b:a': '256k',
+            'b:a': audio_bitrate,
             'ac': 2,
             'ar': 48000
         }

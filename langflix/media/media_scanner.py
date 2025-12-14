@@ -199,6 +199,34 @@ class MediaScanner:
                     if subtitle_path.exists():
                         return subtitle_path
         
+        # V2: Netflix folder format - subtitles in folder matching video name
+        # e.g., video.mp4 + video/ folder containing 7_English.srt, 4_Korean.srt
+        netflix_folder = video_dir / video_basename
+        if netflix_folder.exists() and netflix_folder.is_dir():
+            logger.info(f"Found Netflix-format subtitle folder: {netflix_folder}")
+            # Look for subtitle file matching the configured source language
+            # Import here to avoid circular imports
+            from langflix import settings
+            source_lang = settings.get_source_language_name()  # e.g., "Korean", "English"
+            logger.info(f"Looking for {source_lang} subtitle in Netflix folder")
+            
+            for ext in self.SUPPORTED_SUBTITLE_EXTENSIONS:
+                # Priority 1: Exact language name match (e.g., "Korean.srt")
+                exact_match = netflix_folder / f"{source_lang}{ext}"
+                if exact_match.exists():
+                    logger.info(f"Found exact {source_lang} subtitle: {exact_match}")
+                    return exact_match
+                
+                # Priority 2: Pattern match for Netflix-style naming (e.g., "4_Korean.srt")
+                for sub_file in netflix_folder.glob(f"*{source_lang}*{ext}"):
+                    logger.info(f"Found Netflix {source_lang} subtitle: {sub_file}")
+                    return sub_file
+                
+                # Priority 3: Fallback to any subtitle if source language not found
+                for sub_file in netflix_folder.glob(f"*{ext}"):
+                    logger.info(f"Found Netflix subtitle (fallback): {sub_file}")
+                    return sub_file
+        
         return None
     
     def _check_file_accessible(self, video_path: Path) -> Tuple[bool, Optional[str]]:

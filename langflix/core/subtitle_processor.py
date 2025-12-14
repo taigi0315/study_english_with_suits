@@ -490,12 +490,15 @@ class SubtitleProcessor:
             end_time_str = self._timedelta_to_srt_time(relative_end)
             srt_lines.append(f"{start_time_str} --> {end_time_str}")
             
-            # Original text
-            srt_lines.append(subtitle['text'])
+            # Source text (TOP, white) - use ASS styling for color
+            # Format: {\c&HFFFFFF&} for white in ASS
+            source_text = subtitle['text']
+            srt_lines.append(f"{{\\c&HFFFFFF&}}{source_text}")
             
-            # Find translation using improved mapping
+            # Target/translation text (BOTTOM, yellow)
+            # Format: {\c&H00FFFF&} for yellow in ASS (BGR)
             translation_text = self._get_translation_for_subtitle(i, subtitle, subtitle_to_dialogue_map, expression)
-            srt_lines.append(translation_text)
+            srt_lines.append(f"{{\\c&H00FFFF&}}{translation_text}")
             
             # Empty line between entries
             srt_lines.append("")

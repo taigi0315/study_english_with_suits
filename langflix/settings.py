@@ -1082,6 +1082,55 @@ def get_slides_quality() -> int:
     return get_slides_generation_config().get('quality', 95)
 
 
+# ============================================================================
+# Encoding Presets - Fast (test) vs Quality (production)
+# ============================================================================
+
+def get_encoding_preset(test_mode: bool = False) -> Dict[str, Any]:
+    """
+    Get encoding preset based on mode.
+    
+    Args:
+        test_mode: If True, use fast encoding for quick iteration.
+                   If False, use high quality encoding for production.
+    
+    Returns:
+        Dict with encoding settings: preset, crf, audio_bitrate
+    """
+    if test_mode:
+        # Fast mode - for development iteration
+        return {
+            'preset': 'ultrafast',
+            'crf': 28,
+            'audio_bitrate': '128k',
+        }
+    else:
+        # Quality mode - for production
+        return {
+            'preset': 'slow',
+            'crf': 18,
+            'audio_bitrate': '256k',
+        }
+
+
+def get_video_encoding_args(test_mode: bool = False) -> Dict[str, Any]:
+    """
+    Get FFmpeg video encoding arguments based on mode.
+    
+    Returns a dict ready to use with ffmpeg-python's .output()
+    """
+    preset = get_encoding_preset(test_mode)
+    return {
+        'vcodec': 'libx264',
+        'preset': preset['preset'],
+        'crf': preset['crf'],
+        'acodec': 'aac',
+        'audio_bitrate': preset['audio_bitrate'],
+        'ac': 2,
+        'ar': 48000,
+    }
+
+
 # Legacy functions - maintained for compatibility
 def get_video_config(attribute: str = None):
     """Legacy: Get video processing configuration"""

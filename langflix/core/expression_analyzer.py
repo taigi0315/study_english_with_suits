@@ -116,7 +116,7 @@ def _validate_and_filter_expressions(expressions: List[ExpressionAnalysis]) -> L
     retry=False,  # Retry is handled by _generate_content_with_retry
     fallback=False
 )
-def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None, target_duration: float = 180.0) -> List[ExpressionAnalysis]:
+def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, language_code: str = "ko", save_output: bool = False, output_dir: str = None, target_duration: float = 180.0, test_llm: bool = False, show_name: str = None) -> List[ExpressionAnalysis]:
     """
     Analyzes a chunk of subtitles using Gemini API with structured output (with caching).
     
@@ -126,12 +126,35 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         language_code: Target language code for translation
         save_output: Whether to save LLM output to file
         output_dir: Directory to save LLM output
+        test_llm: If True, use cached LLM response (for fast development iteration)
+        show_name: Show/episode name for cache identification
         
     Returns:
         List of ExpressionAnalysis objects
     """
     try:
-        # Check cache first
+        # TEST_LLM MODE: Load from dev test cache if available
+        if test_llm:
+            from .llm_test_cache import load_llm_test_response, save_llm_test_response
+            
+            cache_id = show_name or "default"
+            cached_data = load_llm_test_response("expression_analysis", cache_id)
+            
+            if cached_data:
+                logger.info(f"🚀 TEST_LLM: Using cached LLM response (skipping API call)")
+                try:
+                    if isinstance(cached_data, list):
+                        return [ExpressionAnalysis(**expr) for expr in cached_data]
+                    elif isinstance(cached_data, dict) and "expressions" in cached_data:
+                        return [ExpressionAnalysis(**expr) for expr in cached_data["expressions"]]
+                    else:
+                        logger.warning(f"Invalid test cache format, will call API")
+                except Exception as e:
+                    logger.warning(f"Failed to parse test cache: {e}, will call API")
+            else:
+                logger.info(f"🔄 TEST_LLM: No cache found, will call API and save response")
+        
+        # Check production cache first
         cache_manager = get_cache_manager()
         chunk_text = " ".join([sub.get('text', '') for sub in subtitle_chunk])
         # Add versioning to cache key to force re-analysis when prompt changes
@@ -287,6 +310,18 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                         logger.info(f"All {len(validated_expressions)} expressions are unique")
                     
                     logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
+                    
+                    # Save to test cache if test_llm mode is enabled
+                    if test_llm:
+                        from .llm_test_cache import save_llm_test_response
+                        cache_id = show_name or "default"
+                        cache_data = [expr.dict() for expr in validated_expressions]
+                        save_llm_test_response("expression_analysis", cache_data, cache_id, {
+                            "language_code": language_code,
+                            "language_level": language_level,
+                            "expression_count": len(validated_expressions)
+                        })
+                    
                     return validated_expressions
                 except Exception as validation_error:
                     # If structured output validation fails, log and fall through to text parsing
@@ -315,8 +350,51 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             
             # Parse response using Pydantic validation
             try:
-                response_obj = _parse_response_text(response_text)
+                # First, try to parse as JSON to check if it's V8 format
+                import json as json_module
+                cleaned_text = response_text.strip()
+                if cleaned_text.startswith("```json"):
+                    cleaned_text = cleaned_text[7:]
+                if cleaned_text.startswith("```"):
+                    cleaned_text = cleaned_text[3:]
+                if cleaned_text.endswith("```"):
+                    cleaned_text = cleaned_text[:-3]
+                cleaned_text = cleaned_text.strip()
+                
+                try:
+                    raw_data = json_module.loads(cleaned_text)
+                except json_module.JSONDecodeError:
+                    # Fall back to _parse_response_text which has more robust parsing
+                    raw_data = None
+                
+                # Detect V8 format: has context_start_index but no dialogues
+                is_v8_format = False
+                raw_expressions = None
+                
+                if raw_data:
+                    if isinstance(raw_data, dict) and "expressions" in raw_data:
+                        raw_expressions = raw_data["expressions"]
+                    elif isinstance(raw_data, list):
+                        raw_expressions = raw_data
+                    
+                    if raw_expressions and len(raw_expressions) > 0:
+                        first_expr = raw_expressions[0]
+                        # V8 format has indices but no dialogues array
+                        if 'context_start_index' in first_expr and 'dialogues' not in first_expr:
+                            is_v8_format = True
+                            logger.info(f"🔄 Detected V8 index-based format, applying post-processing...")
+                
+                # Apply V8 post-processing if needed
+                if is_v8_format and raw_expressions:
+                    # Post-process to convert indices to full text
+                    processed_expressions = _postprocess_v8_response(raw_expressions, subtitle_chunk)
+                    response_obj = ExpressionAnalysisResponse(expressions=processed_expressions)
+                else:
+                    # Standard V7 format - use regular parsing
+                    response_obj = _parse_response_text(response_text)
+                
                 expressions = response_obj.expressions
+
                 
                 # Validate and filter expressions
                 validated_expressions = _validate_and_filter_expressions(expressions)
@@ -379,6 +457,105 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         # Don't log as "No expressions found" - this is an actual error
         logger.warning(f"No expressions found in chunk due to error: {type(e).__name__}")
         return []
+
+
+def _postprocess_v8_response(raw_expressions: List[Dict[str, Any]], subtitle_chunk: List[dict], target_dialogues: List[dict] = None) -> List[Dict[str, Any]]:
+    """
+    V2 Post-processing: Convert V8 index-based LLM output to full ExpressionAnalysis format.
+    
+    The LLM only provides indices, and we look up actual text from the subtitle chunks.
+    
+    Args:
+        raw_expressions: List of expression dicts from LLM with index-based fields
+        subtitle_chunk: Source language subtitle chunk (list of dicts with 'text', 'start_time', 'end_time')
+        target_dialogues: Target language subtitle chunk (if available, else use source)
+        
+    Returns:
+        List of expression dicts with full text fields populated
+    """
+    processed = []
+    
+    for expr_data in raw_expressions:
+        try:
+            # Extract indices from LLM output
+            context_start_idx = expr_data.get('context_start_index', 0)
+            context_end_idx = expr_data.get('context_end_index', len(subtitle_chunk) - 1)
+            expr_dialogue_idx = expr_data.get('expression_dialogue_index', context_start_idx)
+            
+            # Validate indices
+            if context_start_idx < 0 or context_end_idx >= len(subtitle_chunk):
+                logger.warning(f"Invalid context indices: {context_start_idx}-{context_end_idx}, max={len(subtitle_chunk)-1}")
+                context_start_idx = max(0, context_start_idx)
+                context_end_idx = min(len(subtitle_chunk) - 1, context_end_idx)
+            
+            if expr_dialogue_idx < context_start_idx or expr_dialogue_idx > context_end_idx:
+                logger.warning(f"expression_dialogue_index {expr_dialogue_idx} outside context range, adjusting")
+                expr_dialogue_idx = context_start_idx
+            
+            # Look up dialogues from source subtitles
+            dialogues = []
+            for i in range(context_start_idx, context_end_idx + 1):
+                if i < len(subtitle_chunk):
+                    dialogues.append(subtitle_chunk[i].get('text', ''))
+            
+            # Look up translations from target subtitles (or use source if not available)
+            translations = []
+            target_source = target_dialogues if target_dialogues and len(target_dialogues) > context_end_idx else subtitle_chunk
+            for i in range(context_start_idx, context_end_idx + 1):
+                if i < len(target_source):
+                    translations.append(target_source[i].get('text', ''))
+            
+            # Get timestamps
+            context_start_time = subtitle_chunk[context_start_idx].get('start_time', '00:00:00,000')
+            context_end_time = subtitle_chunk[context_end_idx].get('end_time', '00:00:30,000')
+            
+            # Get expression dialogue
+            expression_dialogue = subtitle_chunk[expr_dialogue_idx].get('text', '') if expr_dialogue_idx < len(subtitle_chunk) else ''
+            expression_dialogue_translation = target_source[expr_dialogue_idx].get('text', '') if expr_dialogue_idx < len(target_source) else ''
+            
+            # Use LLM-provided expression_translation if available (preferred in V8 mode)
+            # Fall back to looking up from target dialogues only if LLM didn't provide it
+            llm_expression_translation = expr_data.get('expression_translation', '')
+            expression_translation = llm_expression_translation if llm_expression_translation else expr_data.get('expression', '')
+            
+            # Process vocabulary annotations - use LLM-provided translations
+            vocab_annotations = expr_data.get('vocabulary_annotations', [])
+            for vocab in vocab_annotations:
+                if 'translation' not in vocab and target_dialogues:
+                    # Look up translation from the target dialogue at the specified index
+                    vocab_idx = vocab.get('dialogue_index', 0)
+                    if vocab_idx < len(target_dialogues):
+                        # We don't have word-level translation, so leave blank or use placeholder
+                        vocab['translation'] = f"({vocab.get('word', '')} translation)"
+                elif 'translation' not in vocab:
+                    vocab['translation'] = vocab.get('word', '')  # Fallback
+            
+            # Build the full expression dict
+            full_expr = {
+                'title': expr_data.get('title', ''),
+                'dialogues': dialogues,
+                'translation': translations,
+                'expression_dialogue': expression_dialogue,
+                'expression_dialogue_translation': expression_dialogue_translation,
+                'expression': expr_data.get('expression', ''),
+                'expression_translation': expression_translation,  # Use LLM-provided translation
+                'intro_hook': expr_data.get('intro_hook', ''),
+                'context_start_time': context_start_time,
+                'context_end_time': context_end_time,
+                'similar_expressions': expr_data.get('similar_expressions', []),
+                'scene_type': expr_data.get('scene_type', 'drama'),
+                'catchy_keywords': expr_data.get('catchy_keywords', []),
+                'vocabulary_annotations': vocab_annotations,
+            }
+            
+            processed.append(full_expr)
+            logger.info(f"✅ V8 Post-processed: '{full_expr['expression']}' (indices {context_start_idx}-{context_end_idx})")
+            
+        except Exception as e:
+            logger.error(f"Error post-processing V8 expression: {e}")
+            continue
+    
+    return processed
 
 
 def _parse_response_text(response_text: str) -> ExpressionAnalysisResponse:

@@ -76,14 +76,15 @@ def get_font_file_for_language(language_code: Optional[str] = None, use_case: st
         
         # Priority 0: For target languages that need to display mixed content (Korean source + translated text),
         # we need a font that supports BOTH CJK (Korean) AND Latin accents (Spanish é, ó, etc.)
-        # AppleSDGothicNeo supports BOTH - Korean chars + Latin Extended including accents
+        # Arial Unicode MS and Helvetica Neue have better Latin Extended-A support for accented chars
         if language_code == 'es' and platform.system() == "Darwin":
              try:
-                # AppleSDGothicNeo is ideal: supports Korean (CJK) + Spanish accents (Latin Extended)
-                # Tested: é (U+E9), ó (U+F3), ñ (U+F1), ¿ (U+BF), ¡ (U+A1) all render correctly
+                # Priority: Arial Unicode MS > Helvetica Neue > AppleSDGothicNeo
+                # AppleSDGothicNeo may not render all Latin Extended chars in FFmpeg drawtext
                 mixed_content_fonts = [
-                    "/System/Library/Fonts/AppleSDGothicNeo.ttc",  # Supports Korean + Spanish accents
-                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",  # Universal fallback
+                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",  # Best Unicode coverage
+                    "/System/Library/Fonts/HelveticaNeue.ttc",  # Good Latin Extended support
+                    "/System/Library/Fonts/AppleSDGothicNeo.ttc",  # CJK + some Latin
                 ]
                 for safe_font in mixed_content_fonts:
                     if os.path.exists(safe_font):

@@ -376,8 +376,23 @@ class LangFlixPipeline:
         # Get media path from video file
         media_path = self.video_file if self.video_file else self.video_dir
         
-        # Discover available languages
+        # Try to discover subtitle folder from media path
         subtitle_folder = get_subtitle_folder(media_path)
+        
+        # If not found (e.g., video in temp folder), try to find by episode name in assets/media
+        if not subtitle_folder and self.episode_name:
+            logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
+            # Search in common media directories
+            for media_root in ["assets/media", "assets/media/test_media"]:
+                potential_folder = Path(media_root) / self.episode_name
+                if potential_folder.exists() and potential_folder.is_dir():
+                    # Check if this folder has subtitle files
+                    srt_files = list(potential_folder.glob("*.srt"))
+                    if srt_files:
+                        subtitle_folder = str(potential_folder)
+                        logger.info(f"Found Netflix folder by episode name: {subtitle_folder}")
+                        break
+        
         if not subtitle_folder:
             logger.warning("No subtitle folder found, falling back to V1")
             return []
@@ -402,7 +417,7 @@ class LangFlixPipeline:
         try:
             service = get_dual_subtitle_service()
             dual_sub = service.load_dual_subtitles(
-                media_path=media_path,
+                media_path=subtitle_folder,  # Use discovered Netflix folder, not temp video path
                 source_language=source_lang,
                 target_language=target_lang,
             )

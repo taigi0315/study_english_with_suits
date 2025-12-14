@@ -23,12 +23,14 @@ SUBTITLE_FILENAME_PATTERN = re.compile(r'^(\d+)_([A-Za-z]+)\.srt$')
 
 def get_subtitle_folder(media_path: str) -> Optional[Path]:
     """
-    Get the subtitle folder for a given media file.
+    Get the subtitle folder for a given media file or folder path.
     
     The subtitle folder has the same name as the media file without extension.
+    Also handles when media_path is already a subtitle folder.
     
     Args:
-        media_path: Path to the media file (e.g., /path/to/video.mp4)
+        media_path: Path to the media file (e.g., /path/to/video.mp4) or 
+                    directly to the subtitle folder (e.g., /path/to/video/)
         
     Returns:
         Path to subtitle folder, or None if it doesn't exist
@@ -36,12 +38,20 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
     Example:
         >>> get_subtitle_folder("/media/show.mp4")
         Path("/media/show")
+        >>> get_subtitle_folder("/media/show")  # Already a subtitle folder
+        Path("/media/show")
     """
     media_file = Path(media_path)
     
     if not media_file.exists():
         logger.warning(f"Media file does not exist: {media_path}")
         return None
+    
+    # If it's already a directory with .srt files, return it directly
+    if media_file.is_dir():
+        srt_files = list(media_file.glob("*.srt"))
+        if srt_files:
+            return media_file
     
     # Subtitle folder has same name as media file without extension
     subtitle_folder = media_file.parent / media_file.stem
@@ -104,15 +114,29 @@ def discover_subtitle_languages(media_path: str) -> Dict[str, List[str]]:
     
     languages: Dict[str, List[str]] = {}
     
+    # Pattern for simple language filenames: {Language}.srt (e.g., "Korean.srt")
+    simple_pattern = re.compile(r'^([A-Za-z]+)\.srt$')
+    
     for srt_file in sorted(subtitle_folder.glob("*.srt")):
         parsed = parse_subtitle_filename(srt_file.name)
         if parsed:
+            # Indexed filename: "3_Korean.srt"
             index, language = parsed
             if language not in languages:
                 languages[language] = []
             languages[language].append(str(srt_file))
         else:
-            logger.debug(f"Skipping non-standard subtitle file: {srt_file.name}")
+            # Try simple filename pattern: "Korean.srt"
+            simple_match = simple_pattern.match(srt_file.name)
+            if simple_match:
+                language = simple_match.group(1)
+                if language not in languages:
+                    languages[language] = []
+                # Insert at beginning (priority over indexed variants)
+                languages[language].insert(0, str(srt_file))
+                logger.debug(f"Found simple subtitle: {srt_file.name} -> {language}")
+            else:
+                logger.debug(f"Skipping non-standard subtitle file: {srt_file.name}")
     
     logger.info(f"Discovered {len(languages)} languages for {media_path}: {list(languages.keys())}")
     return languages

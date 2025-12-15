@@ -74,9 +74,12 @@ class VideoEditor:
         from langflix.core.video.video_composer import VideoComposer
         self.video_composer = VideoComposer(output_dir=self.output_dir, test_mode=test_mode)
 
-        # Initialize FontResolver for font management
+        # Initialize FontResolver for font management (supports dual-language)
         from langflix.core.video.font_resolver import FontResolver
-        self.font_resolver = FontResolver(default_language_code=language_code)
+        self.font_resolver = FontResolver(
+            default_language_code=language_code,  # Target language
+            source_language_code=self.source_language_code  # Source language
+        )
 
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles

@@ -6,6 +6,7 @@ Tests font resolution functionality including:
 - Font caching
 - FFmpeg font option string generation
 - Font validation
+- Dual-font rendering support (source + target)
 """
 
 from pathlib import Path
@@ -32,6 +33,16 @@ class TestFontResolver:
 
         assert resolver.default_language_code is None
         assert resolver.font_cache == {}
+
+    def test_init_with_dual_language(self):
+        """Test that FontResolver initializes with both source and target languages."""
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+
+        assert resolver.default_language_code == "es"  # Target
+        assert resolver.source_language_code == "ko"   # Source
 
     @patch('langflix.config.font_utils.get_font_file_for_language')
     @patch('os.path.exists')
@@ -180,3 +191,153 @@ class TestFontResolver:
         assert mock_get_font.call_count == 2
         assert font1 == "/path/to/default.ttf"
         assert font2 == "/path/to/expression.ttf"
+
+
+class TestFontResolverDualLanguage:
+    """Test suite for dual-language font resolution features."""
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_source_font(self, mock_exists, mock_get_font):
+        """Test get_source_font convenience method."""
+        mock_get_font.return_value = "/path/to/korean_font.ttf"
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        font_path = resolver.get_source_font(use_case="expression")
+
+        assert font_path == "/path/to/korean_font.ttf"
+        mock_get_font.assert_called_once_with("ko", "expression")
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_target_font(self, mock_exists, mock_get_font):
+        """Test get_target_font convenience method."""
+        mock_get_font.return_value = "/path/to/spanish_font.ttf"
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        font_path = resolver.get_target_font(use_case="translation")
+
+        assert font_path == "/path/to/spanish_font.ttf"
+        mock_get_font.assert_called_once_with("es", "translation")
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_dual_fonts(self, mock_exists, mock_get_font):
+        """Test get_dual_fonts returns both source and target fonts."""
+        mock_get_font.side_effect = [
+            "/path/to/korean_font.ttf",   # Source
+            "/path/to/spanish_font.ttf"   # Target
+        ]
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        source_font, target_font = resolver.get_dual_fonts(use_case="vocabulary")
+
+        assert source_font == "/path/to/korean_font.ttf"
+        assert target_font == "/path/to/spanish_font.ttf"
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_source_font_option(self, mock_exists, mock_get_font):
+        """Test get_source_font_option convenience method."""
+        mock_get_font.return_value = "/path/to/korean_font.ttf"
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        option_string = resolver.get_source_font_option(use_case="expression")
+
+        assert option_string == "fontfile=/path/to/korean_font.ttf:"
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_target_font_option(self, mock_exists, mock_get_font):
+        """Test get_target_font_option convenience method."""
+        mock_get_font.return_value = "/path/to/spanish_font.ttf"
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        option_string = resolver.get_target_font_option(use_case="translation")
+
+        assert option_string == "fontfile=/path/to/spanish_font.ttf:"
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_validate_dual_language_support(self, mock_exists, mock_get_font):
+        """Test validate_dual_language_support checks both languages."""
+        mock_get_font.side_effect = [
+            "/path/to/korean_font.ttf",   # Source
+            "/path/to/spanish_font.ttf"   # Target
+        ]
+        mock_exists.return_value = True
+
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+        result = resolver.validate_dual_language_support()
+
+        assert result["source"] is True
+        assert result["target"] is True
+        assert result["source_language"] == "ko"
+        assert result["target_language"] == "es"
+
+    @patch('langflix.config.font_utils.get_font_file_for_language')
+    @patch('os.path.exists')
+    def test_get_all_fonts_for_language(self, mock_exists, mock_get_font):
+        """Test get_all_fonts_for_language returns all use cases."""
+        mock_get_font.return_value = "/path/to/font.ttf"
+        mock_exists.return_value = True
+
+        resolver = FontResolver()
+        fonts = resolver.get_all_fonts_for_language("ko")
+
+        # Should include all use cases
+        assert "default" in fonts
+        assert "expression" in fonts
+        assert "keywords" in fonts
+        assert "translation" in fonts
+        assert "vocabulary" in fonts
+        assert "narration" in fonts
+        assert "dialogue" in fonts
+        assert "title" in fonts
+        assert "educational_slide" in fonts
+
+    def test_clear_cache(self):
+        """Test that clear_cache empties the font cache."""
+        resolver = FontResolver()
+        resolver.font_cache["test:key"] = "/some/path.ttf"
+
+        resolver.clear_cache()
+
+        assert resolver.font_cache == {}
+
+    def test_repr(self):
+        """Test string representation."""
+        resolver = FontResolver(
+            default_language_code="es",
+            source_language_code="ko"
+        )
+
+        repr_str = repr(resolver)
+
+        assert "es" in repr_str
+        assert "ko" in repr_str
+        assert "FontResolver" in repr_str
+

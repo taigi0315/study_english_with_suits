@@ -312,7 +312,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 50
+      font_size: 30
       y_position: 220            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width

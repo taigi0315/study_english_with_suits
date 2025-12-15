@@ -151,7 +151,7 @@ class OverlayRenderer:
         target_width: int = 1080
     ):
         """
-        Add hashtag keywords below viral title.
+        Add hashtag keywords below viral title (comma-separated, with line wrapping).
 
         Args:
             video_stream: FFmpeg video stream
@@ -172,47 +172,74 @@ class OverlayRenderer:
         if not keywords:
             return video_stream
 
-        # Limit to 3 keywords
-        keywords = keywords[:3]
+        # Limit to 5 keywords (increased since comma-separated is more compact)
+        keywords = keywords[:5]
 
         # Format keywords: add "#" prefix to each
         formatted_keywords = [f"#{keyword}" for keyword in keywords]
-
-        # Generate random color for each keyword (deterministic based on keyword text)
-        keyword_colors = []
-        for keyword in formatted_keywords:
-            random.seed(hash(keyword) % (2**32))
-            r = random.randint(100, 255)
-            g = random.randint(100, 255)
-            b = random.randint(100, 255)
-            keyword_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
 
         # Get settings
         font_size = settings.get_keywords_font_size()
         y_position = settings.get_keywords_y_position()
         line_height_factor = settings.get_keywords_line_height_factor()
-        line_height = font_size * line_height_factor
+        line_height = int(font_size * line_height_factor)
         max_width_percent = settings.get_keywords_max_width_percent()
         max_width = target_width * max_width_percent
 
         # Get target language font for keywords
         keyword_font = self.font_resolver.get_target_font("keywords")
 
-        # Character width estimate
+        # Character width estimate for line wrapping calculation
         char_width_estimate = font_size * 0.6
-        comma_separator = ",   "
-        comma_width = len(comma_separator) * char_width_estimate
+        comma_separator = ", "
 
-        # One keyword per line
-        for line_idx, (keyword, color) in enumerate(zip(formatted_keywords, keyword_colors)):
+        # Build lines with comma-separated keywords, wrapping when needed
+        lines = []
+        current_line = []
+        current_line_width = 0
+
+        for keyword in formatted_keywords:
+            keyword_width = len(keyword) * char_width_estimate
+            separator_width = len(comma_separator) * char_width_estimate if current_line else 0
+            
+            # Check if adding this keyword would exceed max width
+            if current_line and (current_line_width + separator_width + keyword_width > max_width):
+                # Start a new line
+                lines.append(current_line)
+                current_line = [keyword]
+                current_line_width = keyword_width
+            else:
+                # Add to current line
+                current_line.append(keyword)
+                current_line_width += separator_width + keyword_width
+
+        # Don't forget the last line
+        if current_line:
+            lines.append(current_line)
+
+        # Generate a random color for each line (for visual variety)
+        line_colors = []
+        for line_idx, line in enumerate(lines):
+            # Use first keyword of line as seed for consistent color
+            random.seed(hash(line[0]) % (2**32))
+            r = random.randint(100, 255)
+            g = random.randint(100, 255)
+            b = random.randint(100, 255)
+            line_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
+
+        # Render each line
+        for line_idx, (line_keywords, color) in enumerate(zip(lines, line_colors)):
             line_y = y_position + (line_idx * line_height)
-            escaped_keyword = self.escape_drawtext_string(keyword)
+            
+            # Join keywords with comma separator
+            line_text = comma_separator.join(line_keywords)
+            escaped_line = self.escape_drawtext_string(line_text)
 
             keyword_args = {
-                'text': escaped_keyword,
+                'text': escaped_line,
                 'fontsize': font_size,
                 'fontcolor': color,
-                'x': '(w-text_w)/2',  # Center each keyword
+                'x': '(w-text_w)/2',  # Center the line
                 'y': line_y,
                 'borderw': settings.get_keywords_border_width(),
                 'bordercolor': settings.get_keywords_border_color()
@@ -223,7 +250,7 @@ class OverlayRenderer:
 
             video_stream = ffmpeg.filter(video_stream, 'drawtext', **keyword_args)
 
-        logger.info(f"Added {len(keywords)} catchy keywords with # prefix")
+        logger.info(f"Added {len(keywords)} catchy keywords ({len(lines)} lines, comma-separated)")
         return video_stream
 
     def add_narrations(

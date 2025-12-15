@@ -5,14 +5,21 @@ This module is responsible for:
 - Adding viral title overlay (top of video)
 - Adding catchy keywords (hashtag format)
 - Adding narrations (timed commentary)
-- Adding vocabulary annotations (word definitions)
-- Adding expression annotations (idiom/phrase explanations)
+- Adding vocabulary annotations (word definitions with dual-font)
+- Adding expression annotations (idiom/phrase explanations with dual-font)
+- Escaping text for FFmpeg drawtext filter
 
-Extracted from video_editor.py overlay sections (lines 889-1400+)
+Extracted from video_editor.py overlay sections (lines 889-1508)
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+import os
+import random
+import re
+import textwrap
+from typing import List, Dict, Any, Optional, Tuple
+
+from langflix.core.video.font_resolver import FontResolver
 
 logger = logging.getLogger(__name__)
 
@@ -25,36 +32,47 @@ class OverlayRenderer:
     - Render viral title at top
     - Render catchy keywords (hashtags)
     - Render narrations with timing
-    - Render vocabulary annotations
-    - Render expression annotations
+    - Render vocabulary annotations (dual-font: source + target)
+    - Render expression annotations (dual-font: source + target)
     - Escape text for FFmpeg drawtext filter
 
     Example:
-        >>> renderer = OverlayRenderer(source_lang="ko", target_lang="es")
+        >>> renderer = OverlayRenderer(
+        ...     source_language_code="ko",
+        ...     target_language_code="es"
+        ... )
         >>> video_stream = renderer.add_viral_title(
         ...     video_stream=stream,
         ...     viral_title="니까짓 게 날 죽여?",
-        ...     duration=0.0
+        ...     settings=settings
         ... )
     """
 
     def __init__(
         self,
         source_language_code: str,
-        target_language_code: str
+        target_language_code: str,
+        font_resolver: Optional[FontResolver] = None
     ):
         """
         Initialize OverlayRenderer.
 
         Args:
-            source_language_code: Source language for expressions
-            target_language_code: Target language for translations
+            source_language_code: Source language for expressions (e.g., "ko")
+            target_language_code: Target language for translations (e.g., "es")
+            font_resolver: Optional FontResolver instance (created if not provided)
         """
-        self.source_language = source_language_code
-        self.target_language = target_language_code
+        self.source_language_code = source_language_code
+        self.target_language_code = target_language_code
 
-        # Will be initialized in Phase 1, Day 3
-        self.font_resolver = None  # FontResolver instance
+        # Use provided or create FontResolver
+        if font_resolver:
+            self.font_resolver = font_resolver
+        else:
+            self.font_resolver = FontResolver(
+                default_language_code=target_language_code,
+                source_language_code=source_language_code
+            )
 
         logger.info(
             f"OverlayRenderer initialized: "
@@ -65,6 +83,7 @@ class OverlayRenderer:
         self,
         video_stream,
         viral_title: str,
+        settings,
         duration: float = 0.0
     ):
         """
@@ -73,21 +92,63 @@ class OverlayRenderer:
         Args:
             video_stream: FFmpeg video stream
             viral_title: Title text (in source language)
+            settings: Settings module for configuration
             duration: Display duration (0 = entire video)
 
         Returns:
             Video stream with viral title overlay
 
-        Note:
-            Extracted from video_editor.py lines 889-929
+        Example:
+            >>> stream = renderer.add_viral_title(stream, "니까짓 게 날 죽여?", settings)
         """
-        # TODO: Implementation in Phase 1, Day 3
-        raise NotImplementedError("Will be implemented in Phase 1, Day 3")
+        import ffmpeg
+
+        if not viral_title:
+            return video_stream
+
+        # Wrap viral title for visibility (max 25 chars per line)
+        wrapped_viral_title = textwrap.fill(viral_title, width=25)
+        escaped_viral_title = self.escape_drawtext_string(wrapped_viral_title)
+
+        # Get settings
+        viral_font_size = settings.get_viral_title_font_size()
+        viral_y = settings.get_viral_title_y_position()
+        viral_color = settings.get_viral_title_text_color()
+        viral_border = settings.get_viral_title_border_width()
+        viral_border_color = settings.get_viral_title_border_color()
+        viral_duration = settings.get_viral_title_display_duration() if duration == 0 else duration
+
+        viral_title_args = {
+            'text': escaped_viral_title,
+            'fontsize': viral_font_size,
+            'fontcolor': viral_color,
+            'x': '(w-text_w)/2',  # Center horizontally
+            'y': viral_y,
+            'borderw': viral_border,
+            'bordercolor': viral_border_color,
+            'line_spacing': 8
+        }
+
+        # Add timing if duration is specified (0 = entire video)
+        if viral_duration > 0:
+            viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+
+        # Use source language font for viral_title
+        source_font = self.font_resolver.get_source_font("expression")
+        if source_font and os.path.exists(source_font):
+            viral_title_args['fontfile'] = source_font
+
+        video_stream = ffmpeg.filter(video_stream, 'drawtext', **viral_title_args)
+        logger.info(f"Added viral_title overlay: '{viral_title[:50]}...'")
+
+        return video_stream
 
     def add_catchy_keywords(
         self,
         video_stream,
-        keywords: List[str]
+        keywords: List[str],
+        settings,
+        target_width: int = 1080
     ):
         """
         Add hashtag keywords below viral title.
@@ -95,21 +156,83 @@ class OverlayRenderer:
         Args:
             video_stream: FFmpeg video stream
             keywords: List of keywords (in target language)
+            settings: Settings module for configuration
+            target_width: Video width for positioning
 
         Returns:
             Video stream with keyword overlays
 
-        Note:
-            Extracted from video_editor.py lines 931-1068
+        Example:
+            >>> stream = renderer.add_catchy_keywords(
+            ...     stream, ["aprendizaje", "idiomas", "coreano"], settings
+            ... )
         """
-        # TODO: Implementation in Phase 1, Day 3
-        raise NotImplementedError("Will be implemented in Phase 1, Day 3")
+        import ffmpeg
+
+        if not keywords:
+            return video_stream
+
+        # Limit to 3 keywords
+        keywords = keywords[:3]
+
+        # Format keywords: add "#" prefix to each
+        formatted_keywords = [f"#{keyword}" for keyword in keywords]
+
+        # Generate random color for each keyword (deterministic based on keyword text)
+        keyword_colors = []
+        for keyword in formatted_keywords:
+            random.seed(hash(keyword) % (2**32))
+            r = random.randint(100, 255)
+            g = random.randint(100, 255)
+            b = random.randint(100, 255)
+            keyword_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
+
+        # Get settings
+        font_size = settings.get_keywords_font_size()
+        y_position = settings.get_keywords_y_position()
+        line_height_factor = settings.get_keywords_line_height_factor()
+        line_height = font_size * line_height_factor
+        max_width_percent = settings.get_keywords_max_width_percent()
+        max_width = target_width * max_width_percent
+
+        # Get target language font for keywords
+        keyword_font = self.font_resolver.get_target_font("keywords")
+
+        # Character width estimate
+        char_width_estimate = font_size * 0.6
+        comma_separator = ",   "
+        comma_width = len(comma_separator) * char_width_estimate
+
+        # One keyword per line
+        for line_idx, (keyword, color) in enumerate(zip(formatted_keywords, keyword_colors)):
+            line_y = y_position + (line_idx * line_height)
+            escaped_keyword = self.escape_drawtext_string(keyword)
+
+            keyword_args = {
+                'text': escaped_keyword,
+                'fontsize': font_size,
+                'fontcolor': color,
+                'x': '(w-text_w)/2',  # Center each keyword
+                'y': line_y,
+                'borderw': settings.get_keywords_border_width(),
+                'bordercolor': settings.get_keywords_border_color()
+            }
+
+            if keyword_font and os.path.exists(keyword_font):
+                keyword_args['fontfile'] = keyword_font
+
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **keyword_args)
+
+        logger.info(f"Added {len(keywords)} catchy keywords with # prefix")
+        return video_stream
 
     def add_narrations(
         self,
         video_stream,
         narrations: List[Dict[str, Any]],
-        dialogue_timing: Dict[int, float]
+        dialogue_count: int,
+        context_duration: float,
+        settings
     ):
         """
         Add narration overlays at specified times.
@@ -117,62 +240,445 @@ class OverlayRenderer:
         Args:
             video_stream: FFmpeg video stream
             narrations: List of narration dicts with text, dialogue_index, type
-            dialogue_timing: Mapping of dialogue_index to timestamp
+            dialogue_count: Number of dialogue lines (for timing calculation)
+            context_duration: Total duration of context section
+            settings: Settings module for configuration
 
         Returns:
             Video stream with narration overlays
 
-        Note:
-            Extracted from video_editor.py lines 1314-1384
+        Example:
+            >>> narrations = [
+            ...     {"text": "¡Qué escena!", "dialogue_index": 0, "type": "reaction"}
+            ... ]
+            >>> stream = renderer.add_narrations(stream, narrations, 5, 30.0, settings)
         """
-        # TODO: Implementation in Phase 1, Day 3
-        raise NotImplementedError("Will be implemented in Phase 1, Day 3")
+        import ffmpeg
+
+        if not narrations or dialogue_count <= 0:
+            return video_stream
+
+        time_per_dialogue = context_duration / dialogue_count
+
+        narr_y = settings.get_narrations_y_position()
+        narr_duration = settings.get_narrations_duration()
+        narr_font_size = settings.get_narrations_font_size()
+        narr_border = settings.get_narrations_border_width()
+        narr_border_color = settings.get_narrations_border_color()
+
+        # Get target language font
+        target_font = self.font_resolver.get_target_font("keywords")
+
+        logger.info(f"Processing {len(narrations)} narration overlays")
+
+        for idx, narr_item in enumerate(narrations[:6]):  # Max 6 narrations
+            # Handle both dict and object
+            if isinstance(narr_item, dict):
+                narr_text = self._clean_html(narr_item.get('text', ''))
+                narr_dialogue_idx = narr_item.get('dialogue_index', 0)
+                narr_type = narr_item.get('type', 'commentary')
+            else:
+                narr_text = self._clean_html(getattr(narr_item, 'text', ''))
+                narr_dialogue_idx = getattr(narr_item, 'dialogue_index', 0)
+                narr_type = getattr(narr_item, 'type', 'commentary')
+
+            if not narr_text:
+                continue
+
+            # Get color based on narration type
+            narr_color = settings.get_narrations_type_color(narr_type)
+
+            # Timing
+            narr_start = max(0, narr_dialogue_idx * time_per_dialogue)
+            narr_end = narr_start + narr_duration
+
+            escaped_narr = self.escape_drawtext_string(narr_text)
+
+            narr_args = {
+                'text': escaped_narr,
+                'fontsize': narr_font_size,
+                'fontcolor': narr_color,
+                'x': '(w-text_w)/2',
+                'y': narr_y,
+                'borderw': narr_border,
+                'bordercolor': narr_border_color,
+                'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
+            }
+
+            if target_font and os.path.exists(target_font):
+                narr_args['fontfile'] = target_font
+
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **narr_args)
+            logger.debug(f"Added narration [{narr_type}]: '{narr_text[:30]}' at t={narr_start:.2f}-{narr_end:.2f}s")
+
+        logger.info(f"Added {len(narrations[:6])} narration overlays")
+        return video_stream
 
     def add_vocabulary_annotations(
         self,
         video_stream,
         vocab_annotations: List[Dict[str, Any]],
-        dialogue_timing: Dict[int, float]
+        dialogue_count: int,
+        context_duration: float,
+        settings
     ):
         """
-        Add vocabulary word overlays.
+        Add vocabulary word overlays with dual-font rendering.
+
+        Uses source language font for the word and target language font for translation.
 
         Args:
             video_stream: FFmpeg video stream
             vocab_annotations: List of vocab dicts with word, translation, dialogue_index
-            dialogue_timing: Mapping of dialogue_index to timestamp
+            dialogue_count: Number of dialogue lines
+            context_duration: Total duration
+            settings: Settings module for configuration
 
         Returns:
             Video stream with vocabulary overlays
 
-        Note:
-            Extracted from video_editor.py lines 1163-1310
+        Example:
+            >>> vocab = [{"word": "사랑", "translation": "amor", "dialogue_index": 0}]
+            >>> stream = renderer.add_vocabulary_annotations(stream, vocab, 5, 30.0, settings)
         """
-        # TODO: Implementation in Phase 1, Day 3
-        raise NotImplementedError("Will be implemented in Phase 1, Day 3")
+        import ffmpeg
+
+        if not vocab_annotations or dialogue_count <= 0:
+            return video_stream
+
+        time_per_dialogue = context_duration / dialogue_count
+
+        # Get dual fonts
+        source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
+
+        # Layout settings
+        voca_y_start = 440  # User requested: right below top black padding
+        rand_x = 40
+        font_size = settings.get_vocabulary_font_size()
+        annot_duration = settings.get_vocabulary_duration()
+        char_width_estimate = font_size * 0.5
+
+        # Random colors for vocabulary
+        voca_colors = ['#FFD700', '#00FF00', '#FF6B6B', '#00BFFF', '#FF69B4', '#FFA500']
+
+        logger.info(f"Processing {len(vocab_annotations)} vocabulary annotations")
+        logger.debug(f"Using FIXED coordinates: x={rand_x}, y={voca_y_start}")
+
+        for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5
+            # Handle both dict and object
+            if isinstance(vocab_annot, dict):
+                word = self._clean_html(vocab_annot.get('word', ''))
+                translation = self._clean_html(vocab_annot.get('translation', ''))
+                dialogue_index = vocab_annot.get('dialogue_index', 0)
+            else:
+                word = self._clean_html(getattr(vocab_annot, 'word', ''))
+                translation = self._clean_html(getattr(vocab_annot, 'translation', ''))
+                dialogue_index = getattr(vocab_annot, 'dialogue_index', 0)
+
+            if not word or not translation:
+                continue
+
+            # Timing
+            annot_start = max(0, dialogue_index * time_per_dialogue)
+            annot_end = annot_start + annot_duration
+
+            # Vertical stacking
+            rand_y = voca_y_start + (idx * 50)
+
+            # Escape text
+            escaped_word = self.escape_drawtext_string(word)
+            escaped_separator = " : "
+            escaped_translation = self.escape_drawtext_string(translation)
+
+            # Calculate widths
+            word_width = int(len(word) * char_width_estimate)
+            separator_width = int(len(" : ") * char_width_estimate)
+
+            # Random color
+            random_color = random.choice(voca_colors)
+
+            common_args = {
+                'fontsize': font_size,
+                'fontcolor': random_color,
+                'borderw': settings.get_vocabulary_border_width(),
+                'bordercolor': settings.get_vocabulary_border_color(),
+                'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
+            }
+
+            # 1. Render SOURCE WORD
+            word_args = {**common_args, 'text': escaped_word, 'x': rand_x, 'y': rand_y}
+            if source_font and os.path.exists(source_font):
+                word_args['fontfile'] = source_font
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **word_args)
+
+            # 2. Render SEPARATOR
+            sep_x = rand_x + word_width
+            sep_args = {**common_args, 'text': escaped_separator, 'x': sep_x, 'y': rand_y}
+            if target_font and os.path.exists(target_font):
+                sep_args['fontfile'] = target_font
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **sep_args)
+
+            # 3. Render TRANSLATION
+            trans_x = sep_x + separator_width
+            trans_args = {**common_args, 'text': escaped_translation, 'x': trans_x, 'y': rand_y}
+            if target_font and os.path.exists(target_font):
+                trans_args['fontfile'] = target_font
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)
+
+            logger.debug(f"Added vocabulary: '{word}' : '{translation}' at ({rand_x}, {rand_y})")
+
+        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations with dual-font")
+        return video_stream
 
     def add_expression_annotations(
         self,
         video_stream,
         expr_annotations: List[Dict[str, Any]],
-        dialogue_timing: Dict[int, float]
+        dialogue_count: int,
+        context_duration: float,
+        settings
     ):
         """
-        Add expression/idiom overlays.
+        Add expression/idiom overlays with dual-font rendering.
+
+        Uses source language font for expression and target font for translation.
 
         Args:
             video_stream: FFmpeg video stream
-            expr_annotations: List of expression dicts with expression, translation, dialogue_index
-            dialogue_timing: Mapping of dialogue_index to timestamp
+            expr_annotations: List of expression dicts
+            dialogue_count: Number of dialogue lines
+            context_duration: Total duration
+            settings: Settings module for configuration
 
         Returns:
             Video stream with expression overlays
 
-        Note:
-            Extracted from video_editor.py lines 1386+
+        Example:
+            >>> exprs = [{"expression": "식은 죽 먹기", "translation": "pan comido", "dialogue_index": 1}]
+            >>> stream = renderer.add_expression_annotations(stream, exprs, 5, 30.0, settings)
         """
-        # TODO: Implementation in Phase 1, Day 3
-        raise NotImplementedError("Will be implemented in Phase 1, Day 3")
+        import ffmpeg
+
+        if not expr_annotations or dialogue_count <= 0:
+            return video_stream
+
+        time_per_dialogue = context_duration / dialogue_count
+
+        # Get settings
+        expr_annot_font_size = settings.get_expression_annotations_font_size()
+        expr_annot_x = settings.get_expression_annotations_x_position()
+        expr_annot_y_start = settings.get_expression_annotations_y_offset()
+        expr_annot_duration = settings.get_expression_annotations_duration()
+        expr_annot_color = settings.get_expression_annotations_text_color()
+        expr_annot_border = settings.get_expression_annotations_border_width()
+        expr_annot_border_color = settings.get_expression_annotations_border_color()
+
+        # Get dual fonts
+        source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
+
+        char_width_estimate = expr_annot_font_size * 0.5
+
+        logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")
+
+        for idx, ea_item in enumerate(expr_annotations[:3]):  # Max 3
+            # Handle both dict and object
+            if isinstance(ea_item, dict):
+                ea_expr = self._clean_html(ea_item.get('expression', ''))
+                ea_trans = self._clean_html(ea_item.get('translation', ''))
+                ea_dialogue_idx = ea_item.get('dialogue_index', 0)
+            else:
+                ea_expr = self._clean_html(getattr(ea_item, 'expression', ''))
+                ea_trans = self._clean_html(getattr(ea_item, 'translation', ''))
+                ea_dialogue_idx = getattr(ea_item, 'dialogue_index', 0)
+
+            if not ea_expr:
+                continue
+
+            # Timing
+            ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
+            ea_end = ea_start + expr_annot_duration
+
+            # Stack vertically
+            ea_y = expr_annot_y_start + (idx * 50)
+
+            escaped_expr = self.escape_drawtext_string(ea_expr)
+            escaped_trans = self.escape_drawtext_string(ea_trans) if ea_trans else ""
+
+            expr_width = int(len(ea_expr) * char_width_estimate)
+            sep_width = int(len(" : ") * char_width_estimate)
+
+            common_args = {
+                'fontsize': expr_annot_font_size,
+                'fontcolor': expr_annot_color,
+                'borderw': expr_annot_border,
+                'bordercolor': expr_annot_border_color,
+                'enable': f"between(t,{ea_start:.2f},{ea_end:.2f})",
+            }
+
+            # 1. Render expression (source language)
+            expr_args = {**common_args, 'text': escaped_expr, 'x': expr_annot_x, 'y': ea_y}
+            if source_font and os.path.exists(source_font):
+                expr_args['fontfile'] = source_font
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **expr_args)
+
+            # 2. Render separator and translation (target language)
+            if ea_trans:
+                sep_x = expr_annot_x + expr_width
+                trans_x = sep_x + sep_width
+
+                sep_args = {**common_args, 'text': " : ", 'x': sep_x, 'y': ea_y}
+                if target_font and os.path.exists(target_font):
+                    sep_args['fontfile'] = target_font
+                video_stream = ffmpeg.filter(video_stream, 'drawtext', **sep_args)
+
+                trans_args = {**common_args, 'text': escaped_trans, 'x': trans_x, 'y': ea_y}
+                if target_font and os.path.exists(target_font):
+                    trans_args['fontfile'] = target_font
+                video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)
+
+            logger.debug(f"Added expression annotation: '{ea_expr}' : '{ea_trans}' at y={ea_y}")
+
+        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (dual-font)")
+        return video_stream
+
+    def add_expression_text(
+        self,
+        video_stream,
+        expression_text: str,
+        translation_text: str,
+        settings
+    ):
+        """
+        Add expression and translation text at bottom of video (static, entire video).
+
+        Args:
+            video_stream: FFmpeg video stream
+            expression_text: Expression in source language
+            translation_text: Translation in target language
+            settings: Settings module for configuration
+
+        Returns:
+            Video stream with expression text overlay
+        """
+        import ffmpeg
+
+        def wrap_text(text, width=28):
+            return textwrap.fill(text, width=width)
+
+        # Expression (source language)
+        expression_text = self._clean_html(expression_text)
+        wrapped_expression = wrap_text(expression_text)
+        escaped_expression = self.escape_drawtext_string(wrapped_expression)
+
+        expression_y = settings.get_expression_y_position()
+        expression_font_size = settings.get_expression_font_size()
+        expr_line_count = wrapped_expression.count('\n') + 1
+        expr_height_px = expression_font_size * 1.2 * expr_line_count
+
+        expr_args = {
+            'text': escaped_expression,
+            'fontsize': expression_font_size,
+            'fontcolor': settings.get_expression_text_color(),
+            'x': '(w-text_w)/2',
+            'y': expression_y,
+            'borderw': settings.get_expression_border_width(),
+            'bordercolor': settings.get_expression_border_color(),
+            'line_spacing': 10
+        }
+
+        source_font = self.font_resolver.get_source_font("expression")
+        if source_font and os.path.exists(source_font):
+            expr_args['fontfile'] = source_font
+
+        video_stream = ffmpeg.filter(video_stream, 'drawtext', **expr_args)
+
+        # Translation (target language)
+        translation_text = self._clean_html(translation_text)
+        wrapped_translation = wrap_text(translation_text)
+        escaped_translation = self.escape_drawtext_string(wrapped_translation)
+
+        padding_between = 20
+        translation_y = f"{expression_y}+{int(expr_height_px) + padding_between}"
+
+        trans_args = {
+            'text': escaped_translation,
+            'fontsize': settings.get_translation_font_size(),
+            'fontcolor': settings.get_translation_text_color(),
+            'x': '(w-text_w)/2',
+            'y': translation_y,
+            'borderw': settings.get_translation_border_width(),
+            'bordercolor': settings.get_translation_border_color(),
+            'line_spacing': 10
+        }
+
+        target_font = self.font_resolver.get_target_font("translation")
+        if target_font and os.path.exists(target_font):
+            trans_args['fontfile'] = target_font
+
+        video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)
+
+        return video_stream
+
+    def add_logo(
+        self,
+        video_stream,
+        logo_path: str,
+        position: str = "top-center",
+        scale_height: int = 59,
+        opacity: float = 0.5
+    ):
+        """
+        Add logo overlay to video.
+
+        Args:
+            video_stream: FFmpeg video stream
+            logo_path: Path to logo PNG file
+            position: Position ("top-center", "top-right", etc.)
+            scale_height: Logo height in pixels
+            opacity: Logo opacity (0.0 - 1.0)
+
+        Returns:
+            Video stream with logo overlay
+        """
+        import ffmpeg
+
+        if not os.path.exists(logo_path):
+            logger.debug(f"Logo file not found: {logo_path}")
+            return video_stream
+
+        try:
+            logo_input = ffmpeg.input(str(logo_path))
+            logo_video = logo_input['v'].filter('scale', -1, scale_height)
+            logo_video = logo_video.filter('format', 'rgba')
+            logo_video = logo_video.filter(
+                'geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
+                a=f'{opacity}*alpha(X,Y)'
+            )
+
+            if position == "top-center":
+                x = '(W-w)/2'
+                y = 0
+            elif position == "top-right":
+                x = 'W-w-20'
+                y = 20
+            else:
+                x = '(W-w)/2'
+                y = 0
+
+            video_stream = ffmpeg.overlay(
+                video_stream,
+                logo_video,
+                x=x,
+                y=y,
+                enable='between(t,0,999999)'
+            )
+
+            logger.info(f"Added logo at {position} ({scale_height}px, {opacity*100}% opacity)")
+
+        except Exception as e:
+            logger.warning(f"Failed to add logo: {e}")
+
+        return video_stream
 
     @staticmethod
     def escape_drawtext_string(text: str) -> str:
@@ -184,16 +690,13 @@ class OverlayRenderer:
 
         Returns:
             Escaped string safe for FFmpeg
-
-        Note:
-            Extracted from inline logic in video_editor.py
         """
         if not text:
             return ""
 
         # Normalize quotes
-        text = text.replace("'", "'").replace("'", "'")
-        text = text.replace(""", '"').replace(""", '"')
+        text = text.replace("'", "'").replace("'", "'").replace("‚", "'").replace("‛", "'")
+        text = text.replace(""", '"').replace(""", '"').replace("„", '"')
         text = text.replace('"', '')  # Remove double quotes
 
         # Escape for FFmpeg drawtext
@@ -204,3 +707,10 @@ class OverlayRenderer:
         escaped = escaped.replace("]", "\\]")
 
         return escaped
+
+    @staticmethod
+    def _clean_html(text: str) -> str:
+        """Remove HTML tags from text."""
+        if not text:
+            return ""
+        return re.sub(r'<[^>]+>', '', text)

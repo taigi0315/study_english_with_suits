@@ -14,10 +14,15 @@ Components:
 Refactored from original video_editor.py (3,554 lines) into focused modules.
 """
 
+from langflix.core.video.video_composer import VideoComposer
+from langflix.core.video.font_resolver import FontResolver
+from langflix.core.video.overlay_renderer import OverlayRenderer
+from langflix.core.video.short_form_creator import ShortFormCreator
+
 __all__ = [
     'VideoComposer',
     'ShortFormCreator',
     'OverlayRenderer',
     'FontResolver',
-    'TransitionBuilder',
 ]
+

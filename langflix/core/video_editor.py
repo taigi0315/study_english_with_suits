@@ -69,7 +69,11 @@ class VideoEditor:
         
         # Encoding mode: fast (test) vs quality (production)
         self.test_mode = test_mode
-        
+
+        # Initialize VideoComposer for video composition operations
+        from langflix.core.video.video_composer import VideoComposer
+        self.video_composer = VideoComposer(output_dir=self.output_dir, test_mode=test_mode)
+
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
@@ -1769,61 +1773,17 @@ class VideoEditor:
     
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
         """Get video output arguments from configuration with optional resolution-aware quality.
-        
+
         Uses fast encoding (ultrafast/crf28) in test mode, quality encoding (slow/crf18) in production.
-        
+
         Args:
             source_video_path: Optional path to source video for resolution-based quality adjustment
-            
+
         Returns:
             Dictionary with vcodec, acodec, preset, and crf values
         """
-        # Get encoding preset based on test_mode (fast vs quality)
-        encoding_preset = settings.get_encoding_preset(self.test_mode)
-        base_preset = encoding_preset['preset']
-        base_crf = encoding_preset['crf']
-        audio_bitrate = encoding_preset['audio_bitrate']
-        
-        # Log which mode is being used
-        mode_name = "FAST (test)" if self.test_mode else "QUALITY (production)"
-        logger.debug(f"Using {mode_name} encoding: preset={base_preset}, crf={base_crf}")
-        
-        # If source video provided and NOT in test mode, adjust quality based on resolution (TICKET-072)
-        if source_video_path and os.path.exists(source_video_path) and not self.test_mode:
-            try:
-                from langflix.media.ffmpeg_utils import get_video_params
-                vp = get_video_params(source_video_path)
-                height = vp.height or 1080
-                
-                # Higher quality logic for production mode only
-                if height <= 720:
-                    crf = min(base_crf, 16)  # Ensure high quality for 720p
-                    logger.debug(f"720p source detected, using CRF {crf} for better quality")
-                else:
-                    crf = base_crf
-                    
-                return {
-                    'vcodec': 'libx264',
-                    'acodec': 'aac',
-                    'preset': base_preset,
-                    'crf': crf,
-                    'b:a': audio_bitrate,
-                    'ac': 2,
-                    'ar': 48000
-                }
-            except Exception as e:
-                logger.warning(f"Could not detect source resolution, using base settings: {e}")
-        
-        # Default: use preset values
-        return {
-            'vcodec': 'libx264',
-            'acodec': 'aac',
-            'preset': base_preset,
-            'crf': base_crf,
-            'b:a': audio_bitrate,
-            'ac': 2,
-            'ar': 48000
-        }
+        # Delegate to VideoComposer
+        return self.video_composer._get_encoding_args(source_video_path)
     
     def _get_background_config(self) -> tuple[str, str]:
         """
@@ -3416,37 +3376,8 @@ class VideoEditor:
         Returns:
             str: Path to the combined video.
         """
-        if not video_paths:
-            raise ValueError("No video paths provided for combination")
-
-        output_path_obj = Path(output_path)
-        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Combining {len(video_paths)} videos into {output_path}")
-
-        # Create concat file
-        concat_file = output_path_obj.parent / f"temp_concat_list_{output_path_obj.stem}.txt"
-        self._register_temp_file(concat_file)
-
-        try:
-            with open(concat_file, 'w') as f:
-                for video_path in video_paths:
-                    f.write(f"file '{Path(video_path).absolute()}'\n")
-
-            # Use shared utility for concatenation
-            from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
-            concat_demuxer_if_uniform(concat_file, output_path_obj, normalize_audio=True)
-            
-            logger.info(f"✅ Combined video created: {output_path}")
-            return str(output_path)
-
-        except ffmpeg.Error as e:
-            stderr_output = e.stderr.decode() if e.stderr else "No stderr details available"
-            logger.error(f"FFmpeg Error combining videos:\n{stderr_output}")
-            raise
-        except Exception as e:
-            logger.error(f"Error combining videos: {e}")
-            raise
+        # Delegate to VideoComposer
+        return self.video_composer.combine_videos(video_paths, output_path)
 
     def _create_video_batch(
         self,

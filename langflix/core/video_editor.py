@@ -897,47 +897,47 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
-            # Add viral_title at top (below logo, above keywords)
-            # Iconic, meme-worthy quote from the scene in source language
-            viral_title = get_expr_attr(expression, 'viral_title')
-            logger.info(f"DEBUG: viral_title = '{viral_title}'")
-            if viral_title:
-                # Wrap viral title for visibility (max 25 chars per line)
-                wrapped_viral_title = textwrap.fill(viral_title, width=25)
-                escaped_viral_title = escape_drawtext_string(wrapped_viral_title)
+            # Add title at top (below logo, above keywords)
+            # Catchy hook/title in TARGET language (user's native language)
+            title = get_expr_attr(expression, 'title')
+            logger.info(f"DEBUG: title = '{title}'")
+            if title:
+                # Wrap title for visibility (max 25 chars per line)
+                wrapped_title = textwrap.fill(title, width=25)
+                escaped_title = escape_drawtext_string(wrapped_title)
                 
-                viral_font_size = settings.get_viral_title_font_size()
-                viral_y = settings.get_viral_title_y_position()
-                viral_color = settings.get_viral_title_text_color()
-                viral_border = settings.get_viral_title_border_width()
-                viral_border_color = settings.get_viral_title_border_color()
-                viral_duration = settings.get_viral_title_display_duration()
+                title_font_size = settings.get_viral_title_font_size()
+                title_y = settings.get_viral_title_y_position()
+                title_color = settings.get_viral_title_text_color()
+                title_border = settings.get_viral_title_border_width()
+                title_border_color = settings.get_viral_title_border_color()
+                title_duration = settings.get_viral_title_display_duration()
                 
-                viral_title_args = {
-                    'text': escaped_viral_title,
-                    'fontsize': viral_font_size,
-                    'fontcolor': viral_color,
+                title_args = {
+                    'text': escaped_title,
+                    'fontsize': title_font_size,
+                    'fontcolor': title_color,
                     'x': '(w-text_w)/2',  # Center horizontally
-                    'y': viral_y,
-                    'borderw': viral_border,
-                    'bordercolor': viral_border_color,
+                    'y': title_y,
+                    'borderw': title_border,
+                    'bordercolor': title_border_color,
                     'line_spacing': 8
                 }
                 
                 # Add timing if duration is specified (0 = entire video)
-                if viral_duration > 0:
-                    viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+                if title_duration > 0:
+                    title_args['enable'] = f"between(t,0,{title_duration:.2f})"
                 
-                # Use source language font for viral_title
+                # Use TARGET language font for title (title is in user's native language)
                 try:
-                    source_font = self._get_font_path_for_use_case(self.source_language_code, "expression")
-                    if source_font and os.path.exists(source_font):
-                        viral_title_args['fontfile'] = source_font
+                    target_font = self._get_font_path_for_use_case(self.language_code, "title")
+                    if target_font and os.path.exists(target_font):
+                        title_args['fontfile'] = target_font
                 except Exception as e:
-                    logger.warning(f"Error getting font for viral_title: {e}")
+                    logger.warning(f"Error getting font for title: {e}")
                 
-                final_video = ffmpeg.filter(final_video, 'drawtext', **viral_title_args)
-                logger.info(f"Added viral_title overlay: '{viral_title[:50]}...'")
+                final_video = ffmpeg.filter(final_video, 'drawtext', **title_args)
+                logger.info(f"Added title overlay: '{title[:50]}...'")
 
             # Add catchy keywords at top (outside long-form video area, in top black padding)
             # Display catchy keywords if available (positioning from config)

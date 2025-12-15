@@ -87,26 +87,29 @@ class OverlayRenderer:
         duration: float = 0.0
     ):
         """
-        Add viral title overlay at top of video.
+        Add title overlay at top of video.
+
+        Note: Despite the method name, this renders the 'title' field which is
+        in the TARGET language (user's native language), not source language.
 
         Args:
             video_stream: FFmpeg video stream
-            viral_title: Title text (in source language)
+            viral_title: Title text (in TARGET language)
             settings: Settings module for configuration
             duration: Display duration (0 = entire video)
 
         Returns:
-            Video stream with viral title overlay
+            Video stream with title overlay
 
         Example:
-            >>> stream = renderer.add_viral_title(stream, "니까짓 게 날 죽여?", settings)
+            >>> stream = renderer.add_viral_title(stream, "¡Aprende esta expresión!", settings)
         """
         import ffmpeg
 
         if not viral_title:
             return video_stream
 
-        # Wrap viral title for visibility (max 25 chars per line)
+        # Wrap title for visibility (max 25 chars per line)
         wrapped_viral_title = textwrap.fill(viral_title, width=25)
         escaped_viral_title = self.escape_drawtext_string(wrapped_viral_title)
 
@@ -133,13 +136,13 @@ class OverlayRenderer:
         if viral_duration > 0:
             viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
 
-        # Use source language font for viral_title
-        source_font = self.font_resolver.get_source_font("expression")
-        if source_font and os.path.exists(source_font):
-            viral_title_args['fontfile'] = source_font
+        # Use TARGET language font for title (title is in user's native language)
+        target_font = self.font_resolver.get_target_font("title")
+        if target_font and os.path.exists(target_font):
+            viral_title_args['fontfile'] = target_font
 
         video_stream = ffmpeg.filter(video_stream, 'drawtext', **viral_title_args)
-        logger.info(f"Added viral_title overlay: '{viral_title[:50]}...'")
+        logger.info(f"Added title overlay: '{viral_title[:50]}...'")
 
         return video_stream
 

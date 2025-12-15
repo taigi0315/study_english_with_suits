@@ -413,16 +413,13 @@ class OverlayRenderer:
             annot_end = annot_start + annot_duration
 
             # Vertical stacking
-            rand_y = voca_y_start + (idx * 50)
+            # Vertical stacking - each annotation takes 2 lines (source + translation)  
+            annotation_height = int(font_size * 2.5)  # Space for 2 lines + gap
+            rand_y = voca_y_start + (idx * annotation_height)
 
             # Escape text
             escaped_word = self.escape_drawtext_string(word)
-            escaped_separator = " : "
             escaped_translation = self.escape_drawtext_string(translation)
-
-            # Calculate widths
-            word_width = int(len(word) * char_width_estimate)
-            separator_width = int(len(" : ") * char_width_estimate)
 
             # Random color
             random_color = random.choice(voca_colors)
@@ -435,29 +432,30 @@ class OverlayRenderer:
                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
             }
 
+            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+            # Line 1: Source word (Korean)
+            # Line 2: Indented translation (Spanish)
+            
+            line_spacing = int(font_size * 1.2)
+            indent = "    "  # 4 spaces for translation
+
             # 1. Render SOURCE WORD
             word_args = {**common_args, 'text': escaped_word, 'x': rand_x, 'y': rand_y}
             if source_font and os.path.exists(source_font):
                 word_args['fontfile'] = source_font
             video_stream = ffmpeg.filter(video_stream, 'drawtext', **word_args)
 
-            # 2. Render SEPARATOR
-            sep_x = rand_x + word_width
-            sep_args = {**common_args, 'text': escaped_separator, 'x': sep_x, 'y': rand_y}
-            if target_font and os.path.exists(target_font):
-                sep_args['fontfile'] = target_font
-            video_stream = ffmpeg.filter(video_stream, 'drawtext', **sep_args)
-
-            # 3. Render TRANSLATION
-            trans_x = sep_x + separator_width
-            trans_args = {**common_args, 'text': escaped_translation, 'x': trans_x, 'y': rand_y}
+            # 2. Render TRANSLATION on next line (indented)
+            trans_y = rand_y + line_spacing
+            indented_translation = indent + escaped_translation
+            trans_args = {**common_args, 'text': indented_translation, 'x': rand_x, 'y': trans_y}
             if target_font and os.path.exists(target_font):
                 trans_args['fontfile'] = target_font
             video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)
 
-            logger.debug(f"Added vocabulary: '{word}' : '{translation}' at ({rand_x}, {rand_y})")
+            logger.debug(f"Added vocabulary: '{word}' / '{translation}' at x={rand_x}, y={rand_y}-{trans_y}")
 
-        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations with dual-font")
+        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations (vertical stack)")
         return video_stream
 
     def add_expression_annotations(

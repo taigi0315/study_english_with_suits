@@ -903,7 +903,7 @@ class VideoEditor:
             logger.info(f"DEBUG: title = '{title}'")
             if title:
                 # Wrap title for visibility (max 25 chars per line)
-                wrapped_title = textwrap.fill(title, width=25)
+                wrapped_title = textwrap.fill(title, width=45)
                 escaped_title = escape_drawtext_string(wrapped_title)
                 
                 title_font_size = settings.get_viral_title_font_size()
@@ -977,106 +977,71 @@ class VideoEditor:
                 max_width_percent = settings.get_keywords_max_width_percent()
                 max_width = target_width * max_width_percent
                 
-                # Group keywords: one keyword per line (each on its own line)
-                keyword_lines = []  # List of lists, each inner list contains one keyword index
+                # Group keywords with comma separator, wrap to new line when needed
+                comma_separator = ", "
                 
-                for i, keyword in enumerate(formatted_keywords):
-                    # Each keyword gets its own line
-                    keyword_lines.append([i])
+                # Build lines with comma-separated keywords, wrapping when width exceeded
+                lines = []
+                current_line = []
+                current_line_width = 0
                 
-                # Render keywords line by line
-                for line_idx, line_keyword_indices in enumerate(keyword_lines):
+                for keyword in formatted_keywords:
+                    keyword_width = len(keyword) * char_width_estimate
+                    separator_width = len(comma_separator) * char_width_estimate if current_line else 0
+                    
+                    # Check if adding this keyword would exceed max width
+                    if current_line and (current_line_width + separator_width + keyword_width > max_width):
+                        # Start a new line
+                        lines.append(current_line)
+                        current_line = [keyword]
+                        current_line_width = keyword_width
+                    else:
+                        # Add to current line
+                        current_line.append(keyword)
+                        current_line_width += separator_width + keyword_width
+                
+                # Don't forget the last line
+                if current_line:
+                    lines.append(current_line)
+                
+                # Generate a random color for each line
+                line_colors = []
+                for line_idx, line in enumerate(lines):
+                    random.seed(hash(line[0]) % (2**32))
+                    r = random.randint(100, 255)
+                    g = random.randint(100, 255)
+                    b = random.randint(100, 255)
+                    line_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
+                
+                # Render each line as a single drawtext
+                for line_idx, (line_keywords, color) in enumerate(zip(lines, line_colors)):
                     line_y = y_position + (line_idx * line_height)
                     
-                    # Get keywords and colors for this line
-                    line_keywords = [formatted_keywords[i] for i in line_keyword_indices]
-                    line_colors = [keyword_colors[i] for i in line_keyword_indices]
-                    
-                    # Calculate total width of this line for centering
+                    # Join keywords with comma separator
                     line_text = comma_separator.join(line_keywords)
-                    line_width = len(line_text) * char_width_estimate
+                    escaped_line = escape_drawtext_string(line_text)
                     
-                    # Calculate starting x position: center the entire line
-                    # First keyword starts at: center - (half of remaining text width)
-                    remaining_after_first = comma_separator.join(line_keywords[1:]) if len(line_keywords) > 1 else ""
-                    remaining_width = len(remaining_after_first) * char_width_estimate if remaining_after_first else 0
+                    keyword_args = {
+                        'text': escaped_line,
+                        'fontsize': font_size,
+                        'fontcolor': color,
+                        'x': 40,
+                        'y': line_y,
+                        'borderw': settings.get_keywords_border_width(),
+                        'bordercolor': settings.get_keywords_border_color()
+                    }
                     
-                    # Add each keyword with its own color, positioned sequentially
-                    current_x_offset = 0  # Track cumulative offset from center
-                    for i, (keyword, color) in enumerate(zip(line_keywords, line_colors)):
-                        escaped_keyword = escape_drawtext_string(keyword)
-
-                        # Calculate x position for this keyword
-                        if i == 0:
-                            # First keyword: center minus half of remaining text width
-                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}"
-                        else:
-                            # Subsequent keywords: after previous keyword + comma
-                            # Calculate width of previous keyword and comma
-                            prev_keyword = line_keywords[i-1]
-                            prev_keyword_width = len(prev_keyword) * char_width_estimate
-                            current_x_offset += prev_keyword_width + comma_width
-                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}+{current_x_offset:.0f}"
-                        
-                        keyword_args = {
-                            'text': escaped_keyword,
-                            'fontsize': font_size,
-                            'fontcolor': color,  # Random color per keyword
-                            'x': x_expr,
-                            'y': line_y,
-                            'borderw': settings.get_keywords_border_width(),
-                            'bordercolor': settings.get_keywords_border_color()
-                        }
-
-                        # Add custom font for keywords
-                        try:
-                            # Use new per-language font config logic
-                            # This handles language specific fonts including Spanish (via font_utils)
-                            # Key: 'keywords'
-                            font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
-                            logger.info(f"DEBUG: Keywords Font Resolved: {font_path} (Lang: {self.language_code})")
-                            
-                            if font_path and os.path.exists(font_path):
-                                keyword_args['fontfile'] = font_path
-                        except Exception as e:
-                            logger.warning(f"Error getting font for keywords: {e}")
-                            # Fallback to old method
-                            if font_file:
-                                font_path = font_file.replace('fontfile=', '').replace(':', '')
-                                if font_path and os.path.exists(font_path):
-                                    keyword_args['fontfile'] = font_path
-
-                        final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
-
-                        # Add comma after keyword (except last in line)
-                        if i < len(line_keywords) - 1:
-                            # Comma position: after current keyword
-                            keyword_width = len(keyword) * char_width_estimate
-                            comma_x_offset = current_x_offset + keyword_width
-                            if i == 0:
-                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{keyword_width:.0f}"
-                            else:
-                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{comma_x_offset:.0f}"
-                            
-                            comma_args = {
-                                'text': ', ',
-                                'fontsize': font_size,
-                                'fontcolor': settings.get_keywords_text_color(),  # Comma color from config
-                                'x': comma_x,
-                                'y': line_y,
-                                'borderw': settings.get_keywords_border_width(),
-                                'bordercolor': settings.get_keywords_border_color()
-                            }
-                            # Use language-specific font for comma
-                            try:
-                                comma_font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
-                                if comma_font_path and os.path.exists(comma_font_path):
-                                    comma_args['fontfile'] = comma_font_path
-                            except: pass
-                            
-                            final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
-
-                logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
+                    # Add custom font for keywords
+                    try:
+                        font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
+                        if font_path and os.path.exists(font_path):
+                            keyword_args['fontfile'] = font_path
+                    except Exception as e:
+                        logger.warning(f"Error getting font for keywords: {e}")
+                    
+                    final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+                
+                logger.info(f"Added {len(formatted_keywords)} catchy keywords ({len(lines)} line(s), comma-separated)")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
             # Split expression and translation into separate drawtext filters for better control
@@ -1236,8 +1201,9 @@ class VideoEditor:
                             annot_duration = settings.get_vocabulary_duration()
                             annot_end = annot_start + annot_duration
                             
-                            # Stack vertically
-                            rand_y = voca_y_start + (idx * 50)
+                            # Stack vertically - each annotation takes 2 lines (source + translation)
+                            annotation_height = int(font_size * 2.5)  # Space for 2 lines + gap
+                            rand_y = voca_y_start + (idx * annotation_height)
                             
                             logger.info(f" vocabulary[{idx}] '{word}' dialogue_index={dialogue_index}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                             
@@ -1267,7 +1233,14 @@ class VideoEditor:
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
                             }
                             
-                            # 1. Render SOURCE WORD at rand_x
+                            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+                            # Line 1: Source word (Korean)
+                            # Line 2: Indented translation (Spanish)
+                            
+                            line_spacing = int(font_size * 1.2)  # Space between lines
+                            indent = "    "  # 4 spaces for translation
+                            
+                            # 1. Render SOURCE WORD
                             word_args = {
                                 **common_args,
                                 'text': escaped_word,
@@ -1281,33 +1254,14 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **word_args)
                             
-                            # 2. Render SEPARATOR after word
-                            # Since we don't know exact rendered width, we use estimation.
-                            # Better approach with mixed fonts is hard.
-                            # We will use 'text_w' of 1st drawtext in 2nd? No, unavailable.
-                            # We will use absolute estimation positions.
-                            
-                            sep_x = rand_x + word_width
-                            separator_args = {
-                                **common_args,
-                                'text': escaped_separator,
-                                'x': sep_x,
-                                'y': rand_y,
-                            }
-                            try:
-                                target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
-                                if target_font and os.path.exists(target_font):
-                                    separator_args['fontfile'] = target_font
-                            except: pass
-                            final_video = ffmpeg.filter(final_video, 'drawtext', **separator_args)
-                            
-                            # 3. Render TRANSLATION after separator
-                            trans_x = sep_x + separator_width
+                            # 2. Render TRANSLATION on next line (indented)
+                            trans_y = rand_y + line_spacing
+                            indented_translation = indent + escaped_translation
                             translation_args = {
                                 **common_args,
-                                'text': escaped_translation,
-                                'x': trans_x,
-                                'y': rand_y,
+                                'text': indented_translation,
+                                'x': rand_x,
+                                'y': trans_y,
                             }
                             try:
                                 target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
@@ -1316,9 +1270,9 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **translation_args)
                             
-                            logger.debug(f"Added vocabulary annotation: '{word}' : '{translation}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s (dual-font)")
+                            logger.debug(f"Added vocabulary: '{word}' / '{translation}' at x={rand_x}, y={rand_y}-{trans_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                         
-                        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations with dual-font rendering")
+                        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations (vertical stack layout)")
                 except Exception as vocab_error:
                     logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
             

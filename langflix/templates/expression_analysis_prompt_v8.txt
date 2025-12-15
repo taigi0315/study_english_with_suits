@@ -12,7 +12,7 @@
 
 **⚠️ LANGUAGE RULES:**
 - `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
-- `viral_title`, `expression`, `similar_expressions` → {source_language}
+- `title_translation`, `expression`, `similar_expressions` → {source_language}
 - All `translation` fields → {target_language}
 
 ---
@@ -61,9 +61,8 @@
 
 ---
 
-**VIRAL TITLE:**
-
-The iconic, meme-worthy quote from the scene in {source_language}.
+**TITLE:**
+The iconic, meme-worthy quote from the scene in {source_language}. should be narrative can hook the audience.
 
 **Good examples:**
 - "니까짓 게 날 죽여?" (The Glory)
@@ -133,7 +132,7 @@ Short, punchy phrases in {target_language} for social media hooks.
   "expressions": [
     {{
       "title": "Catchy title in {target_language} (8-15 words)",
-      "viral_title": "Iconic line in {source_language} (3-12 words)",
+      "title_translation": "natural translation in {target_language}",
       "expression": "key phrase copied exactly from dialogue (4-8 words)",
       "expression_translation": "natural translation in {target_language}",
       "expression_dialogue_index": 5,

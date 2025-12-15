@@ -526,14 +526,12 @@ class OverlayRenderer:
             ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
             ea_end = ea_start + expr_annot_duration
 
-            # Stack vertically
-            ea_y = expr_annot_y_start + (idx * 50)
+            # Vertical stacking - each annotation takes 2 lines (source + translation)
+            annotation_height = int(expr_annot_font_size * 2.5)
+            ea_y = expr_annot_y_start + (idx * annotation_height)
 
             escaped_expr = self.escape_drawtext_string(ea_expr)
             escaped_trans = self.escape_drawtext_string(ea_trans) if ea_trans else ""
-
-            expr_width = int(len(ea_expr) * char_width_estimate)
-            sep_width = int(len(" : ") * char_width_estimate)
 
             common_args = {
                 'fontsize': expr_annot_font_size,
@@ -543,30 +541,31 @@ class OverlayRenderer:
                 'enable': f"between(t,{ea_start:.2f},{ea_end:.2f})",
             }
 
-            # 1. Render expression (source language)
+            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+            # Line 1: Expression (source language)
+            # Line 2: Indented translation (target language)
+            
+            line_spacing = int(expr_annot_font_size * 1.2)
+            indent = "    "  # 4 spaces for translation
+
+            # 1. Render EXPRESSION (source language)
             expr_args = {**common_args, 'text': escaped_expr, 'x': expr_annot_x, 'y': ea_y}
             if source_font and os.path.exists(source_font):
                 expr_args['fontfile'] = source_font
             video_stream = ffmpeg.filter(video_stream, 'drawtext', **expr_args)
 
-            # 2. Render separator and translation (target language)
+            # 2. Render TRANSLATION on next line (indented)
             if ea_trans:
-                sep_x = expr_annot_x + expr_width
-                trans_x = sep_x + sep_width
-
-                sep_args = {**common_args, 'text': " : ", 'x': sep_x, 'y': ea_y}
-                if target_font and os.path.exists(target_font):
-                    sep_args['fontfile'] = target_font
-                video_stream = ffmpeg.filter(video_stream, 'drawtext', **sep_args)
-
-                trans_args = {**common_args, 'text': escaped_trans, 'x': trans_x, 'y': ea_y}
+                trans_y = ea_y + line_spacing
+                indented_trans = indent + escaped_trans
+                trans_args = {**common_args, 'text': indented_trans, 'x': expr_annot_x, 'y': trans_y}
                 if target_font and os.path.exists(target_font):
                     trans_args['fontfile'] = target_font
                 video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)
 
-            logger.debug(f"Added expression annotation: '{ea_expr}' : '{ea_trans}' at y={ea_y}")
+            logger.debug(f"Added expression annotation: '{ea_expr}' / '{ea_trans}' at y={ea_y}")
 
-        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (dual-font)")
+        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (vertical stack)")
         return video_stream
 
     def add_expression_text(

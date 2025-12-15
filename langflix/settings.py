@@ -638,6 +638,11 @@ def get_keywords_border_color() -> str:
     return get_keywords_config().get('border_color', 'black')
 
 
+def get_keywords_newline() -> int:
+    """Get keywords max characters before newline (default: 60)"""
+    return get_keywords_config().get('newline', 60)
+
+
 def get_expression_text_config() -> Dict[str, Any]:
     """Get expression text display configuration"""
     layout = get_short_video_layout_config()
@@ -739,6 +744,11 @@ def get_dialogue_subtitle_outline_color() -> str:
 def get_dialogue_subtitle_background_opacity() -> float:
     """Get dialogue subtitle background opacity (default: 0.5 for 50%)"""
     return get_dialogue_subtitle_config().get('background_opacity', 0.5)
+
+
+def get_dialogue_subtitle_newline() -> int:
+    """Get dialogue subtitle max characters before newline (default: 40)"""
+    return get_dialogue_subtitle_config().get('newline', 40)
 
 
 def get_layout_fonts_config() -> Dict[str, Any]:

@@ -150,9 +150,9 @@ video:
 # ============================================================================
 dialogue_subtitle:
   # Font size for dialogue subtitles (in short-form videos)
-  font_size: 24
+  font_size: 28
   # Characters per line before wrapping
-  chars_per_line: 35
+  chars_per_line: 45
   # Vertical margin from bottom (in pixels) - lower = closer to bottom
   margin_v: 15
   # Source language color (the language being learned)
@@ -312,7 +312,8 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 30
+      font_size: 39
+      newline: 90
       y_position: 220            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -340,7 +341,8 @@ short_video:
 
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
-      font_size: 9
+      font_size: 14
+      newline: 40
       margin_v: 90
       text_color: 'white'
       outline_width: 1
@@ -367,7 +369,7 @@ short_video:
 
     # Vocabulary annotations (dynamic overlays that appear when words are spoken)
     vocabulary_annotations:
-      font_size: 40                # Font size for vocabulary text
+      font_size: 45                # Font size for vocabulary text
       text_color: 'yellow'         # Text color
       border_width: 2              # Border width
       border_color: 'black'        # Border color
@@ -377,7 +379,7 @@ short_video:
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 48                # Large font for emphasis
+      font_size: 75                # Large font for emphasis
       y_position: 120              # Below logo, above keywords
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
@@ -386,8 +388,8 @@ short_video:
 
     # Narrations (commentary overlays in target language)
     narrations:
-      font_size: 45                # Medium size
-      y_position: 440              # Upper-middle area (below video top padding)
+      font_size: 55                # Medium size
+      y_position: 390              # Upper-middle area (below video top padding)
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent
@@ -404,7 +406,7 @@ short_video:
 
     # Expression annotations (idiom/phrase overlays)
     expression_annotations:
-      font_size: 40                # Smaller than vocab
+      font_size: 45                # Smaller than vocab
       x_position: 40               # Left side
       y_offset: 520                # Below narrations area
       text_color: '#0088FF'        # Blue to distinguish from vocab (yellow)
@@ -423,11 +425,11 @@ short_video:
       
       # Font sizes for slide elements
       font_sizes:
-        expression_dialogue: 36      # Full dialogue sentence (increased for readability)
-        expression: 36               # Key expression (yellow) - not shown if show_expression_highlight=false
-        expression_dialogue_trans: 36  # Dialogue translation (increased)
-        expression_translation: 36   # Expression translation (yellow) - not shown if show_translation_highlight=false
-        similar: 32                  # Similar expressions (increased to match)
+        expression_dialogue: 36
+        expression: 36
+        expression_dialogue_trans: 36
+        expression_translation: 36
+        similar: 32
 
       # Positioning (Y offsets from center)
       positions:

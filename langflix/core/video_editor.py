@@ -1391,16 +1391,13 @@ class VideoEditor:
                             ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
                             ea_end = ea_start + expr_annot_duration
                             
-                            # Stack vertically (different y for each annotation)
-                            ea_y = expr_annot_y_start + (idx * 50)
+                            # Vertical stacking - each annotation takes 2 lines (source + translation)
+                            annotation_height = int(expr_annot_font_size * 2.5)
+                            ea_y = expr_annot_y_start + (idx * annotation_height)
                             
                             # Use dual-font rendering: source font for expression, target font for translation
                             escaped_expr = escape_drawtext_string(ea_expr)
                             escaped_trans = escape_drawtext_string(ea_trans) if ea_trans else ""
-                            
-                            char_width_estimate = expr_annot_font_size * 0.5
-                            expr_width = int(len(ea_expr) * char_width_estimate)
-                            sep_width = int(len(" : ") * char_width_estimate)
                             
                             common_args = {
                                 'fontsize': expr_annot_font_size,
@@ -1410,7 +1407,14 @@ class VideoEditor:
                                 'enable': f"between(t,{ea_start:.2f},{ea_end:.2f})",
                             }
                             
-                            # 1. Render expression (source language)
+                            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+                            # Line 1: Expression (source language)
+                            # Line 2: Indented translation (target language)
+                            
+                            line_spacing = int(expr_annot_font_size * 1.2)
+                            indent = "    "  # 4 spaces for translation
+                            
+                            # 1. Render EXPRESSION (source language)
                             expr_args = {
                                 **common_args,
                                 'text': escaped_expr,
@@ -1424,31 +1428,15 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **expr_args)
                             
-                            # 2. Render separator and translation (target language)
+                            # 2. Render TRANSLATION on next line (indented)
                             if ea_trans:
-                                sep_x = expr_annot_x + expr_width
-                                trans_x = sep_x + sep_width
-                                
-                                # Separator
-                                sep_args = {
-                                    **common_args,
-                                    'text': " : ",
-                                    'x': sep_x,
-                                    'y': ea_y,
-                                }
-                                try:
-                                    target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
-                                    if target_font and os.path.exists(target_font):
-                                        sep_args['fontfile'] = target_font
-                                except: pass
-                                final_video = ffmpeg.filter(final_video, 'drawtext', **sep_args)
-                                
-                                # Translation
+                                trans_y = ea_y + line_spacing
+                                indented_trans = indent + escaped_trans
                                 trans_args = {
                                     **common_args,
-                                    'text': escaped_trans,
-                                    'x': trans_x,
-                                    'y': ea_y,
+                                    'text': indented_trans,
+                                    'x': expr_annot_x,
+                                    'y': trans_y,
                                 }
                                 try:
                                     target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
@@ -1457,9 +1445,9 @@ class VideoEditor:
                                 except: pass
                                 final_video = ffmpeg.filter(final_video, 'drawtext', **trans_args)
                             
-                            logger.debug(f"Added expression annotation: '{ea_expr}' : '{ea_trans}' at y={ea_y}, t={ea_start:.2f}-{ea_end:.2f}s (dual-font)")
+                            logger.debug(f"Added expression annotation: '{ea_expr}' / '{ea_trans}' at y={ea_y}, t={ea_start:.2f}-{ea_end:.2f}s")
                         
-                        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (blue, dual-font)")
+                        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (vertical stack)")
                 except Exception as ea_error:
                     logger.warning(f"Could not add expression annotations: {ea_error}")
             

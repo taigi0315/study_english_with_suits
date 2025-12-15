@@ -158,7 +158,8 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         cache_manager = get_cache_manager()
         chunk_text = " ".join([sub.get('text', '') for sub in subtitle_chunk])
         # Add versioning to cache key to force re-analysis when prompt changes
-        cache_version = "v2_source_lang"
+        # Bumping to v3 to invalidate cache with absolute vocab indices (TICKET-029)
+        cache_version = "v3_source_lang_vocab_fix"
         cache_key = cache_manager.get_expression_key(f"{chunk_text}_{cache_version}", language_code)
         cached_result = cache_manager.get(cache_key)
         
@@ -292,6 +293,18 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
             
             # Extract structured response
             if hasattr(response, 'text') and response.text:
+                # DEBUG: Save raw LLM response to file
+                try:
+                    import time
+                    timestamp = int(time.time())
+                    target_dir = Path(output_dir) if output_dir else Path("output")
+                    debug_file = target_dir / f"llm_response_v3_{timestamp}.json"
+                    debug_file.parent.mkdir(parents=True, exist_ok=True)
+                    debug_file.write_text(response.text, encoding='utf-8')
+                    logger.info(f"Saved raw LLM response to {debug_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to save debug LLM response: {e}")
+
                 try:
                     # Parse the structured response
                     response_obj = ExpressionAnalysisResponse.model_validate_json(response.text)
@@ -310,6 +323,11 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                         logger.info(f"All {len(validated_expressions)} expressions are unique")
                     
                     logger.info(f"Successfully parsed {len(validated_expressions)} expressions from {len(expressions)} total")
+                    
+                    # DEBUG: Log vocabulary annotations from response
+                    for i, expr in enumerate(expressions):
+                        vocab = getattr(expr, 'vocabulary_annotations', [])
+                        logger.info(f"DEBUG: Analyzed Expression {i+1} vocab raw: {vocab}")
                     
                     # Save to test cache if test_llm mode is enabled
                     if test_llm:
@@ -521,10 +539,18 @@ def _postprocess_v8_response(raw_expressions: List[Dict[str, Any]], subtitle_chu
             # Process vocabulary annotations - use LLM-provided translations
             vocab_annotations = expr_data.get('vocabulary_annotations', [])
             for vocab in vocab_annotations:
+                # FIX for Timestamp Drift (TICKET-029)
+                # LLM returns dialogue_index relative to the CHUNK (0..N)
+                # But 'dialogues' list is sliced from context_start_idx (M..P)
+                # We must normalize dialogue_index to be relative to the sliced list (0..P-M)
+                raw_idx = vocab.get('dialogue_index', 0)
+                relative_idx = max(0, raw_idx - context_start_idx)
+                vocab['dialogue_index'] = relative_idx
+                
                 if 'translation' not in vocab and target_dialogues:
                     # Look up translation from the target dialogue at the specified index
-                    vocab_idx = vocab.get('dialogue_index', 0)
-                    if vocab_idx < len(target_dialogues):
+                    # Note: Need to look up in ORIGINAL target_dialogues using raw_idx
+                    if raw_idx < len(target_dialogues):
                         # We don't have word-level translation, so leave blank or use placeholder
                         vocab['translation'] = f"({vocab.get('word', '')} translation)"
                 elif 'translation' not in vocab:

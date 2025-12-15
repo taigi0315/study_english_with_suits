@@ -70,6 +70,7 @@ Thumbs.db
 .DS_Store
 **/.DS_Store
 
+
 # Legacy credential patterns
 client_secret_*.json
 examples/*credentials*.json

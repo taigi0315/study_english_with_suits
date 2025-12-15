@@ -438,10 +438,17 @@ export const ui = {
 
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #34495e; margin-bottom: 10px;">Options</h3>
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 10px;">
                     <input type="checkbox" id="testModeCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
-                    <span style="font-weight: 500;">Test Mode (Process only first chunk for testing)</span>
+                    <span style="font-weight: 500;">⚡ Test Mode (Fast encoding + first chunk only)</span>
                 </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 15px; padding-left: 28px;">
+                    <input type="checkbox" id="testLlmCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span style="font-weight: 500;">🔄 Use Cached LLM Response (skip API calls)</span>
+                </label>
+                <p style="margin-left: 28px; margin-bottom: 15px; font-size: 0.85em; color: #7f8c8d;">
+                    When checked, uses previously saved LLM responses for faster development iteration.
+                </p>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
                     <input type="number" id="shortFormMaxDuration" value="120" min="60" max="300" step="10" 
@@ -557,6 +564,7 @@ export const ui = {
             const sourceLanguage = dialog.querySelector('#sourceLanguage').value;  // V2: Source language
             const languageLevel = dialog.querySelector('#languageLevel').value;
             const testMode = dialog.querySelector('#testModeCheckbox').checked;
+            const testLlm = dialog.querySelector('#testLlmCheckbox').checked;  // Dev: Use cached LLM response
             const shortFormMaxDuration = parseFloat(dialog.querySelector('#shortFormMaxDuration').value);
             const createLongForm = dialog.querySelector('#createLongFormCheckbox').checked;
             const createShortForm = dialog.querySelector('#createShortFormCheckbox').checked;
@@ -592,6 +600,7 @@ export const ui = {
                             target_languages: selectedLanguages,
                             language_level: languageLevel,
                             test_mode: testMode,
+                            test_llm: testLlm,  // Dev: Use cached LLM response
                             create_long_form: createLongForm,
                             create_short_form: createShortForm,
                             short_form_max_duration: shortFormMaxDuration,

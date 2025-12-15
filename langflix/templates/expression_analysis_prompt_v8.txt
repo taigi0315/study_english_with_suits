@@ -1,371 +1,160 @@
-**You do NOT need to translate anything.**
-**Focus purely on CONTENT SELECTION - identifying the best expressions.**
-**Use INDICES to reference dialogues, not timestamps or text.**
-
----
-
-Here is a segment of dialogue from the TV show "{show_name}":
+=**CONTENT SELECTOR for "{show_name}"**
 
 **SOURCE DIALOGUES ({source_language}):**
----
 {source_dialogues}
----
 
 **TARGET DIALOGUES ({target_language}):**
----
 {target_dialogues}
----
 
-**INPUT FORMAT:**
-Each dialogue line is formatted as: `[index] dialogue_text`
-Use these indices in your output to reference specific dialogues.
-The system will look up actual text and timestamps from the indices you provide.
+**Format:** `[index] dialogue_text` - Use indices to reference dialogues.
 
 ---
 
-**⚠️ CRITICAL LANGUAGE REQUIREMENT:**
-- The **catchy_keywords** field MUST BE 100% IN {target_language}. NEVER WRITE {source_language} KEYWORDS.
-- The **title** field MUST BE 100% IN {target_language}. NEVER WRITE {source_language} TITLES.
-- The **intro_hook** field MUST BE 100% IN {target_language}.
-- ❌ WRONG: {source_language} keywords, titles, or hooks
-- ✅ CORRECT: {target_language} keywords, titles, and hooks
+**⚠️ LANGUAGE RULES:**
+- `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
+- `viral_title`, `expression`, `similar_expressions` → {source_language}
+- All `translation` fields → {target_language}
 
 ---
 
-**YOUR MISSION:**
-Find the best expressions from the {source_language} dialogues that learners would be EXCITED to learn - expressions they'd actually use and remember.
+**MISSION:** Find {min_expressions}-{max_expressions} expressions learners would be EXCITED to learn.
 
-**CRITICAL: FOCUS ON HIGH-ENERGY, MEMORABLE MOMENTS**
-When selecting expressions, prioritize scenes with strong emotional impact or entertainment value. The best expressions often come from moments that are:
-- **😂 HUMOROUS:** Funny, witty, sarcastic, or laugh-out-loud moments.
-- **🔥 INTENSE/DRAMATIC:** High tension, conflict, confrontation, or high stakes.
-- **😍 SEXY/ROMANTIC:** Flirty, charming, or romantically charged interactions.
-- **😲 SURPRISING:** Unexpected twists or reveals that grab attention.
-
-Think about what would make a short video clip go viral. If the scene makes you laugh, gasp, or feel something strong, it's a prime candidate.
-
-**IMPORTANT:** You can extract UP TO {max_expressions} expressions from this dialogue segment.
-Choose the BEST expressions - prioritize quality over filling the quota.
-Each expression should come from a DIFFERENT, NON-OVERLAPPING index range.
-If there aren't enough high-quality expressions, it's OK to return fewer.
-
-**LANGUAGE LEVEL:** {level_description}
+**LEVEL:** {level_description}
 
 ---
 
-**THE NORTH STAR PRINCIPLE:**
-Ask yourself: "Would I be excited to share THIS clip with a friend because it's hilarious, intense, or awesome?"
+**WHAT TO EXTRACT:**
 
-If the answer is YES because:
-- ✓ It's a scene that grabs attention (funny/dramatic/sexy/tense)
-- ✓ The expression is used naturally in this high-energy moment
-- ✓ It's memorable because of the scene's impact
-- ✓ Learners would actually say this in their daily life
+✅ **HIGH-IMPACT SCENES:**
+- 😂 Humorous/witty moments
+- 🔥 Dramatic/tense confrontations  
+- 😍 Romantic/flirty interactions
+- 😲 Surprising reveals
 
-Then it's worth extracting.
+✅ **REUSABLE EXPRESSIONS (3+ words):**
+- Phrasal verbs: "put up with", "figure out what to do"
+- Idioms: "cut to the chase", "get on my nerves"
+- Colloquial phrases: "no big deal", "you bet"
+- Test: Would native speakers use this weekly?
 
-If the answer is NO because:
-- ✗ The scene is boring, flat, or procedural
-- ✗ It's too obvious or simple
-- ✗ It's too specific to this one situation
-- ✗ It's awkward phrasing or too formal/legal jargon
-
-Then skip it.
-
----
-
-**WHAT MAKES AN EXPRESSION "BEST":**
-
-**1. HIGH-IMPACT SCENE** (Crucial for engagement)
-The expression appears in a scene that is:
-- Humorous, dramatic, tense, emotional, sexy, or witty
-- NOT boring procedural talk or flat information delivery
-- Has energy and personality that makes the clip highly watchable
-- Makes the expression memorable through emotion or entertainment
-
-**2. COMMON & REUSABLE**
-- Used frequently by native speakers across different situations
-- Not tied to just legal/office settings - can be used in everyday life
-- Something you'd hear in conversations, movies, casual settings
-- Test: "Would native speakers use this expression at least once a week?"
-- **COMPLEXITY REQUIREMENT:** The expression should be substantial enough to be worth learning:
-  * Multi-word phrases (3+ words preferred): "get on my nerves", "blow off steam", "cut to the chase"
-  * Phrasal verbs with interesting usage: "put up with", "come up with", "figure out"
-  * NOT simple curses or basic 1-2 word phrases: avoid "bullshit", "screw you", "damn it"
-  * The expression should have a non-obvious meaning or usage pattern
-
-**3. CLEARLY USEFUL**
-- Idiomatic expressions, phrasal verbs, or colloquial phrases
-- Not just regular vocabulary or obvious statements
-- Appropriate for your target level: {level_description}
+❌ **NEVER EXTRACT:**
+- Boring/procedural dialogue
+- Simple curses or 1-2 word phrases ("bullshit", "damn")
+- Scene-specific phrases that only work in this context
+- Self-explanatory statements ("I agree", "That's good")
 
 ---
 
-**STRICT FILTERS - NEVER EXTRACT:**
-- ✗ Plain statements with no special expression ("I agree", "That's good")
-- ✗ Scene-specific phrases that only work in this exact context
-- ✗ Overly formal legal jargon (unless it's commonly used in general conversation)
-- ✗ Random sentence fragments that aren't actual expressions
-- ✗ Boring exchanges with no emotional energy
-- ✗ Expressions that are self-explanatory and obvious
+**CONTEXT DESIGN:**
+
+**Goal:** Each clip = standalone mini-story (25-45 seconds, ~{target_duration}s target)
+
+**Structure:**
+- **Beginning:** Setup situation/conflict
+- **Middle:** Expression appears naturally
+- **End:** Reaction/resolution
+
+**Rules:**
+- Expression should NOT be at very start or end
+- Include complete sentences at boundaries
+- **ZERO OVERLAP** between different clips' index ranges
 
 ---
 
-**UNDERSTANDING THE STORY FIRST:**
+**VIRAL TITLE:**
 
-Before extracting expressions, take time to understand:
-1. **What's the emotional hook?** - Is it funny? Tense? Sexy? Dramatic?
-2. **What's happening in this scene?** - The situation, conflict, or interaction
-3. **Who are the characters?** - Their relationships and motivations
-4. **Why does this moment matter?** - What makes it interesting or memorable?
+The iconic, meme-worthy quote from the scene in {source_language}.
 
-This understanding will help you:
-- Select the most engaging expressions from high-impact scenes
-- Provide context that tells a compelling mini-story
-- Generate catchy keywords that capture the scene's energy
+**Good examples:**
+- "니까짓 게 날 죽여?" (The Glory)
+- "I don't have dreams, I have goals." (Suits)
+- "연진아, 이거 누구 딸이니?"
+
+**Characteristics:** 3-12 words, quotable, makes people click/share.
 
 ---
 
-**CONTEXT DESIGN - TELL A MINI-STORY:**
+**NARRATIONS (3-6 per clip):**
 
-**GOAL:** Learners should be enthralled by the story segment AND learn the expression naturally.
+Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
 
-**CRITICAL PRINCIPLES:**
+**Types:**
+| Type | Purpose | Example |
+|------|---------|---------|
+| `hook` | Opening attention grab | "자 여기서부터 집중!" |
+| `highlight` | Point out key expressions | "이 표현 원어민들 진짜 많이 씀" |
+| `reaction` | Comment on scene/acting | "연진이 눈빛 연기 보소... 소름" |
+| `tension` | Build suspense | "과연 뭐라고 대답할까?" |
+| `commentary` | Relatable observation | "직장인이면 100% 공감 ㅋㅋ" |
 
-1. **LONGER, STORY-RICH CONTEXT (25-45 seconds typical)**
-   - Give enough dialogue to understand WHO these people are and WHAT'S happening
-   - Include the setup that makes the expression make sense and builds tension/humor
-   - Include reactions that show the impact or meaning
-   - Let viewers follow the narrative flow naturally
-
-2. **EXPRESSION PLACEMENT:**
-   - The expression should appear naturally in the middle of the story
-   - NOT at the very beginning (needs setup)
-   - NOT at the very end (needs reaction/closure)
-
-3. **COMPLETE STORY ARC:**
-   - **Beginning:** Establish situation/conflict/hook
-   - **Middle:** Expression appears in context
-   - **End:** Reaction/response that completes the moment
-
-4. **START AND END POINTS (using indices):**
-   - **context_start_index:** Begin when the situation/topic begins (complete sentence)
-   - **context_end_index:** End when the moment feels complete and resolved (complete sentence)
-   - **Include full sentences at boundaries** - no partial phrases
-
-**LENGTH GUIDELINES:**
-- **Target Duration:** Aim for a context of approximately **{target_duration} seconds** total
-- **Minimum:** {target_duration} - 15 seconds (for shorter scenes)
-- **Maximum:** {target_duration} + 15 seconds (if needed for story completion)
-- **IMPORTANT:** Each extracted context WILL become a standalone short video
-
-**Quick Test:**
-- Can someone who's never seen the show understand what's happening?
-- Does it feel like a complete, engaging mini-scene?
-- Would learners enjoy watching this clip just for the entertainment value?
-- Is the expression's usage crystal clear from the context?
+**Guidelines:**
+- Casual tone, internet slang OK (ㅋㅋ, ㄹㅇ, 헐, 오짐)
+- 5-15 words each
+- Space them out - don't narrate every line
+- Match scene energy (funny scene = funny narration)
 
 ---
 
-**CRITICAL: NO OVERLAPPING CLIPS - CREATE A CONTINUOUS VIEWING EXPERIENCE**
+**ANNOTATIONS:**
 
-**THE BIG PICTURE:**
-When all extracted clips are played in chronological order, learners should be able to watch the entire episode naturally - like watching a movie with no repeated scenes. Each clip should pick up where the previous one left off or jump forward in the story.
-
-**ABSOLUTE RULES:**
-
-1. **ZERO OVERLAP BETWEEN CLIPS:**
-   - If you extract multiple expressions from DIFFERENT dialogue segments, their index ranges must NEVER overlap
-   - Previous clip ends at index X → Next clip must start at index X or later
-   - Example: 
-     * Clip 1: context_start_index=2, context_end_index=8 ✓
-     * Clip 2: context_start_index=9, context_end_index=15 ✓ (starts after Clip 1 ended)
-     * Clip 2: context_start_index=6, context_end_index=12 ✗ (overlaps with Clip 1 - NEVER DO THIS)
-
-2. **CHRONOLOGICAL STORY FLOW:**
-   - Extract expressions in the order they appear in the dialogue
-   - Each new clip should advance the story forward
-   - Learners should feel they're watching the episode unfold naturally
-   - Gaps between clips are OK (story jumps forward)
-   - Overlaps are NOT OK (story repeats itself)
-
-3. **CONTEXT BOUNDARIES MUST NOT OVERLAP:**
-   - **CRITICAL:** Different contexts must NEVER overlap
-   - Before finalizing your selection, review all `context_start_index` and `context_end_index` values
-   - Sort contexts chronologically by `context_start_index`
-   - Verify that each context's start index is > previous context's end index
-   - If you find ANY overlap between different contexts, adjust or remove one of them
-
-**VERIFICATION CHECKLIST:**
-- ✓ All clips are sorted by start index (lowest to highest)
-- ✓ No clip's start index is ≤ a previous clip's end index
-- ✓ Together, clips tell a forward-moving story with no repetition
-- ✓ If clips are back-to-back, they feel like one continuous scene
-- ✓ If there are gaps, they feel like natural story progression (time jump forward)
-
----
-
-**CATCHY CONTEXT KEYWORDS - HOOK THE VIEWER:**
-
-**PURPOSE:** Generate short, punchy phrases in {target_language} that make people think "Wait, WHAT? I need to see this!" within 2-3 seconds. These should feel like engaging social media captions.
-
-**CHARACTERISTICS OF GREAT KEYWORDS:**
-
-1. **REVEAL THE JUICY PART & EMOTION** without spoiling everything
-   - Hint at conflict, surprise, drama, humor, or romance
-   - Create curiosity: "How did THAT happen?" or "Did they just say that?"
-
-2. **FOCUS ON THE UNEXPECTED & HIGH STAKES**
-   - What's surprising, unusual, or highly relatable about this scene?
-   - What would make someone stop scrolling immediately?
-   - What's the dramatic "hook" that makes this moment special?
-
-3. **USE POWER WORDS & STRONG VERBS**
-   - Words that create emotion: Awesome, Shocking, Plot twist, Fluttering, Crisis, Secret, Hysterical
-   - Action words: Ram into, Confess, Get caught, Explode, Confront
-   - Dramatic words: Truth, Decision, Choice, Worst case scenario
-
-4. **DIFFERENT ANGLES** for the same scene:
-   - Keyword 1: Character/Relatable perspective
-   - Keyword 2: Conflict/Drama angle
-   - Keyword 3: Humor/Situation
-
-**FORMAT:**
-- Each keyword: 3-6 words in {target_language}
-- NO full sentences, NO explanations
-- Short, punchy, scroll-stopping
-- Think: "TikTok/Reel caption style" - colloquial, engaging, maybe slightly provocative
-
-**BAD EXAMPLES (too bland):**
-- ❌ "Scene of an interview" (too descriptive, no hook)
-- ❌ "Conversation at a law firm" (too generic)
-- ❌ "Mike and Harvey meeting" (no drama)
-
-**PROCESS:**
-1. Identify what's dramatic/surprising/emotional/funny about this scene
-2. Brainstorm 5-6 possible angles, focusing on the hook
-3. Pick the top 2-3 that would make YOU click/watch
-4. Keep them short and punchy
-
----
-
-**EXTRACTING THE EXPRESSION - GIVE MORE CONTEXT:**
-
-**NEW APPROACH: Expand the phrase to include meaningful context**
-
-Instead of extracting just the bare minimum phrase, include enough surrounding words to make the expression's usage pattern clear and natural.
-
-**EXAMPLES:**
-
-❌ TOO SHORT (old way):
-- "figure out"
-- "deal with"
-- "come up with"
-
-✅ BETTER (new way - includes usage context):
-- "figure out what to do"
-- "deal with this situation"
-- "come up with a solution"
-- "I can't deal with this right now"
-- "We need to figure out how to handle this"
-
-**GUIDELINES:**
-- Include the verb AND its natural object/complement when relevant
-- Include necessary prepositions or particles that show usage
-- Include subject pronouns if they're part of the natural usage pattern
-- Make it a chunk that learners can memorize and reuse
-- Still focus on the KEY phrase, but give it breathing room
-
-**BALANCE:**
-- Don't make it so long it becomes a full sentence
-- Don't make it so short it's unclear how to use it
-- Aim for 4-8 words typically
-
-**EXPRESSION COUNT:**
-- Find {min_expressions} to {max_expressions} expressions from this dialogue segment
-- Each expression MUST have a DIFFERENT, NON-OVERLAPPING context index range
-- Quality over quantity: Only extract expressions that pass ALL quality checks
-- It's OK to return fewer than {max_expressions} if there aren't enough high-quality expressions
-
----
-
-**VOCABULARY ANNOTATIONS - DYNAMIC WORD HIGHLIGHTS:**
-
-**PURPOSE:** Identify 2-5 interesting/difficult vocabulary words from the {source_language} dialogues that will appear as dynamic overlays when spoken.
-
-**WHAT TO ANNOTATE:**
-- ✓ Slang terms (e.g., "douchebag", "busted", "screw over")
-- ✓ Idioms within the dialogue (e.g., "off the hook", "on the same page")
-- ✓ Culturally-specific terms that need explanation
-- ✓ Difficult words for intermediate learners
-- ✓ Words that add color/meaning to the scene
-
-**WHAT NOT TO ANNOTATE:**
-- ✗ The main expression itself (that's shown separately)
-- ✗ Common words everyone knows ("the", "is", "good")
-- ✗ Words that are self-explanatory from context
-
-**FORMAT (V2 - NO translation field):**
+**vocabulary_annotations** - Single difficult WORDS:
 ```json
-"vocabulary_annotations": [
-  {{"word": "douchebag", "dialogue_index": 0}},
-  {{"word": "code red", "dialogue_index": 5}}
-]
+{{"word": "leverage", "translation": "영향력", "dialogue_index": 5}}
 ```
 
-**DIALOGUE_INDEX:** The index of the dialogue line where this word appears (from the numbered input).
+**expression_annotations** - Multi-word IDIOMS/PHRASES:
+```json
+{{"expression": "cut to the chase", "translation": "본론으로 들어가다", "dialogue_index": 7}}
+```
+
+**⚠️ CRITICAL: ZERO OVERLAP between vocabulary and expression annotations.**
+Both display on same visual layer - overlapping = unreadable subtitles.
+
+❌ Bad: vocabulary "rat" + expression "rat me out"
+✅ Good: vocabulary "leverage" + expression "cut to the chase"
 
 ---
 
-**PROCESS:**
+**CATCHY KEYWORDS (3 per clip):**
 
-**STEP 0:** Read and understand the entire scene from BOTH source and target dialogues
-   - What's the story here?
-   - Who are these people and what do they want?
-   - What's the emotion, tension, humor, or hook?
+Short, punchy phrases in {target_language} for social media hooks.
 
-**STEP 1:** Scan the {source_language} dialogues for expressions that pass the North Star test, focusing on high-impact moments.
+**Format:** 3-6 words each, TikTok caption style
 
-**STEP 2:** Rank them by:
-   1. How engaging and high-energy the scene is (Humor/Drama/Tension/Sexy)
-   2. How common/reusable the expression is
-   3. How appropriate for the target level
-
-**STEP 3:** For each top expression, design story-rich context using indices:
-   - Plan 25-45 seconds that tells a complete mini-story
-   - Ensure the expression appears naturally in the middle
-   - Verify learners can follow what's happening and feel the impact
-
-**STEP 4:** Select UP TO {max_expressions} expressions with NON-OVERLAPPING index ranges. Quality over quantity.
+**Good:** "면접장 패기 폭발", "소름돋는 첫마디", "상사한테 직구 날림"
+**Bad:** "Scene of an interview", "두 사람이 대화함"
 
 ---
 
-**OUTPUT FORMAT (JSON):**
-
-**IMPORTANT: You are a SCRIPT SELECTOR. You do NOT translate. You only select indices that reference the dialogues above.**
-The system will look up actual dialogue text and translations from the provided subtitles.
+**OUTPUT FORMAT (JSON only):**
 
 ```json
 {{
   "expressions": [
     {{
-      "title": "Catchy, dramatic title in {target_language} (8-15 words)",
-      "expression": "the key phrase from {source_language} (4-8 words copy exactly from source dialogue)",
-      "expression_translation": "natural translation of the expression in {target_language}",
+      "title": "Catchy title in {target_language} (8-15 words)",
+      "viral_title": "Iconic line in {source_language} (3-12 words)",
+      "expression": "key phrase copied exactly from dialogue (4-8 words)",
+      "expression_translation": "natural translation in {target_language}",
       "expression_dialogue_index": 5,
       "context_start_index": 2,
-      "context_end_index": 8,
-      "catchy_keywords": [
-        "keyword 1 in {target_language} (3-6 words)",
-        "keyword 2 in {target_language} (3-6 words)",
-        "keyword 3 in {target_language} (3-6 words)"
+      "context_end_index": 12,
+      "narrations": [
+        {{"dialogue_index": 2, "text": "Hook text", "type": "hook"}},
+        {{"dialogue_index": 5, "text": "Highlight text", "type": "highlight"}},
+        {{"dialogue_index": 8, "text": "Reaction text", "type": "reaction"}},
+        {{"dialogue_index": 11, "text": "Tension text", "type": "tension"}}
       ],
+      "catchy_keywords": ["keyword 1", "keyword 2", "keyword 3"],
       "vocabulary_annotations": [
-        {{"word": "interesting {source_language} word", "translation": "translation in {target_language}", "dialogue_index": 3}}
+        {{"word": "word", "translation": "번역", "dialogue_index": 3}}
       ],
-      "similar_expressions": ["alternative 1 in {source_language}", "alternative 2 in {source_language}"],
-      "scene_type": "humor|drama|tension|emotional|witty|confrontation|sexy|surprising",
-      "intro_hook": "Short, engaging hook in {target_language}"
+      "expression_annotations": [
+        {{"expression": "idiom phrase", "translation": "번역", "dialogue_index": 7}}
+      ],
+      "similar_expressions": ["alternative 1", "alternative 2"],
+      "scene_type": "humor|drama|tension|emotional|confrontation|sexy|surprising",
+      "intro_hook": "Short hook in {target_language}"
     }}
   ]
 }}
@@ -373,48 +162,14 @@ The system will look up actual dialogue text and translations from the provided 
 
 ---
 
-**FIELD EXPLANATIONS:**
-
-- **title**: Catchy title in {target_language} that makes viewers curious (8-15 words)
-- **expression**: Copy the KEY PHRASE exactly from {source_language} dialogue at expression_dialogue_index (4-8 words)
-- **expression_translation**: Natural translation of the expression in {target_language}
-- **expression_dialogue_index**: Index of the source dialogue line containing the expression
-- **context_start_index**: Starting index for context (first line of context)
-- **context_end_index**: Ending index for context (last line of context)
-- **catchy_keywords**: 2-3 short, punchy keywords in {target_language} (3-6 words each)
-- **vocabulary_annotations**: Interesting words with translation in {target_language} and dialogue_index
-- **similar_expressions**: 2-3 alternative expressions in {source_language}
-- **scene_type**: Category of the scene's energy
-- **intro_hook**: Short hook question/statement in {target_language}
-
-**NOTE:** The system will automatically:
-1. Look up dialogue text from source_dialogues using your indices
-2. Look up dialogue translations from target_dialogues using your indices (if available)
-3. Extract timestamps from the indexed dialogues
-4. Build the full ExpressionAnalysis object
-
-You do NOT need to include: dialogues[], translation[], expression_dialogue, expression_dialogue_translation, context_start_time, context_end_time.
-
-**IMPORTANT:** You MUST provide: expression_translation and vocabulary_annotations with translation field.
-
----
-
 **FINAL CHECKLIST:**
-- ✓ You UNDERSTAND the story and situation before extracting
-- ✓ Each expression is COMMON and REUSABLE in real life
-- ✓ Each expression is SUBSTANTIAL (3+ words)
-- ✓ Expression is copied exactly from the source dialogue (4-8 words typical)
-- ✓ Each scene is ENGAGING, HIGH-ENERGY
-- ✓ Indices are valid (within the range of provided dialogues)
-- ✓ Context indices define a cohesive story segment (25-45 seconds)
-- ✓ Expression appears BETWEEN context_start_index and context_end_index
-- ✓ All `catchy_keywords`, `title`, and `intro_hook` are in {target_language}
-- ✓ All `similar_expressions` and `expression` are in {source_language}
-- ✓ NO simple curses or 1-2 word phrases
+- ✓ Expression: 3+ words, common, reusable, copied exactly from dialogue
+- ✓ Scene: High-energy (funny/dramatic/tense/romantic)
+- ✓ Context: ~{target_duration}s, complete story arc, expression in middle
+- ✓ Clips: NO overlapping index ranges
+- ✓ Narrations: 3-6 entries, spaced throughout, casual {target_language}
+- ✓ Annotations: vocabulary (words) vs expression (idioms) - ZERO overlap
+- ✓ Language rules: correct language for each field
 
-Return ONLY expressions that pass ALL checks. Quality over quantity.
-
-**CRITICAL: Respond with ONLY valid JSON. No markdown, no explanations.**
-
-If you find expressions, respond with the JSON object.
-If you find NO expressions: {{"expressions":[]}}
+**Return ONLY valid JSON.**
+**No good expressions? Return: {{"expressions":[]}}**

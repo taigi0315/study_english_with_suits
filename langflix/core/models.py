@@ -22,6 +22,43 @@ class VocabularyAnnotation(BaseModel):
     )
 
 
+class Narration(BaseModel):
+    """
+    Model for narration commentary that appears during video playback.
+    Timestamped commentary in target language displayed separately from subtitles.
+    """
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in dialogues array when this narration should appear",
+        ge=0
+    )
+    text: str = Field(
+        description="Narration text in target language"
+    )
+    type: str = Field(
+        default="commentary",
+        description="Narration type: hook, highlight, reaction, tension, commentary"
+    )
+
+
+class ExpressionAnnotation(BaseModel):
+    """
+    Model for expression/idiom annotation that appears dynamically in the video.
+    Multi-word phrases and idioms (distinct from single-word VocabularyAnnotation).
+    """
+    expression: str = Field(
+        description="The idiom or multi-word phrase to annotate"
+    )
+    translation: str = Field(
+        description="Translation of the expression in target language"
+    )
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in dialogues array where this expression appears",
+        ge=0
+    )
+
+
 class ExpressionAnalysis(BaseModel):
     """
     Model for a single expression analysis result
@@ -29,6 +66,10 @@ class ExpressionAnalysis(BaseModel):
     title: Optional[str] = Field(
         default=None,
         description="Catchy Korean title (8-15 words) for video, in target language NOT English. Examples: '회사에서 상사에게 참교육 당하는 순간', '어제 나를 해고한 상사가 백지수표를 들고 찾아왔다'"
+    )
+    viral_title: Optional[str] = Field(
+        default=None,
+        description="Iconic, meme-worthy quote from the scene in source language (3-12 words). Displayed at top of video."
     )
     dialogues: List[str] = Field(
         description="Complete dialogue lines in the scene",
@@ -93,6 +134,14 @@ class ExpressionAnalysis(BaseModel):
     vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
         default=None,
         description="2-5 vocabulary words with translations for dynamic video overlays"
+    )
+    narrations: Optional[List[Narration]] = Field(
+        default=None,
+        description="3-6 narration commentaries in target language displayed throughout video"
+    )
+    expression_annotations: Optional[List[ExpressionAnnotation]] = Field(
+        default=None,
+        description="1-3 idiom/phrase annotations with translations for dynamic video overlays"
     )
 
     # New fields for expression-based learning

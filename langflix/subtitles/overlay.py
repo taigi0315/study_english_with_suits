@@ -164,6 +164,9 @@ def wrap_subtitle_lines(input_path: Path, output_path: Path, max_chars: int = 15
     Read an SRT file and wrap text lines to a maximum width.
     This ensures subtitles do not overflow the screen.
     
+    This version parses SRT blocks, removes existing line breaks within text,
+    and reflows the text to the specified width.
+    
     Args:
         input_path: Source SRT file
         output_path: Destination SRT file
@@ -178,37 +181,59 @@ def wrap_subtitle_lines(input_path: Path, output_path: Path, max_chars: int = 15
         logger.warning(f"Failed to read SRT for wrapping ({input_path}): {e}")
         return input_path
         
-    lines = content.split('\n')
-    wrapped_lines = []
+    # Normalize line endings
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
     
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        
-        # Pass through empty lines, numbers, and timestamps unchanged
-        if not line or line.isdigit() or '-->' in line:
-            wrapped_lines.append(lines[i])
-            i += 1
+    # Split into blocks by double newline
+    blocks = content.strip().split('\n\n')
+    wrapped_blocks = []
+    
+    for block in blocks:
+        if not block.strip():
             continue
             
-        # This is a text line. Check for HTML tags.
-        # If line contains tags, we skip simplistic wrapping to avoid breaking valid HTML/SRT styling.
-        # If it's plain text, we wrap it.
-        if len(line) > max_chars and not ('<' in line and '>' in line):
-             try:
-                 # Use textwrap to break lines, respecting words
-                 wrapped = textwrap.fill(line, width=max_chars, break_long_words=False)
-                 wrapped_lines.append(wrapped)
-             except Exception:
-                 wrapped_lines.append(line)
-        else:
-             wrapped_lines.append(line)
+        lines = block.split('\n')
+        if len(lines) < 2:
+            wrapped_blocks.append(block)
+            continue
+            
+        # Parse block structure
+        index_line = lines[0]
         
-        i += 1
+        # Find timestamp line
+        timestamp_line_idx = -1
+        for i, line in enumerate(lines):
+            if '-->' in line:
+                timestamp_line_idx = i
+                break
+        
+        if timestamp_line_idx == -1:
+            wrapped_blocks.append(block)
+            continue
+            
+        timestamp_line = lines[timestamp_line_idx]
+        text_lines = lines[timestamp_line_idx + 1:]
+        
+        # Combine text lines into one, removing existing breaks
+        combined_text = " ".join([line.strip() for line in text_lines if line.strip()])
+        
+        # Check for HTML tags or ASS styling tags - if present, skip wrapping to avoid breaking
+        if ('<' in combined_text and '>' in combined_text) or '{\\' in combined_text:
+             wrapped_text = "\n".join(text_lines) # Keep original layout
+        else:
+             try:
+                 # Reflow text
+                 wrapped_text = textwrap.fill(combined_text, width=max_chars, break_long_words=False)
+             except Exception:
+                 wrapped_text = combined_text
+        
+        # Reconstruct block
+        new_block = f"{index_line}\n{timestamp_line}\n{wrapped_text}"
+        wrapped_blocks.append(new_block)
         
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text('\n'.join(wrapped_lines), encoding='utf-8')
-    logger.info(f"Wrapped subtitles to {max_chars} chars: {output_path}")
+    output_path.write_text('\n\n'.join(wrapped_blocks) + '\n', encoding='utf-8')
+    logger.info(f"Wrapped subtitles to {max_chars} chars (reflowed): {output_path}")
     return output_path
 
 
@@ -243,7 +268,8 @@ def build_ass_force_style(is_expression: bool = False) -> str:
     outline_w = max(2, font_size // 12)
     
     # Increase vertical margin to avoid cropping at bottom (TICKET-090)
-    margin_v = style_cfg.get("margin_v", 50) # Default increased to 50
+    # Lower value = closer to bottom edge
+    margin_v = style_cfg.get("margin_v", 20)  # Reduced to 20 for lower position
     
     parts = [
         f"FontSize={font_size}",
@@ -252,7 +278,8 @@ def build_ass_force_style(is_expression: bool = False) -> str:
         f"Outline={outline_w}",
         f"Bold={bold}",
         "BorderStyle=3",
-        f"MarginV={margin_v}", # Added explicit vertical margin
+        "Alignment=2",  # Bottom center alignment
+        f"MarginV={margin_v}",
     ]
     return ",".join(parts)
 
@@ -299,7 +326,8 @@ def apply_dual_subtitle_layers(
     expression_subtitle_path: str,
     output_path: str,
     context_start_seconds: float,
-    context_end_seconds: float
+    context_end_seconds: float,
+    encoding_params: Optional[Dict[str, Any]] = None
 ) -> Path:
     """
     Extract context segment from source video, then apply original subtitles only.
@@ -311,7 +339,9 @@ def apply_dual_subtitle_layers(
         expression_subtitle_path: Path to expression-only subtitle SRT (not used, kept for API compatibility)
         output_path: Output video path (context segment with subtitles)
         context_start_seconds: Context start time in source video (seconds)
+        context_start_seconds: Context start time in source video (seconds)
         context_end_seconds: Context end time in source video (seconds)
+        encoding_params: Optional dict with 'preset', 'crf' keys
         
     Returns:
         Path to output video with subtitles
@@ -351,7 +381,7 @@ def apply_dual_subtitle_layers(
     )
     
     # Output
-    output_args = {
+    default_args = {
         'vcodec': 'libx264',
         'preset': 'slow',   # Enforce slow preset
         'crf': 18,          # Enforce CRF 18
@@ -361,6 +391,10 @@ def apply_dual_subtitle_layers(
         'ar': 48000,
         # Note: ss and t are handled in input
     }
+    
+    output_args = default_args.copy()
+    if encoding_params:
+         output_args.update(encoding_params)
     
     (
         ffmpeg

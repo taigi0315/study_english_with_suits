@@ -36,6 +36,21 @@ def get_video_config() -> Dict[str, Any]:
     return _config_loader.get_section('video') or {}
 
 
+def get_dialogue_subtitle_styling_config() -> Dict[str, Any]:
+    """Get top-level dialogue subtitle styling configuration"""
+    return _config_loader.get_section('dialogue_subtitle') or {}
+
+
+def get_dialogue_subtitle_source_color() -> str:
+    """Get source language subtitle color from top-level config"""
+    return get_dialogue_subtitle_styling_config().get('source_color', '#FFFFFF')
+
+
+def get_dialogue_subtitle_target_color() -> str:
+    """Get target language subtitle color from top-level config"""
+    return get_dialogue_subtitle_styling_config().get('target_color', '#FFFF00')
+
+
 def get_clip_extraction_config() -> Dict[str, Any]:
     """Get clip extraction configuration"""
     video_cfg = get_video_config()
@@ -284,8 +299,28 @@ def get_show_name() -> str:
 
 def get_template_file() -> str:
     """Get the template file name from configuration"""
-    return get_app_config().get('template_file', 'expression_analysis_prompt_v7.txt')
+    return get_app_config().get('template_file', 'expression_analysis_prompt_v8.txt')
 
+
+def get_source_language_name() -> str:
+    """Get the source language name (the language being learned) from configuration.
+    
+    Returns:
+        Human-readable language name like "Korean", "English", "Spanish"
+    """
+    # Check dual_language config first (V2 mode)
+    dual_lang = get_dual_language_config()
+    if dual_lang.get('enabled', False):
+        source_lang = dual_lang.get('source_language', 'Korean')
+        # Map language codes to full names
+        lang_names = {
+            'ko': 'Korean', 'en': 'English', 'es': 'Spanish', 
+            'ja': 'Japanese', 'zh': 'Chinese', 'fr': 'French'
+        }
+        return lang_names.get(source_lang, source_lang)
+    
+    # Fallback to app config source_language
+    return get_app_config().get('source_language', 'English')
 
 # ============================================================================
 # LLM Settings
@@ -808,6 +843,149 @@ def get_vocabulary_y_offset() -> int:
 def get_vocabulary_duration() -> float:
     """Get vocabulary annotation display duration in seconds (default: 4.0)"""
     return get_vocabulary_annotations_config().get('duration', 4.0)
+
+
+# ============================================================================
+# Viral Title Settings
+# ============================================================================
+
+def get_viral_title_config() -> Dict[str, Any]:
+    """Get viral title display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('viral_title', {})
+
+
+def get_viral_title_font_size() -> int:
+    """Get viral title font size (default: 48)"""
+    return get_viral_title_config().get('font_size', 48)
+
+
+def get_viral_title_y_position() -> int:
+    """Get viral title Y position (default: 120)"""
+    return get_viral_title_config().get('y_position', 120)
+
+
+def get_viral_title_text_color() -> str:
+    """Get viral title text color (default: '#FF4444' red)"""
+    return get_viral_title_config().get('text_color', '#FF4444')
+
+
+def get_viral_title_border_width() -> int:
+    """Get viral title border width (default: 3)"""
+    return get_viral_title_config().get('border_width', 3)
+
+
+def get_viral_title_border_color() -> str:
+    """Get viral title border color (default: 'black')"""
+    return get_viral_title_config().get('border_color', 'black')
+
+
+def get_viral_title_display_duration() -> float:
+    """Get viral title display duration in seconds (0 = entire video, default: 0)"""
+    return get_viral_title_config().get('display_duration', 0.0)
+
+
+# ============================================================================
+# Narrations Settings
+# ============================================================================
+
+def get_narrations_config() -> Dict[str, Any]:
+    """Get narrations display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('narrations', {})
+
+
+def get_narrations_font_size() -> int:
+    """Get narrations font size (default: 32)"""
+    return get_narrations_config().get('font_size', 32)
+
+
+def get_narrations_y_position() -> int:
+    """Get narrations Y position (default: 500)"""
+    return get_narrations_config().get('y_position', 500)
+
+
+def get_narrations_text_color() -> str:
+    """Get narrations text color (default: '#00FF00' green)"""
+    return get_narrations_config().get('text_color', '#00FF00')
+
+
+def get_narrations_background_color() -> str:
+    """Get narrations background color (default: '#000000' black)"""
+    return get_narrations_config().get('background_color', '#000000')
+
+
+def get_narrations_background_opacity() -> float:
+    """Get narrations background opacity (default: 0.7)"""
+    return get_narrations_config().get('background_opacity', 0.7)
+
+
+def get_narrations_border_width() -> int:
+    """Get narrations border width (default: 2)"""
+    return get_narrations_config().get('border_width', 2)
+
+
+def get_narrations_border_color() -> str:
+    """Get narrations border color (default: 'black')"""
+    return get_narrations_config().get('border_color', 'black')
+
+
+def get_narrations_duration() -> float:
+    """Get narrations display duration in seconds (default: 3.0)"""
+    return get_narrations_config().get('duration', 3.0)
+
+
+def get_narrations_type_color(narration_type: str) -> str:
+    """Get color for specific narration type (default: green)"""
+    config = get_narrations_config()
+    type_colors = config.get('type_colors', {})
+    default_color = get_narrations_text_color()
+    return type_colors.get(narration_type, default_color)
+
+
+# ============================================================================
+# Expression Annotations Settings
+# ============================================================================
+
+def get_expression_annotations_config() -> Dict[str, Any]:
+    """Get expression annotations display configuration"""
+    layout = get_short_video_layout_config()
+    return layout.get('expression_annotations', {})
+
+
+def get_expression_annotations_font_size() -> int:
+    """Get expression annotations font size (default: 28)"""
+    return get_expression_annotations_config().get('font_size', 28)
+
+
+def get_expression_annotations_x_position() -> int:
+    """Get expression annotations X position (default: 40)"""
+    return get_expression_annotations_config().get('x_position', 40)
+
+
+def get_expression_annotations_y_offset() -> int:
+    """Get expression annotations Y offset (default: 520)"""
+    return get_expression_annotations_config().get('y_offset', 520)
+
+
+def get_expression_annotations_text_color() -> str:
+    """Get expression annotations text color (default: '#0088FF' blue)"""
+    return get_expression_annotations_config().get('text_color', '#0088FF')
+
+
+def get_expression_annotations_border_width() -> int:
+    """Get expression annotations border width (default: 2)"""
+    return get_expression_annotations_config().get('border_width', 2)
+
+
+def get_expression_annotations_border_color() -> str:
+    """Get expression annotations border color (default: 'black')"""
+    return get_expression_annotations_config().get('border_color', 'black')
+
+
+def get_expression_annotations_duration() -> float:
+    """Get expression annotations display duration in seconds (default: 4.0)"""
+    return get_expression_annotations_config().get('duration', 4.0)
 
 
 # ============================================================================

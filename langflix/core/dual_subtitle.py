@@ -26,6 +26,112 @@ from langflix.utils.path_utils import (
 logger = logging.getLogger(__name__)
 
 
+def is_dialogue_entry(text: str) -> bool:
+    """
+    Check if a subtitle entry is actual dialogue (not sound effects/annotations).
+    
+    Netflix-style subtitles often include:
+    - Sound effects: [불안한 음악] (anxious music)
+    - Actions: [마이크를 딸각 켠다] (clicks microphone)
+    - Speaker tags: [신도들] (congregation)
+    
+    These should be filtered for translation matching.
+    """
+    text = text.strip()
+    
+    # Empty text
+    if not text:
+        return False
+    
+    # Remove Unicode LTR marks that Netflix adds
+    text = text.replace('\u200e', '').replace('\u200f', '').strip()
+    
+    # If entire text is wrapped in brackets, it's a sound effect/annotation
+    if text.startswith('[') and text.endswith(']'):
+        return False
+    
+    # If text only contains bracketed content (possibly multi-line)
+    lines = text.split('\n')
+    all_bracketed = all(
+        line.strip().startswith('[') and line.strip().endswith(']')
+        for line in lines if line.strip()
+    )
+    if all_bracketed and lines:
+        return False
+    
+    # If text starts with a bracketed tag followed by actual dialogue, keep it
+    # e.g., "[사라 부] 예수께서 말씀하시길" -> This is dialogue
+    
+    return True
+
+
+def filter_dialogue_entries(entries: list) -> list:
+    """Filter subtitle entries to only include actual dialogue."""
+    return [e for e in entries if is_dialogue_entry(e.text)]
+
+
+def fuzzy_match_by_timestamp(
+    source_entries: list,
+    target_entries: list,
+    tolerance_seconds: float = 1.0
+) -> list:
+    """
+    Match source and target subtitle entries by overlapping timestamps.
+    
+    Args:
+        source_entries: List of SubtitleEntry from source language
+        target_entries: List of SubtitleEntry from target language
+        tolerance_seconds: Maximum time difference to consider a match
+        
+    Returns:
+        List of tuples (source_entry, target_entry) for matched pairs
+    """
+    matched_pairs = []
+    used_target_indices = set()
+    
+    for source in source_entries:
+        source_start = source.start_seconds
+        source_end = source.end_seconds
+        source_mid = (source_start + source_end) / 2
+        
+        best_match = None
+        best_overlap = -1
+        best_target_idx = -1
+        
+        for idx, target in enumerate(target_entries):
+            if idx in used_target_indices:
+                continue
+                
+            target_start = target.start_seconds
+            target_end = target.end_seconds
+            target_mid = (target_start + target_end) / 2
+            
+            # Calculate overlap
+            overlap_start = max(source_start, target_start)
+            overlap_end = min(source_end, target_end)
+            overlap = max(0, overlap_end - overlap_start)
+            
+            # Also check midpoint distance for short subtitles
+            mid_distance = abs(source_mid - target_mid)
+            
+            # Consider a match if there's overlap OR midpoints are close
+            if overlap > 0 or mid_distance < tolerance_seconds:
+                score = overlap if overlap > 0 else (1.0 / (mid_distance + 0.1))
+                if score > best_overlap:
+                    best_overlap = score
+                    best_match = target
+                    best_target_idx = idx
+        
+        if best_match is not None:
+            matched_pairs.append((source, best_match))
+            used_target_indices.add(best_target_idx)
+    
+    logger.info(
+        f"Fuzzy timestamp matching: {len(matched_pairs)}/{len(source_entries)} source entries matched"
+    )
+    
+    return matched_pairs
+
 class SubtitleEntry(BaseModel):
     """
     A single subtitle entry with timing and text.
@@ -190,6 +296,8 @@ class DualSubtitleService:
         target_lang: str,
         source_variant: int = 0,
         target_variant: int = 0,
+        use_fuzzy_matching: bool = True,
+        tolerance_seconds: float = 1.0,
     ) -> DualSubtitle:
         """
         Load both source and target language subtitles for a media file.
@@ -200,6 +308,8 @@ class DualSubtitleService:
             target_lang: Target language name (e.g., "Korean")
             source_variant: Which variant to use if multiple exist
             target_variant: Which variant to use if multiple exist
+            use_fuzzy_matching: If True, use timestamp-based matching instead of index
+            tolerance_seconds: Max time difference for fuzzy matching
             
         Returns:
             DualSubtitle object with both languages loaded
@@ -222,27 +332,69 @@ class DualSubtitleService:
             raise ValueError(f"Could not find subtitle files for {source_lang}/{target_lang}")
         
         # Parse subtitles
-        source_entries = self._parse_subtitle_file(source_path)
-        target_entries = self._parse_subtitle_file(target_path)
+        source_entries_raw = self._parse_subtitle_file(source_path)
+        target_entries_raw = self._parse_subtitle_file(target_path)
         
-        # Log alignment info
-        if len(source_entries) != len(target_entries):
-            logger.warning(
-                f"Subtitle count mismatch: {source_lang}={len(source_entries)}, "
-                f"{target_lang}={len(target_entries)}. Using min count."
+        logger.info(
+            f"Loaded raw subtitles: {source_lang}={len(source_entries_raw)}, "
+            f"{target_lang}={len(target_entries_raw)}"
+        )
+        
+        # Filter non-dialogue entries (sound effects, annotations)
+        source_entries_filtered = filter_dialogue_entries(source_entries_raw)
+        target_entries_filtered = filter_dialogue_entries(target_entries_raw)
+        
+        logger.info(
+            f"After filtering non-dialogue: {source_lang}={len(source_entries_filtered)}, "
+            f"{target_lang}={len(target_entries_filtered)} "
+            f"(removed {len(source_entries_raw) - len(source_entries_filtered)} + "
+            f"{len(target_entries_raw) - len(target_entries_filtered)} annotations)"
+        )
+        
+        if use_fuzzy_matching:
+            # Use fuzzy timestamp matching for misaligned subtitles
+            matched_pairs = fuzzy_match_by_timestamp(
+                source_entries_filtered,
+                target_entries_filtered,
+                tolerance_seconds=tolerance_seconds
             )
+            
+            # Build aligned entry lists from matched pairs
+            source_entries = [pair[0] for pair in matched_pairs]
+            target_entries = [pair[1] for pair in matched_pairs]
+            
+            # Re-index entries to be sequential (0-based for internal use)
+            for i, (src, tgt) in enumerate(zip(source_entries, target_entries)):
+                src.index = i + 1
+                tgt.index = i + 1
+            
+            logger.info(
+                f"Fuzzy matching created {len(matched_pairs)} aligned pairs from "
+                f"{len(source_entries_filtered)} source / {len(target_entries_filtered)} target entries"
+            )
+        else:
+            # Fall back to index-based matching (original behavior)
+            source_entries = source_entries_filtered
+            target_entries = target_entries_filtered
+            
+            if len(source_entries) != len(target_entries):
+                logger.warning(
+                    f"Subtitle count mismatch: {source_lang}={len(source_entries)}, "
+                    f"{target_lang}={len(target_entries)}. Using min count."
+                )
         
         dual_subtitle = DualSubtitle(
             source_language=source_lang,
             target_language=target_lang,
             source_entries=source_entries,
             target_entries=target_entries,
-            media_path=media_path,
+            media_path=str(media_path),  # Convert to string for Pydantic
         )
         
         logger.info(
             f"Loaded dual subtitles: {source_lang} ({len(source_entries)}) / "
-            f"{target_lang} ({len(target_entries)})"
+            f"{target_lang} ({len(target_entries)}) - "
+            f"{'fuzzy matched' if use_fuzzy_matching else 'index aligned'}"
         )
         
         return dual_subtitle

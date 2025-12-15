@@ -17,6 +17,13 @@ from langflix.subtitles.overlay import apply_dual_subtitle_layers
 
 logger = logging.getLogger(__name__)
 
+# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+def get_expr_attr(expr, key, default=None):
+    """Get attribute from expression - works with both dict and object types."""
+    if isinstance(expr, dict):
+        return expr.get(key, default)
+    return getattr(expr, key, default)
+
 class VideoFactory:
     """Service for orchestrating video creation."""
 
@@ -32,6 +39,7 @@ class VideoFactory:
         episode_name: str,
         subtitle_file: Path,
         no_long_form: bool = False,
+        test_mode: bool = False,
         progress_callback: Optional[callable] = None
     ):
         """
@@ -47,7 +55,7 @@ class VideoFactory:
         logger.info(f"Using original video file: {original_video}")
         
         # Step 1: Extract video slices (reused) - These are RAW clips (no subs)
-        extracted_slices = self._extract_slices(expressions, video_processor, original_video)
+        extracted_slices = self._extract_slices(expressions, video_processor, original_video, test_mode=test_mode)
         
         # Step 2: Create videos for each language
         all_long_form_videos = {}
@@ -87,7 +95,8 @@ class VideoFactory:
                 try:
                     # 1. Generate Subtitle File
                     base_expression = expressions[i] if i < len(expressions) else expression
-                    safe_expression_short = sanitize_for_expression_filename(base_expression.expression)[:30]
+                    expr_text = get_expr_attr(base_expression, 'expression', '')
+                    safe_expression_short = sanitize_for_expression_filename(expr_text)[:30]
                     subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
                     subtitle_output_path = subtitle_dir / subtitle_filename
                     
@@ -120,7 +129,11 @@ class VideoFactory:
                         "", 
                         str(temp_master_clip),
                         0.0, 
-                        duration
+                        duration,
+                        encoding_params={
+                            'preset': 'ultrafast' if test_mode else 'slow',
+                            'crf': 28 if test_mode else 18
+                        } if test_mode else None
                     )
                     
                     if temp_master_clip.exists():
@@ -138,13 +151,24 @@ class VideoFactory:
                 str(lang_paths['final_videos']),
                 lang,
                 episode_name,
-                subtitle_processor=subtitle_processor
+                subtitle_processor=subtitle_processor,
+                test_mode=test_mode
             )
             lang_video_editor.paths = lang_paths
             
             lang_long_form_videos = []
             
             for expr_idx, expression in enumerate(lang_expressions):
+                logger.info(f"Processing short video for expression {expr_idx + 1}/{len(lang_expressions)}")
+                
+                # Debug: Log vocabulary annotations
+                vocab = getattr(expression, 'vocabulary_annotations', [])
+                logger.info(f"DEBUG: Expression {expr_idx+1} vocab annotations raw: {vocab}")
+                if isinstance(vocab, list):
+                    logger.info(f"DEBUG: Found {len(vocab)} annotations in Factory")
+                else:
+                    logger.info(f"DEBUG: Vocab annotations is {type(vocab)}")
+                
                 if expr_idx not in master_clips:
                     logger.warning(f"Skipping video creation for expression {expr_idx+1}: No master clip")
                     continue
@@ -259,14 +283,15 @@ class VideoFactory:
             except Exception as e:
                 logger.error(f"Error creating short videos for {lang}: {e}")
 
-    def _extract_slices(self, expressions, video_processor, original_video) -> Dict[int, Path]:
+    def _extract_slices(self, expressions, video_processor, original_video, test_mode: bool = False) -> Dict[int, Path]:
         logger.info("Extracting video slices...")
         extracted_slices = {}
         temp_manager = get_temp_manager()
         
         for expr_idx, base_expression in enumerate(expressions):
             try:
-                safe_filename = sanitize_for_expression_filename(base_expression.expression)
+                expr_text = get_expr_attr(base_expression, 'expression', '')
+                safe_filename = sanitize_for_expression_filename(expr_text)
                 # We need persistent temp file
                 # Using create_temp_file matches main.py logic (yields path)
                 with temp_manager.create_temp_file(
@@ -274,12 +299,18 @@ class VideoFactory:
                     suffix=".mkv",
                     delete=False
                 ) as temp_context_clip:
+                    start_time = get_expr_attr(base_expression, 'context_start_time')
+                    end_time = get_expr_attr(base_expression, 'context_end_time')
                     success = video_processor.extract_clip(
                         Path(original_video),
-                        base_expression.context_start_time,
-                        base_expression.context_end_time,
+                        start_time,
+                        end_time,
                         temp_context_clip,
-                        strategy='encode'  # Force encode for frame accuracy (fix sync issues)
+                        strategy='encode',  # Force encode for frame accuracy (fix sync issues)
+                        encoding_params={
+                            'preset': 'ultrafast' if test_mode else None,
+                            'crf': 28 if test_mode else None
+                        } if test_mode else None
                     )
                     if success:
                         extracted_slices[expr_idx] = temp_context_clip
@@ -352,7 +383,8 @@ class VideoFactory:
             try:
                 # Get base expression for filename
                 base_expression = base_expressions[i] if i < len(base_expressions) else expression
-                safe_expression_short = sanitize_for_expression_filename(base_expression.expression)[:30]
+                expr_text = get_expr_attr(base_expression, 'expression', '')
+                safe_expression_short = sanitize_for_expression_filename(expr_text)[:30]
                 
                 # Create subtitle filename matching the pattern expected by create_short_form_from_long_form
                 subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
@@ -379,7 +411,8 @@ class VideoFactory:
             # Match using base expression if available logic from main.py
             # Match using constructed filename pattern (matching video_editor.py logic)
             # Use 'expression' (localized) because create_long_form_video uses localized expression for filenames
-            safe_name = sanitize_for_expression_filename(expression.expression)
+            expr_text = get_expr_attr(expression, 'expression', '')
+            safe_name = sanitize_for_expression_filename(expr_text)
             # Must match creation format: expression_{index}_{safe[:50]}
             expected_stem = f"expression_{i+1:02d}_{safe_name[:50]}"
             
@@ -395,8 +428,8 @@ class VideoFactory:
                     short_format_videos.append({
                         "path": str(output_path),
                         "duration": duration,
-                        "expression": expression.expression,
-                        "expression_translation": expression.expression_translation,
+                        "expression": get_expr_attr(expression, 'expression'),
+                        "expression_translation": get_expr_attr(expression, 'expression_translation'),
                         "language": lang,
                         "episode": episode_name,
                         "source_short": Path(output_path).name

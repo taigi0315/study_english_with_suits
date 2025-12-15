@@ -151,7 +151,9 @@ class VideoProcessor:
             }
     
     def extract_clip(self, video_path: Path, start_time: str, end_time: str, 
-                   output_path: Path, strategy: Optional[str] = None) -> bool:
+                   output_path: Path,
+            strategy: Optional[str] = None,
+            encoding_params: Optional[Dict[str, Any]] = None) -> bool:
         """
         Extract video clip between start and end times with adaptive strategy.
         
@@ -167,6 +169,7 @@ class VideoProcessor:
             output_path: Path for output clip
             strategy: Extraction strategy ('auto', 'copy', 'encode'). 
                      If None, uses configuration setting.
+            encoding_params: Optional dict with 'preset', 'crf', 'audio_bitrate' to override defaults.
             
         Returns:
             True if successful, False otherwise
@@ -219,7 +222,7 @@ class VideoProcessor:
             
             # Re-encode path (original behavior or fallback)
             logger.debug(f"Using re-encode (strategy={effective_strategy})")
-            return self._extract_clip_encode(video_path, start_seconds, duration, output_path)
+            return self._extract_clip_encode(video_path, start_seconds, duration, output_path, encoding_params)
             
         except Exception as e:
             logger.error(f"Error extracting clip: {e}")
@@ -260,7 +263,8 @@ class VideoProcessor:
             return False
     
     def _extract_clip_encode(self, video_path: Path, start_seconds: float, 
-                            duration: float, output_path: Path) -> bool:
+                            duration: float, output_path: Path,
+                            encoding_params: Optional[Dict[str, Any]] = None) -> bool:
         """
         Extract clip using re-encode (original behavior).
         
@@ -279,9 +283,12 @@ class VideoProcessor:
             # Get quality settings from config (TICKET-072: improved quality)
             from langflix import settings
             video_config = settings.get_video_config()
-            preset = video_config.get('preset', 'slow')  # Improved default
-            crf = video_config.get('crf', 18)            # High quality default
-            audio_bitrate = video_config.get('audio_bitrate', '256k')
+            
+            # Use provided params or fall back to config
+            params = encoding_params or {}
+            preset = params.get('preset', video_config.get('preset', 'slow'))
+            crf = params.get('crf', video_config.get('crf', 18))
+            audio_bitrate = params.get('audio_bitrate', video_config.get('audio_bitrate', '256k'))
             
             (
                 ffmpeg

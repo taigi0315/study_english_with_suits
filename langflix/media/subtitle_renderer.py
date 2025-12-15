@@ -17,6 +17,13 @@ from .exceptions import SubtitleRenderingError
 
 logger = logging.getLogger(__name__)
 
+# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+def get_expr_attr(expr, key, default=None):
+    """Get attribute from expression - works with both dict and object types."""
+    if isinstance(expr, dict):
+        return expr.get(key, default)
+    return getattr(expr, key, default)
+
 
 class SubtitleRenderer:
     """Render subtitles for expression videos"""
@@ -67,7 +74,7 @@ class SubtitleRenderer:
                 video_path,
                 srt_path,
                 output_path,
-                expression.expression
+                get_expr_attr(expression, 'expression', '')
             )
             
             # Clean up temporary file
@@ -79,7 +86,7 @@ class SubtitleRenderer:
             logger.error(f"Failed to render subtitles: {e}")
             raise SubtitleRenderingError(
                 f"Subtitle rendering failed: {str(e)}",
-                expression=expression.expression,
+                expression=get_expr_attr(expression, 'expression', ''),
                 file_path=video_path
             )
     
@@ -105,10 +112,12 @@ class SubtitleRenderer:
         end_time = self._format_timestamp(expression_data.get('end_time', 0))
         
         # Create highlighted expression subtitle
-        wrapped_expression = self._wrap_text(expression.expression)
+        expr_text = get_expr_attr(expression, 'expression', '')
+        wrapped_expression = self._wrap_text(expr_text)
         expression_text = f"<font color='{self.expression_style.get('color', '#FFD700')}'>{wrapped_expression}</font>"
         # Wrap translation text
-        wrapped_translation = self._wrap_text(expression.expression_translation)
+        expr_translation = get_expr_attr(expression, 'expression_translation', '')
+        wrapped_translation = self._wrap_text(expr_translation)
         # Translation in Yellow
         translation_text = f"<font color='#FFFF00'>{wrapped_translation}</font>"
         
@@ -119,8 +128,10 @@ class SubtitleRenderer:
         srt_content.append("")
         
         # Add context dialogues if available
-        if hasattr(expression, 'dialogues') and expression.dialogues:
-            for i, dialogue in enumerate(expression.dialogues, 2):
+        dialogues = get_expr_attr(expression, 'dialogues', [])
+        translations = get_expr_attr(expression, 'translation', [])
+        if dialogues:
+            for i, dialogue in enumerate(dialogues, 2):
                 if i <= 5:  # Limit to 5 context lines
                     context_start = expression_data.get('start_time', 0) + (i - 1) * 0.5
                     context_end = context_start + 2.0
@@ -130,9 +141,9 @@ class SubtitleRenderer:
                     # Wrap dialogue text
                     wrapped_dialogue = self._wrap_text(dialogue)
                     srt_content.append(f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{wrapped_dialogue}</font>")
-                    if hasattr(expression, 'translation') and i - 2 < len(expression.translation):
+                    if i - 2 < len(translations):
                         # Wrap translation text
-                        wrapped_trans = self._wrap_text(expression.translation[i-2])
+                        wrapped_trans = self._wrap_text(translations[i-2])
                         # Context translation in Yellow
                         srt_content.append(f"<font color='#FFFF00'>{wrapped_trans}</font>")
                     srt_content.append("")
@@ -386,7 +397,7 @@ class SubtitleRenderer:
             logger.error(f"Failed to create SRT file: {e}")
             raise SubtitleRenderingError(
                 f"SRT file creation failed: {str(e)}",
-                expression=expression.expression,
+                expression=get_expr_attr(expression, 'expression', ''),
                 file_path=output_path
             )
     
@@ -401,8 +412,8 @@ class SubtitleRenderer:
             Dict with subtitle information
         """
         return {
-            'expression': expression.expression,
-            'translation': expression.expression_translation,
+            'expression': get_expr_attr(expression, 'expression', ''),
+            'translation': get_expr_attr(expression, 'expression_translation', ''),
             'default_style': self.default_style,
             'expression_style': self.expression_style,
             'output_dir': str(self.output_dir)

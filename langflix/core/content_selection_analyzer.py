@@ -35,11 +35,12 @@ if api_key:
 
 
 def _load_prompt_template() -> str:
-    """Load the V2 content selection prompt template."""
-    template_path = Path(__file__).parent.parent / "templates" / "content_selection_prompt_v1.txt"
+    """Load the prompt template from settings."""
+    template_name = settings.get_template_file()
+    template_path = Path(__file__).parent.parent / "templates" / template_name
     
     if not template_path.exists():
-        raise FileNotFoundError(f"V2 prompt template not found: {template_path}")
+        raise FileNotFoundError(f"Prompt template not found: {template_path}")
     
     return template_path.read_text(encoding='utf-8')
 
@@ -124,14 +125,10 @@ def analyze_with_dual_subtitles(
     
     # Call Gemini API
     try:
-        model_name = settings.LLM_MODEL_NAME or "gemini-2.5-flash"
+        model_name = settings.get_llm_model_name() or "gemini-2.5-flash"
         model = genai.GenerativeModel(model_name)
         
-        generation_config = {
-            "temperature": settings.LLM_TEMPERATURE or 0.1,
-            "top_p": settings.LLM_TOP_P or 0.8,
-            "top_k": settings.LLM_TOP_K or 40,
-        }
+        generation_config = settings.get_generation_config()
         
         logger.info(f"Calling Gemini API for V2 content selection ({len(source_dialogues)} dialogues)")
         response = model.generate_content(prompt, generation_config=generation_config)
@@ -148,9 +145,29 @@ def analyze_with_dual_subtitles(
         if not response_text:
             logger.warning("Empty response from Gemini API")
             return []
-        
+
+        # DEBUG: Save LLM response to file (TICKET-029)
+        try:
+            import time
+            timestamp = int(time.time())
+            debug_dir = Path("output")
+            debug_dir.mkdir(exist_ok=True)
+            debug_file = debug_dir / f"llm_response_v2_{timestamp}_{min_expressions}-{max_expressions}.json"
+            debug_file.write_text(response_text, encoding='utf-8')
+            logger.info(f"Saved raw V2 LLM response to {debug_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save debug V2 LLM response: {e}")
+
+        # Log first 500 chars of response for debugging
+        logger.debug(f"LLM response preview: {response_text[:500]}")
+
         # Parse JSON response
-        selections = _parse_response(response_text)
+        try:
+            selections = _parse_response(response_text)
+        except Exception as parse_error:
+            logger.error(f"Failed to parse LLM response: {parse_error}", exc_info=True)
+            logger.error(f"Raw response text: {response_text}")
+            raise
         
         # Enrich and convert to V1 format
         results = []
@@ -166,7 +183,7 @@ def analyze_with_dual_subtitles(
         return results
         
     except Exception as e:
-        logger.error(f"Error in V2 content selection: {e}")
+        logger.error(f"Error in V2 content selection: {e}", exc_info=True)
         raise
 
 
@@ -174,14 +191,17 @@ def _parse_response(response_text: str) -> List[V2ContentSelection]:
     """Parse LLM response into V2ContentSelection objects."""
     # Clean up response text
     text = response_text.strip()
-    
+
     # Remove markdown code blocks if present
     if text.startswith("```"):
         lines = text.split("\n")
         text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-    
+
+    logger.debug(f"Parsing JSON (length: {len(text)} chars)")
+
     try:
         data = json.loads(text)
+        logger.debug(f"JSON parsed successfully, type: {type(data)}")
         
         # Handle both direct list and wrapped format
         expressions_data = data.get('expressions', data) if isinstance(data, dict) else data
@@ -195,7 +215,8 @@ def _parse_response(response_text: str) -> List[V2ContentSelection]:
                 selection = V2ContentSelection(**expr_data)
                 selections.append(selection)
             except Exception as e:
-                logger.warning(f"Failed to parse expression: {e}")
+                logger.error(f"Failed to parse expression: {e}")
+                logger.error(f"Expression data: {json.dumps(expr_data, ensure_ascii=False, indent=2)}")
                 continue
         
         return selections

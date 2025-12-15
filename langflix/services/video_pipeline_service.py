@@ -116,7 +116,7 @@ class VideoPipelineService:
                 max_expressions=max_expressions,
                 dry_run=False,
                 language_level=language_level,
-                save_llm_output=False,
+                save_llm_output=True,
                 test_mode=test_mode,
                 no_shorts=actual_no_shorts,
                 no_long_form=actual_no_long_form,
@@ -166,19 +166,25 @@ class VideoPipelineService:
         """
         processed = []
         
+        # Helper to get attribute from dict or object
+        def get_attr(expr, key, default=None):
+            if isinstance(expr, dict):
+                return expr.get(key, default)
+            return getattr(expr, key, default)
+        
         for expression in expressions:
             processed.append({
-                "expression": expression.expression,
-                "translation": expression.expression_translation,
-                "context": expression.expression_dialogue,
-                "context_translation": expression.expression_dialogue_translation,
-                "similar_expressions": expression.similar_expressions,
-                "start_time": expression.context_start_time,
-                "end_time": expression.context_end_time,
-                "expression_start_time": getattr(expression, 'expression_start_time', None),
-                "expression_end_time": getattr(expression, 'expression_end_time', None),
-                "difficulty": getattr(expression, 'difficulty', None),
-                "category": getattr(expression, 'category', None)
+                "expression": get_attr(expression, 'expression'),
+                "translation": get_attr(expression, 'expression_translation'),
+                "context": get_attr(expression, 'expression_dialogue'),
+                "context_translation": get_attr(expression, 'expression_dialogue_translation'),
+                "similar_expressions": get_attr(expression, 'similar_expressions', []),
+                "start_time": get_attr(expression, 'context_start_time'),
+                "end_time": get_attr(expression, 'context_end_time'),
+                "expression_start_time": get_attr(expression, 'expression_start_time'),
+                "expression_end_time": get_attr(expression, 'expression_end_time'),
+                "difficulty": get_attr(expression, 'difficulty'),
+                "category": get_attr(expression, 'category')
             })
         
         return processed

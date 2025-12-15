@@ -11,8 +11,16 @@ import re
 
 from .models import ExpressionAnalysis
 from .subtitle_parser import parse_srt_file, parse_subtitle_file_by_extension
+from langflix import settings
 
 logger = logging.getLogger(__name__)
+
+# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+def get_expr_attr(expr, key, default=None):
+    """Get attribute from expression - works with both dict and object types."""
+    if isinstance(expr, dict):
+        return expr.get(key, default)
+    return getattr(expr, key, default)
 
 
 class SubtitleProcessor:
@@ -57,10 +65,12 @@ class SubtitleProcessor:
             List of subtitle dictionaries within the time range
         """
         try:
-            start_time = self._time_to_seconds(expression.context_start_time)
-            end_time = self._time_to_seconds(expression.context_end_time)
+            start_time = self._time_to_seconds(get_expr_attr(expression, 'context_start_time'))
+            end_time = self._time_to_seconds(get_expr_attr(expression, 'context_end_time'))
             
-            logger.info(f"Extracting subtitles from {expression.context_start_time} to {expression.context_end_time}")
+            context_start = get_expr_attr(expression, 'context_start_time')
+            context_end = get_expr_attr(expression, 'context_end_time')
+            logger.info(f"Extracting subtitles from {context_start} to {context_end}")
             
             matching_subtitles = []
             
@@ -209,19 +219,21 @@ class SubtitleProcessor:
         """
         try:
             # Get context time range
-            context_start = self._time_to_seconds(expression.context_start_time)
-            context_end = self._time_to_seconds(expression.context_end_time)
+            context_start = self._time_to_seconds(get_expr_attr(expression, 'context_start_time'))
+            context_end = self._time_to_seconds(get_expr_attr(expression, 'context_end_time'))
             
             # Extract subtitles within context range
             context_subtitles = self.extract_subtitles_for_expression(expression)
             
             if not context_subtitles:
-                logger.warning(f"No context subtitles found for expression: {expression.expression}")
-                return expression.context_start_time, expression.context_end_time
+                expr_text = get_expr_attr(expression, 'expression', '')
+                logger.warning(f"No context subtitles found for expression: {expr_text}")
+                return get_expr_attr(expression, 'context_start_time'), get_expr_attr(expression, 'context_end_time')
             
             # Clean the expression text for matching
-            expression_text = expression.expression.lower().strip()
-            expression_clean = self._clean_text_for_matching(expression.expression)
+            expr_text = get_expr_attr(expression, 'expression', '')
+            expression_text = expr_text.lower().strip()
+            expression_clean = self._clean_text_for_matching(expr_text)
             expression_words = set(expression_clean.split())
             
             best_match_start = None
@@ -256,7 +268,7 @@ class SubtitleProcessor:
                 
         except Exception as e:
             logger.error(f"Error finding expression timing: {e}")
-            return expression.context_start_time, expression.context_end_time
+            return get_expr_attr(expression, 'context_start_time'), get_expr_attr(expression, 'context_end_time')
     
     def _seconds_to_time(self, seconds: float) -> str:
         """Convert seconds to HH:MM:SS,mmm format"""
@@ -285,7 +297,7 @@ class SubtitleProcessor:
             subtitles = self.extract_subtitles_for_expression(expression)
             
             if not subtitles:
-                logger.warning(f"No subtitles found for expression: {expression.expression}")
+                logger.warning(f"No subtitles found for expression: {get_expr_attr(expression, 'expression', '')}")
                 return False
             
             # Create SRT content
@@ -329,11 +341,12 @@ class SubtitleProcessor:
             srt_lines.append(subtitle['text'])
             
             # Translated text (if available)
-            if i < len(expression.translation):
-                srt_lines.append(expression.translation[i])
+            translations = get_expr_attr(expression, 'translation', [])
+            if i < len(translations):
+                srt_lines.append(translations[i])
             else:
                 # Fallback to expression translation
-                srt_lines.append(expression.expression_translation)
+                srt_lines.append(get_expr_attr(expression, 'expression_translation', ''))
             
             # Empty line between entries
             srt_lines.append("")
@@ -396,7 +409,7 @@ class SubtitleProcessor:
             subtitles = self.extract_subtitles_for_expression(expression)
             
             if not subtitles:
-                logger.warning(f"No subtitles found for expression: {expression.expression}")
+                logger.warning(f"No subtitles found for expression: {get_expr_attr(expression, 'expression', '')}")
                 return False
             
             # Create dual-language SRT content
@@ -421,38 +434,46 @@ class SubtitleProcessor:
                 raise write_error
             
         except Exception as e:
-            logger.error(f"Error creating dual-language subtitle file for expression '{expression.expression}': {e}")
+            logger.error(f"Error creating dual-language subtitle file for expression '{get_expr_attr(expression, 'expression', '')}': {e}")
             logger.error(f"Output path: {output_path}")
             return False
     
     def _generate_dual_language_srt(self, subtitles: List[Dict[str, Any]], 
                                    expression: ExpressionAnalysis) -> str:
         """
-        Generate dual-language SRT content with adjusted timing for video clips
-        
-        Args:
-            subtitles: List of subtitle dictionaries
-            expression: ExpressionAnalysis object with translation data
-            
-        Returns:
-            SRT formatted string with both languages and adjusted timing
+        Generate dual-language SRT content with adjusted timing and ASS styling.
+        Source text: White (configured default)
+        Target text: Yellow (configured default)
         """
+        import textwrap  # Import locally to avoid module-level changes for now
+        
+        # Helper for hex to ASS color (BGR)
+        def _hex_to_ass(hex_str):
+            clean = hex_str.lstrip('#')
+            if len(clean) == 6:
+                r, g, b = clean[:2], clean[2:4], clean[4:]
+                return f"&H{b}{g}{r}&"
+            return "&HFFFFFF&"
+
+        # Fetch colors from config (Source: White, Target: Yellow default)
+        source_color_ass = _hex_to_ass(settings.get_dialogue_subtitle_source_color())
+        target_color_ass = _hex_to_ass(settings.get_dialogue_subtitle_target_color())
+
         srt_lines = []
         
         # Get context start time to adjust all subtitle timestamps
-        # Context video starts at context_start_time, so we need to subtract that offset
-        context_start_time = self._time_to_timedelta(expression.context_start_time)
+        context_start_time = self._time_to_timedelta(get_expr_attr(expression, 'context_start_time'))
         
         # Create a mapping between dialogue text and translations
         dialogue_translation_map = {}
-        if len(expression.dialogues) == len(expression.translation):
-            for dialogue, translation in zip(expression.dialogues, expression.translation):
+        dialogues = get_expr_attr(expression, 'dialogues', [])
+        translations = get_expr_attr(expression, 'translation', [])
+        if len(dialogues) == len(translations):
+            for dialogue, translation in zip(dialogues, translations):
                 clean_dialogue = self._clean_text_for_matching(dialogue)
                 dialogue_translation_map[clean_dialogue] = translation
         
-        # For better matching, we'll track which dialogue line each subtitle belongs to
-        # by accumulating subtitle text and matching against complete dialogues
-        subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, expression.dialogues)
+        subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, dialogues)
         
         subtitle_entry_num = 1
         for i, subtitle in enumerate(subtitles):
@@ -460,8 +481,7 @@ class SubtitleProcessor:
             start_time = self._time_to_timedelta(subtitle['start_time'])
             end_time = self._time_to_timedelta(subtitle['end_time'])
             
-            # Calculate relative times from context_start_time (not first subtitle)
-            # This ensures subtitles align with the sliced context video
+            # Calculate relative times
             relative_start = start_time - context_start_time
             relative_end = end_time - context_start_time
             
@@ -469,19 +489,10 @@ class SubtitleProcessor:
             if relative_end.total_seconds() <= 0:
                 continue
             
-            # For subtitles that start before context_start_time but end after it:
-            # The subtitle should start at 0 in the context video (since context video starts at 0)
-            # but we need to preserve the actual duration for proper sync
-            # The end time is already calculated correctly relative to context_start_time
             if relative_start.total_seconds() < 0:
-                # Subtitle starts before context video begins
-                # In the context video (which starts at 0), this subtitle should start at 0
-                # The duration is preserved by keeping the correctly calculated relative_end
                 relative_start = timedelta(seconds=0)
-                # Note: This ensures the subtitle appears from the start of the context video
-                # while maintaining the correct duration for synchronization
             
-            # SRT entry number (renumber sequentially for valid entries only)
+            # SRT entry number
             srt_lines.append(str(subtitle_entry_num))
             subtitle_entry_num += 1
             
@@ -490,15 +501,25 @@ class SubtitleProcessor:
             end_time_str = self._timedelta_to_srt_time(relative_end)
             srt_lines.append(f"{start_time_str} --> {end_time_str}")
             
-            # Source text (TOP, white) - use ASS styling for color
-            # Format: {\c&HFFFFFF&} for white in ASS
-            source_text = subtitle['text']
-            srt_lines.append(f"{{\\c&HFFFFFF&}}{source_text}")
+            # --- Source text (TOP) ---
+            # Use configured source color
+            source_raw = subtitle['text']
+            # Wrap source text to 35 chars
+            source_wrapped = textwrap.fill(source_raw, width=35)
+            # Add color tag to EACH line to ensure it persists
+            source_lines = [f"{{\\c{source_color_ass}}}{line}" for line in source_wrapped.split('\n')]
             
-            # Target/translation text (BOTTOM, yellow)
-            # Format: {\c&H00FFFF&} for yellow in ASS (BGR)
-            translation_text = self._get_translation_for_subtitle(i, subtitle, subtitle_to_dialogue_map, expression)
-            srt_lines.append(f"{{\\c&H00FFFF&}}{translation_text}")
+            # --- Target/translation text (BOTTOM) ---
+            # Use configured target color
+            translation_raw = self._get_translation_for_subtitle(i, subtitle, subtitle_to_dialogue_map, expression)
+            # Wrap translation text to 35 chars
+            translation_wrapped = textwrap.fill(translation_raw, width=35)
+            # Add color tag to EACH line
+            translation_lines = [f"{{\\c{target_color_ass}}}{line}" for line in translation_wrapped.split('\n')]
+            
+            # Combine all lines
+            all_lines = source_lines + translation_lines
+            srt_lines.append("\n".join(all_lines))
             
             # Empty line between entries
             srt_lines.append("")
@@ -583,13 +604,15 @@ class SubtitleProcessor:
         """Get the appropriate translation for a subtitle"""
         dialogue_idx = subtitle_to_dialogue_map[subtitle_idx]
         
-        if dialogue_idx >= 0 and dialogue_idx < len(expression.translation):
-            return expression.translation[dialogue_idx]
+        translations = get_expr_attr(expression, 'translation', [])
+        if dialogue_idx >= 0 and dialogue_idx < len(translations):
+            return translations[dialogue_idx]
         
         # Fallback: use improved matching
+        dialogues = get_expr_attr(expression, 'dialogues', [])
         return self._find_matching_translation(
             subtitle['text'], 
-            dict(zip([self._clean_text_for_matching(d) for d in expression.dialogues], expression.translation)),
+            dict(zip([self._clean_text_for_matching(d) for d in dialogues], translations)),
             expression
         )
     
@@ -607,7 +630,7 @@ class SubtitleProcessor:
     def _find_matching_translation(self, subtitle_text: str, dialogue_translation_map: dict, expression: ExpressionAnalysis) -> str:
         """Find the best matching translation for a subtitle text"""
         if not subtitle_text or not dialogue_translation_map:
-            return expression.expression_translation
+            return get_expr_attr(expression, 'expression_translation', '')
         
         # Clean the subtitle text for matching
         clean_subtitle = self._clean_text_for_matching(subtitle_text)
@@ -625,7 +648,7 @@ class SubtitleProcessor:
         # Try word overlap
         subtitle_words = set(clean_subtitle.split())
         best_match_score = 0
-        best_translation = expression.expression_translation
+        best_translation = get_expr_attr(expression, 'expression_translation', '')
         
         for dialogue_key, translation in dialogue_translation_map.items():
             dialogue_words = set(dialogue_key.split())
@@ -730,8 +753,8 @@ class SubtitleProcessor:
         srt_lines.append(f"{start_time_str} --> {end_time_str}")
 
         # Expression text (original) + translation (both lines)
-        srt_lines.append(expression.expression)
-        srt_lines.append(expression.expression_translation)
+        srt_lines.append(get_expr_attr(expression, 'expression', ''))
+        srt_lines.append(get_expr_attr(expression, 'expression_translation', ''))
         srt_lines.append("")
 
         return "\n".join(srt_lines)

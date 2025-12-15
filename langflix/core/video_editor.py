@@ -23,6 +23,13 @@ from .error_handler import handle_error_decorator, ErrorContext, retry_on_error
 
 logger = logging.getLogger(__name__)
 
+# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+def get_expr_attr(expr, key, default=None):
+    """Get attribute from expression - works with both dict and object types."""
+    if isinstance(expr, dict):
+        return expr.get(key, default)
+    return getattr(expr, key, default)
+
 class VideoEditor:
     """
     Creates educational video sequences from expression analysis results
@@ -89,42 +96,59 @@ class VideoEditor:
         self.short_format_temp_files = []
     
     @staticmethod
-    def _ensure_expression_dialogue(expression: ExpressionAnalysis) -> ExpressionAnalysis:
+    def _ensure_expression_dialogue(expression) -> dict:
         """
         Ensure expression has dialogue fields for backward compatibility.
         If fields are missing, fall back to using expression as dialogue.
         Handle edge cases like very long text and expression==dialogue.
+        Works with both V1 objects and V2 dictionaries.
         
         Args:
-            expression: ExpressionAnalysis object
+            expression: ExpressionAnalysis object or dict
             
         Returns:
-            ExpressionAnalysis with guaranteed dialogue fields
+            Expression with guaranteed dialogue fields (dict or object)
         """
+        # Helper to get/set values that works with both dict and object
+        def get_val(key, default=None):
+            if isinstance(expression, dict):
+                return expression.get(key, default)
+            return getattr(expression, key, default)
+        
+        def set_val(key, value):
+            if isinstance(expression, dict):
+                expression[key] = value
+            else:
+                setattr(expression, key, value)
+        
         # Handle missing expression_dialogue with fallback
-        if not hasattr(expression, 'expression_dialogue') or not expression.expression_dialogue:
-            logger.warning(f"expression_dialogue missing for '{expression.expression}', using fallback")
-            expression.expression_dialogue = expression.expression
+        expr_dialogue = get_val('expression_dialogue')
+        expr_text = get_val('expression', '')
+        if not expr_dialogue:
+            logger.warning(f"expression_dialogue missing for '{expr_text}', using fallback")
+            set_val('expression_dialogue', expr_text)
+            expr_dialogue = expr_text
         
         # Handle missing expression_dialogue_translation with fallback
-        if not hasattr(expression, 'expression_dialogue_translation') or not expression.expression_dialogue_translation:
+        expr_dialogue_trans = get_val('expression_dialogue_translation')
+        if not expr_dialogue_trans:
             logger.warning(f"expression_dialogue_translation missing, using fallback")
-            expression.expression_dialogue_translation = expression.expression_translation
+            set_val('expression_dialogue_translation', get_val('expression_translation', ''))
         
         # Edge case: If expression is the same as dialogue, avoid duplication in TTS
-        if (expression.expression and expression.expression_dialogue and 
-            expression.expression.strip() == expression.expression_dialogue.strip()):
+        if expr_text and expr_dialogue and expr_text.strip() == expr_dialogue.strip():
             logger.info(f"Expression same as dialogue, will handle in TTS generation")
         
         # Edge case: Truncate very long dialogue lines for better slide display
         MAX_DIALOGUE_LENGTH = 120  # characters
-        if len(expression.expression_dialogue) > MAX_DIALOGUE_LENGTH:
-            logger.warning(f"Expression dialogue too long ({len(expression.expression_dialogue)} chars), truncating")
-            expression.expression_dialogue = expression.expression_dialogue[:MAX_DIALOGUE_LENGTH] + "..."
+        if expr_dialogue and len(expr_dialogue) > MAX_DIALOGUE_LENGTH:
+            logger.warning(f"Expression dialogue too long ({len(expr_dialogue)} chars), truncating")
+            set_val('expression_dialogue', expr_dialogue[:MAX_DIALOGUE_LENGTH] + "...")
         
         # Edge case: Truncate very long TTS text for provider limits
         MAX_TTS_CHARS = 500  # Adjust based on provider
-        combined_text = f"{expression.expression_dialogue}. {expression.expression}"
+        expr_dialogue = get_val('expression_dialogue', '')
+        combined_text = f"{expr_dialogue}. {expr_text}"
         if len(combined_text) > MAX_TTS_CHARS:
             logger.warning(f"TTS text too long ({len(combined_text)} chars), will truncate in TTS generation")
         
@@ -166,7 +190,8 @@ class VideoEditor:
         """
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
-            safe_expression = sanitize_for_expression_filename(expression.expression)
+            expr_text = get_expr_attr(expression, 'expression', '')
+            safe_expression = sanitize_for_expression_filename(expr_text)
             # Use index to ensure uniqueness and order (e.g., "expression_01_throw_em_off.mkv")
             # Truncate safe_expression to avoid too long filenames
             output_filename = f"expression_{expression_index+1:02d}_{safe_expression[:50]}.mkv"
@@ -186,15 +211,15 @@ class VideoEditor:
             
             output_path = expressions_dir / output_filename
             
-            logger.info(f"Creating long-form video for: {expression.expression}")
+            logger.info(f"Creating long-form video for: {expr_text}")
             
             # Step 1: Extract expression video clip from context and repeat it (2회)
-            context_start_seconds = self._time_to_seconds(expression.context_start_time)
-            expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
-            expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
+            context_start_seconds = self._time_to_seconds(get_expr_attr(expression, 'context_start_time'))
+            expression_start_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_start_time'))
+            expression_end_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_end_time'))
             
             if expression_start_seconds < context_start_seconds:
-                logger.warning(f"Expression start time {expression.expression_start_time} is before context start {expression.context_start_time}")
+                logger.warning(f"Expression start time {get_expr_attr(expression, 'expression_start_time')} is before context start {get_expr_attr(expression, 'context_start_time')}")
                 expression_start_seconds = context_start_seconds
             
             relative_start = expression_start_seconds - context_start_seconds
@@ -223,7 +248,7 @@ class VideoEditor:
                 context_clip_path = self.output_dir / f"temp_context_clip_{safe_expression}.mkv"
                 self._register_temp_file(context_clip_path)
 
-                context_end_seconds = self._time_to_seconds(expression.context_end_time)
+                context_end_seconds = self._time_to_seconds(get_expr_attr(expression, 'context_end_time'))
                 context_duration = context_end_seconds - context_start_seconds
 
                 logger.info(f"Extracting context clip with subtitles: {context_start_seconds:.2f}s - {context_end_seconds:.2f}s ({context_duration:.2f}s)")
@@ -242,7 +267,7 @@ class VideoEditor:
                 
                 if subtitles_dir.exists():
                     from langflix.utils.filename_utils import sanitize_for_expression_filename
-                    safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                    safe_expression_short = sanitize_for_expression_filename(get_expr_attr(expression, 'expression', ''))[:30]
                     subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
                     subtitle_file_path = Path(subtitles_dir) / subtitle_filename
                     
@@ -264,7 +289,7 @@ class VideoEditor:
                                 subtitle_file = matching_files_index[0]
                                 logger.info(f"Found subtitle file by index: {subtitle_file}")
                             else:
-                                logger.warning(f"No subtitle file found for expression '{expression.expression}' (index {expression_index+1})")
+                                logger.warning(f"No subtitle file found for expression '{get_expr_attr(expression, 'expression', '')}' (index {expression_index+1})")
                 
                 if subtitle_file and subtitle_file.exists():
                     logger.info(f"Applying subtitles from: {subtitle_file}")
@@ -479,12 +504,14 @@ class VideoEditor:
                     concat_filter_with_explicit_map(
                         str(context_clip_reset_path),
                         str(transition_video),
-                        str(temp_context_transition)
+                        str(temp_context_transition),
+                        **video_args
                     )
                     concat_filter_with_explicit_map(
                         str(temp_context_transition),
                         str(repeated_expression_path),
-                        str(context_expr_path)
+                        str(context_expr_path),
+                        **video_args
                     )
                 else:
                     # Fallback to direct concatenation if transition creation failed
@@ -493,7 +520,8 @@ class VideoEditor:
                     concat_filter_with_explicit_map(
                         str(context_clip_reset_path),
                         str(repeated_expression_path),
-                        str(context_expr_path)
+                        str(context_expr_path),
+                        **video_args
                     )
             else:
                 # No transition - direct concatenation
@@ -502,7 +530,8 @@ class VideoEditor:
                 concat_filter_with_explicit_map(
                     str(context_clip_reset_path),
                     str(repeated_expression_path),
-                        str(context_expr_path)
+                        str(context_expr_path),
+                        **video_args
                     )
             
             # Get duration for slide matching
@@ -530,7 +559,8 @@ class VideoEditor:
             concat_filter_with_explicit_map(
                 str(context_expr_path),
                 str(educational_slide),
-                str(long_form_temp_path)
+                str(long_form_temp_path),
+                **video_args
             )
             
             # Step 6: Add logo at right-top with 50% opacity (long-form video)
@@ -652,7 +682,8 @@ class VideoEditor:
         """
         try:
             from langflix.utils.filename_utils import sanitize_for_expression_filename
-            safe_expression = sanitize_for_expression_filename(expression.expression)
+            expr_text = get_expr_attr(expression, 'expression', '')
+            safe_expression = sanitize_for_expression_filename(expr_text)
             # Use index to ensure uniqueness and order
             output_filename = f"short_form_{expression_index+1:02d}_{safe_expression[:50]}.mkv"
             
@@ -692,7 +723,7 @@ class VideoEditor:
             logger.debug(f"Short video output path: {shorts_dir / output_filename}")
             output_path = shorts_dir / output_filename
             
-            logger.info(f"Creating short-form video from long-form video: {expression.expression}")
+            logger.info(f"Creating short-form video from long-form video: {expr_text}")
 
             # Get layout configuration from settings
             target_width, target_height = settings.get_short_video_dimensions()
@@ -855,13 +886,56 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
+            # Add viral_title at top (below logo, above keywords)
+            # Iconic, meme-worthy quote from the scene in source language
+            viral_title = get_expr_attr(expression, 'viral_title')
+            logger.info(f"DEBUG: viral_title = '{viral_title}'")
+            if viral_title:
+                # Wrap viral title for visibility (max 25 chars per line)
+                wrapped_viral_title = textwrap.fill(viral_title, width=25)
+                escaped_viral_title = escape_drawtext_string(wrapped_viral_title)
+                
+                viral_font_size = settings.get_viral_title_font_size()
+                viral_y = settings.get_viral_title_y_position()
+                viral_color = settings.get_viral_title_text_color()
+                viral_border = settings.get_viral_title_border_width()
+                viral_border_color = settings.get_viral_title_border_color()
+                viral_duration = settings.get_viral_title_display_duration()
+                
+                viral_title_args = {
+                    'text': escaped_viral_title,
+                    'fontsize': viral_font_size,
+                    'fontcolor': viral_color,
+                    'x': '(w-text_w)/2',  # Center horizontally
+                    'y': viral_y,
+                    'borderw': viral_border,
+                    'bordercolor': viral_border_color,
+                    'line_spacing': 8
+                }
+                
+                # Add timing if duration is specified (0 = entire video)
+                if viral_duration > 0:
+                    viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+                
+                # Use source language font for viral_title
+                try:
+                    source_font = self._get_font_path_for_use_case(self.source_language_code, "expression")
+                    if source_font and os.path.exists(source_font):
+                        viral_title_args['fontfile'] = source_font
+                except Exception as e:
+                    logger.warning(f"Error getting font for viral_title: {e}")
+                
+                final_video = ffmpeg.filter(final_video, 'drawtext', **viral_title_args)
+                logger.info(f"Added viral_title overlay: '{viral_title[:50]}...'")
+
             # Add catchy keywords at top (outside long-form video area, in top black padding)
             # Display catchy keywords if available (positioning from config)
-            if hasattr(expression, 'catchy_keywords') and expression.catchy_keywords:
+            catchy_keywords = get_expr_attr(expression, 'catchy_keywords')
+            if catchy_keywords:
                 import random
                 
                 # Get keywords (limit to 3 per user spec)
-                keywords = expression.catchy_keywords[:3]
+                keywords = catchy_keywords[:3]
                 
                 # Format keywords: add "#" prefix to each
                 formatted_keywords = [f"#{keyword}" for keyword in keywords]
@@ -949,12 +1023,10 @@ class VideoEditor:
                             # This handles language specific fonts including Spanish (via font_utils)
                             # Key: 'keywords'
                             font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
+                            logger.info(f"DEBUG: Keywords Font Resolved: {font_path} (Lang: {self.language_code})")
+                            
                             if font_path and os.path.exists(font_path):
                                 keyword_args['fontfile'] = font_path
-                        except Exception as e:
-                            logger.warning(f"Error getting font for keywords: {e}")
-                            # Fallback to old logic if needed
-                            pass
                         except Exception as e:
                             logger.warning(f"Error getting font for keywords: {e}")
                             # Fallback to old method
@@ -986,11 +1058,11 @@ class VideoEditor:
                             }
                             # Use language-specific font for comma
                             try:
-                                font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
-                                if font_path and os.path.exists(font_path):
-                                    comma_args['fontfile'] = font_path
-                            except Exception as e:
-                                logger.warning(f"Error getting font for comma: {e}")
+                                comma_font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
+                                if comma_font_path and os.path.exists(comma_font_path):
+                                    comma_args['fontfile'] = comma_font_path
+                            except: pass
+                            
                             final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
 
                 logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
@@ -1002,9 +1074,15 @@ class VideoEditor:
             # Wrapper function for consistent text wrapping width
             def wrap_text(text, width=20):
                 return textwrap.fill(text, width=width)
+            
+            # Clean HTML tags from expression and translation (e.g. <i>...</i>)
+            import re
+            def clean_html(text):
+                if not text: return ""
+                return re.sub(r'<[^>]+>', '', text)
 
             # 1. Expression (Top line)
-            expression_text = expression.expression
+            expression_text = clean_html(get_expr_attr(expression, 'expression', ''))
             # Wrap text to avoid cutoff (width=28 chars for better readability)
             wrapped_expression = wrap_text(expression_text, width=28)
             escaped_expression = escape_drawtext_string(wrapped_expression)
@@ -1031,8 +1109,9 @@ class VideoEditor:
 
             # Get font for expression
             try:
-                # Use 'expression' use case
-                font_path = self._get_font_path_for_use_case(self.language_code, "expression")
+                # Use 'expression' use case with SOURCE language font for the expression text
+                # Fix: ensure we use source_language_code to display Korean/Japanese etc correctly
+                font_path = self._get_font_path_for_use_case(self.source_language_code, "expression")
                 if font_path and os.path.exists(font_path):
                     drawtext_args_expr['fontfile'] = font_path
             except Exception as e:
@@ -1043,7 +1122,7 @@ class VideoEditor:
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_expr)
 
             # 2. Translation (Bottom line)
-            translation_text = expression.expression_translation
+            translation_text = clean_html(get_expr_attr(expression, 'expression_translation', ''))
             # Wrap translation as well
             wrapped_translation = wrap_text(translation_text, width=28)
             escaped_translation = escape_drawtext_string(wrapped_translation)
@@ -1069,83 +1148,115 @@ class VideoEditor:
                 'line_spacing': 10
             } 
             
-            # Use same font for translation
-            if 'fontfile' in drawtext_args_expr:
-                drawtext_args_trans['fontfile'] = drawtext_args_expr['fontfile']
+            # Use TARGET language font for translation
+            try:
+                # Use 'translation' use case with TARGET language font
+                # Fix: ensure we use self.language_code (Target) for translation text
+                target_font_path = self._get_font_path_for_use_case(self.language_code, "translation")
+                if target_font_path and os.path.exists(target_font_path):
+                    drawtext_args_trans['fontfile'] = target_font_path
+            except Exception as e:
+                logger.warning(f"Error getting font for translation: {e}")
 
             final_video = ffmpeg.filter(final_video, 'drawtext', **drawtext_args_trans)
             
             # Add dynamic vocabulary annotations (appear when the word is spoken)
             # These overlays show vocabulary words with translations synchronized to dialogue timing
-            if hasattr(expression, 'vocabulary_annotations') and expression.vocabulary_annotations:
+            vocab_annotations = get_expr_attr(expression, 'vocabulary_annotations', [])
+            if vocab_annotations:
                 try:
                     # Get subtitles for this expression to map dialogue_index → timestamp
                     # Note: We need to get relative timestamps since video starts at 0
-                    context_start_seconds = self._time_to_seconds(expression.context_start_time) if expression.context_start_time else 0
+                    context_start_time = get_expr_attr(expression, 'context_start_time')
+                    context_start_seconds = self._time_to_seconds(context_start_time) if context_start_time else 0
                     
                     # Map dialogue to subtitles for timing
                     # Each dialogue line roughly corresponds to subtitle timing
-                    dialogues = expression.dialogues if expression.dialogues else []
-                    translations = expression.translation if expression.translation else []
+                    dialogues = get_expr_attr(expression, 'dialogues', [])
+                    translations = get_expr_attr(expression, 'translation', [])
                     
                     # Calculate timing for each dialogue line (estimate based on position)
                     # This is a simple estimation - each dialogue line gets equal time
                     if len(dialogues) > 0:
-                        context_duration = self._time_to_seconds(expression.context_end_time) - context_start_seconds if expression.context_end_time else 30.0
+                        context_end_time = get_expr_attr(expression, 'context_end_time')
+                        context_duration = self._time_to_seconds(context_end_time) - context_start_seconds if context_end_time else 30.0
                         time_per_dialogue = context_duration / len(dialogues)
                         
-                        for idx, vocab_annot in enumerate(expression.vocabulary_annotations[:5]):  # Max 5 annotations (increased)
-                            word = vocab_annot.word if hasattr(vocab_annot, 'word') else ''
-                            translation = vocab_annot.translation if hasattr(vocab_annot, 'translation') else ''
-                            dialogue_index = vocab_annot.dialogue_index if hasattr(vocab_annot, 'dialogue_index') else 0
+                        logger.info(f"Processing {len(vocab_annotations)} vocabulary annotations")
+                        logger.info(f"DEBUG TIMING: dialogues_count={len(dialogues)}, context_duration={context_duration:.2f}s, time_per_dialogue={time_per_dialogue:.2f}s")
+                        
+                        # DEBUG: Center coordinates for visibility testing
+                        # voca_y_start = 440  # Original
+                        # rand_x = 40         # Original
+                        
+                        # Layout Strategy:
+                        # User requested: "Location should be right below the top black padding"
+                        # For 1920x1080 video scaled to fit 1080 width:
+                        # Scaled Height ~ 1040. Padding Top ~ 440.
+                        # Content starts at Y=440.
+                        # We place vocab at Y=460 (just inside content).
+                        
+                        # Layout Strategy:
+                        # User requested fixed coordinates: X="40", Y="440"
+                        # This implies a Left-Aligned layout relative to X=40.
+                        # We will stack Word + Separator + Translation horizontally starting at 40.
+                        
+                        voca_y_start = 440
+                        rand_x = 40
+                        
+                        logger.info(f"DEBUG: Using FIXED coordinates: x={rand_x}, y={voca_y_start}")
+                        
+                        for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5 annotations
+                            # Handle both object and dict
+                            if isinstance(vocab_annot, dict):
+                                word = clean_html(vocab_annot.get('word', ''))
+                                translation = clean_html(vocab_annot.get('translation', ''))
+                                dialogue_index = vocab_annot.get('dialogue_index', 0)
+                            else:
+                                word = clean_html(getattr(vocab_annot, 'word', ''))
+                                translation = clean_html(getattr(vocab_annot, 'translation', ''))
+                                dialogue_index = getattr(vocab_annot, 'dialogue_index', 0)
                             
                             if not word or not translation:
                                 continue
                             
-                            # Calculate when this annotation should appear (relative to video start)
-                            # Estimate: dialogue_index * time_per_dialogue
+                            # Timing
                             annot_start = max(0, dialogue_index * time_per_dialogue)
                             annot_duration = settings.get_vocabulary_duration()
                             annot_end = annot_start + annot_duration
                             
-                            # V2: DUAL-FONT RENDERING
-                            # Render word (source lang) and translation (target lang) with SEPARATE fonts
-                            # This fixes the issue where Korean text breaks when rendered with Spanish font
+                            # Stack vertically
+                            rand_y = voca_y_start + (idx * 50)
                             
-                            # V2 LAYOUT: Fixed position at TOP OF MEDIA DISPLAY (not random)
-                            # Per user layout spec: voca-annotation should be at "top of media display"
-                            # Video area starts around y=260 (after logo + catchy keywords padding)
-                            
-                            # Video area bounds (9:16 format, 1080x1920)
-                            video_area_y_start = 270  # Top of media display
-                            video_area_x_center = 360  # Center x for 720px width media
-                            
-                            # Fixed position: top of media, horizontally centered
-                            rand_x = video_area_x_center - 100  # Offset left for text centering
-                            rand_y = video_area_y_start + (idx * 45)  # Stack vertically with spacing
+                            logger.info(f" vocabulary[{idx}] '{word}' dialogue_index={dialogue_index}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                             
                             font_size = settings.get_vocabulary_font_size()
-                            char_width_estimate = font_size * 0.6  # Approximate char width
+                            # Estimate width for sequential placement
+                            char_width_estimate = font_size * 0.5  # Slightly larger estimate for safety
                             
-                            # Escape text for drawtext
+                            # Escape text
                             escaped_word = escape_drawtext_string(word)
-                            escaped_separator = " : "
+                            escaped_separator = " : " 
                             escaped_translation = escape_drawtext_string(translation)
                             
-                            # Calculate widths for positioning
-                            word_width = len(word) * char_width_estimate
-                            separator_width = len(escaped_separator) * char_width_estimate
+                            # Calculate estimated widths for placement
+                            word_width = int(len(word) * char_width_estimate)
+                            separator_width = int(len(" : ") * char_width_estimate)
                             
-                            # Common drawtext args
+                            # Random color
+                            import random
+                            voca_colors = ['#FFD700', '#00FF00', '#FF6B6B', '#00BFFF', '#FF69B4', '#FFA500']
+                            random_color = random.choice(voca_colors)
+                            
                             common_args = {
                                 'fontsize': font_size,
-                                'fontcolor': settings.get_vocabulary_text_color(),
+                                'fontcolor': random_color,
                                 'borderw': settings.get_vocabulary_border_width(),
                                 'bordercolor': settings.get_vocabulary_border_color(),
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
                             }
                             
-                            # 1. Render SOURCE WORD with SOURCE language font
+                            # 1. Render SOURCE WORD at rand_x
                             word_args = {
                                 **common_args,
                                 'text': escaped_word,
@@ -1153,52 +1264,239 @@ class VideoEditor:
                                 'y': rand_y,
                             }
                             try:
-                                # Use SOURCE language font for the word being learned
                                 source_font = self._get_font_path_for_use_case(self.source_language_code, "vocabulary")
                                 if source_font and os.path.exists(source_font):
                                     word_args['fontfile'] = source_font
-                            except Exception:
-                                pass
+                            except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **word_args)
                             
-                            # 2. Render SEPARATOR with neutral/target font
-                            separator_x = rand_x + word_width
+                            # 2. Render SEPARATOR after word
+                            # Since we don't know exact rendered width, we use estimation.
+                            # Better approach with mixed fonts is hard.
+                            # We will use 'text_w' of 1st drawtext in 2nd? No, unavailable.
+                            # We will use absolute estimation positions.
+                            
+                            sep_x = rand_x + word_width
                             separator_args = {
                                 **common_args,
                                 'text': escaped_separator,
-                                'x': int(separator_x),
+                                'x': sep_x,
                                 'y': rand_y,
                             }
                             try:
                                 target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
                                 if target_font and os.path.exists(target_font):
                                     separator_args['fontfile'] = target_font
-                            except Exception:
-                                pass
+                            except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **separator_args)
                             
-                            # 3. Render TRANSLATION with TARGET language font
-                            translation_x = separator_x + separator_width
+                            # 3. Render TRANSLATION after separator
+                            trans_x = sep_x + separator_width
                             translation_args = {
                                 **common_args,
                                 'text': escaped_translation,
-                                'x': int(translation_x),
+                                'x': trans_x,
                                 'y': rand_y,
                             }
                             try:
-                                # Use TARGET language font for the translation
                                 target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
                                 if target_font and os.path.exists(target_font):
                                     translation_args['fontfile'] = target_font
-                            except Exception:
-                                pass
+                            except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **translation_args)
                             
                             logger.debug(f"Added vocabulary annotation: '{word}' : '{translation}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s (dual-font)")
                         
-                        logger.info(f"Added {len(expression.vocabulary_annotations[:5])} vocabulary annotations with dual-font rendering")
+                        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations with dual-font rendering")
                 except Exception as vocab_error:
                     logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
+            
+            # Add narrations - commentary overlays in target language
+            # These appear at specific dialogue timings throughout the video
+            narrations = get_expr_attr(expression, 'narrations', [])
+            logger.info(f"DEBUG: narrations count = {len(narrations) if narrations else 0}, content = {narrations[:2] if narrations else 'None'}")
+            if narrations:
+                try:
+                    # Get timing info
+                    context_start_time = get_expr_attr(expression, 'context_start_time')
+                    context_start_seconds = self._time_to_seconds(context_start_time) if context_start_time else 0
+                    dialogues = get_expr_attr(expression, 'dialogues', [])
+                    
+                    if len(dialogues) > 0:
+                        context_end_time = get_expr_attr(expression, 'context_end_time')
+                        context_duration = self._time_to_seconds(context_end_time) - context_start_seconds if context_end_time else 30.0
+                        time_per_dialogue = context_duration / len(dialogues)
+                        
+                        narr_y = settings.get_narrations_y_position()
+                        narr_duration = settings.get_narrations_duration()
+                        narr_font_size = settings.get_narrations_font_size()
+                        narr_border = settings.get_narrations_border_width()
+                        narr_border_color = settings.get_narrations_border_color()
+                        
+                        logger.info(f"Processing {len(narrations)} narration overlays")
+                        
+                        for idx, narr_item in enumerate(narrations[:6]):  # Max 6 narrations
+                            # Handle both dict and object
+                            if isinstance(narr_item, dict):
+                                narr_text = clean_html(narr_item.get('text', ''))
+                                narr_dialogue_idx = narr_item.get('dialogue_index', 0)
+                                narr_type = narr_item.get('type', 'commentary')
+                            else:
+                                narr_text = clean_html(getattr(narr_item, 'text', ''))
+                                narr_dialogue_idx = getattr(narr_item, 'dialogue_index', 0)
+                                narr_type = getattr(narr_item, 'type', 'commentary')
+                            
+                            if not narr_text:
+                                continue
+                            
+                            # Get color based on narration type
+                            narr_color = settings.get_narrations_type_color(narr_type)
+                            
+                            # Timing
+                            narr_start = max(0, narr_dialogue_idx * time_per_dialogue)
+                            narr_end = narr_start + narr_duration
+                            
+                            escaped_narr = escape_drawtext_string(narr_text)
+                            
+                            narr_args = {
+                                'text': escaped_narr,
+                                'fontsize': narr_font_size,
+                                'fontcolor': narr_color,
+                                'x': '(w-text_w)/2',  # Center horizontally
+                                'y': narr_y,
+                                'borderw': narr_border,
+                                'bordercolor': narr_border_color,
+                                'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
+                            }
+                            
+                            # Use target language font for narrations
+                            try:
+                                target_font = self._get_font_path_for_use_case(self.language_code, "keywords")
+                                if target_font and os.path.exists(target_font):
+                                    narr_args['fontfile'] = target_font
+                            except: pass
+                            
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **narr_args)
+                            logger.debug(f"Added narration [{narr_type}]: '{narr_text[:30]}' at t={narr_start:.2f}-{narr_end:.2f}s")
+                        
+                        logger.info(f"Added {len(narrations[:6])} narration overlays")
+                except Exception as narr_error:
+                    logger.warning(f"Could not add narrations: {narr_error}")
+            
+            # Add expression_annotations - idiom/phrase overlays
+            # These appear at specific dialogue timings, styled in blue
+            expr_annotations = get_expr_attr(expression, 'expression_annotations', [])
+            if expr_annotations:
+                try:
+                    # Get timing info (same as vocab annotations)
+                    context_start_time = get_expr_attr(expression, 'context_start_time')
+                    context_start_seconds = self._time_to_seconds(context_start_time) if context_start_time else 0
+                    dialogues = get_expr_attr(expression, 'dialogues', [])
+                    
+                    if len(dialogues) > 0:
+                        context_end_time = get_expr_attr(expression, 'context_end_time')
+                        context_duration = self._time_to_seconds(context_end_time) - context_start_seconds if context_end_time else 30.0
+                        time_per_dialogue = context_duration / len(dialogues)
+                        
+                        expr_annot_font_size = settings.get_expression_annotations_font_size()
+                        expr_annot_x = settings.get_expression_annotations_x_position()
+                        expr_annot_y_start = settings.get_expression_annotations_y_offset()
+                        expr_annot_duration = settings.get_expression_annotations_duration()
+                        expr_annot_color = settings.get_expression_annotations_text_color()
+                        expr_annot_border = settings.get_expression_annotations_border_width()
+                        expr_annot_border_color = settings.get_expression_annotations_border_color()
+                        
+                        logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")
+                        
+                        for idx, ea_item in enumerate(expr_annotations[:3]):  # Max 3 expression annotations
+                            # Handle both dict and object
+                            if isinstance(ea_item, dict):
+                                ea_expr = clean_html(ea_item.get('expression', ''))
+                                ea_trans = clean_html(ea_item.get('translation', ''))
+                                ea_dialogue_idx = ea_item.get('dialogue_index', 0)
+                            else:
+                                ea_expr = clean_html(getattr(ea_item, 'expression', ''))
+                                ea_trans = clean_html(getattr(ea_item, 'translation', ''))
+                                ea_dialogue_idx = getattr(ea_item, 'dialogue_index', 0)
+                            
+                            if not ea_expr:
+                                continue
+                            
+                            # Timing
+                            ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
+                            ea_end = ea_start + expr_annot_duration
+                            
+                            # Stack vertically (different y for each annotation)
+                            ea_y = expr_annot_y_start + (idx * 50)
+                            
+                            # Use dual-font rendering: source font for expression, target font for translation
+                            escaped_expr = escape_drawtext_string(ea_expr)
+                            escaped_trans = escape_drawtext_string(ea_trans) if ea_trans else ""
+                            
+                            char_width_estimate = expr_annot_font_size * 0.5
+                            expr_width = int(len(ea_expr) * char_width_estimate)
+                            sep_width = int(len(" : ") * char_width_estimate)
+                            
+                            common_args = {
+                                'fontsize': expr_annot_font_size,
+                                'fontcolor': expr_annot_color,
+                                'borderw': expr_annot_border,
+                                'bordercolor': expr_annot_border_color,
+                                'enable': f"between(t,{ea_start:.2f},{ea_end:.2f})",
+                            }
+                            
+                            # 1. Render expression (source language)
+                            expr_args = {
+                                **common_args,
+                                'text': escaped_expr,
+                                'x': expr_annot_x,
+                                'y': ea_y,
+                            }
+                            try:
+                                source_font = self._get_font_path_for_use_case(self.source_language_code, "vocabulary")
+                                if source_font and os.path.exists(source_font):
+                                    expr_args['fontfile'] = source_font
+                            except: pass
+                            final_video = ffmpeg.filter(final_video, 'drawtext', **expr_args)
+                            
+                            # 2. Render separator and translation (target language)
+                            if ea_trans:
+                                sep_x = expr_annot_x + expr_width
+                                trans_x = sep_x + sep_width
+                                
+                                # Separator
+                                sep_args = {
+                                    **common_args,
+                                    'text': " : ",
+                                    'x': sep_x,
+                                    'y': ea_y,
+                                }
+                                try:
+                                    target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
+                                    if target_font and os.path.exists(target_font):
+                                        sep_args['fontfile'] = target_font
+                                except: pass
+                                final_video = ffmpeg.filter(final_video, 'drawtext', **sep_args)
+                                
+                                # Translation
+                                trans_args = {
+                                    **common_args,
+                                    'text': escaped_trans,
+                                    'x': trans_x,
+                                    'y': ea_y,
+                                }
+                                try:
+                                    target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
+                                    if target_font and os.path.exists(target_font):
+                                        trans_args['fontfile'] = target_font
+                                except: pass
+                                final_video = ffmpeg.filter(final_video, 'drawtext', **trans_args)
+                            
+                            logger.debug(f"Added expression annotation: '{ea_expr}' : '{ea_trans}' at y={ea_y}, t={ea_start:.2f}-{ea_end:.2f}s (dual-font)")
+                        
+                        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (blue, dual-font)")
+                except Exception as ea_error:
+                    logger.warning(f"Could not add expression annotations: {ea_error}")
             
             # Add logo at the very end to ensure it stays at absolute top (y=0)
             # Logo position: absolute top (y=0) of black padding, above hashtags
@@ -1288,7 +1586,7 @@ class VideoEditor:
             if subtitle_dir and Path(subtitle_dir).exists():
                 # Look for expression subtitle file by index and name
                 from langflix.utils.filename_utils import sanitize_for_expression_filename
-                safe_expression_short = sanitize_for_expression_filename(expression.expression)[:30]
+                safe_expression_short = sanitize_for_expression_filename(get_expr_attr(expression, 'expression', ''))[:30]
                 
                 # Try exact match first
                 subtitle_filename = f"expression_{expression_index+1:02d}_{safe_expression_short}.srt"
@@ -1797,8 +2095,9 @@ class VideoEditor:
         try:
             # Ensure backward compatibility for expression_dialogue fields
             expression = self._ensure_expression_dialogue(expression)
+            expr_text = get_expr_attr(expression, 'expression', '')
             
-            output_path = self.output_dir / f"temp_slide_{sanitize_for_expression_filename(expression.expression)}.mkv"
+            output_path = self.output_dir / f"temp_slide_{sanitize_for_expression_filename(expr_text)}.mkv"
             self._register_temp_file(output_path)
             
             # Get background configuration with proper fallbacks
@@ -1821,20 +2120,22 @@ class VideoEditor:
                 logger.info("Using expression audio from original video for slide (instead of TTS)")
                 # IMPORTANT: expression_video_clip_path is actually the original expression_video_path
                 # (expression_source_video) passed from create_educational_sequence caller
-                # Extract audio from original video using expression timestamps for accurate matching
-                expression_audio_path = self.output_dir / f"temp_expression_audio_{sanitize_for_expression_filename(expression.expression)}.wav"
+                # Extract audio from original expression video using expression timestamps for accurate matching
+                expression_audio_path = self.output_dir / f"temp_expression_audio_{sanitize_for_expression_filename(expr_text)}.wav"
                 self._register_temp_file(expression_audio_path)
                 
                 # Extract audio from original expression video using expression timestamps
                 # Use output seeking for accurate audio extraction
-                expression_start_seconds = self._time_to_seconds(expression.expression_start_time)
-                expression_end_seconds = self._time_to_seconds(expression.expression_end_time)
+                expression_start_time = get_expr_attr(expression, 'expression_start_time')
+                expression_end_time = get_expr_attr(expression, 'expression_end_time')
+                expression_start_seconds = self._time_to_seconds(expression_start_time)
+                expression_end_seconds = self._time_to_seconds(expression_end_time)
                 expression_audio_duration = expression_end_seconds - expression_start_seconds
                 
                 # Verify we're using the original video path (not a clip)
                 original_video_path = expression_video_clip_path  # This is actually the original video
                 logger.info(f"Extracting expression audio from original video: {original_video_path}")
-                logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time} ({expression_audio_duration:.2f}s)")
+                logger.info(f"Expression timestamps: {expression_start_time} - {expression_end_time} ({expression_audio_duration:.2f}s)")
                 logger.info(f"Audio segment: {expression_start_seconds:.2f}s - {expression_end_seconds:.2f}s (duration: {expression_audio_duration:.2f}s)")
                 
                 try:
@@ -1873,7 +2174,7 @@ class VideoEditor:
                 
                 # Loop expression audio based on repeat_count setting
                 # CRITICAL: DO NOT extend to match full target_duration - only repeat_count times
-                final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expression.expression)}.wav"
+                final_audio_path = self.output_dir / f"temp_expression_audio_final_{sanitize_for_expression_filename(expr_text)}.wav"
                 self._register_temp_file(final_audio_path)
                 
                 # Get repeat count from settings (default: 3, but educational slides use 2)
@@ -1938,7 +2239,7 @@ class VideoEditor:
                     from langflix.tts.factory import create_tts_client
                     
                     # Prepare dialogue text for TTS generation
-                    tts_text = expression.expression_dialogue or ""
+                    tts_text = get_expr_attr(expression, 'expression_dialogue', '') or ""
                     if not isinstance(tts_text, str):
                         tts_text = str(tts_text)
                     
@@ -2047,10 +2348,10 @@ class VideoEditor:
             
             # Prepare text content with proper cleaning
             # NEW: Add expression_dialogue and expression_dialogue_translation
-            expression_dialogue_raw = clean_text_for_slide(expression.expression_dialogue)
-            expression_text_raw = clean_text_for_slide(expression.expression)
-            expression_dialogue_trans_raw = clean_text_for_slide(expression.expression_dialogue_translation)
-            translation_text_raw = clean_text_for_slide(expression.expression_translation)
+            expression_dialogue_raw = clean_text_for_slide(get_expr_attr(expression, 'expression_dialogue', ''))
+            expression_text_raw = clean_text_for_slide(get_expr_attr(expression, 'expression', ''))
+            expression_dialogue_trans_raw = clean_text_for_slide(get_expr_attr(expression, 'expression_dialogue_translation', ''))
+            translation_text_raw = clean_text_for_slide(get_expr_attr(expression, 'expression_translation', ''))
             
             # Escape for drawtext filter
             expression_dialogue = escape_drawtext_string(expression_dialogue_raw)
@@ -2097,22 +2398,25 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # Get font option - use language-specific font for better character support
-                # Get font option - prioritize educational slide font setting (Maplestory Bold supports both KR/EN)
+                # --- V2 FONT SETUP: Dual Fonts for Source/Target ---
+                source_font_option = ""
+                target_font_option = ""
+                
+                # 1. Source Font (for Expression/Dialogue)
                 try:
-                    # Use configured slide font which should now default to Maplestory Bold
-                    # This font supports both Korean (source) and English (target) characters
-                    # Now managed via per-language config in font_utils
-                    font_path = self._get_font_path_for_use_case(self.language_code, "educational_slide")
-                    if font_path and os.path.exists(font_path):
-                         font_file_option = f"fontfile={font_path}:"
-                         logger.debug(f"Using educational slide font: {font_path}")
-                    else:
-                        font_file_option = ""
-                        logger.warning(f"Educational slide font not found, falling back to default")
+                    source_font_path = self._get_font_path_for_use_case(self.source_language_code, "educational_slide")
+                    if source_font_path and os.path.exists(source_font_path):
+                        source_font_option = f"fontfile={source_font_path}:"
                 except Exception as e:
-                    logger.warning(f"Error getting font option: {e}")
-                    font_file_option = ""
+                    logger.warning(f"Error getting source font: {e}")
+
+                # 2. Target Font (for Translations/Similar)
+                try:
+                    target_font_path = self._get_font_path_for_use_case(self.language_code, "educational_slide")
+                    if target_font_path and os.path.exists(target_font_path):
+                        target_font_option = f"fontfile={target_font_path}:"
+                except Exception as e:
+                    logger.warning(f"Error getting target font: {e}")
                 
                 # Get font sizes from config
                 font_sizes = settings.get_educational_slide_font_sizes()
@@ -2149,49 +2453,47 @@ class VideoEditor:
                         lines.append(' '.join(words[i:i+max_words]))
                     return '\n'.join(lines)
                 
-                # 1. Expression dialogue (full sentence) - upper area (with line break if needed)
+                # 1. Expression dialogue (full sentence) - Uses SOURCE font
                 if expression_dialogue and isinstance(expression_dialogue, str):
                     dialogue_with_breaks = add_line_breaks(expression_dialogue, dialogue_max_words)
                     dialogue_with_breaks_escaped = escape_drawtext_string(dialogue_with_breaks)
                     drawtext_filters.append(
                         f"drawtext=text='{dialogue_with_breaks_escaped}':fontsize={dialogue_font_size}:fontcolor=white:"
-                        f"{font_file_option}"
+                        f"{source_font_option}"
                         f"x=(w-text_w)/2:y=h/2{dialogue_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
-                # 2. Expression (key phrase) - highlighted in yellow, below dialogue
-                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                # 2. Expression (key phrase) - Uses SOURCE font
                 if expression_text and isinstance(expression_text, str) and settings.show_expression_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
-                        f"{font_file_option}"
+                        f"{source_font_option}"
                         f"x=(w-text_w)/2:y=h/2{expr_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 3. Expression dialogue translation - middle area (with line break if needed)
+                # 3. Expression dialogue translation - Uses TARGET font
                 if expression_dialogue_trans and isinstance(expression_dialogue_trans, str):
                     trans_with_breaks = add_line_breaks(expression_dialogue_trans, trans_max_words)
                     trans_with_breaks_escaped = escape_drawtext_string(trans_with_breaks)
                     drawtext_filters.append(
                         f"drawtext=text='{trans_with_breaks_escaped}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
-                        f"{font_file_option}"
+                        f"{target_font_option}"
                         f"x=(w-text_w)/2:y=h/2+{dialogue_trans_y}:"
                         f"borderw=2:bordercolor=black"
                     )
                 
-                # 4. Expression translation (key phrase) - highlighted in yellow
-                # Only show if enabled in config (default: true, but can be disabled to avoid duplicate)
+                # 4. Expression translation (key phrase) - Uses TARGET font
                 if translation_text and isinstance(translation_text, str) and settings.show_translation_highlight():
                     drawtext_filters.append(
                         f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
-                        f"{font_file_option}"
+                        f"{target_font_option}"
                         f"x=(w-text_w)/2:y=h/2+{trans_y}:"
                         f"borderw=3:bordercolor=black"
                     )
                 
-                # 5. Similar expressions (bottom area, positioned based on config)
+                # 5. Similar expressions - Uses TARGET font
                 if similar_expressions:
                     # Ensure all items are strings before processing
                     safe_similar = []
@@ -2217,7 +2519,7 @@ class VideoEditor:
                             y_position = f"h-{similar_base_offset - (i * similar_line_spacing)}"
                             drawtext_filters.append(
                                 f"drawtext=text='{similar_text_escaped}':fontsize={similar_font_size}:fontcolor=white:"
-                                f"{font_file_option}"
+                                f"{target_font_option}"
                                 f"x=(w-text_w)/2:y={y_position}:"
                                 f"borderw=1:bordercolor=black"
                             )
@@ -2350,12 +2652,12 @@ class VideoEditor:
                 # USER REQUEST (Fail-Fast): Stop entire process on failure.
                 # Do not produce garbage/blank output.
                 logger.critical(f"FATAL: Failed to create critical educational slide: {slide_error}", exc_info=True)
-                raise RuntimeError(f"Slide generation failed for expression '{expression.expression}': {slide_error}")
+                raise RuntimeError(f"Slide generation failed for expression '{get_expr_attr(expression, 'expression', '')}': {slide_error}")
             
             # Move temp slide to final location in slides directory
             slides_dir = self.output_dir.parent / "slides"
             slides_dir.mkdir(exist_ok=True)
-            final_slide_path = slides_dir / f"slide_{sanitize_for_expression_filename(expression.expression)}.mkv"
+            final_slide_path = slides_dir / f"slide_{sanitize_for_expression_filename(get_expr_attr(expression, 'expression', ''))}.mkv"
             
             try:
                 # Copy the slide (which now already includes audio) to final location
@@ -2576,8 +2878,8 @@ class VideoEditor:
             logger.info(f"🎵 Creating context audio timeline directly from: {context_video_path}")
             
             # Parse timestamps
-            start_seconds = self._time_to_seconds(expression.expression_start_time)
-            end_seconds = self._time_to_seconds(expression.expression_end_time)
+            start_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_start_time'))
+            end_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_end_time'))
             segment_duration = end_seconds - start_seconds
             
             logger.info(f"🎵 Expression segment: {start_seconds:.2f}s - {end_seconds:.2f}s ({segment_duration:.2f}s)")
@@ -2628,7 +2930,7 @@ class VideoEditor:
                     f.write(f"file '{silence_1s_path}'\n")  # 1s end silence
                 
                 # Create final timeline audio
-                safe_expression = sanitize_for_expression_filename(expression.expression)
+                safe_expression = sanitize_for_expression_filename(get_expr_attr(expression, 'expression', ''))
                 timeline_filename = f"context_audio_timeline_{safe_expression}_{expression_index}.wav"
                 timeline_path = output_dir / timeline_filename
                 
@@ -2679,7 +2981,8 @@ class VideoEditor:
             Tuple of (timeline_audio_path, total_duration)
         """
         try:
-            logger.info(f"Extracting original audio timeline for expression {expression_index}: '{expression.expression}'")
+            expr_text = get_expr_attr(expression, 'expression', '')
+            logger.info(f"Extracting original audio timeline for expression {expression_index}: '{expr_text}'")
             
             # Import the original audio extractor
             from langflix.audio.original_audio_extractor import create_original_audio_timeline
@@ -2693,15 +2996,23 @@ class VideoEditor:
             
             logger.info(f"Using audio format: {audio_format} (from provider config)")
             
+            # Validate
+            if not start_time or not end_time:
+                error_msg = f"Expression '{expr_text}' missing required timestamps for audio extraction"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
             # Validate expression timestamps
-            if not expression.expression_start_time or not expression.expression_end_time:
-                error_msg = f"Expression '{expression.expression}' missing required timestamps for audio extraction"
+            start_time = get_expr_attr(expression, 'expression_start_time')
+            end_time = get_expr_attr(expression, 'expression_end_time')
+            if not start_time or not end_time:
+                error_msg = f"Expression '{expr_text}' missing required timestamps for audio extraction"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             
             # Create timeline using the original audio extractor
             logger.info(f"Original video path: {original_video_path}")
-            logger.info(f"Expression timestamps: {expression.expression_start_time} - {expression.expression_end_time}")
+            logger.info(f"Expression timestamps: {start_time} - {end_time}")
             
             timeline_path, total_duration = create_original_audio_timeline(
                 expression=expression,
@@ -2846,6 +3157,9 @@ class VideoEditor:
         Returns:
             Time in seconds as float
         """
+        if not time_str:
+            return 0.0
+            
         try:
             # Replace comma with dot for milliseconds if needed
             time_str = time_str.replace(',', '.')

@@ -14,9 +14,45 @@ class V2VocabularyAnnotation(BaseModel):
     Points to source dialogue by index.
     """
     word: str = Field(description="The vocabulary word or phrase to annotate")
+    translation: str = Field(
+        description="Translation of the word in target language (required from LLM)"
+    )
     dialogue_index: int = Field(
         default=0,
         description="0-indexed position in source_dialogues where this word appears",
+        ge=0
+    )
+
+
+class V2Narration(BaseModel):
+    """
+    Narration commentary for dynamic overlays.
+    Timestamped commentary in target language displayed separately from subtitles.
+    """
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in source_dialogues when this narration should appear",
+        ge=0
+    )
+    text: str = Field(description="Narration text in target language")
+    type: str = Field(
+        default="commentary",
+        description="Narration type: hook, highlight, reaction, tension, commentary"
+    )
+
+
+class V2ExpressionAnnotation(BaseModel):
+    """
+    Expression/idiom annotation for dynamic overlays.
+    Multi-word phrases (distinct from single-word V2VocabularyAnnotation).
+    """
+    expression: str = Field(description="The idiom or multi-word phrase to annotate")
+    translation: str = Field(
+        description="Translation of the expression in target language (required from LLM)"
+    )
+    dialogue_index: int = Field(
+        default=0,
+        description="0-indexed position in source_dialogues where this expression appears",
         ge=0
     )
 
@@ -32,6 +68,10 @@ class V2ContentSelection(BaseModel):
     title: Optional[str] = Field(
         default=None,
         description="Catchy title in target language (8-15 words)"
+    )
+    viral_title: Optional[str] = Field(
+        default=None,
+        description="Iconic, meme-worthy quote from the scene in source language (3-12 words)"
     )
     catchy_keywords: Optional[List[str]] = Field(
         default=None,
@@ -65,6 +105,14 @@ class V2ContentSelection(BaseModel):
     vocabulary_annotations: Optional[List[V2VocabularyAnnotation]] = Field(
         default=None,
         description="2-5 vocabulary words for dynamic overlays"
+    )
+    narrations: Optional[List[V2Narration]] = Field(
+        default=None,
+        description="3-6 narration commentaries in target language"
+    )
+    expression_annotations: Optional[List[V2ExpressionAnnotation]] = Field(
+        default=None,
+        description="1-3 idiom/phrase annotations for dynamic overlays"
     )
     similar_expressions: List[str] = Field(
         default_factory=list,
@@ -170,19 +218,48 @@ def convert_v2_to_v1_format(
     expression_dialogue = source_dialogues[expr_idx].get('text', '') if expr_idx < len(source_dialogues) else ''
     expression_dialogue_translation = target_dialogues[expr_idx].get('text', '') if expr_idx < len(target_dialogues) else ''
     
-    # Build vocabulary annotations with translations
+    # Build vocabulary annotations with translations from LLM
     vocab_annotations = []
     if selection.vocabulary_annotations:
         for va in selection.vocabulary_annotations:
-            if 0 <= va.dialogue_index < len(target_dialogues):
-                vocab_annotations.append({
-                    'word': va.word,
-                    'translation': target_dialogues[va.dialogue_index].get('text', '')[:50],  # Truncate
-                    'dialogue_index': va.dialogue_index
-                })
+            vocab_annotations.append({
+                'word': va.word,
+                'translation': va.translation,  # Use LLM-provided translation, not subtitle
+                'dialogue_index': max(0, va.dialogue_index - start_idx)  # Fix Timestamp Drift: Normalize to context
+            })
     
+    # Build narrations (normalize dialogue_index to context range)
+    narrations = []
+    if selection.narrations:
+        for narr in selection.narrations:
+            narrations.append({
+                'dialogue_index': max(0, narr.dialogue_index - start_idx),
+                'text': narr.text,
+                'type': narr.type
+            })
+    
+    # Build expression annotations with translations from LLM
+    expr_annotations = []
+    if selection.expression_annotations:
+        for ea in selection.expression_annotations:
+            expr_annotations.append({
+                'expression': ea.expression,
+                'translation': ea.translation,  # Use LLM-provided translation, not subtitle
+                'dialogue_index': max(0, ea.dialogue_index - start_idx)
+            })
+    
+    # Calculate expression timestamps (fallback to full dialogue line duration)
+    # V2 doesn't provide word-level timing, so we use the containing dialogue line
+    expression_start_time = ''
+    expression_end_time = ''
+    if 0 <= selection.expression_dialogue_index < len(source_dialogues):
+        expr_dialogue_line = source_dialogues[selection.expression_dialogue_index]
+        expression_start_time = expr_dialogue_line.get('start', '')
+        expression_end_time = expr_dialogue_line.get('end', '')
+
     return {
         'title': selection.title,
+        'viral_title': selection.viral_title,
         'dialogues': dialogues,
         'translation': translations,
         'expression_dialogue': expression_dialogue,
@@ -192,8 +269,13 @@ def convert_v2_to_v1_format(
         'intro_hook': selection.intro_hook,
         'context_start_time': selection.context_start_time,
         'context_end_time': selection.context_end_time,
+        'expression_start_time': expression_start_time,
+        'expression_end_time': expression_end_time,
         'similar_expressions': selection.similar_expressions,
         'scene_type': selection.scene_type,
         'catchy_keywords': selection.catchy_keywords,
         'vocabulary_annotations': vocab_annotations,
+        'narrations': narrations,
+        'expression_annotations': expr_annotations,
     }
+

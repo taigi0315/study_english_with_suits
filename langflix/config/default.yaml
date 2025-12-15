@@ -375,6 +375,43 @@ short_video:
       y_offset: 25                 # Y offset from top of video area
       duration: 4.0                # How long annotation appears (seconds)
 
+    # Viral title (top of video, attention-grabbing hook in source language)
+    viral_title:
+      font_size: 48                # Large font for emphasis
+      y_position: 120              # Below logo, above keywords
+      text_color: '#FF4444'        # Red for attention
+      border_width: 3              # Thick border for visibility
+      border_color: 'black'
+      display_duration: 0.0        # 0 = entire video, >0 = fade out after N seconds
+
+    # Narrations (commentary overlays in target language)
+    narrations:
+      font_size: 32                # Medium size
+      y_position: 500              # Upper-middle area (below video top padding)
+      text_color: '#00FF00'        # Green for visibility
+      background_color: '#000000'  # Black background
+      background_opacity: 0.7      # Semi-transparent
+      border_width: 2
+      border_color: 'black'
+      duration: 3.0                # How long each narration shows
+      # Per-type color overrides (optional)
+      type_colors:
+        hook: '#FF6B6B'            # Red for hooks
+        highlight: '#00BFFF'       # Blue for educational highlights
+        reaction: '#FFD700'        # Gold for reactions
+        tension: '#FF69B4'         # Pink for tension
+        commentary: '#00FF00'      # Green default
+
+    # Expression annotations (idiom/phrase overlays)
+    expression_annotations:
+      font_size: 28                # Smaller than vocab
+      x_position: 40               # Left side
+      y_offset: 520                # Below narrations area
+      text_color: '#0088FF'        # Blue to distinguish from vocab (yellow)
+      border_width: 2
+      border_color: 'black'
+      duration: 4.0                # How long annotation appears
+
     # Educational slide configuration (displayed during expression replay)
     educational_slide:
       # Font for educational slide (relative to assets/fonts)

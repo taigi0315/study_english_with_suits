@@ -200,7 +200,9 @@ class LangFlixPipeline:
             if settings.is_dual_language_enabled():
                 # V2 Workflow: Use dual subtitles from Netflix
                 logger.info("🆕 V2 Mode: Using dual-language subtitle workflow")
-                self.expressions = self._run_v2_analysis(language_level, max_expressions)
+                # In test mode, limit to 1 expression (matching V1 behavior)
+                v2_max_expressions = 1 if test_mode else (max_expressions or 5)
+                self.expressions = self._run_v2_analysis(language_level, v2_max_expressions)
             else:
                 # V1 Workflow: Traditional single subtitle + LLM translation
                 # Step 1: Parse & Chunk Subtitles
@@ -254,10 +256,11 @@ class LangFlixPipeline:
                     self.video_processor,
                     self.subtitle_processor,
                     self.output_dir,
-                    self.episode_name,
-                    self.subtitle_file,
+                    episode_name=self.episode_name,
+                    subtitle_file=self.subtitle_file,
                     no_long_form=no_long_form,
-                    progress_callback=lambda p, m: self._update_progress(p, m)
+                    test_mode=test_mode,
+                    progress_callback=lambda p, m: self._update_progress(p, f"[Video] {m}")
                 )
 
                 # Short Videos
@@ -266,7 +269,7 @@ class LangFlixPipeline:
                     from langflix.core.video_editor import VideoEditor # For factory
                     
                     def create_editor(lang, paths):
-                        e = VideoEditor(str(paths['final_videos']), lang, self.episode_name, subtitle_processor=self.subtitle_processor)
+                        e = VideoEditor(str(paths['final_videos']), lang, self.episode_name, subtitle_processor=self.subtitle_processor, test_mode=test_mode)
                         e.paths = paths
                         return e
 
@@ -280,7 +283,7 @@ class LangFlixPipeline:
                         create_editor,
                         short_form_max_duration=short_form_max_duration,
                         output_dir=self.output_dir,
-                        progress_callback=lambda p, m: self._update_progress(p, m)
+                        progress_callback=lambda p, m: self._update_progress(p, f"[Shorts] {m}")
                     )
                 
                 # Upload
@@ -292,11 +295,21 @@ class LangFlixPipeline:
                         self.output_dir
                     )
 
-            self._update_progress(100, "Pipeline completed successfully!")
+            # Step 5: Verify output was created
+            self._update_progress(98, "Verifying output...")
+            output_stats = self._verify_output()
+            
+            if output_stats['total_videos'] == 0:
+                logger.warning("⚠️ Pipeline completed but NO VIDEO FILES were created!")
+                logger.warning(f"Check logs for errors. Output dir: {self.output_dir}")
+                self._update_progress(100, "Pipeline completed with warnings - no videos created")
+            else:
+                logger.info(f"✅ Created {output_stats['total_videos']} video(s): {output_stats['short_videos']} shorts, {output_stats['long_videos']} long-form")
+                self._update_progress(100, f"Pipeline completed successfully! Created {output_stats['total_videos']} video(s)")
             
             self._cleanup_resources()
             
-            return self._generate_summary()
+            return self._generate_summary(output_stats)
 
         except Exception as e:
             logger.error(f"Pipeline failed: {e}", exc_info=True)
@@ -344,13 +357,54 @@ class LangFlixPipeline:
         except Exception as e:
              logger.error(f"DB Error saving expressions: {e}")
 
-    def _generate_summary(self):
-        return {
-            "status": "success",
+    def _generate_summary(self, output_stats: Dict[str, int] = None):
+        summary = {
+            "status": "success" if (output_stats and output_stats.get('total_videos', 0) > 0) else "warning",
             "expressions_count": len(self.expressions),
             "languages": self.target_languages,
             "output_dir": str(self.output_dir)
         }
+        if output_stats:
+            summary["videos_created"] = output_stats
+        return summary
+
+    def _verify_output(self) -> Dict[str, int]:
+        """
+        Verify that output files were created.
+        
+        Returns:
+            Dict with counts of created videos
+        """
+        stats = {
+            'short_videos': 0,
+            'long_videos': 0,
+            'total_videos': 0
+        }
+        
+        logger.info(f"Checking for short videos in {len(self.paths.get('languages', {}))} language directories")
+        
+        for lang, lang_paths in self.paths.get('languages', {}).items():
+            # Check shorts directory
+            shorts_dir = lang_paths.get('shorts')
+            if shorts_dir:
+                shorts_path = Path(shorts_dir)
+                if shorts_path.exists():
+                    logger.info(f"Scanning for shorts in: {shorts_path}")
+                    short_files = list(shorts_path.glob("*.mkv")) + list(shorts_path.glob("*.mp4"))
+                    stats['short_videos'] += len(short_files)
+            
+            # Check expressions directory (long-form)
+            expressions_dir = lang_paths.get('expressions')
+            if expressions_dir:
+                expressions_path = Path(expressions_dir)
+                if expressions_path.exists():
+                    long_files = list(expressions_path.glob("*.mkv")) + list(expressions_path.glob("*.mp4"))
+                    stats['long_videos'] += len(long_files)
+        
+        stats['total_videos'] = stats['short_videos'] + stats['long_videos']
+        logger.info(f"Total short videos found: {stats['short_videos']}")
+        
+        return stats
 
     def _cleanup_resources(self):
         from langflix.utils.temp_file_manager import get_temp_manager
@@ -418,8 +472,8 @@ class LangFlixPipeline:
             service = get_dual_subtitle_service()
             dual_sub = service.load_dual_subtitles(
                 media_path=subtitle_folder,  # Use discovered Netflix folder, not temp video path
-                source_language=source_lang,
-                target_language=target_lang,
+                source_lang=source_lang,
+                target_lang=target_lang,
             )
         except Exception as e:
             logger.error(f"Failed to load dual subtitles: {e}")
@@ -446,7 +500,10 @@ class LangFlixPipeline:
             return expressions
             
         except Exception as e:
+            import traceback
             logger.error(f"V2 content selection failed: {e}")
+            logger.error(f"Full error details: {repr(e)}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
             return []
 
 

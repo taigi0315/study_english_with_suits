@@ -24,7 +24,7 @@ class TestRound4Settings(unittest.TestCase):
         # We need to ensure we are testing the default, so might need to clear env vars or config cache if any
         # Assuming settings.get_template_file() reads from config fresh or we trust it logic
         template_file = settings.get_template_file()
-        self.assertEqual(template_file, 'expression_analysis_prompt_v7.txt')
+        self.assertEqual(template_file, 'expression_analysis_prompt_v8.txt')
 
 class TestRound4FontUtils(unittest.TestCase):
     """Verify Font Utils updates for Spanish on macOS"""

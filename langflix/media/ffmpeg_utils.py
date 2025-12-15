@@ -594,6 +594,7 @@ def concat_filter_with_explicit_map(
     left_path: str,
     right_path: str,
     out_path: Path | str,
+    **encode_args: Any,
 ) -> None:
     """Concat two segments with filter concat ensuring v=1,a=1 and explicit mapping.
 
@@ -652,15 +653,21 @@ def concat_filter_with_explicit_map(
     try:
         # Must re-encode audio when using filters (setpts, asetpts) - cannot use streamcopy
         # Filtering and streamcopy cannot be used together
+        
+        # Merge default args with passed encode_args
+        final_args = {
+            **make_video_encode_args_from_source(left_path),
+            **make_audio_encode_args(normalize=True)
+        }
+        final_args.update(encode_args)
+        
         output_with_explicit_streams(
             concat_node[0],
             concat_node[1],
             out_path,
-            **make_video_encode_args_from_source(left_path),
-            **make_audio_encode_args(normalize=True),  # Re-encode audio (filtered streams cannot use copy)
+            **final_args
         )
-    except ffmpeg.Error as e:
-        # Read stderr for detailed error information
+    except ffmpeg.Error as e:        # Read stderr for detailed error information
         stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
         logger.error(
             f"❌ concat_filter_with_explicit_map FAILED: Cannot concatenate videos\n"
@@ -1072,11 +1079,23 @@ def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: f
             'b:a': '256k'
         }
     
-    (
-        ffmpeg
-        .output(video_stream, boosted_audio, str(out_path), **encode_args)
-        .overwrite_output()
-        .run(quiet=True)
-    )
-    ensure_dir(Path(out_path))
+    try:
+        (
+            ffmpeg
+            .output(video_stream, boosted_audio, str(out_path), **encode_args)
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        ensure_dir(Path(out_path))
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+        logger.error(
+            f"❌ apply_final_audio_gain FAILED:\n"
+            f"   Input: {input_path}\n"
+            f"   Output: {out_path}\n"
+            f"   Gain: {gain_factor}\n"
+            f"   Error: {stderr[:1000]}"
+        )
+        raise
+
 

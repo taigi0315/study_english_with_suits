@@ -63,7 +63,8 @@ def sanitize_filename(
         
     # Remove filesystem unsafe characters
     # This regex removes anything that IS one of the forbidden chars
-    sanitized = re.sub(r'[\\/*?:"<>|]', '', base_name)
+    # Also remove quotes/apostrophes which break FFmpeg's subtitle filter
+    sanitized = re.sub(r'[\\/*?:"<>|\'`]', '', base_name)
     
     # Remove control characters
     sanitized = "".join(c for c in sanitized if c.isprintable())

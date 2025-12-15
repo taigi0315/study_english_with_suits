@@ -312,7 +312,7 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 39
+      font_size: 35
       newline: 90
       y_position: 220            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
@@ -379,8 +379,8 @@ short_video:
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 75                # Large font for emphasis
-      y_position: 120              # Below logo, above keywords
+      font_size: 95                # Large font for emphasis
+      y_position: 110              # Below logo, above keywords
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -388,8 +388,8 @@ short_video:
 
     # Narrations (commentary overlays in target language)
     narrations:
-      font_size: 55                # Medium size
-      y_position: 390              # Upper-middle area (below video top padding)
+      font_size: 45                # Medium size
+      y_position: 380              # Upper-middle area (below video top padding)
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent

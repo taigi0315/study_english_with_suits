@@ -35,13 +35,15 @@
 - Phrasal verbs: "put up with", "figure out what to do"
 - Idioms: "cut to the chase", "get on my nerves"
 - Colloquial phrases: "no big deal", "you bet"
-- Test: Would native speakers use this weekly?
+- **⚠️ MUST BE CONTEXT-FREE:** Expression should make sense WITHOUT knowing the drama/scene
+- Test: Would native speakers use this weekly in everyday life?
 
 ❌ **NEVER EXTRACT:**
 - Boring/procedural dialogue
 - Simple curses or 1-2 word phrases ("bullshit", "damn")
-- Scene-specific phrases that only work in this context
+- **Scene-specific phrases that only work in this drama's context**
 - Self-explanatory statements ("I agree", "That's good")
+- Expressions that require knowing what happened in the scene
 
 ---
 
@@ -134,7 +136,7 @@ Short, punchy phrases in {target_language} for social media hooks.
       "title": "Catchy title in {target_language} (8-15 words)",
       "title_translation": "natural translation in {target_language}",
       "expression": "key phrase copied exactly from dialogue (4-8 words)",
-      "expression_translation": "natural translation in {target_language}",
+      "expression_translation": "LITERAL translation (직역) in {target_language} - word-by-word, no context",
       "expression_dialogue_index": 5,
       "context_start_index": 2,
       "context_end_index": 12,
@@ -162,7 +164,8 @@ Short, punchy phrases in {target_language} for social media hooks.
 ---
 
 **FINAL CHECKLIST:**
-- ✓ Expression: 3+ words, common, reusable, copied exactly from dialogue
+- ✓ Expression: 3+ words, common, **CONTEXT-FREE** (learnable without knowing drama), copied exactly
+- ✓ expression_translation: **LITERAL (직역)** - straight word-by-word translation, no interpretation
 - ✓ Scene: High-energy (funny/dramatic/tense/romantic)
 - ✓ Context: ~{target_duration}s, complete story arc, expression in middle
 - ✓ Clips: NO overlapping index ranges

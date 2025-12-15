@@ -1172,15 +1172,20 @@ class VideoEditor:
                         # Content starts at Y=440.
                         # We place vocab at Y=460 (just inside content).
                         
-                        # Layout Strategy:
-                        # User requested fixed coordinates: X="40", Y="440"
-                        # This implies a Left-Aligned layout relative to X=40.
-                        # We will stack Word + Separator + Translation horizontally starting at 40.
+                        # Layout Strategy: 4 fixed rotating positions
+                        # Each annotation rotates through these spots:
+                        # Position 0: x=40, y=420
+                        # Position 1: x=40, y=520
+                        # Position 2: x=540, y=420
+                        # Position 3: x=540, y=520
+                        ANNOTATION_POSITIONS = [
+                            (40, 420),   # Top-left
+                            (40, 520),   # Bottom-left
+                            (540, 420),  # Top-right
+                            (540, 520),  # Bottom-right
+                        ]
                         
-                        voca_y_start = 440
-                        rand_x = 40
-                        
-                        logger.info(f"DEBUG: Using FIXED coordinates: x={rand_x}, y={voca_y_start}")
+                        logger.info(f"DEBUG: Using 4 rotating positions for vocabulary annotations")
                         
                         for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5 annotations
                             # Handle both object and dict
@@ -1201,11 +1206,11 @@ class VideoEditor:
                             annot_duration = settings.get_vocabulary_duration()
                             annot_end = annot_start + annot_duration
                             
-                            # Stack vertically - each annotation takes 2 lines (source + translation)
-                            annotation_height = int(font_size * 2.5)  # Space for 2 lines + gap
-                            rand_y = voca_y_start + (idx * annotation_height)
+                            # Get rotating position (cycle through 4 positions)
+                            pos_idx = idx % len(ANNOTATION_POSITIONS)
+                            rand_x, rand_y = ANNOTATION_POSITIONS[pos_idx]
                             
-                            logger.info(f" vocabulary[{idx}] '{word}' dialogue_index={dialogue_index}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
+                            logger.info(f" vocabulary[{idx}] '{word}' pos={pos_idx}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                             
                             font_size = settings.get_vocabulary_font_size()
                             # Estimate width for sequential placement
@@ -1364,12 +1369,18 @@ class VideoEditor:
                         time_per_dialogue = context_duration / len(dialogues)
                         
                         expr_annot_font_size = settings.get_expression_annotations_font_size()
-                        expr_annot_x = settings.get_expression_annotations_x_position()
-                        expr_annot_y_start = settings.get_expression_annotations_y_offset()
                         expr_annot_duration = settings.get_expression_annotations_duration()
                         expr_annot_color = settings.get_expression_annotations_text_color()
                         expr_annot_border = settings.get_expression_annotations_border_width()
                         expr_annot_border_color = settings.get_expression_annotations_border_color()
+                        
+                        # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
+                        ANNOTATION_POSITIONS = [
+                            (40, 420),   # Top-left
+                            (40, 520),   # Bottom-left
+                            (540, 420),  # Top-right
+                            (540, 520),  # Bottom-right
+                        ]
                         
                         logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")
                         
@@ -1391,9 +1402,9 @@ class VideoEditor:
                             ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
                             ea_end = ea_start + expr_annot_duration
                             
-                            # Vertical stacking - each annotation takes 2 lines (source + translation)
-                            annotation_height = int(expr_annot_font_size * 2.5)
-                            ea_y = expr_annot_y_start + (idx * annotation_height)
+                            # Get rotating position (cycle through 4 positions)
+                            pos_idx = idx % len(ANNOTATION_POSITIONS)
+                            ea_x, ea_y = ANNOTATION_POSITIONS[pos_idx]
                             
                             # Use dual-font rendering: source font for expression, target font for translation
                             escaped_expr = escape_drawtext_string(ea_expr)
@@ -1418,7 +1429,7 @@ class VideoEditor:
                             expr_args = {
                                 **common_args,
                                 'text': escaped_expr,
-                                'x': expr_annot_x,
+                                'x': ea_x,
                                 'y': ea_y,
                             }
                             try:
@@ -1435,7 +1446,7 @@ class VideoEditor:
                                 trans_args = {
                                     **common_args,
                                     'text': indented_trans,
-                                    'x': expr_annot_x,
+                                    'x': ea_x,
                                     'y': trans_y,
                                 }
                                 try:

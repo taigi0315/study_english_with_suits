@@ -381,18 +381,21 @@ class OverlayRenderer:
         # Get dual fonts
         source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
 
-        # Layout settings
-        voca_y_start = 440  # User requested: right below top black padding
-        rand_x = 40
+        # Layout Strategy: 4 fixed rotating positions
+        ANNOTATION_POSITIONS = [
+            (40, 420),   # Top-left
+            (40, 520),   # Bottom-left
+            (540, 420),  # Top-right
+            (540, 520),  # Bottom-right
+        ]
+        
         font_size = settings.get_vocabulary_font_size()
         annot_duration = settings.get_vocabulary_duration()
-        char_width_estimate = font_size * 0.5
 
         # Random colors for vocabulary
         voca_colors = ['#FFD700', '#00FF00', '#FF6B6B', '#00BFFF', '#FF69B4', '#FFA500']
 
-        logger.info(f"Processing {len(vocab_annotations)} vocabulary annotations")
-        logger.debug(f"Using FIXED coordinates: x={rand_x}, y={voca_y_start}")
+        logger.info(f"Processing {len(vocab_annotations)} vocabulary annotations (4 rotating positions)")
 
         for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5
             # Handle both dict and object
@@ -412,10 +415,9 @@ class OverlayRenderer:
             annot_start = max(0, dialogue_index * time_per_dialogue)
             annot_end = annot_start + annot_duration
 
-            # Vertical stacking
-            # Vertical stacking - each annotation takes 2 lines (source + translation)  
-            annotation_height = int(font_size * 2.5)  # Space for 2 lines + gap
-            rand_y = voca_y_start + (idx * annotation_height)
+            # Get rotating position (cycle through 4 positions)
+            pos_idx = idx % len(ANNOTATION_POSITIONS)
+            rand_x, rand_y = ANNOTATION_POSITIONS[pos_idx]
 
             # Escape text
             escaped_word = self.escape_drawtext_string(word)
@@ -494,8 +496,6 @@ class OverlayRenderer:
 
         # Get settings
         expr_annot_font_size = settings.get_expression_annotations_font_size()
-        expr_annot_x = settings.get_expression_annotations_x_position()
-        expr_annot_y_start = settings.get_expression_annotations_y_offset()
         expr_annot_duration = settings.get_expression_annotations_duration()
         expr_annot_color = settings.get_expression_annotations_text_color()
         expr_annot_border = settings.get_expression_annotations_border_width()
@@ -504,9 +504,15 @@ class OverlayRenderer:
         # Get dual fonts
         source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
 
-        char_width_estimate = expr_annot_font_size * 0.5
+        # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
+        ANNOTATION_POSITIONS = [
+            (40, 420),   # Top-left
+            (40, 520),   # Bottom-left
+            (540, 420),  # Top-right
+            (540, 520),  # Bottom-right
+        ]
 
-        logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")
+        logger.info(f"Processing {len(expr_annotations)} expression annotations (4 rotating positions)")
 
         for idx, ea_item in enumerate(expr_annotations[:3]):  # Max 3
             # Handle both dict and object
@@ -526,9 +532,9 @@ class OverlayRenderer:
             ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
             ea_end = ea_start + expr_annot_duration
 
-            # Vertical stacking - each annotation takes 2 lines (source + translation)
-            annotation_height = int(expr_annot_font_size * 2.5)
-            ea_y = expr_annot_y_start + (idx * annotation_height)
+            # Get rotating position (cycle through 4 positions)
+            pos_idx = idx % len(ANNOTATION_POSITIONS)
+            ea_x, ea_y = ANNOTATION_POSITIONS[pos_idx]
 
             escaped_expr = self.escape_drawtext_string(ea_expr)
             escaped_trans = self.escape_drawtext_string(ea_trans) if ea_trans else ""
@@ -549,7 +555,7 @@ class OverlayRenderer:
             indent = "    "  # 4 spaces for translation
 
             # 1. Render EXPRESSION (source language)
-            expr_args = {**common_args, 'text': escaped_expr, 'x': expr_annot_x, 'y': ea_y}
+            expr_args = {**common_args, 'text': escaped_expr, 'x': ea_x, 'y': ea_y}
             if source_font and os.path.exists(source_font):
                 expr_args['fontfile'] = source_font
             video_stream = ffmpeg.filter(video_stream, 'drawtext', **expr_args)
@@ -558,7 +564,7 @@ class OverlayRenderer:
             if ea_trans:
                 trans_y = ea_y + line_spacing
                 indented_trans = indent + escaped_trans
-                trans_args = {**common_args, 'text': indented_trans, 'x': expr_annot_x, 'y': trans_y}
+                trans_args = {**common_args, 'text': indented_trans, 'x': ea_x, 'y': trans_y}
                 if target_font and os.path.exists(target_font):
                     trans_args['fontfile'] = target_font
                 video_stream = ffmpeg.filter(video_stream, 'drawtext', **trans_args)

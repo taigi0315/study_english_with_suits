@@ -74,6 +74,10 @@ class VideoEditor:
         from langflix.core.video.video_composer import VideoComposer
         self.video_composer = VideoComposer(output_dir=self.output_dir, test_mode=test_mode)
 
+        # Initialize FontResolver for font management
+        from langflix.core.video.font_resolver import FontResolver
+        self.font_resolver = FontResolver(default_language_code=language_code)
+
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
@@ -1743,33 +1747,22 @@ class VideoEditor:
     
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext using language-specific font (default use case)"""
-        try:
-            font_path = self._get_font_path_for_use_case(self.language_code, "default")
-            if font_path and os.path.exists(font_path):
-                return f"fontfile={font_path}:"
-        except Exception as e:
-            logger.warning(f"Error getting font option: {e}")
-        return ""
-    
+        # Delegate to FontResolver
+        return self.font_resolver.get_font_option_string(use_case="default")
+
     def _get_font_path_for_use_case(self, language_code: Optional[str] = None, use_case: str = "default") -> Optional[str]:
         """
         Get absolute path to font file for specific language and use case
-        
+
         Args:
             language_code: Target language code
             use_case: Specific use case (e.g. 'keywords', 'expression', 'educational_slide')
-            
+
         Returns:
             Absolute path to font file or None
         """
-        try:
-            from langflix.config.font_utils import get_font_file_for_language
-            font_path = get_font_file_for_language(language_code, use_case)
-            if font_path and os.path.exists(font_path):
-                return font_path
-        except Exception as e:
-            logger.warning(f"Error resolving font path for {language_code}/{use_case}: {e}")
-        return None
+        # Delegate to FontResolver
+        return self.font_resolver.get_font_for_language(language_code, use_case)
     
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
         """Get video output arguments from configuration with optional resolution-aware quality.

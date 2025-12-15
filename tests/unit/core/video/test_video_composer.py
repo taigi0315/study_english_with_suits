@@ -214,3 +214,58 @@ class TestVideoComposer:
 
         assert Path(result).exists()
         assert Path(result).parent.exists()
+
+    def test_extract_clip_creates_clip(self, tmp_path):
+        """Test that extract_clip extracts a video clip correctly."""
+        # Create a 2-second test video
+        source_video = _make_test_video(tmp_path / "source.mp4", duration=2.0)
+
+        composer = VideoComposer(output_dir=tmp_path, test_mode=True)
+        output_path = str(tmp_path / "clip.mp4")
+
+        # Extract 0.5s clip from 0.5s to 1.0s
+        result = composer.extract_clip(
+            source_video=str(source_video),
+            start_time=0.5,
+            end_time=1.0,
+            output_path=output_path
+        )
+
+        assert result == output_path
+        assert Path(output_path).exists()
+
+        # Verify clip duration is approximately 0.5s
+        probe = ffmpeg.probe(output_path)
+        duration = float(probe['format']['duration'])
+        assert 0.4 < duration < 0.6  # Allow some tolerance
+
+    def test_extract_clip_raises_on_invalid_duration(self, tmp_path):
+        """Test that extract_clip raises ValueError for invalid duration."""
+        source_video = _make_test_video(tmp_path / "source.mp4", duration=2.0)
+
+        composer = VideoComposer(output_dir=tmp_path, test_mode=True)
+
+        with pytest.raises(ValueError, match="Invalid duration"):
+            composer.extract_clip(
+                source_video=str(source_video),
+                start_time=1.0,
+                end_time=0.5,  # End before start
+                output_path=str(tmp_path / "clip.mp4")
+            )
+
+    def test_extract_clip_creates_parent_directory(self, tmp_path):
+        """Test that extract_clip creates parent directory if needed."""
+        source_video = _make_test_video(tmp_path / "source.mp4", duration=2.0)
+
+        composer = VideoComposer(output_dir=tmp_path, test_mode=True)
+        output_path = str(tmp_path / "nested" / "dir" / "clip.mp4")
+
+        result = composer.extract_clip(
+            source_video=str(source_video),
+            start_time=0.0,
+            end_time=0.5,
+            output_path=output_path
+        )
+
+        assert Path(result).exists()
+        assert Path(result).parent.exists()

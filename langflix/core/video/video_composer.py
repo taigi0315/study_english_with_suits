@@ -168,8 +168,47 @@ class VideoComposer:
         Returns:
             Path to extracted clip
         """
-        # TODO: Implementation in Phase 1, Day 2
-        raise NotImplementedError("Will be implemented in Phase 1, Day 2")
+        import ffmpeg
+        from pathlib import Path
+
+        duration = end_time - start_time
+        if duration <= 0:
+            raise ValueError(f"Invalid duration: end_time ({end_time}) must be greater than start_time ({start_time})")
+
+        output_path_obj = Path(output_path)
+        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Extracting clip: {start_time:.2f}s - {end_time:.2f}s ({duration:.2f}s)")
+
+        try:
+            # Get encoding args based on source video
+            video_args = self._get_encoding_args(source_video)
+
+            # Extract clip using ffmpeg
+            (
+                ffmpeg.input(str(source_video))
+                .output(
+                    str(output_path),
+                    vcodec=video_args['vcodec'],
+                    acodec=video_args['acodec'],
+                    ac=video_args['ac'],
+                    ar=video_args['ar'],
+                    preset=video_args['preset'],
+                    crf=video_args['crf'],
+                    ss=start_time,
+                    t=duration
+                )
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+
+            logger.info(f"✅ Clip extracted: {output_path}")
+            return str(output_path)
+
+        except ffmpeg.Error as e:
+            stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+            logger.error(f"❌ FFmpeg failed to extract clip: {stderr}")
+            raise RuntimeError(f"FFmpeg failed to extract clip: {stderr}") from e
 
     def _get_encoding_args(self, source_video_path: Optional[str] = None) -> Dict[str, Any]:
         """

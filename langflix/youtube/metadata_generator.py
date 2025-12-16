@@ -39,16 +39,16 @@ class YouTubeMetadataGenerator:
         """Load translations for template strings by target language (TICKET-056, TICKET-060, TICKET-074)"""
         return {
             "Korean": {
-                "quick_lesson": "수트에서 배우는 빠른 영어 레슨!",
+                "quick_lesson": "드라마로 배우는 영어 표현!",
                 "expression_label": "Expression",
                 "meaning_label": "의미",
                 "watch_and_learn": "좋아하는 쇼에서 보고 배우세요!",
-                "title_template": "{expression} | {translation} | {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | {episode}",
-                "long_form_description_intro": "수트 드라마에서 배우는 실용적인 영어 표현들을 모았습니다.",
-                "final_title": "완전한 영어 레슨: {episode} | 수트에서 배우는 5개 이상의 표현",
-                "final_description_intro": "수트 {episode}의 완전한 영어 레슨!",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "드라마에서 배우는 실용적인 영어 표현들을 모았습니다.",
+                "final_title": "완전한 영어 레슨 | 드라마에서 배우는 5개 이상의 표현",
+                "final_description_intro": "드라마의 완전한 영어 레슨!",
                 "learn_expressions": "이 포괄적인 레슨에서 여러 영어 표현을 배우게 됩니다:",
                 "what_you_master": "마스터할 내용:",
                 "real_expressions": "원어민이 사용하는 실제 영어 표현",
@@ -59,16 +59,16 @@ class YouTubeMetadataGenerator:
                 "check_meaning": "의미를 영상에서 확인하세요"
             },
             "English": {
-                "quick_lesson": "Quick English lesson from Suits!",
+                "quick_lesson": "Learn English expressions from TV!",
                 "expression_label": "Expression",
                 "meaning_label": "Meaning",
                 "watch_and_learn": "Watch and learn from your favorite show!",
-                "title_template": "{expression} | {translation} | from {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
-                "long_form_description_intro": "Learn practical English expressions from the hit TV show Suits!",
-                "final_title": "Complete English Lesson: {episode} | Learn 5+ Expressions from Suits",
-                "final_description_intro": "Complete English lesson from Suits {episode}!",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "Learn practical English expressions from TV dramas!",
+                "final_title": "Complete English Lesson | Learn 5+ Expressions",
+                "final_description_intro": "Complete English lesson from the drama!",
                 "learn_expressions": "In this comprehensive lesson, you'll learn multiple English expressions:",
                 "what_you_master": "What you'll master:",
                 "real_expressions": "Real English expressions used by native speakers",
@@ -79,16 +79,16 @@ class YouTubeMetadataGenerator:
                 "check_meaning": "Check the meaning in the video"
             },
             "Japanese": {
-                "quick_lesson": "スーツから学ぶクイック英語レッスン！",
+                "quick_lesson": "ドラマで学ぶ英語表現！",
                 "expression_label": "Expression",
                 "meaning_label": "意味",
                 "watch_and_learn": "お気に入りの番組から見て学びましょう！",
-                "title_template": "{expression} | {translation} | from {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
-                "long_form_description_intro": "人気ドラマ「スーツ」から実用的な英語表現を学びましょう！",
-                "final_title": "完全な英語レッスン: {episode} | スーツから5つ以上の表現を学ぶ",
-                "final_description_intro": "スーツ {episode}の完全な英語レッスン！",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "人気ドラマから実用的な英語表現を学びましょう！",
+                "final_title": "完全な英語レッスン | 5つ以上の表現を学ぶ",
+                "final_description_intro": "ドラマの完全な英語レッスン！",
                 "learn_expressions": "この包括的なレッスンでは、複数の英語表現を学びます:",
                 "what_you_master": "マスターする内容:",
                 "real_expressions": "ネイティブスピーカーが使用する実際の英語表現",
@@ -99,16 +99,16 @@ class YouTubeMetadataGenerator:
                 "check_meaning": "動画で意味を確認してください"
             },
             "Chinese": {
-                "quick_lesson": "从《金装律师》快速学习英语！",
+                "quick_lesson": "从电视剧学习英语表达！",
                 "expression_label": "Expression",
                 "meaning_label": "含义",
                 "watch_and_learn": "从你最喜欢的节目中观看和学习！",
-                "title_template": "{expression} | {translation} | from {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
-                "long_form_description_intro": "从热门电视剧《金装律师》中学习实用的英语表达！",
-                "final_title": "完整英语课程: {episode} | 从《金装律师》学习5个以上表达",
-                "final_description_intro": "《金装律师》{episode}的完整英语课程！",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "从热门电视剧中学习实用的英语表达！",
+                "final_title": "完整英语课程 | 学习5个以上表达",
+                "final_description_intro": "电视剧的完整英语课程！",
                 "learn_expressions": "在这门综合课程中，您将学习多个英语表达:",
                 "what_you_master": "您将掌握:",
                 "real_expressions": "母语者使用的真实英语表达",
@@ -119,16 +119,16 @@ class YouTubeMetadataGenerator:
                 "check_meaning": "在视频中查看含义"
             },
             "Spanish": {
-                "quick_lesson": "¡Lección rápida de inglés de Suits!",
+                "quick_lesson": "¡Aprende expresiones de inglés de la TV!",
                 "expression_label": "Expression",
                 "meaning_label": "Significado",
                 "watch_and_learn": "¡Mira y aprende de tu programa favorito!",
-                "title_template": "{expression} | {translation} | from {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
-                "long_form_description_intro": "¡Aprende expresiones prácticas en inglés de la exitosa serie de TV Suits!",
-                "final_title": "Lección completa de inglés: {episode} | Aprende 5+ expresiones de Suits",
-                "final_description_intro": "¡Lección completa de inglés de Suits {episode}!",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "¡Aprende expresiones prácticas en inglés de series de TV!",
+                "final_title": "Lección completa de inglés | Aprende 5+ expresiones",
+                "final_description_intro": "¡Lección completa de inglés de esta serie!",
                 "learn_expressions": "En esta lección completa, aprenderás múltiples expresiones en inglés:",
                 "what_you_master": "Lo que dominarás:",
                 "real_expressions": "Expresiones reales en inglés usadas por hablantes nativos",
@@ -139,16 +139,16 @@ class YouTubeMetadataGenerator:
                 "check_meaning": "Consulta el significado en el video"
             },
             "French": {
-                "quick_lesson": "Leçon d'anglais rapide de Suits !",
+                "quick_lesson": "Apprenez des expressions anglaises de la télé !",
                 "expression_label": "Expression",
                 "meaning_label": "Signification",
                 "watch_and_learn": "Regardez et apprenez de votre émission préférée !",
-                "title_template": "{expression} | {translation} | from {episode}",
-                # Long-form/Final video templates (TICKET-060)
-                "long_form_title": "{expression} | {translation} | from {episode}",
-                "long_form_description_intro": "Apprenez des expressions anglaises pratiques de la série à succès Suits !",
-                "final_title": "Leçon d'anglais complète : {episode} | Apprenez 5+ expressions de Suits",
-                "final_description_intro": "Leçon d'anglais complète de Suits {episode} !",
+                "title_template": "{expression} | {translation}",
+                # Long-form/Final video templates
+                "long_form_title": "{expression} | {translation}",
+                "long_form_description_intro": "Apprenez des expressions anglaises pratiques des séries TV !",
+                "final_title": "Leçon d'anglais complète | Apprenez 5+ expressions",
+                "final_description_intro": "Leçon d'anglais complète de cette série !",
                 "learn_expressions": "Dans cette leçon complète, vous apprendrez plusieurs expressions anglaises :",
                 "what_you_master": "Ce que vous maîtriserez :",
                 "real_expressions": "Expressions anglaises réelles utilisées par les locuteurs natifs",
@@ -440,40 +440,9 @@ class YouTubeMetadataGenerator:
             return None
     
     def _format_episode_for_title(self, episode_raw: str) -> str:
-        """Format episode as 'Suits.S01E02' format for title"""
-        if not episode_raw:
-            return "Suits"
-        
-        import re
-        # Extract S01E02 pattern
-        episode_match = re.search(r'[Ss](\d+)[Ee](\d+)', episode_raw)
-        
-        # If we have a show name in the string, extract it cleanly
-        # Use our improved extract_show_name to clean up garbage (WEB-RIP, 1080p, etc)
-        # Check if the raw string is just garbage metadata (e.g. "2025.1080p.webrip")
-        # If it doesn't look like an episode code or show name, be careful
-        
-        cleaned_name = extract_show_name(episode_raw)
-        if cleaned_name == "Unknown Show":
-             # Try to find "Suits" or just use "Suits" as fallback if it looks really bad
-             if "suits" in episode_raw.lower():
-                 cleaned_name = "Suits"
-             else:
-                 # If we have an episode code, use that at least
-                 if episode_match:
-                     return f"Suits.S{episode_match.group(1)}E{episode_match.group(2)}"
-                 return "Suits"
-
-        if episode_match:
-            # We have SxxExx
-            # If cleaned_name already has SxxExx, return it
-            if re.search(r'[Ss]\d+[Ee]\d+', cleaned_name):
-                return cleaned_name
-            else:
-                 return f"{cleaned_name}.S{episode_match.group(1)}E{episode_match.group(2)}"
-        
-        # No episode code, but improved name
-        return cleaned_name
+        """Format episode - now returns empty string to remove episode from titles"""
+        # Episode info is no longer included in titles per user request
+        return ""
     
     def _generate_description(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, custom_description: Optional[str], target_language: Optional[str] = None) -> str:
         """Generate video description (TICKET-056: Updated to use target language)"""

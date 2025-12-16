@@ -391,10 +391,8 @@ class OverlayRenderer:
         # Layout Strategy: 4 fixed rotating positions for VOCABULARY
         # These positions are offset from expression annotations to avoid overlap
         ANNOTATION_POSITIONS = [
-            (40, 340),   # Top-left (vocabulary row 1)
-            (540, 340),  # Top-right (vocabulary row 1)
-            (40, 400),   # Bottom-left (vocabulary row 2)
-            (540, 400),  # Bottom-right (vocabulary row 2)
+            (600, 440),  # Top-right (vocabulary row 1)
+            (600, 500),  # Bottom-right (vocabulary row 2)
         ]
         
         font_size = settings.get_vocabulary_font_size()
@@ -515,10 +513,8 @@ class OverlayRenderer:
         # Layout Strategy: 4 fixed rotating positions for EXPRESSION annotations
         # These positions are offset from vocabulary annotations to avoid overlap
         ANNOTATION_POSITIONS = [
-            (40, 500),   # Top-left (expression row 1)
-            (540, 500),  # Top-right (expression row 1)
-            (40, 560),   # Bottom-left (expression row 2)
-            (540, 560),  # Bottom-right (expression row 2)
+            (40, 440),   # Top-left (expression row 1)
+            (40, 500),   # Bottom-left (expression row 2)
         ]
 
         logger.info(f"Processing {len(expr_annotations)} expression annotations (4 rotating positions)")

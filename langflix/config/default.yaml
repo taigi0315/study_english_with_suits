@@ -104,8 +104,8 @@ processing:
     max_total_expressions: 1          # Total expressions limit for entire video
   
   # Normal mode expression limits (when test_mode.enabled is false)
-  min_expressions_per_chunk: 1
-  max_expressions_per_chunk: 5        # Up to 5 expressions per chunk in production
+  min_expressions_per_chunk: 3
+  max_expressions_per_chunk: 6        # Up to 6 expressions per chunk in production
 
 # ============================================================================
 # Language Proficiency Levels

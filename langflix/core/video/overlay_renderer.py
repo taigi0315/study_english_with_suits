@@ -110,8 +110,9 @@ class OverlayRenderer:
         if not viral_title:
             return video_stream
 
-        # Wrap title for visibility (max 25 chars per line)
-        wrapped_viral_title = textwrap.fill(viral_title, width=25)
+        # Wrap title using configurable chars per line
+        title_chars_per_line = settings.get_viral_title_chars_per_line()
+        wrapped_viral_title = textwrap.fill(viral_title, width=title_chars_per_line)
         escaped_viral_title = self.escape_drawtext_string(wrapped_viral_title)
 
         # Get settings
@@ -337,6 +338,7 @@ class OverlayRenderer:
                 'y': narr_y,
                 'borderw': narr_border,
                 'bordercolor': narr_border_color,
+                'line_spacing': 8,  # Required for multiline text
                 'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
             }
 
@@ -639,7 +641,9 @@ class OverlayRenderer:
 
         # Translation (target language)
         translation_text = self._clean_html(translation_text)
-        wrapped_translation = wrap_text(translation_text)
+        # Use translation-specific chars_per_line
+        translation_chars_per_line = settings.get_translation_chars_per_line()
+        wrapped_translation = textwrap.fill(translation_text, width=translation_chars_per_line)
         escaped_translation = self.escape_drawtext_string(wrapped_translation)
 
         padding_between = 20

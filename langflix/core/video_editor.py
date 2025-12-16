@@ -899,11 +899,13 @@ class VideoEditor:
 
             # Add title at top (below logo, above keywords)
             # Catchy hook/title in TARGET language (user's native language)
-            title = get_expr_attr(expression, 'title')
+            # LLM returns: title (source lang), title_translation (target lang)
+            title = get_expr_attr(expression, 'title_translation') or get_expr_attr(expression, 'title')
             logger.info(f"DEBUG: title = '{title}'")
             if title:
-                # Wrap title for visibility (max 25 chars per line)
-                wrapped_title = textwrap.fill(title, width=45)
+                # Wrap title using configurable chars per line
+                title_chars_per_line = settings.get_viral_title_chars_per_line()
+                wrapped_title = textwrap.fill(title, width=title_chars_per_line)
                 escaped_title = escape_drawtext_string(wrapped_title)
                 
                 title_font_size = settings.get_viral_title_font_size()
@@ -945,8 +947,8 @@ class VideoEditor:
             if catchy_keywords:
                 import random
                 
-                # Get keywords (limit to 3 per user spec)
-                keywords = catchy_keywords[:3]
+                # Get keywords (limit to 4 per user spec)
+                keywords = catchy_keywords[:4]
                 
                 # Format keywords: add "#" prefix to each
                 formatted_keywords = [f"#{keyword}" for keyword in keywords]
@@ -1176,8 +1178,8 @@ class VideoEditor:
                         # Each annotation rotates through these spots
                         # Vocabulary uses Y=340/400 to avoid overlap with expression annotations
                         ANNOTATION_POSITIONS = [
-                            (520, 440),   # Top-left (vocabulary row 1)
-                            (520, 540),   # Bottom-left (vocabulary row 2)
+                            (620, 440),   # Top-left (vocabulary row 1)
+                            (620, 600),   # Bottom-left (vocabulary row 2)
                         ]
                         
                         logger.info(f"DEBUG: Using 4 rotating positions for vocabulary annotations")
@@ -1307,6 +1309,10 @@ class VideoEditor:
                             if not narr_text:
                                 continue
                             
+                            # Wrap narration text to configured chars per line
+                            narr_chars_per_line = settings.get_narrations_chars_per_line()
+                            narr_text = textwrap.fill(narr_text, width=narr_chars_per_line)
+                            
                             # Get color based on narration type
                             narr_color = settings.get_narrations_type_color(narr_type)
                             
@@ -1324,6 +1330,7 @@ class VideoEditor:
                                 'y': narr_y,
                                 'borderw': narr_border,
                                 'bordercolor': narr_border_color,
+                                'line_spacing': 8,  # Required for multiline text
                                 'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
                             }
                             
@@ -1366,7 +1373,7 @@ class VideoEditor:
                         # Expression uses Y=500/560 to avoid overlap with vocabulary annotations
                         ANNOTATION_POSITIONS = [
                             (40, 440),   # Top-left (vocabulary row 1)
-                            (40, 540),   # Bottom-left (vocabulary row 2)
+                            (40, 600),   # Bottom-left (vocabulary row 2)
                         ]
                         
                         logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")

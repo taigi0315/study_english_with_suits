@@ -425,8 +425,9 @@ class ShortFormCreator:
 
         # Apply overlays using OverlayRenderer
         
-        # 1. Viral title
-        viral_title = get_expr_attr(expression, 'viral_title')
+        # 1. Viral title (use title_translation for target language display)
+        # LLM returns: title (source lang), title_translation (target lang)
+        viral_title = get_expr_attr(expression, 'title_translation') or get_expr_attr(expression, 'viral_title')
         if viral_title:
             video_stream = self.overlay_renderer.add_viral_title(
                 video_stream, viral_title, settings

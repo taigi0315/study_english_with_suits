@@ -11,8 +11,8 @@
 ---
 
 **⚠️ LANGUAGE RULES:**
-- `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
-- `title_translation`, `expression`, `similar_expressions` → {source_language}
+- `catchy_keywords`, `narrations`, `intro_hook`, `title_translation` → {target_language}
+- `title`, `expression`, `similar_expressions` → {source_language}
 - All `translation` fields → {target_language}
 
 ---
@@ -79,7 +79,13 @@ The iconic, meme-worthy quote from the scene in {source_language}. should be nar
 
 Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
 
-⚠️ **CRITICAL: Narrations MUST be written ONLY in {target_language}. Do NOT include any {source_language} text.**
+⚠️ **CRITICAL: Narrations MUST be written 100% in {target_language} ONLY!**
+- ❌ WRONG: "Aprende '사회적 약자' (socialmente vulnerable)" - Contains {source_language}!
+- ❌ WRONG: "Learn '내 꿈은 너야' here" - Contains {source_language}!
+- ✅ CORRECT: "¡Una frase muy útil para expresar tus sueños!" - Pure {target_language}
+- ✅ CORRECT: "Esta expresión se usa cuando quieres vengarte" - Pure {target_language}
+
+**DO NOT include any {source_language} words, even in quotes. Write EVERYTHING in {target_language}.**
 
 **Types:**
 | Type | Purpose | What it does |

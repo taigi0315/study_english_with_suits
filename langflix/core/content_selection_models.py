@@ -64,10 +64,14 @@ class V2ContentSelection(BaseModel):
     Key difference from V1: Uses indices to reference dialogues instead of
     including translated text directly. Translations come from subtitle files.
     """
-    # Generated content (in target language)
+    # Generated content
     title: Optional[str] = Field(
         default=None,
-        description="Catchy title in target language (8-15 words)"
+        description="Catchy title in source language"
+    )
+    title_translation: Optional[str] = Field(
+        default=None,
+        description="Catchy title translated to target language (for display)"
     )
     viral_title: Optional[str] = Field(
         default=None,
@@ -259,6 +263,7 @@ def convert_v2_to_v1_format(
 
     return {
         'title': selection.title,
+        'title_translation': selection.title_translation,
         'viral_title': selection.viral_title,
         'dialogues': dialogues,
         'translation': translations,

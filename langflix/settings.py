@@ -720,6 +720,11 @@ def get_translation_border_color() -> str:
     return get_translation_text_config().get('border_color', 'black')
 
 
+def get_translation_chars_per_line() -> int:
+    """Get max characters per line for translation before wrapping (default: 40)"""
+    return get_translation_text_config().get('chars_per_line', 40)
+
+
 def get_dialogue_subtitle_config() -> Dict[str, Any]:
     """Get dialogue subtitle display configuration"""
     layout = get_short_video_layout_config()
@@ -866,43 +871,48 @@ def get_vocabulary_duration() -> float:
 
 
 # ============================================================================
-# Viral Title Settings
+# Title Settings (viral title overlay at top of video)
 # ============================================================================
 
 def get_viral_title_config() -> Dict[str, Any]:
-    """Get viral title display configuration"""
+    """Get title display configuration from layout.title"""
     layout = get_short_video_layout_config()
-    return layout.get('viral_title', {})
+    return layout.get('title', {})
 
 
 def get_viral_title_font_size() -> int:
-    """Get viral title font size (default: 48)"""
-    return get_viral_title_config().get('font_size', 48)
+    """Get title font size (default: 160)"""
+    return get_viral_title_config().get('font_size', 160)
 
 
 def get_viral_title_y_position() -> int:
-    """Get viral title Y position (default: 120)"""
-    return get_viral_title_config().get('y_position', 10)
+    """Get title Y position (default: 15)"""
+    return get_viral_title_config().get('y_position', 15)
 
 
 def get_viral_title_text_color() -> str:
-    """Get viral title text color (default: '#FF4444' red)"""
+    """Get title text color (default: '#FF4444' red)"""
     return get_viral_title_config().get('text_color', '#FF4444')
 
 
 def get_viral_title_border_width() -> int:
-    """Get viral title border width (default: 3)"""
+    """Get title border width (default: 3)"""
     return get_viral_title_config().get('border_width', 3)
 
 
 def get_viral_title_border_color() -> str:
-    """Get viral title border color (default: 'black')"""
+    """Get title border color (default: 'black')"""
     return get_viral_title_config().get('border_color', 'black')
 
 
 def get_viral_title_display_duration() -> float:
-    """Get viral title display duration in seconds (0 = entire video, default: 0)"""
+    """Get title display duration in seconds (0 = entire video, default: 0)"""
     return get_viral_title_config().get('display_duration', 0.0)
+
+
+def get_viral_title_chars_per_line() -> int:
+    """Get max characters per line for title before wrapping (default: 25)"""
+    return get_viral_title_config().get('chars_per_line', 25)
 
 
 # ============================================================================

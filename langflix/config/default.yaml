@@ -314,7 +314,7 @@ short_video:
     keywords:
       font_size: 35
       newline: 175
-      y_position: 205            # Adjusted for smaller padding (was 250)
+      y_position: 210            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -325,7 +325,7 @@ short_video:
     expression:
       font_size: 50              # Main expression font size (increased by 10 from 45)
       y_position: 1530           # Adjusted for new layout (video ends at 1480)
-      chars_per_line: 65         # Characters per line before wrapping (increased from 28)
+      chars_per_line: 40         # Characters per line before wrapping (increased from 28)
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
@@ -335,6 +335,7 @@ short_video:
       font_size: 50
       y_position: 1680           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
+      chars_per_line: 40         # Max characters per line before wrapping
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
@@ -380,8 +381,9 @@ short_video:
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 160                # Large font for emphasis
-      y_position: 10                 # Below logo, above keywords
+      font_size: 75                # Large font for emphasis
+      y_position: 25               # Below logo, above keywords
+      chars_per_line: 25           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -391,7 +393,7 @@ short_video:
     narrations:
       font_size: 55                # Medium size
       y_position: 320              # Upper-middle area (below video top padding)
-      chars_per_line: 30           # Max characters per line before wrapping
+      chars_per_line: 32           # Max characters per line before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent

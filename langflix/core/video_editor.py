@@ -69,7 +69,18 @@ class VideoEditor:
         
         # Encoding mode: fast (test) vs quality (production)
         self.test_mode = test_mode
-        
+
+        # Initialize VideoComposer for video composition operations
+        from langflix.core.video.video_composer import VideoComposer
+        self.video_composer = VideoComposer(output_dir=self.output_dir, test_mode=test_mode)
+
+        # Initialize FontResolver for font management (supports dual-language)
+        from langflix.core.video.font_resolver import FontResolver
+        self.font_resolver = FontResolver(
+            default_language_code=language_code,  # Target language
+            source_language_code=self.source_language_code  # Source language
+        )
+
         self.episode_name = episode_name or "Unknown_Episode"
         self.subtitle_processor = subtitle_processor  # For generating expression subtitles
         
@@ -886,47 +897,47 @@ class VideoEditor:
 
             font_file = self._get_font_option()
 
-            # Add viral_title at top (below logo, above keywords)
-            # Iconic, meme-worthy quote from the scene in source language
-            viral_title = get_expr_attr(expression, 'viral_title')
-            logger.info(f"DEBUG: viral_title = '{viral_title}'")
-            if viral_title:
-                # Wrap viral title for visibility (max 25 chars per line)
-                wrapped_viral_title = textwrap.fill(viral_title, width=25)
-                escaped_viral_title = escape_drawtext_string(wrapped_viral_title)
+            # Add title at top (below logo, above keywords)
+            # Catchy hook/title in TARGET language (user's native language)
+            title = get_expr_attr(expression, 'title')
+            logger.info(f"DEBUG: title = '{title}'")
+            if title:
+                # Wrap title for visibility (max 25 chars per line)
+                wrapped_title = textwrap.fill(title, width=45)
+                escaped_title = escape_drawtext_string(wrapped_title)
                 
-                viral_font_size = settings.get_viral_title_font_size()
-                viral_y = settings.get_viral_title_y_position()
-                viral_color = settings.get_viral_title_text_color()
-                viral_border = settings.get_viral_title_border_width()
-                viral_border_color = settings.get_viral_title_border_color()
-                viral_duration = settings.get_viral_title_display_duration()
+                title_font_size = settings.get_viral_title_font_size()
+                title_y = settings.get_viral_title_y_position()
+                title_color = settings.get_viral_title_text_color()
+                title_border = settings.get_viral_title_border_width()
+                title_border_color = settings.get_viral_title_border_color()
+                title_duration = settings.get_viral_title_display_duration()
                 
-                viral_title_args = {
-                    'text': escaped_viral_title,
-                    'fontsize': viral_font_size,
-                    'fontcolor': viral_color,
+                title_args = {
+                    'text': escaped_title,
+                    'fontsize': title_font_size,
+                    'fontcolor': title_color,
                     'x': '(w-text_w)/2',  # Center horizontally
-                    'y': viral_y,
-                    'borderw': viral_border,
-                    'bordercolor': viral_border_color,
+                    'y': title_y,
+                    'borderw': title_border,
+                    'bordercolor': title_border_color,
                     'line_spacing': 8
                 }
                 
                 # Add timing if duration is specified (0 = entire video)
-                if viral_duration > 0:
-                    viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+                if title_duration > 0:
+                    title_args['enable'] = f"between(t,0,{title_duration:.2f})"
                 
-                # Use source language font for viral_title
+                # Use TARGET language font for title (title is in user's native language)
                 try:
-                    source_font = self._get_font_path_for_use_case(self.source_language_code, "expression")
-                    if source_font and os.path.exists(source_font):
-                        viral_title_args['fontfile'] = source_font
+                    target_font = self._get_font_path_for_use_case(self.language_code, "title")
+                    if target_font and os.path.exists(target_font):
+                        title_args['fontfile'] = target_font
                 except Exception as e:
-                    logger.warning(f"Error getting font for viral_title: {e}")
+                    logger.warning(f"Error getting font for title: {e}")
                 
-                final_video = ffmpeg.filter(final_video, 'drawtext', **viral_title_args)
-                logger.info(f"Added viral_title overlay: '{viral_title[:50]}...'")
+                final_video = ffmpeg.filter(final_video, 'drawtext', **title_args)
+                logger.info(f"Added title overlay: '{title[:50]}...'")
 
             # Add catchy keywords at top (outside long-form video area, in top black padding)
             # Display catchy keywords if available (positioning from config)
@@ -966,106 +977,71 @@ class VideoEditor:
                 max_width_percent = settings.get_keywords_max_width_percent()
                 max_width = target_width * max_width_percent
                 
-                # Group keywords: one keyword per line (each on its own line)
-                keyword_lines = []  # List of lists, each inner list contains one keyword index
+                # Group keywords with comma separator, wrap to new line when needed
+                comma_separator = ", "
                 
-                for i, keyword in enumerate(formatted_keywords):
-                    # Each keyword gets its own line
-                    keyword_lines.append([i])
+                # Build lines with comma-separated keywords, wrapping when width exceeded
+                lines = []
+                current_line = []
+                current_line_width = 0
                 
-                # Render keywords line by line
-                for line_idx, line_keyword_indices in enumerate(keyword_lines):
+                for keyword in formatted_keywords:
+                    keyword_width = len(keyword) * char_width_estimate
+                    separator_width = len(comma_separator) * char_width_estimate if current_line else 0
+                    
+                    # Check if adding this keyword would exceed max width
+                    if current_line and (current_line_width + separator_width + keyword_width > max_width):
+                        # Start a new line
+                        lines.append(current_line)
+                        current_line = [keyword]
+                        current_line_width = keyword_width
+                    else:
+                        # Add to current line
+                        current_line.append(keyword)
+                        current_line_width += separator_width + keyword_width
+                
+                # Don't forget the last line
+                if current_line:
+                    lines.append(current_line)
+                
+                # Generate a random color for each line
+                line_colors = []
+                for line_idx, line in enumerate(lines):
+                    random.seed(hash(line[0]) % (2**32))
+                    r = random.randint(100, 255)
+                    g = random.randint(100, 255)
+                    b = random.randint(100, 255)
+                    line_colors.append(f"0x{b:02x}{g:02x}{r:02x}")
+                
+                # Render each line as a single drawtext
+                for line_idx, (line_keywords, color) in enumerate(zip(lines, line_colors)):
                     line_y = y_position + (line_idx * line_height)
                     
-                    # Get keywords and colors for this line
-                    line_keywords = [formatted_keywords[i] for i in line_keyword_indices]
-                    line_colors = [keyword_colors[i] for i in line_keyword_indices]
-                    
-                    # Calculate total width of this line for centering
+                    # Join keywords with comma separator
                     line_text = comma_separator.join(line_keywords)
-                    line_width = len(line_text) * char_width_estimate
+                    escaped_line = escape_drawtext_string(line_text)
                     
-                    # Calculate starting x position: center the entire line
-                    # First keyword starts at: center - (half of remaining text width)
-                    remaining_after_first = comma_separator.join(line_keywords[1:]) if len(line_keywords) > 1 else ""
-                    remaining_width = len(remaining_after_first) * char_width_estimate if remaining_after_first else 0
+                    keyword_args = {
+                        'text': escaped_line,
+                        'fontsize': font_size,
+                        'fontcolor': color,
+                        'x': 40,
+                        'y': line_y,
+                        'borderw': settings.get_keywords_border_width(),
+                        'bordercolor': settings.get_keywords_border_color()
+                    }
                     
-                    # Add each keyword with its own color, positioned sequentially
-                    current_x_offset = 0  # Track cumulative offset from center
-                    for i, (keyword, color) in enumerate(zip(line_keywords, line_colors)):
-                        escaped_keyword = escape_drawtext_string(keyword)
-
-                        # Calculate x position for this keyword
-                        if i == 0:
-                            # First keyword: center minus half of remaining text width
-                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}"
-                        else:
-                            # Subsequent keywords: after previous keyword + comma
-                            # Calculate width of previous keyword and comma
-                            prev_keyword = line_keywords[i-1]
-                            prev_keyword_width = len(prev_keyword) * char_width_estimate
-                            current_x_offset += prev_keyword_width + comma_width
-                            x_expr = f"(w-text_w)/2-{remaining_width:.0f}+{current_x_offset:.0f}"
-                        
-                        keyword_args = {
-                            'text': escaped_keyword,
-                            'fontsize': font_size,
-                            'fontcolor': color,  # Random color per keyword
-                            'x': x_expr,
-                            'y': line_y,
-                            'borderw': settings.get_keywords_border_width(),
-                            'bordercolor': settings.get_keywords_border_color()
-                        }
-
-                        # Add custom font for keywords
-                        try:
-                            # Use new per-language font config logic
-                            # This handles language specific fonts including Spanish (via font_utils)
-                            # Key: 'keywords'
-                            font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
-                            logger.info(f"DEBUG: Keywords Font Resolved: {font_path} (Lang: {self.language_code})")
-                            
-                            if font_path and os.path.exists(font_path):
-                                keyword_args['fontfile'] = font_path
-                        except Exception as e:
-                            logger.warning(f"Error getting font for keywords: {e}")
-                            # Fallback to old method
-                            if font_file:
-                                font_path = font_file.replace('fontfile=', '').replace(':', '')
-                                if font_path and os.path.exists(font_path):
-                                    keyword_args['fontfile'] = font_path
-
-                        final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
-
-                        # Add comma after keyword (except last in line)
-                        if i < len(line_keywords) - 1:
-                            # Comma position: after current keyword
-                            keyword_width = len(keyword) * char_width_estimate
-                            comma_x_offset = current_x_offset + keyword_width
-                            if i == 0:
-                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{keyword_width:.0f}"
-                            else:
-                                comma_x = f"(w-text_w)/2-{remaining_width:.0f}+{comma_x_offset:.0f}"
-                            
-                            comma_args = {
-                                'text': ', ',
-                                'fontsize': font_size,
-                                'fontcolor': settings.get_keywords_text_color(),  # Comma color from config
-                                'x': comma_x,
-                                'y': line_y,
-                                'borderw': settings.get_keywords_border_width(),
-                                'bordercolor': settings.get_keywords_border_color()
-                            }
-                            # Use language-specific font for comma
-                            try:
-                                comma_font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
-                                if comma_font_path and os.path.exists(comma_font_path):
-                                    comma_args['fontfile'] = comma_font_path
-                            except: pass
-                            
-                            final_video = ffmpeg.filter(final_video, 'drawtext', **comma_args)
-
-                logger.info(f"Added {len(keywords)} catchy keywords in {len(keyword_lines)} line(s) with # prefix, each with random color")
+                    # Add custom font for keywords
+                    try:
+                        font_path = self._get_font_path_for_use_case(self.language_code, "keywords")
+                        if font_path and os.path.exists(font_path):
+                            keyword_args['fontfile'] = font_path
+                    except Exception as e:
+                        logger.warning(f"Error getting font for keywords: {e}")
+                    
+                    final_video = ffmpeg.filter(final_video, 'drawtext', **keyword_args)
+                
+                logger.info(f"Added {len(formatted_keywords)} catchy keywords ({len(lines)} line(s), comma-separated)")
 
             # Add expression text at bottom (bottom area of video, throughout entire video)
             # Split expression and translation into separate drawtext filters for better control
@@ -1196,17 +1172,17 @@ class VideoEditor:
                         # Content starts at Y=440.
                         # We place vocab at Y=460 (just inside content).
                         
-                        # Layout Strategy:
-                        # User requested fixed coordinates: X="40", Y="440"
-                        # This implies a Left-Aligned layout relative to X=40.
-                        # We will stack Word + Separator + Translation horizontally starting at 40.
+                        # Layout Strategy: 4 fixed rotating positions for VOCABULARY
+                        # Each annotation rotates through these spots
+                        # Vocabulary uses Y=340/400 to avoid overlap with expression annotations
+                        ANNOTATION_POSITIONS = [
+                            (520, 440),   # Top-left (vocabulary row 1)
+                            (520, 540),   # Bottom-left (vocabulary row 2)
+                        ]
                         
-                        voca_y_start = 440
-                        rand_x = 40
+                        logger.info(f"DEBUG: Using 4 rotating positions for vocabulary annotations")
                         
-                        logger.info(f"DEBUG: Using FIXED coordinates: x={rand_x}, y={voca_y_start}")
-                        
-                        for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5 annotations
+                        for idx, vocab_annot in enumerate(vocab_annotations):  # Max 5 annotations
                             # Handle both object and dict
                             if isinstance(vocab_annot, dict):
                                 word = clean_html(vocab_annot.get('word', ''))
@@ -1225,23 +1201,17 @@ class VideoEditor:
                             annot_duration = settings.get_vocabulary_duration()
                             annot_end = annot_start + annot_duration
                             
-                            # Stack vertically
-                            rand_y = voca_y_start + (idx * 50)
+                            # Get rotating position (cycle through 4 positions)
+                            pos_idx = idx % len(ANNOTATION_POSITIONS)
+                            rand_x, rand_y = ANNOTATION_POSITIONS[pos_idx]
                             
-                            logger.info(f" vocabulary[{idx}] '{word}' dialogue_index={dialogue_index}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
+                            logger.info(f" vocabulary[{idx}] '{word}' pos={pos_idx}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                             
                             font_size = settings.get_vocabulary_font_size()
-                            # Estimate width for sequential placement
-                            char_width_estimate = font_size * 0.5  # Slightly larger estimate for safety
                             
                             # Escape text
                             escaped_word = escape_drawtext_string(word)
-                            escaped_separator = " : " 
                             escaped_translation = escape_drawtext_string(translation)
-                            
-                            # Calculate estimated widths for placement
-                            word_width = int(len(word) * char_width_estimate)
-                            separator_width = int(len(" : ") * char_width_estimate)
                             
                             # Random color
                             import random
@@ -1256,7 +1226,14 @@ class VideoEditor:
                                 'enable': f"between(t,{annot_start:.2f},{annot_end:.2f})",
                             }
                             
-                            # 1. Render SOURCE WORD at rand_x
+                            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+                            # Line 1: Source word (Korean)
+                            # Line 2: Indented translation (Spanish)
+                            
+                            line_spacing = int(font_size * 1.2)  # Space between lines
+                            indent = "    "  # 4 spaces for translation
+                            
+                            # 1. Render SOURCE WORD
                             word_args = {
                                 **common_args,
                                 'text': escaped_word,
@@ -1270,33 +1247,14 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **word_args)
                             
-                            # 2. Render SEPARATOR after word
-                            # Since we don't know exact rendered width, we use estimation.
-                            # Better approach with mixed fonts is hard.
-                            # We will use 'text_w' of 1st drawtext in 2nd? No, unavailable.
-                            # We will use absolute estimation positions.
-                            
-                            sep_x = rand_x + word_width
-                            separator_args = {
-                                **common_args,
-                                'text': escaped_separator,
-                                'x': sep_x,
-                                'y': rand_y,
-                            }
-                            try:
-                                target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
-                                if target_font and os.path.exists(target_font):
-                                    separator_args['fontfile'] = target_font
-                            except: pass
-                            final_video = ffmpeg.filter(final_video, 'drawtext', **separator_args)
-                            
-                            # 3. Render TRANSLATION after separator
-                            trans_x = sep_x + separator_width
+                            # 2. Render TRANSLATION on next line (indented)
+                            trans_y = rand_y + line_spacing
+                            indented_translation = indent + escaped_translation
                             translation_args = {
                                 **common_args,
-                                'text': escaped_translation,
-                                'x': trans_x,
-                                'y': rand_y,
+                                'text': indented_translation,
+                                'x': rand_x,
+                                'y': trans_y,
                             }
                             try:
                                 target_font = self._get_font_path_for_use_case(self.target_language_code or self.language_code, "vocabulary")
@@ -1305,9 +1263,9 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **translation_args)
                             
-                            logger.debug(f"Added vocabulary annotation: '{word}' : '{translation}' at ({rand_x}, {rand_y}), t={annot_start:.2f}-{annot_end:.2f}s (dual-font)")
+                            logger.debug(f"Added vocabulary: '{word}' / '{translation}' at x={rand_x}, y={rand_y}-{trans_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                         
-                        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations with dual-font rendering")
+                        logger.info(f"Added {len(vocab_annotations[:5])} vocabulary annotations (vertical stack layout)")
                 except Exception as vocab_error:
                     logger.warning(f"Could not add vocabulary annotations: {vocab_error}")
             
@@ -1399,12 +1357,17 @@ class VideoEditor:
                         time_per_dialogue = context_duration / len(dialogues)
                         
                         expr_annot_font_size = settings.get_expression_annotations_font_size()
-                        expr_annot_x = settings.get_expression_annotations_x_position()
-                        expr_annot_y_start = settings.get_expression_annotations_y_offset()
                         expr_annot_duration = settings.get_expression_annotations_duration()
                         expr_annot_color = settings.get_expression_annotations_text_color()
                         expr_annot_border = settings.get_expression_annotations_border_width()
                         expr_annot_border_color = settings.get_expression_annotations_border_color()
+                        
+                        # Layout Strategy: 4 fixed rotating positions for EXPRESSION annotations
+                        # Expression uses Y=500/560 to avoid overlap with vocabulary annotations
+                        ANNOTATION_POSITIONS = [
+                            (40, 440),   # Top-left (vocabulary row 1)
+                            (40, 540),   # Bottom-left (vocabulary row 2)
+                        ]
                         
                         logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")
                         
@@ -1426,16 +1389,13 @@ class VideoEditor:
                             ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
                             ea_end = ea_start + expr_annot_duration
                             
-                            # Stack vertically (different y for each annotation)
-                            ea_y = expr_annot_y_start + (idx * 50)
+                            # Get rotating position (cycle through 4 positions)
+                            pos_idx = idx % len(ANNOTATION_POSITIONS)
+                            ea_x, ea_y = ANNOTATION_POSITIONS[pos_idx]
                             
                             # Use dual-font rendering: source font for expression, target font for translation
                             escaped_expr = escape_drawtext_string(ea_expr)
                             escaped_trans = escape_drawtext_string(ea_trans) if ea_trans else ""
-                            
-                            char_width_estimate = expr_annot_font_size * 0.5
-                            expr_width = int(len(ea_expr) * char_width_estimate)
-                            sep_width = int(len(" : ") * char_width_estimate)
                             
                             common_args = {
                                 'fontsize': expr_annot_font_size,
@@ -1445,11 +1405,18 @@ class VideoEditor:
                                 'enable': f"between(t,{ea_start:.2f},{ea_end:.2f})",
                             }
                             
-                            # 1. Render expression (source language)
+                            # VERTICAL STACK LAYOUT (avoids font width estimation issues)
+                            # Line 1: Expression (source language)
+                            # Line 2: Indented translation (target language)
+                            
+                            line_spacing = int(expr_annot_font_size * 1.2)
+                            indent = "    "  # 4 spaces for translation
+                            
+                            # 1. Render EXPRESSION (source language)
                             expr_args = {
                                 **common_args,
                                 'text': escaped_expr,
-                                'x': expr_annot_x,
+                                'x': ea_x,
                                 'y': ea_y,
                             }
                             try:
@@ -1459,31 +1426,15 @@ class VideoEditor:
                             except: pass
                             final_video = ffmpeg.filter(final_video, 'drawtext', **expr_args)
                             
-                            # 2. Render separator and translation (target language)
+                            # 2. Render TRANSLATION on next line (indented)
                             if ea_trans:
-                                sep_x = expr_annot_x + expr_width
-                                trans_x = sep_x + sep_width
-                                
-                                # Separator
-                                sep_args = {
-                                    **common_args,
-                                    'text': " : ",
-                                    'x': sep_x,
-                                    'y': ea_y,
-                                }
-                                try:
-                                    target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
-                                    if target_font and os.path.exists(target_font):
-                                        sep_args['fontfile'] = target_font
-                                except: pass
-                                final_video = ffmpeg.filter(final_video, 'drawtext', **sep_args)
-                                
-                                # Translation
+                                trans_y = ea_y + line_spacing
+                                indented_trans = indent + escaped_trans
                                 trans_args = {
                                     **common_args,
-                                    'text': escaped_trans,
-                                    'x': trans_x,
-                                    'y': ea_y,
+                                    'text': indented_trans,
+                                    'x': ea_x,
+                                    'y': trans_y,
                                 }
                                 try:
                                     target_font = self._get_font_path_for_use_case(self.language_code, "vocabulary")
@@ -1492,9 +1443,9 @@ class VideoEditor:
                                 except: pass
                                 final_video = ffmpeg.filter(final_video, 'drawtext', **trans_args)
                             
-                            logger.debug(f"Added expression annotation: '{ea_expr}' : '{ea_trans}' at y={ea_y}, t={ea_start:.2f}-{ea_end:.2f}s (dual-font)")
+                            logger.debug(f"Added expression annotation: '{ea_expr}' / '{ea_trans}' at y={ea_y}, t={ea_start:.2f}-{ea_end:.2f}s")
                         
-                        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (blue, dual-font)")
+                        logger.info(f"Added {len(expr_annotations[:3])} expression annotations (vertical stack)")
                 except Exception as ea_error:
                     logger.warning(f"Could not add expression annotations: {ea_error}")
             
@@ -1739,91 +1690,36 @@ class VideoEditor:
     
     def _get_font_option(self) -> str:
         """Get font file option for ffmpeg drawtext using language-specific font (default use case)"""
-        try:
-            font_path = self._get_font_path_for_use_case(self.language_code, "default")
-            if font_path and os.path.exists(font_path):
-                return f"fontfile={font_path}:"
-        except Exception as e:
-            logger.warning(f"Error getting font option: {e}")
-        return ""
-    
+        # Delegate to FontResolver
+        return self.font_resolver.get_font_option_string(use_case="default")
+
     def _get_font_path_for_use_case(self, language_code: Optional[str] = None, use_case: str = "default") -> Optional[str]:
         """
         Get absolute path to font file for specific language and use case
-        
+
         Args:
             language_code: Target language code
             use_case: Specific use case (e.g. 'keywords', 'expression', 'educational_slide')
-            
+
         Returns:
             Absolute path to font file or None
         """
-        try:
-            from langflix.config.font_utils import get_font_file_for_language
-            font_path = get_font_file_for_language(language_code, use_case)
-            if font_path and os.path.exists(font_path):
-                return font_path
-        except Exception as e:
-            logger.warning(f"Error resolving font path for {language_code}/{use_case}: {e}")
-        return None
+        # Delegate to FontResolver
+        return self.font_resolver.get_font_for_language(language_code, use_case)
     
     def _get_video_output_args(self, source_video_path: Optional[str] = None) -> dict:
         """Get video output arguments from configuration with optional resolution-aware quality.
-        
+
         Uses fast encoding (ultrafast/crf28) in test mode, quality encoding (slow/crf18) in production.
-        
+
         Args:
             source_video_path: Optional path to source video for resolution-based quality adjustment
-            
+
         Returns:
             Dictionary with vcodec, acodec, preset, and crf values
         """
-        # Get encoding preset based on test_mode (fast vs quality)
-        encoding_preset = settings.get_encoding_preset(self.test_mode)
-        base_preset = encoding_preset['preset']
-        base_crf = encoding_preset['crf']
-        audio_bitrate = encoding_preset['audio_bitrate']
-        
-        # Log which mode is being used
-        mode_name = "FAST (test)" if self.test_mode else "QUALITY (production)"
-        logger.debug(f"Using {mode_name} encoding: preset={base_preset}, crf={base_crf}")
-        
-        # If source video provided and NOT in test mode, adjust quality based on resolution (TICKET-072)
-        if source_video_path and os.path.exists(source_video_path) and not self.test_mode:
-            try:
-                from langflix.media.ffmpeg_utils import get_video_params
-                vp = get_video_params(source_video_path)
-                height = vp.height or 1080
-                
-                # Higher quality logic for production mode only
-                if height <= 720:
-                    crf = min(base_crf, 16)  # Ensure high quality for 720p
-                    logger.debug(f"720p source detected, using CRF {crf} for better quality")
-                else:
-                    crf = base_crf
-                    
-                return {
-                    'vcodec': 'libx264',
-                    'acodec': 'aac',
-                    'preset': base_preset,
-                    'crf': crf,
-                    'b:a': audio_bitrate,
-                    'ac': 2,
-                    'ar': 48000
-                }
-            except Exception as e:
-                logger.warning(f"Could not detect source resolution, using base settings: {e}")
-        
-        # Default: use preset values
-        return {
-            'vcodec': 'libx264',
-            'acodec': 'aac',
-            'preset': base_preset,
-            'crf': base_crf,
-            'b:a': audio_bitrate,
-            'ac': 2,
-            'ar': 48000
-        }
+        # Delegate to VideoComposer
+        return self.video_composer._get_encoding_args(source_video_path)
     
     def _get_background_config(self) -> tuple[str, str]:
         """
@@ -3416,37 +3312,8 @@ class VideoEditor:
         Returns:
             str: Path to the combined video.
         """
-        if not video_paths:
-            raise ValueError("No video paths provided for combination")
-
-        output_path_obj = Path(output_path)
-        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Combining {len(video_paths)} videos into {output_path}")
-
-        # Create concat file
-        concat_file = output_path_obj.parent / f"temp_concat_list_{output_path_obj.stem}.txt"
-        self._register_temp_file(concat_file)
-
-        try:
-            with open(concat_file, 'w') as f:
-                for video_path in video_paths:
-                    f.write(f"file '{Path(video_path).absolute()}'\n")
-
-            # Use shared utility for concatenation
-            from langflix.media.ffmpeg_utils import concat_demuxer_if_uniform
-            concat_demuxer_if_uniform(concat_file, output_path_obj, normalize_audio=True)
-            
-            logger.info(f"✅ Combined video created: {output_path}")
-            return str(output_path)
-
-        except ffmpeg.Error as e:
-            stderr_output = e.stderr.decode() if e.stderr else "No stderr details available"
-            logger.error(f"FFmpeg Error combining videos:\n{stderr_output}")
-            raise
-        except Exception as e:
-            logger.error(f"Error combining videos: {e}")
-            raise
+        # Delegate to VideoComposer
+        return self.video_composer.combine_videos(video_paths, output_path)
 
     def _create_video_batch(
         self,

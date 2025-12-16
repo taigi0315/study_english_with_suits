@@ -12,7 +12,7 @@
 
 **⚠️ LANGUAGE RULES:**
 - `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
-- `viral_title`, `expression`, `similar_expressions` → {source_language}
+- `title_translation`, `expression`, `similar_expressions` → {source_language}
 - All `translation` fields → {target_language}
 
 ---
@@ -35,13 +35,15 @@
 - Phrasal verbs: "put up with", "figure out what to do"
 - Idioms: "cut to the chase", "get on my nerves"
 - Colloquial phrases: "no big deal", "you bet"
-- Test: Would native speakers use this weekly?
+- **⚠️ MUST BE CONTEXT-FREE:** Expression should make sense WITHOUT knowing the drama/scene
+- Test: Would native speakers use this weekly in everyday life?
 
 ❌ **NEVER EXTRACT:**
 - Boring/procedural dialogue
 - Simple curses or 1-2 word phrases ("bullshit", "damn")
-- Scene-specific phrases that only work in this context
+- **Scene-specific phrases that only work in this drama's context**
 - Self-explanatory statements ("I agree", "That's good")
+- Expressions that require knowing what happened in the scene
 
 ---
 
@@ -61,9 +63,8 @@
 
 ---
 
-**VIRAL TITLE:**
-
-The iconic, meme-worthy quote from the scene in {source_language}.
+**TITLE:**
+The iconic, meme-worthy quote from the scene in {source_language}. should be narrative can hook the audience.
 
 **Good examples:**
 - "니까짓 게 날 죽여?" (The Glory)
@@ -78,17 +79,19 @@ The iconic, meme-worthy quote from the scene in {source_language}.
 
 Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
 
+⚠️ **CRITICAL: Narrations MUST be written ONLY in {target_language}. Do NOT include any {source_language} text.**
+
 **Types:**
-| Type | Purpose | Example |
-|------|---------|---------|
-| `hook` | Opening attention grab | "자 여기서부터 집중!" |
-| `highlight` | Point out key expressions | "이 표현 원어민들 진짜 많이 씀" |
-| `reaction` | Comment on scene/acting | "연진이 눈빛 연기 보소... 소름" |
-| `tension` | Build suspense | "과연 뭐라고 대답할까?" |
-| `commentary` | Relatable observation | "직장인이면 100% 공감 ㅋㅋ" |
+| Type | Purpose | What it does |
+|------|---------|--------------|
+| `hook` | Opening attention grab | Get viewer's attention at the start |
+| `highlight` | Point out key expressions | Explain why this phrase is useful |
+| `reaction` | Comment on scene/acting | React to dramatic moments |
+| `tension` | Build suspense | Create anticipation |
+| `commentary` | Relatable observation | Connect with viewers |
 
 **Guidelines:**
-- Casual tone, internet slang OK (ㅋㅋ, ㄹㅇ, 헐, 오짐)
+- Write in casual, conversational {target_language}
 - 5-15 words each
 - Space them out - don't narrate every line
 - Match scene energy (funny scene = funny narration)
@@ -133,9 +136,9 @@ Short, punchy phrases in {target_language} for social media hooks.
   "expressions": [
     {{
       "title": "Catchy title in {target_language} (8-15 words)",
-      "viral_title": "Iconic line in {source_language} (3-12 words)",
+      "title_translation": "natural translation in {target_language}",
       "expression": "key phrase copied exactly from dialogue (4-8 words)",
-      "expression_translation": "natural translation in {target_language}",
+      "expression_translation": "LITERAL translation (직역) in {target_language} - word-by-word, no context",
       "expression_dialogue_index": 5,
       "context_start_index": 2,
       "context_end_index": 12,
@@ -163,7 +166,8 @@ Short, punchy phrases in {target_language} for social media hooks.
 ---
 
 **FINAL CHECKLIST:**
-- ✓ Expression: 3+ words, common, reusable, copied exactly from dialogue
+- ✓ Expression: 3+ words, common, **CONTEXT-FREE** (learnable without knowing drama), copied exactly
+- ✓ expression_translation: **LITERAL (직역)** - straight word-by-word translation, no interpretation
 - ✓ Scene: High-energy (funny/dramatic/tense/romantic)
 - ✓ Context: ~{target_duration}s, complete story arc, expression in middle
 - ✓ Clips: NO overlapping index ranges

@@ -44,6 +44,7 @@ class VideoPipelineService:
         max_expressions: int = 10,
         language_level: str = "intermediate",
         test_mode: bool = False,
+        test_llm: bool = False,  # Dev: Use cached LLM response
         no_shorts: bool = False,
         create_long_form: bool = True,
         create_short_form: bool = True,
@@ -118,6 +119,7 @@ class VideoPipelineService:
                 language_level=language_level,
                 save_llm_output=True,
                 test_mode=test_mode,
+                test_llm=test_llm,
                 no_shorts=actual_no_shorts,
                 no_long_form=actual_no_long_form,
                 short_form_max_duration=short_form_max_duration,

@@ -51,6 +51,11 @@ def get_dialogue_subtitle_target_color() -> str:
     return get_dialogue_subtitle_styling_config().get('target_color', '#FFFF00')
 
 
+def get_dialogue_subtitle_chars_per_line() -> int:
+    """Get max characters per line for dialogue subtitles (default: 45)"""
+    return get_dialogue_subtitle_styling_config().get('chars_per_line', 45)
+
+
 def get_clip_extraction_config() -> Dict[str, Any]:
     """Get clip extraction configuration"""
     video_cfg = get_video_config()
@@ -638,6 +643,11 @@ def get_keywords_border_color() -> str:
     return get_keywords_config().get('border_color', 'black')
 
 
+def get_keywords_newline() -> int:
+    """Get keywords max characters before newline (default: 60)"""
+    return get_keywords_config().get('newline', 60)
+
+
 def get_expression_text_config() -> Dict[str, Any]:
     """Get expression text display configuration"""
     layout = get_short_video_layout_config()
@@ -667,6 +677,11 @@ def get_expression_border_width() -> int:
 def get_expression_border_color() -> str:
     """Get expression border color (default: 'black')"""
     return get_expression_text_config().get('border_color', 'black')
+
+
+def get_expression_chars_per_line() -> int:
+    """Get expression text chars per line before wrapping (default: 40)"""
+    return get_expression_text_config().get('chars_per_line', 40)
 
 
 def get_translation_text_config() -> Dict[str, Any]:
@@ -739,6 +754,11 @@ def get_dialogue_subtitle_outline_color() -> str:
 def get_dialogue_subtitle_background_opacity() -> float:
     """Get dialogue subtitle background opacity (default: 0.5 for 50%)"""
     return get_dialogue_subtitle_config().get('background_opacity', 0.5)
+
+
+def get_dialogue_subtitle_newline() -> int:
+    """Get dialogue subtitle max characters before newline (default: 40)"""
+    return get_dialogue_subtitle_config().get('newline', 40)
 
 
 def get_layout_fonts_config() -> Dict[str, Any]:
@@ -862,7 +882,7 @@ def get_viral_title_font_size() -> int:
 
 def get_viral_title_y_position() -> int:
     """Get viral title Y position (default: 120)"""
-    return get_viral_title_config().get('y_position', 120)
+    return get_viral_title_config().get('y_position', 10)
 
 
 def get_viral_title_text_color() -> str:
@@ -933,6 +953,11 @@ def get_narrations_border_color() -> str:
 def get_narrations_duration() -> float:
     """Get narrations display duration in seconds (default: 3.0)"""
     return get_narrations_config().get('duration', 3.0)
+
+
+def get_narrations_chars_per_line() -> int:
+    """Get max characters per line for narrations before wrapping (default: 30)"""
+    return get_narrations_config().get('chars_per_line', 30)
 
 
 def get_narrations_type_color(narration_type: str) -> str:

@@ -175,8 +175,8 @@ class LangFlixPipeline:
         self.translated_expressions = {}
 
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, 
-            save_llm_output: bool = False, test_mode: bool = False, no_shorts: bool = False, 
-            no_long_form: bool = False, short_form_max_duration: float = 180.0, 
+            save_llm_output: bool = False, test_mode: bool = False, test_llm: bool = False,
+            no_shorts: bool = False, no_long_form: bool = False, short_form_max_duration: float = 180.0, 
             target_languages: Optional[List[str]] = None, schedule_upload: bool = False) -> Dict[str, Any]:
         
         if target_languages:
@@ -202,7 +202,7 @@ class LangFlixPipeline:
                 logger.info("🆕 V2 Mode: Using dual-language subtitle workflow")
                 # In test mode, limit to 1 expression (matching V1 behavior)
                 v2_max_expressions = 1 if test_mode else (max_expressions or 5)
-                self.expressions = self._run_v2_analysis(language_level, v2_max_expressions)
+                self.expressions = self._run_v2_analysis(language_level, v2_max_expressions, test_llm=test_llm)
             else:
                 # V1 Workflow: Traditional single subtitle + LLM translation
                 # Step 1: Parse & Chunk Subtitles
@@ -410,7 +410,7 @@ class LangFlixPipeline:
         from langflix.utils.temp_file_manager import get_temp_manager
         get_temp_manager().cleanup_all()
 
-    def _run_v2_analysis(self, language_level: str = None, max_expressions: int = None) -> List[Dict[str, Any]]:
+    def _run_v2_analysis(self, language_level: str = None, max_expressions: int = None, test_llm: bool = False) -> List[Dict[str, Any]]:
         """
         V2 Analysis: Use dual-language subtitles from Netflix.
         
@@ -489,6 +489,7 @@ class LangFlixPipeline:
                 min_expressions=1,
                 max_expressions=max_expressions or 5,
                 target_duration=45.0,
+                test_llm=test_llm,
             )
             
             # Store source language code for video editor

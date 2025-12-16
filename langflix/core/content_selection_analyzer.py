@@ -78,6 +78,7 @@ def analyze_with_dual_subtitles(
     min_expressions: int = 1,
     max_expressions: int = 3,
     target_duration: float = 45.0,
+    test_llm: bool = False,  # Dev: Use cached LLM response
 ) -> List[dict]:
     """
     Analyze dual subtitles to select engaging content.
@@ -89,10 +90,27 @@ def analyze_with_dual_subtitles(
         min_expressions: Minimum expressions to find
         max_expressions: Maximum expressions to find
         target_duration: Target duration for context clips in seconds
+        test_llm: If True, use cached LLM response (for fast development iteration)
         
     Returns:
         List of expression dicts in V1-compatible format
     """
+    # TEST_LLM MODE: Load from dev test cache if available
+    if test_llm:
+        from .llm_test_cache import load_llm_test_response, save_llm_test_response
+        
+        cache_id = show_name or "default"
+        cached_data = load_llm_test_response("content_selection_v2", cache_id)
+        
+        if cached_data:
+            logger.info(f"🚀 TEST_LLM: Using cached V2 LLM response (skipping API call)")
+            # Return cached expressions, BUT respect max_expressions limit!
+            result = cached_data[:max_expressions] if isinstance(cached_data, list) else cached_data
+            logger.info(f"🚀 TEST_LLM: Returning {len(result)} expressions (max_expressions={max_expressions})")
+            return result
+        else:
+            logger.info(f"🔄 TEST_LLM: No V2 cache found, will call API and save response")
+    
     # Get dialogues in prompt format
     source_dialogues, target_dialogues = dual_subtitle.to_dialogue_format()
     
@@ -178,6 +196,21 @@ def analyze_with_dual_subtitles(
             # Convert to V1-compatible dict
             v1_format = convert_v2_to_v1_format(enriched, source_dialogues, target_dialogues)
             results.append(v1_format)
+        
+        # Save to test cache if test_llm mode is enabled
+        if test_llm:
+            from .llm_test_cache import save_llm_test_response
+            cache_id = show_name or "default"
+            save_llm_test_response("content_selection_v2", results, cache_id, {
+                "language_level": language_level,
+                "expression_count": len(results)
+            })
+            logger.info(f"💾 TEST_LLM: Saved {len(results)} expressions to V2 cache")
+        
+        # CRITICAL: Enforce max_expressions limit (for test_mode=1)
+        if max_expressions and len(results) > max_expressions:
+            logger.info(f"Limiting expressions from {len(results)} to {max_expressions} (test_mode active)")
+            results = results[:max_expressions]
         
         logger.info(f"V2 content selection found {len(results)} expressions")
         return results

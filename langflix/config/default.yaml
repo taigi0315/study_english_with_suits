@@ -7,7 +7,7 @@
 # ============================================================================
 app:
   # Name of the TV show for prompting
-  show_name: "Suits"
+  show_name: "Shows"
   
   # Template file for expression analysis prompt
   # V1: expression_analysis_prompt_v7.txt (includes translation)
@@ -62,7 +62,7 @@ llm:
   # Maximum characters of subtitle content per chunk
   # Increased from 800 to 3000 for cost optimization (fewer API calls)
   # Trade-off: Larger chunks = fewer calls but longer processing time
-  max_input_length: 3000
+  max_input_length: 2000
   
   model_name: "gemini-2.5-flash"
   

@@ -20,6 +20,7 @@ import textwrap
 from typing import List, Dict, Any, Optional, Tuple
 
 from langflix.core.video.font_resolver import FontResolver
+from langflix import settings
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +316,10 @@ class OverlayRenderer:
             if not narr_text:
                 continue
 
+            # Wrap narration text to configured chars per line
+            narr_chars_per_line = settings.get_narrations_chars_per_line()
+            narr_text = textwrap.fill(narr_text, width=narr_chars_per_line)
+
             # Get color based on narration type
             narr_color = settings.get_narrations_type_color(narr_type)
 
@@ -381,12 +386,13 @@ class OverlayRenderer:
         # Get dual fonts
         source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
 
-        # Layout Strategy: 4 fixed rotating positions
+        # Layout Strategy: 4 fixed rotating positions for VOCABULARY
+        # These positions are offset from expression annotations to avoid overlap
         ANNOTATION_POSITIONS = [
-            (40, 450),   # Top-left
-            (40, 550),   # Bottom-left
-            (540, 450),  # Top-right
-            (540, 550),  # Bottom-right
+            (40, 340),   # Top-left (vocabulary row 1)
+            (540, 340),  # Top-right (vocabulary row 1)
+            (40, 400),   # Bottom-left (vocabulary row 2)
+            (540, 400),  # Bottom-right (vocabulary row 2)
         ]
         
         font_size = settings.get_vocabulary_font_size()
@@ -504,12 +510,13 @@ class OverlayRenderer:
         # Get dual fonts
         source_font, target_font = self.font_resolver.get_dual_fonts("vocabulary")
 
-        # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
+        # Layout Strategy: 4 fixed rotating positions for EXPRESSION annotations
+        # These positions are offset from vocabulary annotations to avoid overlap
         ANNOTATION_POSITIONS = [
-            (40, 450),   # Top-left
-            (40, 550),   # Bottom-left
-            (540, 450),  # Top-right
-            (540, 550),  # Bottom-right
+            (40, 500),   # Top-left (expression row 1)
+            (540, 500),  # Top-right (expression row 1)
+            (40, 560),   # Bottom-left (expression row 2)
+            (540, 560),  # Bottom-right (expression row 2)
         ]
 
         logger.info(f"Processing {len(expr_annotations)} expression annotations (4 rotating positions)")
@@ -595,7 +602,12 @@ class OverlayRenderer:
         """
         import ffmpeg
 
-        def wrap_text(text, width=28):
+        # Get configurable chars per line from settings
+        chars_per_line = settings.get_expression_chars_per_line()
+        
+        def wrap_text(text, width=None):
+            if width is None:
+                width = chars_per_line
             return textwrap.fill(text, width=width)
 
         # Expression (source language)

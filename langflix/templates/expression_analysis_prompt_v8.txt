@@ -79,17 +79,19 @@ The iconic, meme-worthy quote from the scene in {source_language}. should be nar
 
 Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
 
+⚠️ **CRITICAL: Narrations MUST be written ONLY in {target_language}. Do NOT include any {source_language} text.**
+
 **Types:**
-| Type | Purpose | Example |
-|------|---------|---------|
-| `hook` | Opening attention grab | "자 여기서부터 집중!" |
-| `highlight` | Point out key expressions | "이 표현 원어민들 진짜 많이 씀" |
-| `reaction` | Comment on scene/acting | "연진이 눈빛 연기 보소... 소름" |
-| `tension` | Build suspense | "과연 뭐라고 대답할까?" |
-| `commentary` | Relatable observation | "직장인이면 100% 공감 ㅋㅋ" |
+| Type | Purpose | What it does |
+|------|---------|--------------|
+| `hook` | Opening attention grab | Get viewer's attention at the start |
+| `highlight` | Point out key expressions | Explain why this phrase is useful |
+| `reaction` | Comment on scene/acting | React to dramatic moments |
+| `tension` | Build suspense | Create anticipation |
+| `commentary` | Relatable observation | Connect with viewers |
 
 **Guidelines:**
-- Casual tone, internet slang OK (ㅋㅋ, ㄹㅇ, 헐, 오짐)
+- Write in casual, conversational {target_language}
 - 5-15 words each
 - Space them out - don't narrate every line
 - Match scene energy (funny scene = funny narration)

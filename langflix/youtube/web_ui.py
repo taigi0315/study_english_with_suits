@@ -2026,6 +2026,7 @@ class VideoManagementUI:
                 
                 # Get test_mode parameter (optional, defaults to False)
                 test_mode = data.get('test_mode', False)
+                test_llm = data.get('test_llm', False)  # Dev: Use cached LLM response
                 
                 # Call FastAPI backend with file uploads
                 import requests
@@ -2045,6 +2046,7 @@ class VideoManagementUI:
                     "max_expressions": 50,
                     "language_level": data['language_level'],
                     "test_mode": str(test_mode).lower(),
+                    "test_llm": str(test_llm).lower(),  # Forward to FastAPI backend
                     "no_shorts": False,
                     "short_form_max_duration": short_form_max_duration,
                     "create_long_form": data.get('create_long_form', True),

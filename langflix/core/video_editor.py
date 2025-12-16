@@ -1172,17 +1172,12 @@ class VideoEditor:
                         # Content starts at Y=440.
                         # We place vocab at Y=460 (just inside content).
                         
-                        # Layout Strategy: 4 fixed rotating positions
-                        # Each annotation rotates through these spots:
-                        # Position 0: x=40, y=420
-                        # Position 1: x=40, y=520
-                        # Position 2: x=540, y=420
-                        # Position 3: x=540, y=520
+                        # Layout Strategy: 4 fixed rotating positions for VOCABULARY
+                        # Each annotation rotates through these spots
+                        # Vocabulary uses Y=340/400 to avoid overlap with expression annotations
                         ANNOTATION_POSITIONS = [
-                            (40, 450),   # Top-left
-                            (40, 550),   # Bottom-left
-                            (540, 450),  # Top-right
-                            (540, 550),  # Bottom-right
+                            (520, 440),   # Top-left (vocabulary row 1)
+                            (520, 540),   # Bottom-left (vocabulary row 2)
                         ]
                         
                         logger.info(f"DEBUG: Using 4 rotating positions for vocabulary annotations")
@@ -1367,12 +1362,11 @@ class VideoEditor:
                         expr_annot_border = settings.get_expression_annotations_border_width()
                         expr_annot_border_color = settings.get_expression_annotations_border_color()
                         
-                        # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
+                        # Layout Strategy: 4 fixed rotating positions for EXPRESSION annotations
+                        # Expression uses Y=500/560 to avoid overlap with vocabulary annotations
                         ANNOTATION_POSITIONS = [
-                            (40, 450),   # Top-left
-                            (40, 550),   # Bottom-left
-                            (540, 450),  # Top-right
-                            (540, 550),  # Bottom-right
+                            (40, 440),   # Top-left (vocabulary row 1)
+                            (40, 540),   # Bottom-left (vocabulary row 2)
                         ]
                         
                         logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")

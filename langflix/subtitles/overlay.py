@@ -273,7 +273,8 @@ def build_ass_force_style(is_expression: bool = False) -> str:
     
     parts = [
         f"FontSize={font_size}",
-        f"PrimaryColour={color}",
+        # NOTE: PrimaryColour intentionally OMITTED to allow inline \c color tags
+        # to work for dual-color subtitles (source=white, target=yellow)
         f"OutlineColour={outline}",
         f"Outline={outline_w}",
         f"Bold={bold}",

@@ -1179,15 +1179,15 @@ class VideoEditor:
                         # Position 2: x=540, y=420
                         # Position 3: x=540, y=520
                         ANNOTATION_POSITIONS = [
-                            (40, 420),   # Top-left
-                            (40, 520),   # Bottom-left
-                            (540, 420),  # Top-right
-                            (540, 520),  # Bottom-right
+                            (40, 450),   # Top-left
+                            (40, 550),   # Bottom-left
+                            (540, 450),  # Top-right
+                            (540, 550),  # Bottom-right
                         ]
                         
                         logger.info(f"DEBUG: Using 4 rotating positions for vocabulary annotations")
                         
-                        for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5 annotations
+                        for idx, vocab_annot in enumerate(vocab_annotations):  # Max 5 annotations
                             # Handle both object and dict
                             if isinstance(vocab_annot, dict):
                                 word = clean_html(vocab_annot.get('word', ''))
@@ -1213,17 +1213,10 @@ class VideoEditor:
                             logger.info(f" vocabulary[{idx}] '{word}' pos={pos_idx}, coords: x={rand_x}, y={rand_y}, t={annot_start:.2f}-{annot_end:.2f}s")
                             
                             font_size = settings.get_vocabulary_font_size()
-                            # Estimate width for sequential placement
-                            char_width_estimate = font_size * 0.5  # Slightly larger estimate for safety
                             
                             # Escape text
                             escaped_word = escape_drawtext_string(word)
-                            escaped_separator = " : " 
                             escaped_translation = escape_drawtext_string(translation)
-                            
-                            # Calculate estimated widths for placement
-                            word_width = int(len(word) * char_width_estimate)
-                            separator_width = int(len(" : ") * char_width_estimate)
                             
                             # Random color
                             import random
@@ -1376,10 +1369,10 @@ class VideoEditor:
                         
                         # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
                         ANNOTATION_POSITIONS = [
-                            (40, 420),   # Top-left
-                            (40, 520),   # Bottom-left
-                            (540, 420),  # Top-right
-                            (540, 520),  # Bottom-right
+                            (40, 450),   # Top-left
+                            (40, 550),   # Bottom-left
+                            (540, 450),  # Top-right
+                            (540, 550),  # Bottom-right
                         ]
                         
                         logger.info(f"Processing {len(expr_annotations)} expression annotation overlays")

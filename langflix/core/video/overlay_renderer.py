@@ -383,10 +383,10 @@ class OverlayRenderer:
 
         # Layout Strategy: 4 fixed rotating positions
         ANNOTATION_POSITIONS = [
-            (40, 420),   # Top-left
-            (40, 520),   # Bottom-left
-            (540, 420),  # Top-right
-            (540, 520),  # Bottom-right
+            (40, 450),   # Top-left
+            (40, 550),   # Bottom-left
+            (540, 450),  # Top-right
+            (540, 550),  # Bottom-right
         ]
         
         font_size = settings.get_vocabulary_font_size()
@@ -506,10 +506,10 @@ class OverlayRenderer:
 
         # Layout Strategy: 4 fixed rotating positions (same as vocabulary)
         ANNOTATION_POSITIONS = [
-            (40, 420),   # Top-left
-            (40, 520),   # Bottom-left
-            (540, 420),  # Top-right
-            (540, 520),  # Bottom-right
+            (40, 450),   # Top-left
+            (40, 550),   # Bottom-left
+            (540, 450),  # Top-right
+            (540, 550),  # Bottom-right
         ]
 
         logger.info(f"Processing {len(expr_annotations)} expression annotations (4 rotating positions)")

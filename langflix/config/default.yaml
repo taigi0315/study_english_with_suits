@@ -313,8 +313,8 @@ short_video:
     # Catchy keywords (top padding area)
     keywords:
       font_size: 35
-      newline: 90
-      y_position: 220            # Adjusted for smaller padding (was 250)
+      newline: 120
+      y_position: 240            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'

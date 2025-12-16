@@ -51,6 +51,11 @@ def get_dialogue_subtitle_target_color() -> str:
     return get_dialogue_subtitle_styling_config().get('target_color', '#FFFF00')
 
 
+def get_dialogue_subtitle_chars_per_line() -> int:
+    """Get max characters per line for dialogue subtitles (default: 45)"""
+    return get_dialogue_subtitle_styling_config().get('chars_per_line', 45)
+
+
 def get_clip_extraction_config() -> Dict[str, Any]:
     """Get clip extraction configuration"""
     video_cfg = get_video_config()

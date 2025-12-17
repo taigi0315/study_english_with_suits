@@ -10,9 +10,7 @@ app:
   show_name: "Shows"
   
   # Template file for expression analysis prompt
-  # V1: expression_analysis_prompt_v7.txt (includes translation)
-  # V2: expression_analysis_prompt_v8.txt (dual-language input format)
-  template_file: "expression_analysis_prompt_v8.txt"
+  template_file: "expression_analysis_prompt.txt"
 
 # ============================================================================
 # V2: Dual Language Subtitle Configuration
@@ -105,7 +103,8 @@ processing:
   
   # Normal mode expression limits (when test_mode.enabled is false)
   min_expressions_per_chunk: 3
-  max_expressions_per_chunk: 6        # Up to 6 expressions per chunk in production
+  max_expressions_per_chunk: 6        # Up to 6 expressions per chunk in production (V1 mode)
+  max_total_expressions: 50           # V2 mode: Max expressions for entire video
 
 # ============================================================================
 # Language Proficiency Levels

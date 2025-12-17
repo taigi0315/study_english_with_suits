@@ -1,5 +1,6 @@
 import re
 import logging
+import yaml
 from typing import List
 from pathlib import Path
 from langflix import settings
@@ -8,15 +9,28 @@ from langflix.core.language_config import LanguageConfig
 logger = logging.getLogger(__name__)
 
 def _load_prompt_template() -> str:
-    """Load the prompt template from file"""
+    """Load the prompt template from file (supports YAML and TXT formats)"""
     template_filename = settings.get_template_file()
-    # Templates are in langflix/templates/, not utils/templates/
-    template_path = Path(__file__).parent.parent / "templates" / template_filename
+    prompts_dir = Path(__file__).parent.parent / "prompts"
+    
+    # Try YAML first (preferred), then TXT
+    yaml_path = prompts_dir / template_filename.replace('.txt', '.yaml')
+    txt_path = prompts_dir / template_filename
+    
     try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Prompt template not found at {template_path}")
+        if yaml_path.exists():
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+                # YAML file should have a 'prompt' key containing the template
+                if isinstance(data, dict) and 'prompt' in data:
+                    return data['prompt']
+                else:
+                    raise ValueError(f"YAML file must contain a 'prompt' key: {yaml_path}")
+        elif txt_path.exists():
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        else:
+            raise FileNotFoundError(f"Prompt template not found at {yaml_path} or {txt_path}")
     except Exception as e:
         raise RuntimeError(f"Failed to load prompt template: {e}")
 

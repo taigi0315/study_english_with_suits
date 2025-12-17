@@ -108,6 +108,7 @@ class LangFlixPipeline:
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media",
                  output_dir: str = "output", language_code: str = "ko",
+                 source_language: str = "English",
                  target_languages: Optional[List[str]] = None,
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
@@ -132,6 +133,24 @@ class LangFlixPipeline:
             series_name = settings.get_show_name()
             
         self.language_code = language_code
+
+        # Normalize source_language: convert code to full name if needed
+        language_code_to_name = {
+            'ko': 'Korean', 'ja': 'Japanese', 'zh': 'Chinese', 'es': 'Spanish',
+            'fr': 'French', 'en': 'English', 'de': 'German', 'pt': 'Portuguese',
+            'ru': 'Russian', 'ar': 'Arabic', 'it': 'Italian', 'nl': 'Dutch',
+            'pl': 'Polish', 'th': 'Thai', 'vi': 'Vietnamese', 'tr': 'Turkish',
+            'sv': 'Swedish', 'fi': 'Finnish', 'da': 'Danish', 'no': 'Bokmal',
+            'cs': 'Czech', 'el': 'Greek', 'he': 'Hebrew', 'hu': 'Hungarian',
+            'id': 'Indonesian', 'ro': 'Romanian'
+        }
+        # If source_language is a code (2-3 chars), convert to full name
+        if source_language and len(source_language) <= 3 and source_language.lower() in language_code_to_name:
+            self.source_language = language_code_to_name[source_language.lower()]
+            logger.info(f"Converted source language code '{source_language}' to '{self.source_language}'")
+        else:
+            self.source_language = source_language
+
         self.target_languages = target_languages or [language_code]
         self.profiler = profiler
         self.progress_callback = progress_callback
@@ -196,12 +215,17 @@ class LangFlixPipeline:
             # DB Integration
             media_id = self._init_db_media() if DB_AVAILABLE and settings.get_database_enabled() else None
 
+            # SUBTITLE TRANSLATION: Ensure all required subtitles exist
+            if settings.is_dual_language_enabled():
+                self._update_progress(5, "Ensuring subtitle availability...")
+                self._ensure_subtitles_exist()
+
             # V2 MODE: Check if dual-language mode is enabled
             if settings.is_dual_language_enabled():
                 # V2 Workflow: Use dual subtitles from Netflix
                 logger.info("🆕 V2 Mode: Using dual-language subtitle workflow")
-                # In test mode, limit to 1 expression (matching V1 behavior)
-                v2_max_expressions = 1 if test_mode else (max_expressions or 5)
+                # Use config-based max_expressions (respects test_mode setting)
+                v2_max_expressions = max_expressions or settings.get_max_total_expressions(test_mode)
                 self.expressions = self._run_v2_analysis(language_level, v2_max_expressions, test_llm=test_llm)
             else:
                 # V1 Workflow: Traditional single subtitle + LLM translation
@@ -324,6 +348,128 @@ class LangFlixPipeline:
             self.progress_callback(percent, message)
         logger.info(message)
 
+    def _ensure_subtitles_exist(self):
+        """
+        Ensure all required subtitle files exist, translating if necessary.
+        Called BEFORE subtitle loading in V2 mode.
+        """
+        import shutil
+        from langflix.services.subtitle_translation_service import SubtitleTranslationService
+        from langflix.utils.path_utils import get_subtitle_folder
+
+        # Determine media path
+        media_path = self.video_file if self.video_file else self.video_dir
+
+        # Try to discover subtitle folder from media path
+        subtitle_folder = get_subtitle_folder(str(media_path))
+
+        # If not found (e.g., video in temp folder), try to find by episode name in assets/media
+        if not subtitle_folder and self.episode_name:
+            logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
+            # Search in common media directories
+            for media_root in ["assets/media", "assets/media/test_media"]:
+                potential_folder = Path(media_root) / self.episode_name
+                if potential_folder.exists() and potential_folder.is_dir():
+                    # Check if this folder has subtitle files
+                    srt_files = list(potential_folder.glob("*.srt"))
+                    if srt_files:
+                        subtitle_folder = str(potential_folder)
+                        logger.info(f"Found Netflix folder by episode name: {subtitle_folder}")
+                        break
+
+        # If still not found, create Netflix folder in assets/media (permanent location)
+        if not subtitle_folder:
+            if self.episode_name:
+                # Create in assets/media using episode name
+                subtitle_folder = Path("assets/media") / self.episode_name
+                subtitle_folder.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created Netflix folder in assets/media: {subtitle_folder}")
+            else:
+                # Fallback: create based on media path (temp location - not ideal)
+                media_path_obj = Path(media_path)
+                if media_path_obj.is_file():
+                    subtitle_folder = media_path_obj.parent / media_path_obj.stem
+                else:
+                    subtitle_folder = media_path_obj
+                subtitle_folder.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"Created subtitle folder in temp location (no episode name): {subtitle_folder}")
+
+        subtitle_folder = Path(subtitle_folder)
+
+        # Copy uploaded subtitle file to Netflix folder as source language
+        # The uploaded subtitle file is the source language subtitle
+        source_subtitle_path = subtitle_folder / f"{self.source_language}.srt"
+        if not source_subtitle_path.exists() and self.subtitle_file.exists():
+            shutil.copy2(str(self.subtitle_file), str(source_subtitle_path))
+            logger.info(f"Copied uploaded subtitle to: {source_subtitle_path}")
+
+        # Get required languages (convert codes to names)
+        language_code_to_name = {
+            'ko': 'Korean',
+            'ja': 'Japanese',
+            'zh': 'Chinese',
+            'es': 'Spanish',
+            'fr': 'French',
+            'en': 'English',
+            'de': 'German',
+            'pt': 'Portuguese',
+            'ru': 'Russian',
+            'ar': 'Arabic',
+            'it': 'Italian',
+            'nl': 'Dutch',
+            'pl': 'Polish',
+            'th': 'Thai',
+            'vi': 'Vietnamese',
+            'tr': 'Turkish',
+            'sv': 'Swedish',
+            'fi': 'Finnish',
+            'da': 'Danish',
+            'no': 'Bokmal',
+            'cs': 'Czech',
+            'el': 'Greek',
+            'he': 'Hebrew',
+            'hu': 'Hungarian',
+            'id': 'Indonesian',
+            'ro': 'Romanian'
+        }
+
+        # Convert target language codes to names
+        target_lang_names = []
+        for lang_code in self.target_languages:
+            lang_name = language_code_to_name.get(lang_code, lang_code.capitalize())
+            target_lang_names.append(lang_name)
+
+        # Combine source + target languages
+        target_lang = settings.get_default_target_language()
+        required_langs = list(set([self.source_language] + [target_lang] + target_lang_names))
+
+        logger.info(f"Ensuring subtitles exist for languages: {required_langs}")
+
+        # Initialize translation service
+        translation_service = SubtitleTranslationService()
+
+        # Ensure subtitles exist
+        try:
+            results = translation_service.ensure_subtitles_exist(
+                subtitle_folder=subtitle_folder,
+                source_language=self.source_language,
+                required_languages=required_langs,
+                progress_callback=lambda p, m: self._update_progress(5 + int(p * 0.05), m)
+            )
+
+            # Log results
+            successful = [lang for lang, success in results.items() if success]
+            failed = [lang for lang, success in results.items() if not success]
+
+            if successful:
+                logger.info(f"Subtitles available for: {successful}")
+            if failed:
+                logger.warning(f"Failed to ensure subtitles for: {failed}")
+
+        except Exception as e:
+            logger.warning(f"Subtitle translation failed: {e}")
+            logger.info("Continuing with available subtitles...")
+
     def _get_llm_output_dir(self):
         try:
             return str(self.paths['episode']['metadata']['llm_outputs'])
@@ -409,6 +555,33 @@ class LangFlixPipeline:
     def _cleanup_resources(self):
         from langflix.utils.temp_file_manager import get_temp_manager
         get_temp_manager().cleanup_all()
+        
+        # Clean up any leftover temp files in shorts directories
+        self._cleanup_temp_files_in_output()
+    
+    def _cleanup_temp_files_in_output(self):
+        """Clean up temp_ prefixed files left in output directories."""
+        import glob
+        
+        # Find all temp_* files in output paths
+        for lang in self.target_languages:
+            lang_paths = self.paths.get('languages', {}).get(lang, {})
+            shorts_dir = lang_paths.get('shorts')
+            videos_dir = lang_paths.get('final_videos')
+            
+            for dir_path in [shorts_dir, videos_dir]:
+                if dir_path and Path(dir_path).exists():
+                    temp_files = list(Path(dir_path).glob('temp_*'))
+                    for temp_file in temp_files:
+                        try:
+                            if temp_file.is_file():
+                                temp_file.unlink()
+                                logger.debug(f"Cleaned up temp file: {temp_file}")
+                        except Exception as e:
+                            logger.warning(f"Failed to clean up temp file {temp_file}: {e}")
+                    
+                    if temp_files:
+                        logger.info(f"Cleaned up {len(temp_files)} temp files from {dir_path}")
 
     def _run_v2_analysis(self, language_level: str = None, max_expressions: int = None, test_llm: bool = False) -> List[Dict[str, Any]]:
         """
@@ -482,14 +655,18 @@ class LangFlixPipeline:
         # Analyze for content selection
         self._update_progress(40, "Selecting educational content...")
         try:
+            # Get episode output directory for saving LLM response
+            episode_output_dir = str(self.paths.get('episode', {}).get('base', self.output_dir))
+            
             expressions = analyze_with_dual_subtitles(
                 dual_subtitle=dual_sub,
                 show_name=self.series_name,
                 language_level=language_level or "intermediate",
                 min_expressions=1,
-                max_expressions=max_expressions or 5,
+                max_expressions=max_expressions,  # Already set correctly by caller
                 target_duration=45.0,
                 test_llm=test_llm,
+                output_dir=episode_output_dir,  # Save LLM response in episode folder
             )
             
             # Store source language code for video editor

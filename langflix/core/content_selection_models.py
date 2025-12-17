@@ -63,15 +63,19 @@ class V2ContentSelection(BaseModel):
     
     Key difference from V1: Uses indices to reference dialogues instead of
     including translated text directly. Translations come from subtitle files.
+    
+    REQUIRED fields that must come from LLM (no fallbacks):
+    - title: source language
+    - title_translation: target language  
+    - expression: source language
+    - expression_translation: target language
     """
-    # Generated content
-    title: Optional[str] = Field(
-        default=None,
-        description="Catchy title in source language"
+    # REQUIRED content - fail if LLM doesn't provide
+    title: str = Field(
+        description="Catchy title in SOURCE language (meme-worthy quote)"
     )
-    title_translation: Optional[str] = Field(
-        default=None,
-        description="Catchy title translated to target language (for display)"
+    title_translation: str = Field(
+        description="Title translated to TARGET language (for video overlay)"
     )
     viral_title: Optional[str] = Field(
         default=None,
@@ -127,10 +131,9 @@ class V2ContentSelection(BaseModel):
         description="Type of scene: humor, drama, tension, emotional, witty, sexy, surprising"
     )
     
-    # Computed fields (populated after matching with subtitles)
-    expression_translation: Optional[str] = Field(
-        default=None,
-        description="Translation of expression (populated from target subtitles)"
+    # REQUIRED from LLM - do NOT fallback to subtitle text
+    expression_translation: str = Field(
+        description="LITERAL translation of expression in target language (required from LLM)"
     )
     context_start_time: Optional[str] = Field(
         default=None,
@@ -152,18 +155,16 @@ class V2ContentSelectionResponse(BaseModel):
     )
 
 
-def enrich_content_selection(
+def enrich_from_subtitles(
     selection: V2ContentSelection,
     source_dialogues: List[dict],
     target_dialogues: List[dict],
 ) -> V2ContentSelection:
     """
-    Enrich a V2ContentSelection with data from subtitle files.
+    Enrich a V2ContentSelection with timestamp data from subtitle files.
     
-    Populates:
-    - expression_translation: From target dialogue at expression_dialogue_index
-    - context_start_time: From source dialogue at context_start_index
-    - context_end_time: From source dialogue at context_end_index
+    NOTE: expression_translation is REQUIRED from LLM and already validated.
+    This function only populates timestamps (context_start_time, context_end_time).
     
     Args:
         selection: V2ContentSelection to enrich
@@ -173,11 +174,6 @@ def enrich_content_selection(
     Returns:
         Enriched V2ContentSelection
     """
-    # Get expression translation from target dialogues
-    if 0 <= selection.expression_dialogue_index < len(target_dialogues):
-        target_line = target_dialogues[selection.expression_dialogue_index]
-        selection.expression_translation = target_line.get('text', '')
-    
     # Get context start time from source dialogues
     if 0 <= selection.context_start_index < len(source_dialogues):
         start_line = source_dialogues[selection.context_start_index]

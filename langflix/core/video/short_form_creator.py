@@ -586,8 +586,14 @@ class ShortFormCreator:
                         return
                     else:
                         logger.warning("Ending credit failed, using video without credit")
+                        # Clean up failed temp file
+                        if temp_with_credit.exists():
+                            temp_with_credit.unlink()
                 except Exception as e:
                     logger.warning(f"Failed to append ending credit: {e}")
+                    # Clean up failed temp file
+                    if temp_with_credit.exists():
+                        temp_with_credit.unlink()
 
         # Copy as final output
         shutil.copy(str(overlayed_path), str(output_path))

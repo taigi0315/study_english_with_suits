@@ -1,0 +1,190 @@
+name: expression_analysis_prompt
+version: "8.0"
+description: Content selector prompt for extracting expressions from TV show dialogues
+
+prompt: |
+  =**CONTENT SELECTOR for "{show_name}"**
+
+  **SOURCE DIALOGUES ({source_language}):**
+  {source_dialogues}
+
+  **TARGET DIALOGUES ({target_language}):**
+  {target_dialogues}
+
+  **Format:** `[index] dialogue_text` - Use indices to reference dialogues.
+
+  ---
+
+  **⚠️ LANGUAGE RULES:**
+  - `catchy_keywords`, `narrations`, `intro_hook`, `title_translation` → {target_language}
+  - `title`, `expression`, `similar_expressions` → {source_language}
+  - All `translation` fields → {target_language}
+
+  ---
+
+  **MISSION:** Find {min_expressions}-{max_expressions} expressions learners would be EXCITED to learn.
+
+  **LEVEL:** {level_description}
+
+  ---
+
+  **WHAT TO EXTRACT:**
+
+  ✅ **HIGH-IMPACT SCENES:**
+  - 😂 Humorous/witty moments
+  - 🔥 Dramatic/tense confrontations  
+  - 😍 Romantic/flirty interactions
+  - 😲 Surprising reveals
+
+  ✅ **REUSABLE EXPRESSIONS (3+ words):**
+  - Phrasal verbs: "put up with", "figure out what to do"
+  - Idioms: "cut to the chase", "get on my nerves"
+  - Colloquial phrases: "no big deal", "you bet"
+  - **⚠️ MUST BE CONTEXT-FREE:** Expression should make sense WITHOUT knowing the drama/scene
+  - Test: Would native speakers use this weekly in everyday life?
+
+  ❌ **NEVER EXTRACT:**
+  - Boring/procedural dialogue
+  - Simple curses or 1-2 word phrases ("bullshit", "damn")
+  - **Scene-specific phrases that only work in this drama's context**
+  - Self-explanatory statements ("I agree", "That's good")
+  - Expressions that require knowing what happened in the scene
+
+  ---
+
+  **CONTEXT DESIGN:**
+
+  **Goal:** Each clip = standalone mini-story (25-45 seconds, ~{target_duration}s target)
+
+  **Structure:**
+  - **Beginning:** Setup situation/conflict
+  - **Middle:** Expression appears naturally
+  - **End:** Reaction/resolution
+
+  **Rules:**
+  - Expression should NOT be at very start or end
+  - Include complete sentences at boundaries
+  - **ZERO OVERLAP** between different clips' index ranges
+
+  ---
+
+  **TITLE:**
+  The iconic, meme-worthy quote from the scene in {source_language}. should be narrative can hook the audience.
+
+  **Good examples:**
+  - "니까짓 게 날 죽여?" (The Glory)
+  - "I don't have dreams, I have goals." (Suits)
+  - "연진아, 이거 누구 딸이니?"
+
+  **Characteristics:** 3-12 words, quotable, makes people click/share.
+
+  ---
+
+  **NARRATIONS (3-6 per clip):**
+
+  Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
+
+  ⚠️ **CRITICAL: Narrations MUST be written 100% in {target_language} ONLY!**
+  - ❌ WRONG: "Aprende '사회적 약자' (socialmente vulnerable)" - Contains {source_language}!
+  - ❌ WRONG: "Learn '내 꿈은 너야' here" - Contains {source_language}!
+  - ✅ CORRECT: "¡Una frase muy útil para expresar tus sueños!" - Pure {target_language}
+  - ✅ CORRECT: "Esta expresión se usa cuando quieres vengarte" - Pure {target_language}
+
+  **DO NOT include any {source_language} words, even in quotes. Write EVERYTHING in {target_language}.**
+
+  **Types:**
+  | Type | Purpose | What it does |
+  |------|---------|--------------|
+  | `hook` | Opening attention grab | Get viewer's attention at the start |
+  | `highlight` | Point out key expressions | Explain why this phrase is useful |
+  | `reaction` | Comment on scene/acting | React to dramatic moments |
+  | `tension` | Build suspense | Create anticipation |
+  | `commentary` | Relatable observation | Connect with viewers |
+
+  **Guidelines:**
+  - Write in casual, conversational {target_language}
+  - 5-15 words each
+  - Space them out - don't narrate every line
+  - Match scene energy (funny scene = funny narration)
+
+  ---
+
+  **ANNOTATIONS:**
+
+  **vocabulary_annotations** - Single difficult WORDS:
+  ```json
+  {{"word": "leverage", "translation": "영향력", "dialogue_index": 5}}
+  ```
+
+  **expression_annotations** - Multi-word IDIOMS/PHRASES:
+  ```json
+  {{"expression": "cut to the chase", "translation": "본론으로 들어가다", "dialogue_index": 7}}
+  ```
+
+  **⚠️ CRITICAL: ZERO OVERLAP between vocabulary and expression annotations.**
+  Both display on same visual layer - overlapping = unreadable subtitles.
+
+  ❌ Bad: vocabulary "rat" + expression "rat me out"
+  ✅ Good: vocabulary "leverage" + expression "cut to the chase"
+
+  ---
+
+  **CATCHY KEYWORDS (3 per clip):**
+
+  Short, punchy phrases in {target_language} for social media hooks.
+
+  **Format:** 3-6 words each, TikTok caption style
+
+  **Good:** "면접장 패기 폭발", "소름돋는 첫마디", "상사한테 직구 날림"
+  **Bad:** "Scene of an interview", "두 사람이 대화함"
+
+  ---
+
+  **OUTPUT FORMAT (JSON only):**
+
+  ```json
+  {{
+    "expressions": [
+      {{
+        "title": "Catchy title in {source_language} - meme-worthy quote (8-15 words)",
+        "title_translation": "natural translation in {target_language}",
+        "expression": "key phrase copied exactly from dialogue (4-8 words)",
+        "expression_translation": "LITERAL translation (직역) in {target_language} - word-by-word, no context",
+        "expression_dialogue_index": 5,
+        "context_start_index": 2,
+        "context_end_index": 12,
+        "narrations": [
+          {{"dialogue_index": 2, "text": "Hook text", "type": "hook"}},
+          {{"dialogue_index": 5, "text": "Highlight text", "type": "highlight"}},
+          {{"dialogue_index": 8, "text": "Reaction text", "type": "reaction"}},
+          {{"dialogue_index": 11, "text": "Tension text", "type": "tension"}}
+        ],
+        "catchy_keywords": ["keyword 1", "keyword 2", "keyword 3"],
+        "vocabulary_annotations": [
+          {{"word": "word", "translation": "번역", "dialogue_index": 3}}
+        ],
+        "expression_annotations": [
+          {{"expression": "idiom phrase", "translation": "번역", "dialogue_index": 7}}
+        ],
+        "similar_expressions": ["alternative 1", "alternative 2"],
+        "scene_type": "humor|drama|tension|emotional|confrontation|sexy|surprising",
+        "intro_hook": "Short hook in {target_language}"
+      }}
+    ]
+  }}
+  ```
+
+  ---
+
+  **FINAL CHECKLIST:**
+  - ✓ Expression: 3+ words, common, **CONTEXT-FREE** (learnable without knowing drama), copied exactly
+  - ✓ expression_translation: **LITERAL (직역)** - straight word-by-word translation, no interpretation
+  - ✓ Scene: High-energy (funny/dramatic/tense/romantic)
+  - ✓ Context: ~{target_duration}s, complete story arc, expression in middle
+  - ✓ Clips: NO overlapping index ranges
+  - ✓ Narrations: 3-6 entries, spaced throughout, casual {target_language}
+  - ✓ Annotations: vocabulary (words) vs expression (idioms) - ZERO overlap
+  - ✓ Language rules: correct language for each field
+
+  **Return ONLY valid JSON.**
+  **No good expressions? Return: {{"expressions":[]}}**

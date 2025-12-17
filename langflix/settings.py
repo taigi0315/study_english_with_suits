@@ -445,6 +445,20 @@ def get_test_mode_max_total_expressions() -> int:
     return test_mode.get('max_total_expressions', 1)
 
 
+def get_max_total_expressions(test_mode: bool = False) -> int:
+    """Get maximum total expressions for entire video (V2 mode).
+    
+    Args:
+        test_mode: If True, use test mode limits
+        
+    Returns:
+        Max total expressions (1 in test mode, 50 in normal mode by default)
+    """
+    if test_mode or is_test_mode_enabled():
+        return get_test_mode_max_total_expressions()
+    return get_processing_config().get('max_total_expressions', 50)
+
+
 def get_min_expressions_per_chunk() -> int:
     """Get minimum expressions per chunk"""
     return get_processing_config().get('min_expressions_per_chunk', 1)

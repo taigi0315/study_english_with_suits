@@ -17,7 +17,7 @@ from langflix.core.dual_subtitle import DualSubtitle
 from langflix.core.content_selection_models import (
     V2ContentSelection,
     V2ContentSelectionResponse,
-    enrich_content_selection,
+    enrich_from_subtitles,
     convert_v2_to_v1_format,
 )
 from langflix import settings
@@ -33,16 +33,27 @@ if api_key:
         client_options={"api_endpoint": "generativelanguage.googleapis.com"}
     )
 
-
 def _load_prompt_template() -> str:
-    """Load the prompt template from settings."""
+    """Load the prompt template from prompts folder (supports YAML and TXT formats)."""
+    import yaml
     template_name = settings.get_template_file()
-    template_path = Path(__file__).parent.parent / "templates" / template_name
+    prompts_dir = Path(__file__).parent.parent / "prompts"
     
-    if not template_path.exists():
-        raise FileNotFoundError(f"Prompt template not found: {template_path}")
+    # Try YAML first (preferred), then TXT
+    yaml_path = prompts_dir / template_name.replace('.txt', '.yaml')
+    txt_path = prompts_dir / template_name
     
-    return template_path.read_text(encoding='utf-8')
+    if yaml_path.exists():
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+            if isinstance(data, dict) and 'prompt' in data:
+                return data['prompt']
+            else:
+                raise ValueError(f"YAML file must contain a 'prompt' key: {yaml_path}")
+    elif txt_path.exists():
+        return txt_path.read_text(encoding='utf-8')
+    else:
+        raise FileNotFoundError(f"Prompt template not found at {yaml_path} or {txt_path}")
 
 
 def _format_dialogues_for_prompt(dialogues: List[dict], include_timestamps: bool = False) -> str:
@@ -79,6 +90,7 @@ def analyze_with_dual_subtitles(
     max_expressions: int = 3,
     target_duration: float = 45.0,
     test_llm: bool = False,  # Dev: Use cached LLM response
+    output_dir: Optional[str] = None,  # Directory to save LLM response
 ) -> List[dict]:
     """
     Analyze dual subtitles to select engaging content.
@@ -168,8 +180,9 @@ def analyze_with_dual_subtitles(
         try:
             import time
             timestamp = int(time.time())
-            debug_dir = Path("output")
-            debug_dir.mkdir(exist_ok=True)
+            # Save in episode directory if provided, otherwise fallback to output/
+            debug_dir = Path(output_dir) if output_dir else Path("output")
+            debug_dir.mkdir(parents=True, exist_ok=True)
             debug_file = debug_dir / f"llm_response_v2_{timestamp}_{min_expressions}-{max_expressions}.json"
             debug_file.write_text(response_text, encoding='utf-8')
             logger.info(f"Saved raw V2 LLM response to {debug_file}")
@@ -191,7 +204,7 @@ def analyze_with_dual_subtitles(
         results = []
         for selection in selections:
             # Enrich with subtitle data
-            enriched = enrich_content_selection(selection, source_dialogues, target_dialogues)
+            enriched = enrich_from_subtitles(selection, source_dialogues, target_dialogues)
             
             # Convert to V1-compatible dict
             v1_format = convert_v2_to_v1_format(enriched, source_dialogues, target_dialogues)

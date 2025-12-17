@@ -22,17 +22,19 @@ class VideoPipelineService:
     - Standardized result format
     """
     
-    def __init__(self, language_code: str, output_dir: str = "output", target_languages: Optional[List[str]] = None):
+    def __init__(self, language_code: str, output_dir: str = "output", source_language: str = "English", target_languages: Optional[List[str]] = None):
         """
         Initialize the video pipeline service
-        
+
         Args:
             language_code: Primary target language code (e.g., 'ko', 'ja', 'zh')
             output_dir: Output directory for generated files
+            source_language: Source language name (e.g., 'English', 'Korean')
             target_languages: List of target language codes for multi-language generation (defaults to [language_code])
         """
         self.language_code = language_code
         self.output_dir = output_dir
+        self.source_language = source_language
         self.target_languages = target_languages or [language_code]
         
     def process_video(
@@ -98,6 +100,7 @@ class VideoPipelineService:
                 video_dir=video_dir,
                 output_dir=self.output_dir,
                 language_code=self.language_code,
+                source_language=self.source_language,  # Pass source language for subtitle translation
                 target_languages=self.target_languages,  # Pass target languages for multi-language support
                 progress_callback=progress_callback,
                 series_name=show_name,  # Pass show_name to pipeline

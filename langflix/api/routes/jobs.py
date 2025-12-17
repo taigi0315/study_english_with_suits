@@ -48,11 +48,12 @@ async def process_video_task(
     video_filename: str,
     subtitle_filename: str,
     language_code: str,
-    show_name: str,
-    episode_name: str,
-    max_expressions: int,
-    language_level: str,
-    test_mode: bool,
+    source_language: str = "English",
+    show_name: str = "",
+    episode_name: str = "",
+    max_expressions: int = 10,
+    language_level: str = "intermediate",
+    test_mode: bool = False,
     test_llm: bool = False,  # Dev: Use cached LLM response
     no_shorts: bool = False,
     short_form_max_duration: float = 180.0,
@@ -105,6 +106,7 @@ async def process_video_task(
         service = VideoPipelineService(
             language_code=language_code,
             output_dir=output_dir,
+            source_language=source_language,
             target_languages=target_languages
         )
         
@@ -505,6 +507,7 @@ async def create_job(
             video_filename=video_file.filename,
             subtitle_filename=subtitle_file.filename,
             language_code=language_code,
+            source_language=source_language or "English",
             show_name=show_name,
             episode_name=episode_name,
             max_expressions=max_expressions,

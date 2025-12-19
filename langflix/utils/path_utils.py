@@ -1,13 +1,21 @@
 """
 Path utilities for V2 dual-language subtitle file structure.
 
-File Structure Convention:
+File Structure Convention (NEW - Netflix-style):
     assets/media/
     ├── {media_name}.mp4                    # Media file
-    └── {media_name}/                       # Subtitle folder (same base name without extension)
-        ├── {index}_{Language}.srt          # Subtitle files
+    └── Subs/                               # Subs folder
+        └── {media_name}/                   # Subtitle folder (same base name without extension)
+            ├── {index}_{Language}.srt      # Subtitle files
+            ├── 3_Korean.srt
+            ├── 6_English.srt
+            └── ...
+
+Legacy Structure (still supported):
+    assets/media/
+    ├── {media_name}.mp4
+    └── {media_name}/                       # Subtitle folder directly next to media
         ├── 3_Korean.srt
-        ├── 6_English.srt
         └── ...
 """
 import re
@@ -25,8 +33,9 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
     """
     Get the subtitle folder for a given media file or folder path.
     
-    The subtitle folder has the same name as the media file without extension.
-    Also handles when media_path is already a subtitle folder.
+    Checks both new and legacy folder structures:
+    1. NEW: Subs/{media_name}/  (Netflix-style downloads)
+    2. LEGACY: {media_name}/    (original structure)
     
     Args:
         media_path: Path to the media file (e.g., /path/to/video.mp4) or 
@@ -37,9 +46,9 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
         
     Example:
         >>> get_subtitle_folder("/media/show.mp4")
-        Path("/media/show")
-        >>> get_subtitle_folder("/media/show")  # Already a subtitle folder
-        Path("/media/show")
+        Path("/media/Subs/show")  # If new structure exists
+        >>> get_subtitle_folder("/media/show.mp4")
+        Path("/media/show")  # Fallback to legacy structure
     """
     media_file = Path(media_path)
     
@@ -53,13 +62,25 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
         if srt_files:
             return media_file
     
-    # Subtitle folder has same name as media file without extension
-    subtitle_folder = media_file.parent / media_file.stem
+    media_base_name = media_file.stem
     
-    if subtitle_folder.exists() and subtitle_folder.is_dir():
-        return subtitle_folder
+    # NEW STRUCTURE: Check Subs/{media_name}/ first
+    subs_folder = media_file.parent / "Subs" / media_base_name
+    if subs_folder.exists() and subs_folder.is_dir():
+        srt_files = list(subs_folder.glob("*.srt"))
+        if srt_files:
+            logger.debug(f"Found subtitle folder (new structure): {subs_folder}")
+            return subs_folder
     
-    logger.warning(f"Subtitle folder not found: {subtitle_folder}")
+    # LEGACY STRUCTURE: {media_name}/ directly next to media file
+    legacy_folder = media_file.parent / media_base_name
+    if legacy_folder.exists() and legacy_folder.is_dir():
+        srt_files = list(legacy_folder.glob("*.srt"))
+        if srt_files:
+            logger.debug(f"Found subtitle folder (legacy structure): {legacy_folder}")
+            return legacy_folder
+    
+    logger.warning(f"Subtitle folder not found for: {media_path} (checked Subs/{media_base_name}/ and {media_base_name}/)")
     return None
 
 
@@ -202,6 +223,10 @@ def find_media_subtitle_pairs(media_dir: str) -> List[Tuple[Path, Path]]:
     """
     Find all media files that have corresponding subtitle folders.
     
+    Checks both new and legacy folder structures:
+    1. NEW: Subs/{media_name}/  (Netflix-style downloads)
+    2. LEGACY: {media_name}/    (original structure)
+    
     Args:
         media_dir: Directory to search for media files
         
@@ -211,7 +236,7 @@ def find_media_subtitle_pairs(media_dir: str) -> List[Tuple[Path, Path]]:
     Example:
         >>> find_media_subtitle_pairs("/assets/media/")
         [
-            (Path("/assets/media/show1.mp4"), Path("/assets/media/show1")),
+            (Path("/assets/media/show1.mp4"), Path("/assets/media/Subs/show1")),
             (Path("/assets/media/show2.mkv"), Path("/assets/media/show2")),
         ]
     """
@@ -223,13 +248,24 @@ def find_media_subtitle_pairs(media_dir: str) -> List[Tuple[Path, Path]]:
     
     for media_file in media_dir_path.iterdir():
         if media_file.is_file() and media_file.suffix.lower() in video_extensions:
-            subtitle_folder = media_file.parent / media_file.stem
-            if subtitle_folder.exists() and subtitle_folder.is_dir():
-                # Verify folder has subtitle files
-                srt_files = list(subtitle_folder.glob("*.srt"))
+            media_base_name = media_file.stem
+            
+            # Check NEW structure first: Subs/{media_name}/
+            subs_folder = media_file.parent / "Subs" / media_base_name
+            if subs_folder.exists() and subs_folder.is_dir():
+                srt_files = list(subs_folder.glob("*.srt"))
                 if srt_files:
-                    pairs.append((media_file, subtitle_folder))
-                    logger.debug(f"Found pair: {media_file.name} -> {len(srt_files)} subtitles")
+                    pairs.append((media_file, subs_folder))
+                    logger.debug(f"Found pair (new structure): {media_file.name} -> {len(srt_files)} subtitles")
+                    continue
+            
+            # Check LEGACY structure: {media_name}/
+            legacy_folder = media_file.parent / media_base_name
+            if legacy_folder.exists() and legacy_folder.is_dir():
+                srt_files = list(legacy_folder.glob("*.srt"))
+                if srt_files:
+                    pairs.append((media_file, legacy_folder))
+                    logger.debug(f"Found pair (legacy structure): {media_file.name} -> {len(srt_files)} subtitles")
     
     logger.info(f"Found {len(pairs)} media-subtitle pairs in {media_dir}")
     return pairs

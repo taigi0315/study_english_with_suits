@@ -29,6 +29,9 @@ class VideoMetadata:
     video_type: str  # 'educational', 'short', 'final', 'slide', 'context'
     language: str
     expression_translation: Optional[str] = None
+    title_translation: Optional[str] = None  # Title in target language for YouTube
+    catchy_keywords: Optional[List[str]] = None  # Keywords for description
+    show_name: Optional[str] = None  # Show/series name for YouTube tags
     expressions_included: Optional[List[Dict[str, str]]] = None
     ready_for_upload: bool = False
     uploaded_to_youtube: bool = False
@@ -138,6 +141,9 @@ class VideoFileManager:
             # Determine video type and extract episode/expression info
             video_type, episode, expression, language = self._parse_video_path(video_path)
             expression_translation = None
+            title_translation = None  # For YouTube title in target language
+            catchy_keywords = None  # For YouTube description
+            show_name = None  # For YouTube tags and description
             expressions_included = None
             metadata_path = video_path.with_suffix(".meta.json")
             if metadata_path.exists():
@@ -153,6 +159,18 @@ class VideoFileManager:
                     if "expression_translation" in metadata_content:
                         expression_translation = metadata_content["expression_translation"]
                     
+                    # Extract title_translation for YouTube (target language title)
+                    if "title_translation" in metadata_content:
+                        title_translation = metadata_content["title_translation"]
+                    
+                    # Extract catchy_keywords for YouTube description
+                    if "catchy_keywords" in metadata_content:
+                        catchy_keywords = metadata_content["catchy_keywords"]
+                    
+                    # Extract show_name for YouTube tags and description
+                    if "show_name" in metadata_content:
+                        show_name = metadata_content["show_name"]
+                    
                     # Check expressions list
                     expressions_included = metadata_content.get("expressions")
                     if expressions_included and isinstance(expressions_included, list) and len(expressions_included) > 0:
@@ -165,9 +183,17 @@ class VideoFileManager:
                         
                         # Update translation if not set
                         if not expression_translation:
-                            expression_translation = primary.get("translation")
+                            expression_translation = primary.get("translation") or primary.get("expression_translation")
+                        
+                        # Update title_translation if not set (from first expression)
+                        if not title_translation:
+                            title_translation = primary.get("title_translation")
+                        
+                        # Update catchy_keywords if not set (from first expression)
+                        if not catchy_keywords:
+                            catchy_keywords = primary.get("catchy_keywords")
                             
-                    logger.debug(f"Loaded metadata for {video_path.name}: expression='{expression}', translation='{expression_translation}'")
+                    logger.debug(f"Loaded metadata for {video_path.name}: expression='{expression}', translation='{expression_translation}', title_translation='{title_translation}'")
                 except Exception as e:
                     logger.warning(f"Failed to load metadata for {video_path.name}: {e}")
             
@@ -202,6 +228,9 @@ class VideoFileManager:
                 episode=episode,
                 expression=expression,
                 expression_translation=expression_translation,
+                title_translation=title_translation,
+                catchy_keywords=catchy_keywords,
+                show_name=show_name,
                 expressions_included=expressions_included,
                 video_type=video_type,
                 language=language,

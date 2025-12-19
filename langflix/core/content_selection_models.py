@@ -210,8 +210,22 @@ def convert_v2_to_v1_format(
     start_idx = selection.context_start_index
     end_idx = selection.context_end_index + 1  # Make inclusive
     
-    dialogues = [d.get('text', '') for d in source_dialogues[start_idx:end_idx]]
-    translations = [d.get('text', '') for d in target_dialogues[start_idx:end_idx]]
+    # Extract dialogue data - include timing for V2 subtitle generation
+    context_source_dialogues = source_dialogues[start_idx:end_idx]
+    context_target_dialogues = target_dialogues[start_idx:end_idx]
+    
+    dialogues = [d.get('text', '') for d in context_source_dialogues]
+    translations = [d.get('text', '') for d in context_target_dialogues]
+    
+    # Also include full dialogue objects with timing for subtitle generation
+    dialogue_entries = []
+    for i, (src, tgt) in enumerate(zip(context_source_dialogues, context_target_dialogues)):
+        dialogue_entries.append({
+            'text': src.get('text', ''),
+            'translation': tgt.get('text', ''),
+            'start_time': src.get('start', ''),
+            'end_time': src.get('end', ''),
+        })
     
     # Get expression dialogue
     expr_idx = selection.expression_dialogue_index
@@ -263,6 +277,7 @@ def convert_v2_to_v1_format(
         'viral_title': selection.viral_title,
         'dialogues': dialogues,
         'translation': translations,
+        'dialogue_entries': dialogue_entries,  # V2: Full dialogue objects with timing for subtitle generation
         'expression_dialogue': expression_dialogue,
         'expression_dialogue_translation': expression_dialogue_translation,
         'expression': selection.expression,

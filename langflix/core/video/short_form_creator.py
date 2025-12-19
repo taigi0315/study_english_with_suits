@@ -63,7 +63,8 @@ class ShortFormCreator:
         target_language_code: str,
         test_mode: bool = False,
         font_resolver: Optional[FontResolver] = None,
-        paths: Optional[Dict[str, Any]] = None
+        paths: Optional[Dict[str, Any]] = None,
+        show_name: Optional[str] = None
     ):
         """
         Initialize ShortFormCreator.
@@ -75,6 +76,7 @@ class ShortFormCreator:
             test_mode: If True, use faster encoding for testing
             font_resolver: Optional FontResolver instance
             paths: Optional paths dictionary for shorts directory
+            show_name: Optional show/series name for YouTube metadata
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -82,6 +84,7 @@ class ShortFormCreator:
         self.target_language_code = target_language_code
         self.test_mode = test_mode
         self.paths = paths or {}
+        self.show_name = show_name or "Unknown Show"
 
         # Initialize FontResolver
         if font_resolver:
@@ -104,7 +107,7 @@ class ShortFormCreator:
 
         logger.info(
             f"ShortFormCreator initialized: "
-            f"source={source_language_code}, target={target_language_code}"
+            f"source={source_language_code}, target={target_language_code}, show={show_name}"
         )
 
     def _register_temp_file(self, path: Path) -> None:
@@ -248,6 +251,9 @@ class ShortFormCreator:
                 long_form_video_path,
                 settings
             )
+            
+            # Step 4: Create metadata file for YouTube upload
+            self._write_metadata_file(output_path, expression)
 
             logger.info(f"✅ Short-form video created: {output_path}")
             return str(output_path)
@@ -597,6 +603,37 @@ class ShortFormCreator:
 
         # Copy as final output
         shutil.copy(str(overlayed_path), str(output_path))
+
+    def _write_metadata_file(self, video_path: Path, expression: 'ExpressionAnalysis') -> None:
+        """Write metadata file for YouTube upload.
+        
+        Creates a .meta.json file alongside the video with expression data
+        for YouTube title, description, and tag generation.
+        """
+        try:
+            import json
+            
+            # Helper to get attribute from dict or object
+            def get_attr(obj, key, default=None):
+                if isinstance(obj, dict):
+                    return obj.get(key, default)
+                return getattr(obj, key, default)
+            
+            metadata = {
+                "expression": get_attr(expression, 'expression', ''),
+                "expression_translation": get_attr(expression, 'expression_translation', ''),
+                "title": get_attr(expression, 'title', ''),
+                "title_translation": get_attr(expression, 'title_translation', ''),
+                "catchy_keywords": get_attr(expression, 'catchy_keywords', []),
+                "language": self.target_language_code,
+                "show_name": self.show_name,
+            }
+            
+            metadata_path = Path(video_path).with_suffix(".meta.json")
+            metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+            logger.debug(f"Saved video metadata: {metadata_path}")
+        except Exception as e:
+            logger.warning(f"Failed to write metadata file for {video_path}: {e}")
 
     def cleanup_temp_files(self) -> None:
         """Clean up temporary files."""

@@ -405,8 +405,23 @@ class SubtitleProcessor:
             True if successful, False otherwise
         """
         try:
-            # Extract subtitles for this expression
-            subtitles = self.extract_subtitles_for_expression(expression)
+            # V2 MODE: Check if expression has dialogue_entries with timing (from dual subtitles)
+            dialogue_entries = get_expr_attr(expression, 'dialogue_entries', [])
+            
+            if dialogue_entries:
+                # V2: Use pre-loaded dialogue entries with timing
+                logger.info(f"V2 mode: Using {len(dialogue_entries)} dialogue entries from expression")
+                subtitles = []
+                for entry in dialogue_entries:
+                    subtitles.append({
+                        'text': entry.get('text', ''),
+                        'translation': entry.get('translation', ''),
+                        'start_time': entry.get('start_time', ''),
+                        'end_time': entry.get('end_time', ''),
+                    })
+            else:
+                # V1 MODE: Extract subtitles from file
+                subtitles = self.extract_subtitles_for_expression(expression)
             
             if not subtitles:
                 logger.warning(f"No subtitles found for expression: {get_expr_attr(expression, 'expression', '')}")
@@ -602,7 +617,12 @@ class SubtitleProcessor:
     def _get_translation_for_subtitle(self, subtitle_idx: int, subtitle: Dict[str, Any], 
                                     subtitle_to_dialogue_map: List[int], expression: ExpressionAnalysis) -> str:
         """Get the appropriate translation for a subtitle"""
-        dialogue_idx = subtitle_to_dialogue_map[subtitle_idx]
+        # V2 MODE: Check if subtitle has direct translation (from dialogue_entries)
+        if 'translation' in subtitle and subtitle['translation']:
+            return subtitle['translation']
+        
+        # V1 MODE: Look up from expression's translation list
+        dialogue_idx = subtitle_to_dialogue_map[subtitle_idx] if subtitle_idx < len(subtitle_to_dialogue_map) else -1
         
         translations = get_expr_attr(expression, 'translation', [])
         if dialogue_idx >= 0 and dialogue_idx < len(translations):

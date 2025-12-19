@@ -74,21 +74,22 @@ def get_font_file_for_language(language_code: Optional[str] = None, use_case: st
         from ..core.language_config import LanguageConfig
         from langflix import settings
         
-        # Priority 0: For target languages that need to display mixed content (Korean source + translated text),
-        # we need a font that supports BOTH CJK (Korean) AND Latin accents (Spanish é, ó, etc.)
-        # Arial Unicode MS and Helvetica Neue have better Latin Extended-A support for accented chars
-        if language_code == 'es' and platform.system() == "Darwin":
+        # Priority 0: For target languages that need to display Latin characters with accents
+        # (Spanish é, ó, French ç, etc.) we need a font with good Unicode/Latin Extended coverage.
+        # CJK fonts (like the Korean 1HoonGrimdonghwa) don't support these characters well.
+        latin_languages = ['es', 'en', 'fr', 'de', 'pt', 'it', 'nl', 'pl', 'ru', 'vi', 'id', 'tr']
+        if language_code in latin_languages and platform.system() == "Darwin":
              try:
-                # Priority: Arial Unicode MS > Helvetica Neue > AppleSDGothicNeo
-                # AppleSDGothicNeo may not render all Latin Extended chars in FFmpeg drawtext
-                mixed_content_fonts = [
-                    "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",  # Best Unicode coverage
-                    "/System/Library/Fonts/HelveticaNeue.ttc",  # Good Latin Extended support
-                    "/System/Library/Fonts/AppleSDGothicNeo.ttc",  # CJK + some Latin
+                # Priority: Arial Unicode > Arial > Helvetica > AppleSDGothicNeo
+                # Use TTF files when possible (more reliable with FFmpeg drawtext than TTC)
+                latin_fonts = [
+                    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",  # Best Unicode coverage
+                    "/System/Library/Fonts/Supplemental/Arial.ttf",  # Standard Arial with good Latin support
+                    "/System/Library/Fonts/Helvetica.ttc",  # Helvetica as fallback
                 ]
-                for safe_font in mixed_content_fonts:
+                for safe_font in latin_fonts:
                     if os.path.exists(safe_font):
-                        logger.debug(f"Using {safe_font} for Spanish (mixed Korean+Spanish content)")
+                        logger.debug(f"Using {safe_font} for {language_code} (Latin characters)")
                         return safe_font
              except Exception:
                  pass

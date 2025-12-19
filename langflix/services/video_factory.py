@@ -37,7 +37,8 @@ class VideoFactory:
         subtitle_processor: SubtitleProcessor,
         output_dir: Path,
         episode_name: str,
-        subtitle_file: Path,
+        subtitle_file: Path = None,  # May be None in V2 mode
+        video_file: Path = None,  # V2: explicit video file path
         no_long_form: bool = False,
         test_mode: bool = False,
         progress_callback: Optional[callable] = None
@@ -47,15 +48,23 @@ class VideoFactory:
         """
         logger.info(f"Creating long-form videos for {len(expressions)} expressions in {len(target_languages)} languages...")
         
-        original_video = video_processor.find_video_file(str(subtitle_file))
+        # V2 mode: use explicit video_file if provided, otherwise try subtitle_file path
+        logger.info(f"DEBUG: video_file={video_file}, subtitle_file={subtitle_file}")
+        logger.info(f"DEBUG: video_processor.video_file={video_processor.video_file}")
+        reference_path = str(video_file) if video_file else (str(subtitle_file) if subtitle_file else None)
+        logger.info(f"DEBUG: reference_path={reference_path}")
+        original_video = video_processor.find_video_file(reference_path) if reference_path else None
+        
         if not original_video:
             logger.error("No original video file found, cannot create long-form videos")
             raise RuntimeError("Original video file not found")
         
         logger.info(f"Using original video file: {original_video}")
+        logger.info(f"DEBUG: original_video exists: {Path(original_video).exists()}")
         
         # Step 1: Extract video slices (reused) - These are RAW clips (no subs)
         extracted_slices = self._extract_slices(expressions, video_processor, original_video, test_mode=test_mode)
+        logger.info(f"DEBUG: Extracted {len(extracted_slices)} slices from {len(expressions)} expressions")
         
         # Step 2: Create videos for each language
         all_long_form_videos = {}
@@ -284,7 +293,7 @@ class VideoFactory:
                 logger.error(f"Error creating short videos for {lang}: {e}")
 
     def _extract_slices(self, expressions, video_processor, original_video, test_mode: bool = False) -> Dict[int, Path]:
-        logger.info("Extracting video slices...")
+        logger.info(f"Extracting video slices from {len(expressions)} expressions...")
         extracted_slices = {}
         temp_manager = get_temp_manager()
         
@@ -292,6 +301,15 @@ class VideoFactory:
             try:
                 expr_text = get_expr_attr(base_expression, 'expression', '')
                 safe_filename = sanitize_for_expression_filename(expr_text)
+                
+                start_time = get_expr_attr(base_expression, 'context_start_time')
+                end_time = get_expr_attr(base_expression, 'context_end_time')
+                logger.info(f"DEBUG: Expression {expr_idx+1} timing: {start_time} -> {end_time}")
+                
+                if not start_time or not end_time:
+                    logger.warning(f"Skipping expression {expr_idx+1}: Missing timestamps (start={start_time}, end={end_time})")
+                    continue
+                
                 # We need persistent temp file
                 # Using create_temp_file matches main.py logic (yields path)
                 with temp_manager.create_temp_file(
@@ -299,8 +317,6 @@ class VideoFactory:
                     suffix=".mkv",
                     delete=False
                 ) as temp_context_clip:
-                    start_time = get_expr_attr(base_expression, 'context_start_time')
-                    end_time = get_expr_attr(base_expression, 'context_end_time')
                     success = video_processor.extract_clip(
                         Path(original_video),
                         start_time,

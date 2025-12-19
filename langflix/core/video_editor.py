@@ -43,6 +43,7 @@ class VideoEditor:
         subtitle_processor = None,
         source_language_code: str = None,
         test_mode: bool = False,
+        show_name: str = None,
     ):
         """
         Initialize VideoEditor
@@ -54,6 +55,7 @@ class VideoEditor:
             subtitle_processor: Optional SubtitleProcessor instance for generating expression subtitles
             source_language_code: Source language code (language being learned, e.g., "en" for English)
             test_mode: If True, use fast encoding (ultrafast/crf28). If False, use quality encoding (slow/crf18).
+            show_name: Show/series name for YouTube metadata
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)  # Create parent directories if needed
@@ -85,6 +87,9 @@ class VideoEditor:
         from langflix.core.utils.path_resolver import PathResolver
         self.path_resolver = PathResolver(output_dir=self.output_dir)
 
+        # Store show_name for metadata
+        self.show_name = show_name or "Unknown Show"
+        
         # Initialize ShortFormCreator for short-form video creation
         from langflix.core.video.short_form_creator import ShortFormCreator
         self.short_form_creator = ShortFormCreator(
@@ -92,7 +97,8 @@ class VideoEditor:
             source_language_code=self.source_language_code,
             target_language_code=language_code or "en",
             test_mode=test_mode,
-            font_resolver=self.font_resolver
+            font_resolver=self.font_resolver,
+            show_name=self.show_name
         )
 
         self.episode_name = episode_name or "Unknown_Episode"

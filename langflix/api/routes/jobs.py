@@ -359,7 +359,8 @@ async def process_video_task(
         
         # Cleanup temp files explicitly
         temp_manager.cleanup_temp_file(Path(video_path))
-        temp_manager.cleanup_temp_file(Path(subtitle_path))
+        if subtitle_path:  # V2 mode: subtitle_path may be empty
+            temp_manager.cleanup_temp_file(Path(subtitle_path))
         
     except Exception as e:
         logger.error(f"Error processing job {job_id}: {e}", exc_info=True)
@@ -385,12 +386,13 @@ async def process_video_task(
         })
         # Cleanup temp files even on error
         temp_manager.cleanup_temp_file(Path(video_path))
-        temp_manager.cleanup_temp_file(Path(subtitle_path))
+        if subtitle_path:  # V2 mode: subtitle_path may be empty
+            temp_manager.cleanup_temp_file(Path(subtitle_path))
 
 @router.post("/jobs")
 async def create_job(
     video_file: UploadFile = File(...),
-    subtitle_file: UploadFile = File(...),
+    subtitle_file: Optional[UploadFile] = File(None),  # Optional - V2 mode discovers from Subs/ folder
     language_code: str = Form(...),
     show_name: str = Form(...),
     episode_name: str = Form(...),
@@ -415,13 +417,15 @@ async def create_job(
         if not video_file.filename or not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
             raise HTTPException(status_code=400, detail="Invalid video file type")
         
-        # Support multiple subtitle formats: SRT, VTT, SMI, ASS, SSA
-        supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
-        if not subtitle_file.filename or not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
-            )
+        # Validate subtitle file if provided (V1 mode)
+        # V2 mode discovers subtitles from Subs/ folder - no subtitle_file required
+        if subtitle_file and subtitle_file.filename:
+            supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
+            if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
+                )
         
         # Check file sizes (optional validation)
         # Generate job ID first for temp file naming
@@ -431,24 +435,29 @@ async def create_job(
         temp_manager = get_temp_manager()
         
         video_ext = Path(video_file.filename).suffix or '.mkv'
-        subtitle_ext = Path(subtitle_file.filename).suffix or '.srt'
         
-        # Stream files to disk (MEMORY OPTIMIZATION: Do not use read())
+        # Stream video file to disk (MEMORY OPTIMIZATION: Do not use read())
         logger.info(f"Streaming upload to disk for job {job_id}")
         
         video_temp_path = temp_manager.create_persistent_temp_file(suffix=video_ext, prefix=f'{job_id}_video_')
         with open(video_temp_path, 'wb') as buffer:
             shutil.copyfileobj(video_file.file, buffer)
-            
-        subtitle_temp_path = temp_manager.create_persistent_temp_file(suffix=subtitle_ext, prefix=f'{job_id}_subtitle_')
-        with open(subtitle_temp_path, 'wb') as buffer:
-            shutil.copyfileobj(subtitle_file.file, buffer)
-            
-        video_size = video_temp_path.stat().st_size
-        subtitle_size = subtitle_temp_path.stat().st_size
         
-        if video_size == 0 or subtitle_size == 0:
-            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        video_size = video_temp_path.stat().st_size
+        if video_size == 0:
+            raise HTTPException(status_code=400, detail="Empty video file uploaded")
+        
+        # Handle subtitle file (optional for V2 mode which discovers from Subs/ folder)
+        subtitle_temp_path = None
+        if subtitle_file and subtitle_file.filename:
+            subtitle_ext = Path(subtitle_file.filename).suffix or '.srt'
+            subtitle_temp_path = temp_manager.create_persistent_temp_file(suffix=subtitle_ext, prefix=f'{job_id}_subtitle_')
+            with open(subtitle_temp_path, 'wb') as buffer:
+                shutil.copyfileobj(subtitle_file.file, buffer)
+            
+            subtitle_size = subtitle_temp_path.stat().st_size
+            if subtitle_size == 0:
+                raise HTTPException(status_code=400, detail="Empty subtitle file uploaded")
         
         # Get Redis job manager
         redis_manager = get_redis_job_manager()
@@ -477,9 +486,9 @@ async def create_job(
             "job_id": job_id,
             "status": "PENDING",
             "video_file": video_file.filename,
-            "subtitle_file": subtitle_file.filename,
+            "subtitle_file": subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
             "video_size": str(video_size),
-            "subtitle_size": str(subtitle_size),
+            "subtitle_size": str(subtitle_temp_path.stat().st_size if subtitle_temp_path else 0),
             "language_code": language_code,
             "source_language": source_language or language_code,  # V2: Source language for video
             "show_name": show_name,
@@ -499,13 +508,14 @@ async def create_job(
         redis_manager.create_job(job_id, job_data)
         
         # Start REAL background processing task with file paths (not content)
+        # V2 mode: subtitle_path may be empty - pipeline discovers from Subs/ folder
         background_tasks.add_task(
             process_video_task,
             job_id=job_id,
             video_path=str(video_temp_path),
-            subtitle_path=str(subtitle_temp_path),
+            subtitle_path=str(subtitle_temp_path) if subtitle_temp_path else "",
             video_filename=video_file.filename,
-            subtitle_filename=subtitle_file.filename,
+            subtitle_filename=subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
             language_code=language_code,
             source_language=source_language or "English",
             show_name=show_name,
@@ -528,7 +538,7 @@ async def create_job(
             "status": "PENDING",
             "message": "Job created successfully",
             "video_size_mb": round(video_size / (1024 * 1024), 2),
-            "subtitle_size_kb": round(subtitle_size / 1024, 2)
+            "subtitle_size_kb": round(subtitle_temp_path.stat().st_size / 1024, 2) if subtitle_temp_path else 0
         }
         
     except Exception as e:

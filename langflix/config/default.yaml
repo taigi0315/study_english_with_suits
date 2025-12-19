@@ -239,7 +239,7 @@ transitions:
   # Ending credit (appended at the very end of the video)
   ending_credit:
     enabled: true
-    duration: 3.0  # How long to show the ending credit (seconds)
+    duration: 2.0  # How long to show the ending credit (seconds)
     video_path: "assets/ending_credit_mp4.mp4"  # MP4 or GIF file
 
 # ============================================================================
@@ -312,7 +312,7 @@ short_video:
     # Catchy keywords (top padding area)
     keywords:
       font_size: 35
-      newline: 175
+      newline: 200
       y_position: 210            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
@@ -392,7 +392,7 @@ short_video:
     narrations:
       font_size: 55                # Medium size
       y_position: 320              # Upper-middle area (below video top padding)
-      chars_per_line: 32           # Max characters per line before wrapping
+      chars_per_line: 40           # Max characters per line before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent

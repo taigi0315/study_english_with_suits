@@ -115,7 +115,8 @@ class LangFlixPipeline:
                  video_file: str = None,
                  profiler: Optional[PipelineProfiler] = None):
         
-        self.subtitle_file = Path(subtitle_file)
+        # V2 mode: subtitle_file may be empty - subtitles discovered from Subs/ folder
+        self.subtitle_file = Path(subtitle_file) if subtitle_file and subtitle_file.strip() else None
         self.video_dir = Path(video_dir)
         self.output_dir = Path(output_dir)
         self.video_file = Path(video_file) if video_file else None
@@ -167,11 +168,13 @@ class LangFlixPipeline:
 
         # Initialize Processors (Core logic still needed by services)
         self.video_processor = VideoProcessor(str(self.video_dir), video_file=str(self.video_file) if self.video_file else None)
-        self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file))
+        # V2 mode: subtitle_file may be None - SubtitleProcessor handles this
+        self.subtitle_processor = SubtitleProcessor(str(self.subtitle_file) if self.subtitle_file else "")
 
-        # Setup Paths
+        # Setup Paths - use video file name if subtitle file not provided
+        path_reference = str(self.subtitle_file) if self.subtitle_file else (str(self.video_file) if self.video_file else "")
         self.paths = create_output_structure(
-            str(self.subtitle_file), 
+            path_reference, 
             language_code, 
             str(self.output_dir),
             series_name=series_name,
@@ -224,8 +227,12 @@ class LangFlixPipeline:
             if settings.is_dual_language_enabled():
                 # V2 Workflow: Use dual subtitles from Netflix
                 logger.info("🆕 V2 Mode: Using dual-language subtitle workflow")
-                # Use config-based max_expressions (respects test_mode setting)
-                v2_max_expressions = max_expressions or settings.get_max_total_expressions(test_mode)
+                # Test mode ALWAYS uses test limit (1 expression), regardless of other settings
+                if test_mode:
+                    v2_max_expressions = settings.get_max_total_expressions(test_mode=True)
+                    logger.info(f"TEST MODE: Limiting to {v2_max_expressions} expression(s)")
+                else:
+                    v2_max_expressions = max_expressions or settings.get_max_total_expressions(test_mode=False)
                 self.expressions = self._run_v2_analysis(language_level, v2_max_expressions, test_llm=test_llm)
             else:
                 # V1 Workflow: Traditional single subtitle + LLM translation
@@ -282,6 +289,7 @@ class LangFlixPipeline:
                     self.output_dir,
                     episode_name=self.episode_name,
                     subtitle_file=self.subtitle_file,
+                    video_file=self.video_file,  # V2: explicit video file path
                     no_long_form=no_long_form,
                     test_mode=test_mode,
                     progress_callback=lambda p, m: self._update_progress(p, f"[Video] {m}")
@@ -293,7 +301,12 @@ class LangFlixPipeline:
                     from langflix.core.video_editor import VideoEditor # For factory
                     
                     def create_editor(lang, paths):
-                        e = VideoEditor(str(paths['final_videos']), lang, self.episode_name, subtitle_processor=self.subtitle_processor, test_mode=test_mode)
+                        e = VideoEditor(
+                            str(paths['final_videos']), lang, self.episode_name, 
+                            subtitle_processor=self.subtitle_processor, 
+                            test_mode=test_mode,
+                            show_name=self.series_name  # For YouTube metadata
+                        )
                         e.paths = paths
                         return e
 
@@ -366,15 +379,28 @@ class LangFlixPipeline:
         # If not found (e.g., video in temp folder), try to find by episode name in assets/media
         if not subtitle_folder and self.episode_name:
             logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
-            # Search in common media directories
-            for media_root in ["assets/media", "assets/media/test_media"]:
-                potential_folder = Path(media_root) / self.episode_name
-                if potential_folder.exists() and potential_folder.is_dir():
-                    # Check if this folder has subtitle files
-                    srt_files = list(potential_folder.glob("*.srt"))
+            # Search in common media directories and their Subs/ subfolders
+            search_paths = [
+                "assets/media",
+                "assets/media/test_media",
+            ]
+            for media_root in search_paths:
+                # Check NEW structure: {media_root}/Subs/{episode_name}/
+                subs_folder = Path(media_root) / "Subs" / self.episode_name
+                if subs_folder.exists() and subs_folder.is_dir():
+                    srt_files = list(subs_folder.glob("*.srt"))
                     if srt_files:
-                        subtitle_folder = str(potential_folder)
-                        logger.info(f"Found Netflix folder by episode name: {subtitle_folder}")
+                        subtitle_folder = str(subs_folder)
+                        logger.info(f"Found Netflix folder (Subs structure): {subtitle_folder}")
+                        break
+                
+                # Check LEGACY structure: {media_root}/{episode_name}/
+                legacy_folder = Path(media_root) / self.episode_name
+                if legacy_folder.exists() and legacy_folder.is_dir():
+                    srt_files = list(legacy_folder.glob("*.srt"))
+                    if srt_files:
+                        subtitle_folder = str(legacy_folder)
+                        logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
                         break
 
         # If still not found, create Netflix folder in assets/media (permanent location)
@@ -398,8 +424,9 @@ class LangFlixPipeline:
 
         # Copy uploaded subtitle file to Netflix folder as source language
         # The uploaded subtitle file is the source language subtitle
+        # Note: In V2 mode, subtitle_file may be None - subtitles discovered from Subs/ folder
         source_subtitle_path = subtitle_folder / f"{self.source_language}.srt"
-        if not source_subtitle_path.exists() and self.subtitle_file.exists():
+        if not source_subtitle_path.exists() and self.subtitle_file and self.subtitle_file.exists():
             shutil.copy2(str(self.subtitle_file), str(source_subtitle_path))
             logger.info(f"Copied uploaded subtitle to: {source_subtitle_path}")
 
@@ -484,7 +511,7 @@ class LangFlixPipeline:
                     show_name=settings.get_show_name(),
                     episode_name=self.episode_name,
                     language_code=self.language_code,
-                    subtitle_file_path=str(self.subtitle_file),
+                    subtitle_file_path=str(self.subtitle_file) if self.subtitle_file else "",
                     video_file_path=str(self.video_dir)
                 )
                 return str(media.id)
@@ -609,16 +636,38 @@ class LangFlixPipeline:
         # If not found (e.g., video in temp folder), try to find by episode name in assets/media
         if not subtitle_folder and self.episode_name:
             logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
-            # Search in common media directories
-            for media_root in ["assets/media", "assets/media/test_media"]:
-                potential_folder = Path(media_root) / self.episode_name
-                if potential_folder.exists() and potential_folder.is_dir():
-                    # Check if this folder has subtitle files
-                    srt_files = list(potential_folder.glob("*.srt"))
-                    if srt_files:
-                        subtitle_folder = str(potential_folder)
-                        logger.info(f"Found Netflix folder by episode name: {subtitle_folder}")
+            # Search in common media directories and their Subs/ subfolders
+            search_paths = [
+                "assets/media",
+                "assets/media/test_media",
+            ]
+            for media_root in search_paths:
+                media_path = Path(media_root)
+                
+                # Check NEW structure: {media_root}/Subs/{folder containing episode_name}/
+                subs_parent = media_path / "Subs"
+                if subs_parent.exists():
+                    # Look for folders that START with episode_name
+                    for folder in subs_parent.iterdir():
+                        if folder.is_dir() and folder.name.startswith(self.episode_name):
+                            srt_files = list(folder.glob("*.srt"))
+                            if srt_files:
+                                subtitle_folder = folder
+                                logger.info(f"Found Netflix folder (Subs structure): {subtitle_folder}")
+                                break
+                    if subtitle_folder:
                         break
+                
+                # Check LEGACY structure: {media_root}/{folder containing episode_name}/
+                for folder in media_path.iterdir():
+                    if folder.is_dir() and folder.name.startswith(self.episode_name):
+                        srt_files = list(folder.glob("*.srt"))
+                        if srt_files:
+                            subtitle_folder = folder
+                            logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
+                            break
+                if subtitle_folder:
+                    break
         
         if not subtitle_folder:
             logger.warning("No subtitle folder found, falling back to V1")

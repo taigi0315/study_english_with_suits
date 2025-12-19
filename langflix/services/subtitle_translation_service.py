@@ -85,12 +85,21 @@ class SubtitleTranslationService:
         # For discovering subtitles, we need to pass a media file path
         # Since we have the subtitle folder, we need to find the media file
         media_files = []
-        parent_folder = subtitle_folder.parent
         folder_name = subtitle_folder.name
+        
+        # Handle both new and legacy folder structures:
+        # NEW: media_folder/Subs/{media_name}/ → parent.parent is media folder
+        # LEGACY: media_folder/{media_name}/ → parent is media folder
+        if subtitle_folder.parent.name == "Subs":
+            # New structure: Subs/{media_name}/ - media is in grandparent
+            search_folder = subtitle_folder.parent.parent
+        else:
+            # Legacy structure: {media_name}/ - media is in parent
+            search_folder = subtitle_folder.parent
 
         # Look for media files with the same base name
         for ext in ['.mp4', '.mkv', '.avi', '.mov']:
-            media_file = parent_folder / f"{folder_name}{ext}"
+            media_file = search_folder / f"{folder_name}{ext}"
             if media_file.exists():
                 media_files.append(media_file)
                 break

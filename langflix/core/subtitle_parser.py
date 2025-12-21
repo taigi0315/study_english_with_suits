@@ -408,7 +408,7 @@ def chunk_subtitles(subtitles: List[Dict[str, Any]]) -> List[List[Dict[str, Any]
         clean_text = re.sub(r'\s+', ' ', clean_text)      # Normalize whitespace
         text_length = len(clean_text)
         
-        if current_length + text_length > settings.MAX_LLM_INPUT_LENGTH:
+        if settings.MAX_LLM_INPUT_LENGTH > 0 and current_length + text_length > settings.MAX_LLM_INPUT_LENGTH:
             chunks.append(current_chunk)
             current_chunk = [sub]
             current_length = text_length

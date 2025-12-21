@@ -361,6 +361,35 @@ def get_llm_model_name() -> str:
     return get_llm_config().get('model_name', 'gemini-2.5-flash')
 
 
+def get_subtitle_translation_config() -> Dict[str, Any]:
+    """Get subtitle translation specific configuration"""
+    llm_cfg = get_llm_config()
+    return llm_cfg.get('translation', {})
+
+
+def get_subtitle_translation_model() -> str:
+    """Get the model to use for subtitle translation"""
+    # Check for direct override first
+    config = get_subtitle_translation_config()
+    if 'model_name' in config:
+        return config['model_name']
+    
+    # Fallback to main LLM model if not specified
+    return get_llm_model_name()
+
+
+def get_subtitle_translation_batch_size() -> int:
+    """
+    Get the batch size for subtitle translation.
+    
+    Returns:
+        int: Batch size (-1 for all, or positive integer)
+    """
+    config = get_subtitle_translation_config()
+    # Default to 75 if not specified (safe for Flash model)
+    return config.get('batch_size', 75)
+
+
 # ============================================================================
 # Font Settings
 # ============================================================================

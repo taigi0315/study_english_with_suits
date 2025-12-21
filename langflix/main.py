@@ -233,7 +233,34 @@ class LangFlixPipeline:
                     logger.info(f"TEST MODE: Limiting to {v2_max_expressions} expression(s)")
                 else:
                     v2_max_expressions = max_expressions or settings.get_max_total_expressions(test_mode=False)
-                self.expressions = self._run_v2_analysis(language_level, v2_max_expressions, test_llm=test_llm)
+
+                # Try V2 analysis, but fall back to V1 if subtitles not available (especially in test mode)
+                try:
+                    self.expressions = self._run_v2_analysis(language_level, v2_max_expressions, test_llm=test_llm)
+                except ValueError as e:
+                    if "No subtitle folder found" in str(e) or "No valid subtitles found" in str(e):
+                        if test_mode:
+                            logger.warning(f"⚠️ V2 mode failed (subtitles not found), falling back to V1 mode for test: {e}")
+                            logger.info("🔄 Switching to V1 Mode: Traditional single subtitle workflow")
+                            # Fall back to V1 mode
+                            self._update_progress(10, "Parsing subtitles...")
+                            subtitles = self.subtitle_service.parse(self.subtitle_file)
+                            chunks = self.subtitle_service.chunk(subtitles)
+
+                            self._update_progress(30, "Analyzing expressions...")
+                            self.expressions = self.expression_service.analyze(
+                                chunks,
+                                self.subtitle_processor,
+                                max_expressions=max_expressions,
+                                language_level=language_level,
+                                save_llm_output=save_llm_output,
+                                test_mode=test_mode,
+                                output_dir=self._get_llm_output_dir() if save_llm_output else None,
+                                target_duration=short_form_max_duration,
+                            )
+                        else:
+                            # In production mode, re-raise the error
+                            raise
             else:
                 # V1 Workflow: Traditional single subtitle + LLM translation
                 # Step 1: Parse & Chunk Subtitles
@@ -402,6 +429,20 @@ class LangFlixPipeline:
                 persistent_media_root,
                 "assets/media", # Keep legacy just in case
             ]
+            
+            # Add show-specific path if series name is known
+            if self.series_name:
+                show_path = Path("assets/media") / self.series_name
+                search_paths.insert(1, str(show_path))
+
+            # Also try to extract show name from episode name (robustness for test mode)
+            from langflix.utils.filename_utils import extract_show_name
+            derived_show = extract_show_name(self.episode_name)
+            if derived_show and derived_show != self.series_name and derived_show != "Unknown Show":
+                derived_path = Path("assets/media") / derived_show
+                logger.info(f"Checking derived show path for translation: {derived_path}")
+                search_paths.insert(2, str(derived_path))
+
             # Deduplicate paths
             search_paths = list(dict.fromkeys(search_paths))
 
@@ -425,12 +466,36 @@ class LangFlixPipeline:
                         break
 
         # If still not found, create Netflix folder in persistent media path (permanent location)
-        if not subtitle_folder:
             if self.episode_name:
-                # Create in persistent media path (e.g., /media/shows/{EpisodeName})
-                subtitle_folder = Path(persistent_media_root) / self.episode_name
-                subtitle_folder.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Created persistent subtitle folder: {subtitle_folder}")
+                # 1. Try to create relative to persistent media file (preferred)
+                # Check if media_path is not a temp location
+                is_media_temp = any(p in str(media_path).lower() for p in ['/tmp/', '/var/folders/', 'temp'])
+                
+                created_relative = False
+                if not is_media_temp and media_path.exists():
+                    try:
+                        # assets/media/ShowName/Video.mkv -> assets/media/ShowName/Subs/EpisodeName
+                        if media_path.is_file():
+                            relative_subs = media_path.parent / "Subs" / self.episode_name
+                        else: # directory
+                            relative_subs = media_path / "Subs" / self.episode_name
+                            
+                        relative_subs.mkdir(parents=True, exist_ok=True)
+                        subtitle_folder = relative_subs
+                        logger.info(f"Created subtitle folder relative to media: {subtitle_folder}")
+                        created_relative = True
+                    except Exception as e:
+                        logger.warning(f"Could not create relative subtitle folder: {e}")
+
+                # 2. Fallback: Create in persistent media path (e.g., /media/shows/{ShowName}/Subs/{EpisodeName})
+                if not created_relative:
+                    if self.series_name:
+                        subtitle_folder = Path(persistent_media_root) / self.series_name / "Subs" / self.episode_name
+                    else:
+                        subtitle_folder = Path(persistent_media_root) / self.episode_name
+                    
+                    subtitle_folder.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"Created persistent subtitle folder (fallback): {subtitle_folder}")
             else:
                 # Fallback: create based on media path (temp location - not ideal)
                 media_path_obj = Path(media_path)
@@ -670,9 +735,28 @@ class LangFlixPipeline:
             logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
             # Search in common media directories and their Subs/ subfolders
             search_paths = [
+                str(self.video_dir),  # Check configured video dir first
                 "assets/media",
                 "assets/media/test_media",
             ]
+            
+            # Add show-specific path if series name is known
+            if self.series_name:
+                show_path = Path("assets/media") / self.series_name
+                search_paths.insert(1, str(show_path))
+
+            # Also try to extract show name from episode name (robustness for test mode)
+            # e.g. "Suits.S01E01..." -> "Suits"
+            if self.episode_name:
+                from langflix.utils.filename_utils import extract_show_name
+                derived_show = extract_show_name(self.episode_name)
+                if derived_show and derived_show != self.series_name and derived_show != "Unknown Show":
+                    derived_path = Path("assets/media") / derived_show
+                    logger.info(f"Checking derived show path: {derived_path}")
+                    search_paths.insert(2, str(derived_path))
+                
+            # Deduplicate paths
+            search_paths = list(dict.fromkeys([str(p) for p in search_paths]))
             for media_root in search_paths:
                 media_path = Path(media_root)
                 
@@ -691,24 +775,27 @@ class LangFlixPipeline:
                         break
                 
                 # Check LEGACY structure: {media_root}/{folder containing episode_name}/
-                for folder in media_path.iterdir():
-                    if folder.is_dir() and folder.name.startswith(self.episode_name):
-                        srt_files = list(folder.glob("*.srt"))
-                        if srt_files:
-                            subtitle_folder = folder
-                            logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
-                            break
-                if subtitle_folder:
-                    break
+                if media_path.exists() and media_path.is_dir():
+                    for folder in media_path.iterdir():
+                        if folder.is_dir() and folder.name.startswith(self.episode_name):
+                            srt_files = list(folder.glob("*.srt"))
+                            if srt_files:
+                                subtitle_folder = folder
+                                logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
+                                break
+                    if subtitle_folder:
+                        break
         
         if not subtitle_folder:
-            logger.warning("No subtitle folder found, falling back to V1")
-            return []
+            error_msg = f"No subtitle folder found for: {media_path}. V2 mode requires dual-language subtitles."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         languages = discover_subtitle_languages(subtitle_folder)
         if not languages:
-            logger.warning("No subtitle languages found, falling back to V1")
-            return []
+            error_msg = f"No valid subtitles found in: {subtitle_folder}. V2 mode requires dual-language subtitles."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         # Get source and target languages
         # Use provided source language

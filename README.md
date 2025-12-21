@@ -90,20 +90,44 @@ langflix/
    ```
 
 5. **Prepare media files**
+
+   LangFlix V2 supports two subtitle folder structures:
+
+   **NEW (Netflix-style) Structure** (Recommended):
    ```bash
-   # Organize your media files in the following structure:
-   assets/
-   ├── media/
-   │   └── Suits/                    # Series folder
-   │       ├── Suits.S01E01.720p.HDTV.x264.mkv
-   │       ├── Suits.S01E01.720p.HDTV.x264.srt
-   │       ├── Suits.S01E02.720p.HDTV.x264.mkv
-   │       ├── Suits.S01E02.720p.HDTV.x264.srt
-   │       └── ...
-   └── subtitles/                    # Alternative subtitle location
-       └── Suits - season 1.en/
-           ├── Suits - 1x01 - Pilot.720p.WEB-DL.en.srt
+   assets/media/Suits/
+   ├── Suits.S01E01.720p.HDTV.x264.mkv       # Video file
+   ├── Suits.S01E02.720p.HDTV.x264.mkv
+   └── Subs/                                  # Subtitles folder
+       ├── Suits.S01E01.720p.HDTV.x264/       # Episode subtitle folder
+       │   ├── 3_Korean.srt                   # Netflix indexed format
+       │   ├── 6_English.srt
+       │   ├── Spanish.srt                    # Translated (simple format)
+       │   └── Korean.srt                     # Translated (simple format)
+       └── Suits.S01E02.720p.HDTV.x264/
            └── ...
+   ```
+
+   **Legacy Structure** (Still Supported):
+   ```bash
+   assets/media/Suits/
+   ├── Suits.S01E01.720p.HDTV.x264.mkv
+   ├── Suits.S01E01.720p.HDTV.x264/           # Subtitle folder next to video
+   │   ├── 3_Korean.srt
+   │   └── 6_English.srt
+   └── ...
+   ```
+
+   **Subtitle File Naming**:
+   - **Netflix indexed format**: `{index}_{Language}.srt` (e.g., `3_Korean.srt`, `6_English.srt`)
+   - **Simple format**: `{Language}.srt` (e.g., `Korean.srt`, `English.srt`)
+   - Language names are case-insensitive (automatically normalized to Title Case)
+   - Both formats are supported and auto-discovered
+
+   **Automatic Subtitle Translation**:
+   - Missing subtitle languages are automatically translated using Gemini 1.5 Pro
+   - Translations use full episode context for better quality (no chunking)
+   - Translated files are saved in simple format (`{Language}.srt`)
    ```
 
 ## ⚙️ Configuration
@@ -420,6 +444,16 @@ python tests/functional/manual_prompt_test.py 2
 - ✅ **LLM Output Review**: Save and analyze AI responses for debugging
 - ✅ **LLM-Only Testing**: Test expression analysis without video processing
 - ✅ **Real Content Testing**: Successfully processed Suits S01E01
+
+**V2 Updates (December 2025):**
+- ✅ **Gemini 1.5 Pro Integration**: Full episode context for subtitle translation (2M token context window)
+- ✅ **Non-Split Mode**: Process entire subtitle files without chunking for better quality
+- ✅ **Automatic Subtitle Translation**: Missing languages translated automatically using full context
+- ✅ **Netflix-Style Folder Structure**: New Subs/ folder structure with backward compatibility
+- ✅ **Flexible File Naming**: Support both indexed (`3_Korean.srt`) and simple (`Korean.srt`) formats
+- ✅ **Case-Insensitive Language Names**: Automatic normalization to Title Case
+- ✅ **Robust Language Discovery**: Auto-discovers all available subtitle languages and variants
+- ✅ **Dual-Language Workflow**: V2 mode uses both source and target subtitles for content selection
 - ✅ **Output Quality**: Generated high-quality learning videos with dual-language subtitles
 - ✅ **Performance**: Optimized chunking and processing
 - ✅ **Reliability**: Robust error handling and recovery mechanisms

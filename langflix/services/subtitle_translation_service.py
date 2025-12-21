@@ -42,17 +42,24 @@ genai.configure(
 class SubtitleTranslationService:
     """Service for translating subtitle files using Gemini API."""
 
-    def __init__(self, batch_size: int = 75):
+    def __init__(self, batch_size: Optional[int] = None):
         """
         Initialize the subtitle translation service.
 
         Args:
-            batch_size: Number of subtitle entries to translate per API call (default: 75)
+            batch_size: Number of subtitle entries to translate per API call.
+                       If None, uses the setting from configuration.
         """
-        self.batch_size = batch_size
-        self.model_name = settings.get_llm_model_name()
+        # Load from settings if not provided
+        if batch_size is None:
+            self.batch_size = settings.get_subtitle_translation_batch_size()
+        else:
+            self.batch_size = batch_size
+            
+        self.model_name = settings.get_subtitle_translation_model()
         self.generation_config = settings.get_generation_config()
-        logger.info(f"Initialized SubtitleTranslationService with batch_size={batch_size}")
+        
+        logger.info(f"Initialized SubtitleTranslationService with model={self.model_name}, batch_size={self.batch_size}")
 
     def ensure_subtitles_exist(
         self,
@@ -273,8 +280,14 @@ class SubtitleTranslationService:
         """
         logger.info(f"Translating {len(entries)} subtitles from {source_lang} to {target_lang}")
 
-        # Create batches
-        batches = [entries[i:i + self.batch_size] for i in range(0, len(entries), self.batch_size)]
+        if self.batch_size == -1:
+            # Process all at once
+            logger.info("Batch size is -1: Converting entire file in a single pass")
+            batches = [entries]
+        else:
+            # Create batches
+            batches = [entries[i:i + self.batch_size] for i in range(0, len(entries), self.batch_size)]
+            
         logger.info(f"Created {len(batches)} batches (batch_size={self.batch_size})")
 
         all_translated = []

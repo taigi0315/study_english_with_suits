@@ -103,6 +103,7 @@ class MediaScanner:
                 "id": str(video_path.relative_to(self.media_directory)),
                 "show_name": show_name,
                 "episode": episode,
+                "episode_name": video_path.stem,  # Full filename without extension
                 "video_path": str(video_path),
                 "subtitle_path": str(subtitle_path) if subtitle_path else None,
                 "has_subtitle": subtitle_path is not None,
@@ -200,33 +201,47 @@ class MediaScanner:
                         return subtitle_path
         
         # V2: Netflix folder format - subtitles in folder matching video name
-        # e.g., video.mp4 + video/ folder containing 7_English.srt, 4_Korean.srt
-        netflix_folder = video_dir / video_basename
-        if netflix_folder.exists() and netflix_folder.is_dir():
-            logger.info(f"Found Netflix-format subtitle folder: {netflix_folder}")
-            # Look for subtitle file matching the configured source language
-            # Import here to avoid circular imports
-            from langflix import settings
-            source_lang = settings.get_source_language_name()  # e.g., "Korean", "English"
-            logger.info(f"Looking for {source_lang} subtitle in Netflix folder")
-            
+        # Supports THREE structures:
+        # 1. SIMPLE: {video_dir}/Subs/ folder directly containing English.srt
+        # 2. NEW: {video_dir}/Subs/{video_basename}/ containing English.srt, 3_Korean.srt
+        # 3. LEGACY: {video_dir}/{video_basename}/ containing English.srt, 3_Korean.srt
+
+        # Import here to avoid circular imports
+        from langflix import settings
+        source_lang = settings.get_source_language_name()  # e.g., "Korean", "English"
+
+        # Try SIMPLE structure first: Subs/ directly (no nested folder)
+        subs_folder_simple = video_dir / "Subs"
+        # Try NEW structure: Subs/{video_basename}/
+        subs_folder_new = video_dir / "Subs" / video_basename
+        # Try LEGACY structure: {video_basename}/
+        subs_folder_legacy = video_dir / video_basename
+
+        # Check all locations (SIMPLE structure has priority)
+        for subs_folder in [subs_folder_simple, subs_folder_new, subs_folder_legacy]:
+            if not subs_folder.exists() or not subs_folder.is_dir():
+                continue
+
+            logger.info(f"Found subtitle folder: {subs_folder}")
+            logger.info(f"Looking for {source_lang} subtitle in folder")
+
             for ext in self.SUPPORTED_SUBTITLE_EXTENSIONS:
-                # Priority 1: Exact language name match (e.g., "Korean.srt")
-                exact_match = netflix_folder / f"{source_lang}{ext}"
+                # Priority 1: Exact language name match (e.g., "Korean.srt", "English.srt")
+                exact_match = subs_folder / f"{source_lang}{ext}"
                 if exact_match.exists():
                     logger.info(f"Found exact {source_lang} subtitle: {exact_match}")
                     return exact_match
-                
-                # Priority 2: Pattern match for Netflix-style naming (e.g., "4_Korean.srt")
-                for sub_file in netflix_folder.glob(f"*{source_lang}*{ext}"):
-                    logger.info(f"Found Netflix {source_lang} subtitle: {sub_file}")
+
+                # Priority 2: Pattern match for Netflix-style naming (e.g., "4_Korean.srt", "3_English.srt")
+                for sub_file in subs_folder.glob(f"*{source_lang}*{ext}"):
+                    logger.info(f"Found {source_lang} subtitle (pattern): {sub_file}")
                     return sub_file
-                
+
                 # Priority 3: Fallback to any subtitle if source language not found
-                for sub_file in netflix_folder.glob(f"*{ext}"):
-                    logger.info(f"Found Netflix subtitle (fallback): {sub_file}")
+                for sub_file in subs_folder.glob(f"*{ext}"):
+                    logger.info(f"Found subtitle (fallback): {sub_file}")
                     return sub_file
-        
+
         return None
     
     def _check_file_accessible(self, video_path: Path) -> Tuple[bool, Optional[str]]:

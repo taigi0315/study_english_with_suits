@@ -87,15 +87,18 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
 def parse_subtitle_filename(filename: str) -> Optional[Tuple[int, str]]:
     """
     Parse a subtitle filename to extract index and language.
-    
+
     Args:
-        filename: Subtitle filename (e.g., "3_Korean.srt")
-        
+        filename: Subtitle filename (e.g., "3_Korean.srt" or "3_korean.srt")
+
     Returns:
         Tuple of (index, language) or None if pattern doesn't match
-        
+        Language name is normalized to Title Case (e.g., "Korean", "English")
+
     Example:
         >>> parse_subtitle_filename("3_Korean.srt")
+        (3, "Korean")
+        >>> parse_subtitle_filename("3_korean.srt")
         (3, "Korean")
         >>> parse_subtitle_filename("invalid.srt")
         None
@@ -104,6 +107,8 @@ def parse_subtitle_filename(filename: str) -> Optional[Tuple[int, str]]:
     if match:
         index = int(match.group(1))
         language = match.group(2)
+        # Normalize language name to Title Case (Korean, not korean or KOREAN)
+        language = language.title()
         return (index, language)
     return None
 
@@ -151,6 +156,8 @@ def discover_subtitle_languages(media_path: str) -> Dict[str, List[str]]:
             simple_match = simple_pattern.match(srt_file.name)
             if simple_match:
                 language = simple_match.group(1)
+                # Normalize language name to Title Case (Korean, not korean or KOREAN)
+                language = language.title()
                 if language not in languages:
                     languages[language] = []
                 # Insert at beginning (priority over indexed variants)

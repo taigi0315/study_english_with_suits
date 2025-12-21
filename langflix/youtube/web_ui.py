@@ -2067,16 +2067,99 @@ class VideoManagementUI:
                 # Add video file if it exists
                 video_file_handle = None
                 subtitle_file_handle = None
-                
+
                 try:
                     if os.path.exists(data['video_path']):
                         video_file_handle = open(data['video_path'], 'rb')
                         files['video_file'] = (os.path.basename(data['video_path']), video_file_handle, 'video/mp4')
-                    
+
                     # Add subtitle file if it exists
-                    if data.get('subtitle_path') and os.path.exists(data['subtitle_path']):
-                        subtitle_file_handle = open(data['subtitle_path'], 'rb')
-                        files['subtitle_file'] = (os.path.basename(data['subtitle_path']), subtitle_file_handle, 'text/plain')
+                    subtitle_path = data.get('subtitle_path')
+
+                    # FALLBACK: If subtitle_path not provided, try to auto-discover it
+                    if not subtitle_path or not os.path.exists(subtitle_path):
+                        from pathlib import Path
+                        from langflix import settings
+
+                        logger.info("Subtitle path not provided, attempting auto-discovery...")
+
+                        # Get source language from form data (user's selection in UI)
+                        # Fall back to config if not provided
+                        source_lang_code = data.get('source_language') or form_data.get('source_language', 'en')
+
+                        # Convert language code to name (e.g., 'en' -> 'English', 'ko' -> 'Korean')
+                        from langflix.utils.language_utils import convert_language_code_to_name
+                        source_lang = convert_language_code_to_name(source_lang_code)
+
+                        logger.info(f"Auto-discovery using source language: {source_lang} (from code: {source_lang_code})")
+
+                        # Strategy 1: Try video file directory (for files in assets/media/)
+                        video_path = Path(data['video_path'])
+                        video_basename = video_path.stem
+                        video_dir = video_path.parent
+
+                        search_locations = [
+                            (video_dir / "Subs" / video_basename, "NEW structure (video dir)"),
+                            (video_dir / video_basename, "LEGACY structure (video dir)"),
+                        ]
+
+                        # Strategy 2: Try assets/media/{show_name}/Subs/{episode_name}/
+                        # This works when video is uploaded to temp location
+                        if 'show_name' in data and form_data.get('episode_name'):
+                            media_root = Path("assets/media")
+                            show_path = media_root / data['show_name']
+                            episode_name = form_data['episode_name']
+
+                            search_locations.extend([
+                                (show_path / "Subs" / episode_name, "NEW structure (show path)"),
+                                (show_path / episode_name, "LEGACY structure (show path)"),
+                            ])
+
+                        # Search in all locations
+                        for subs_folder, location_desc in search_locations:
+                            if not subs_folder.exists():
+                                logger.debug(f"Subtitle folder not found: {subs_folder} ({location_desc})")
+                                continue
+
+                            logger.info(f"Searching for subtitles in: {subs_folder} ({location_desc})")
+
+                            # Try exact match: {Language}.srt
+                            for ext in ['.srt', '.vtt', '.ass', '.smi']:
+                                candidate = subs_folder / f"{source_lang}{ext}"
+                                if candidate.exists():
+                                    subtitle_path = str(candidate)
+                                    logger.info(f"✅ Auto-discovered subtitle: {subtitle_path} (exact match)")
+                                    break
+
+                            # Try pattern match: *{Language}*.srt
+                            if not subtitle_path:
+                                for ext in ['.srt', '.vtt', '.ass', '.smi']:
+                                    matches = list(subs_folder.glob(f"*{source_lang}*{ext}"))
+                                    if matches:
+                                        subtitle_path = str(matches[0])
+                                        logger.info(f"✅ Auto-discovered subtitle: {subtitle_path} (pattern match)")
+                                        break
+
+                            # Try any subtitle file as fallback
+                            if not subtitle_path:
+                                for ext in ['.srt', '.vtt', '.ass', '.smi']:
+                                    matches = list(subs_folder.glob(f"*{ext}"))
+                                    if matches:
+                                        subtitle_path = str(matches[0])
+                                        logger.info(f"✅ Auto-discovered subtitle: {subtitle_path} (fallback - any file)")
+                                        break
+
+                            if subtitle_path:
+                                break
+
+                        if not subtitle_path:
+                            logger.warning(f"Could not auto-discover subtitle for: {video_basename} (source lang: {source_lang})")
+
+                    # Open subtitle file if found
+                    if subtitle_path and os.path.exists(subtitle_path):
+                        subtitle_file_handle = open(subtitle_path, 'rb')
+                        files['subtitle_file'] = (os.path.basename(subtitle_path), subtitle_file_handle, 'text/plain')
+                        logger.info(f"Uploading subtitle file: {subtitle_path}")
                     
                     # Make request to FastAPI with multipart/form-data
                     response = requests.post(fastapi_url, files=files, data=form_data)

@@ -1,0 +1,19 @@
+Translate the following subtitle entries from {source_language} to {target_language}.
+
+CRITICAL REQUIREMENTS:
+1. Provide natural, contextual translations that capture meaning and emotion
+2. Preserve the EXACT index order
+3. Translate ALL {count} subtitle entries
+4. DO NOT modify timestamps
+5. Output ONLY valid JSON
+
+INPUT SUBTITLES:
+{subtitles_json}
+
+OUTPUT FORMAT:
+{{
+  "translations": [
+    {{"index": 1, "text": "Translated text", "start": "00:00:01,000", "end": "00:00:03,000"}},
+    ...
+  ]
+}}

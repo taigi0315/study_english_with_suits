@@ -677,6 +677,11 @@ class VideoEditor:
             apply_final_audio_gain(str(long_form_temp_path), str(output_path), gain_factor=1.69)
             
             logger.info(f"✅ Long-form video created: {output_path}")
+            
+            # Ensure permissions
+            from langflix.services.output_manager import OutputManager
+            OutputManager.ensure_write_permissions(output_path, is_file=True)
+            
             return str(output_path)
             
         except Exception as e:

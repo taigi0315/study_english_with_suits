@@ -373,17 +373,38 @@ class LangFlixPipeline:
         # Determine media path
         media_path = self.video_file if self.video_file else self.video_dir
 
-        # Try to discover subtitle folder from media path
-        subtitle_folder = get_subtitle_folder(str(media_path))
+        subtitle_folder = None
 
-        # If not found (e.g., video in temp folder), try to find by episode name in assets/media
+        # PRIORITY 1: use the folder of the provided subtitle file
+        # BUT ONLY IF it is not a temporary file (uploaded)
+        # If it is temp, we want to discover/create the proper persistent folder later
+        if self.subtitle_file and self.subtitle_file.exists():
+            is_temp = str(self.subtitle_file).startswith("/tmp") or "temp" in str(self.subtitle_file.parent).lower()
+            
+            if not is_temp:
+                subtitle_folder = self.subtitle_file.parent
+                logger.info(f"Using provided subtitle directory: {subtitle_folder}")
+            else:
+                logger.info(f"Provided subtitle is temp file ({self.subtitle_file}), will find/create persistent folder")
+
+        # Try to discover subtitle folder from media path
+        if not subtitle_folder:
+            subtitle_folder = get_subtitle_folder(str(media_path))
+
+        # Get persistent media base path from env (defaults to assets/media for backward compat, but run.sh sets /media/shows)
+        persistent_media_root = os.getenv("LANGFLIX_STORAGE_LOCAL_BASE_PATH", "assets/media")
+
+        # If not found (e.g., video in temp folder), try to find by episode name in persistent media path
         if not subtitle_folder and self.episode_name:
             logger.info(f"Searching for Netflix folder by episode name: {self.episode_name}")
-            # Search in common media directories and their Subs/ subfolders
+            # Search in persistent media path and legacy paths
             search_paths = [
-                "assets/media",
-                "assets/media/test_media",
+                persistent_media_root,
+                "assets/media", # Keep legacy just in case
             ]
+            # Deduplicate paths
+            search_paths = list(dict.fromkeys(search_paths))
+
             for media_root in search_paths:
                 # Check NEW structure: {media_root}/Subs/{episode_name}/
                 subs_folder = Path(media_root) / "Subs" / self.episode_name
@@ -403,13 +424,13 @@ class LangFlixPipeline:
                         logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
                         break
 
-        # If still not found, create Netflix folder in assets/media (permanent location)
+        # If still not found, create Netflix folder in persistent media path (permanent location)
         if not subtitle_folder:
             if self.episode_name:
-                # Create in assets/media using episode name
-                subtitle_folder = Path("assets/media") / self.episode_name
+                # Create in persistent media path (e.g., /media/shows/{EpisodeName})
+                subtitle_folder = Path(persistent_media_root) / self.episode_name
                 subtitle_folder.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Created Netflix folder in assets/media: {subtitle_folder}")
+                logger.info(f"Created persistent subtitle folder: {subtitle_folder}")
             else:
                 # Fallback: create based on media path (temp location - not ideal)
                 media_path_obj = Path(media_path)
@@ -426,9 +447,21 @@ class LangFlixPipeline:
         # The uploaded subtitle file is the source language subtitle
         # Note: In V2 mode, subtitle_file may be None - subtitles discovered from Subs/ folder
         source_subtitle_path = subtitle_folder / f"{self.source_language}.srt"
-        if not source_subtitle_path.exists() and self.subtitle_file and self.subtitle_file.exists():
-            shutil.copy2(str(self.subtitle_file), str(source_subtitle_path))
-            logger.info(f"Copied uploaded subtitle to: {source_subtitle_path}")
+        
+        # Logic to copy self.subtitle_file to source_subtitle_path
+        # We do this if:
+        # a) source_subtitle_path doesn't exist
+        # b) OR self.subtitle_file is explicitly provided AND different from source_subtitle_path
+        if self.subtitle_file and self.subtitle_file.exists():
+            if not source_subtitle_path.exists() or self.subtitle_file.resolve() != source_subtitle_path.resolve():
+                # Only copy if we are not overwriting the exact same file
+                try:
+                    shutil.copy2(str(self.subtitle_file), str(source_subtitle_path))
+                    logger.info(f"Copied uploaded/provided subtitle to persistent location: {source_subtitle_path}")
+                    # Update self.subtitle_file to point to the persistent copy
+                    self.subtitle_file = source_subtitle_path
+                except Exception as copy_err:
+                     logger.warning(f"Failed to copy subtitle to persistent location: {copy_err}")
 
         # Get required languages (convert codes to names)
         language_code_to_name = {

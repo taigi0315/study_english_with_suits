@@ -148,20 +148,24 @@ class SubtitleTranslationService:
                     percent = int((idx / total_translations) * 90) + 5
                     progress_callback(percent, f"Translating to {target_language}...")
 
-                # Translate subtitles
+                # Write translated subtitle file
+                output_path = subtitle_folder / f"{target_language}.srt"
+                
+                # Translate subtitles (with incremental saving)
                 translated_entries = self.batch_translate_subtitles(
                     base_entries,
                     base_language,
                     target_language,
+                    output_path=str(output_path),
                     progress_callback=lambda p, m: progress_callback(
                         int((idx / total_translations) * 90) + 5 + int(p * 0.9 / total_translations),
                         f"[{target_language}] {m}"
                     ) if progress_callback else None
                 )
 
-                # Write translated subtitle file
-                output_path = subtitle_folder / f"{target_language}.srt"
+                # Final write to ensure completeness (though incremental writes happen too)
                 write_srt_file(translated_entries, str(output_path))
+
                 logger.info(f"Successfully created {target_language} subtitle: {output_path}")
                 results[target_language] = True
 
@@ -248,6 +252,7 @@ class SubtitleTranslationService:
         entries: List[SubtitleEntry],
         source_lang: str,
         target_lang: str,
+        output_path: Optional[str] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> List[SubtitleEntry]:
         """
@@ -257,6 +262,7 @@ class SubtitleTranslationService:
             entries: List of SubtitleEntry objects to translate
             source_lang: Source language name (e.g., "English")
             target_lang: Target language name (e.g., "Korean")
+            output_path: Optional path to save progress incrementally
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -281,6 +287,14 @@ class SubtitleTranslationService:
 
                 translated_batch = self._translate_batch(batch, source_lang, target_lang)
                 all_translated.extend(translated_batch)
+
+                # Incrementally save progress if output path is provided
+                if output_path:
+                    try:
+                        write_srt_file(all_translated, output_path)
+                        logger.debug(f"Saved incremental progress to {output_path}")
+                    except Exception as save_err:
+                        logger.warning(f"Failed to save incremental progress: {save_err}")
 
                 logger.info(f"Successfully translated batch {batch_idx + 1}/{len(batches)}")
 

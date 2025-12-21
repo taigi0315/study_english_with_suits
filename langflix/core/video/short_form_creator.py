@@ -269,6 +269,11 @@ class ShortFormCreator:
             self._write_metadata_file(output_path, expression)
 
             logger.info(f"✅ Short-form video created: {output_path}")
+            
+            # Ensure permissions
+            from langflix.services.output_manager import OutputManager
+            OutputManager.ensure_write_permissions(output_path, is_file=True)
+            
             return str(output_path)
 
         except Exception as e:
@@ -600,7 +605,15 @@ class ShortFormCreator:
                     result = subprocess.run(cmd, capture_output=True, text=True)
 
                     if result.returncode == 0 and temp_with_credit.exists():
-                        shutil.move(str(temp_with_credit), str(output_path))
+                        try:
+                            shutil.move(str(temp_with_credit), str(output_path))
+                        except OSError as move_err:
+                            if hasattr(move_err, 'errno') and move_err.errno == 1:
+                                logger.warning(f"Move failed (EPERM), trying copy+unlink: {move_err}")
+                                shutil.copyfile(str(temp_with_credit), str(output_path))
+                                temp_with_credit.unlink()
+                            else:
+                                raise
                         logger.info("✅ Ending credit appended")
                         return
                     else:
@@ -614,8 +627,23 @@ class ShortFormCreator:
                     if temp_with_credit.exists():
                         temp_with_credit.unlink()
 
-        # Copy as final output
-        shutil.copy(str(overlayed_path), str(output_path))
+        # Final copy
+        try:
+            # First try copy with metadata (if possible)
+            shutil.copy2(str(overlayed_path), str(output_path))
+        except OSError as e:
+            if hasattr(e, 'errno') and e.errno == 1: # Operation not permitted (often chmod on ZFS)
+                logger.warning(f"Metadata copy failed (EPERM), using content-only copy: {e}")
+                # Fallback to content-only copy
+                shutil.copyfile(str(overlayed_path), str(output_path))
+                # Try to set permissions manually (safe method)
+                try:
+                    from langflix.services.output_manager import OutputManager
+                    OutputManager.ensure_write_permissions(output_path, is_file=True)
+                except Exception:
+                    pass
+            else:
+                raise
 
     def _write_metadata_file(self, video_path: Path, expression: 'ExpressionAnalysis') -> None:
         """Write metadata file for YouTube upload.

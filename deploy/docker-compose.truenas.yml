@@ -102,8 +102,8 @@ services:
       - "${API_PORT:-8000}:8000"
 
     volumes:
-      # TrueNAS 미디어 파일 (읽기 전용)
-      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
+      # TrueNAS 미디어 파일 (쓰기 가능 - 자막 생성을 위해)
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:rw
 
       # 출력 디렉토리 (쓰기 가능)
       - ${TRUENAS_DATA_PATH}/output:/data/output:rw

@@ -1,14 +1,15 @@
-#!/usr/bin/env python3
 """
 Output Manager for LangFlix
 Manages organized output structure for scalable multi-language support
+Includes permission handling for TrueNAS environments
 """
 
 import os
 import re
 import logging
+import stat
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,40 @@ class OutputManager:
         """
         self.base_output_dir = Path(base_output_dir)
         self.base_output_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(self.base_output_dir)
+
+    @staticmethod
+    def ensure_write_permissions(path: Union[str, Path], is_file: bool = False) -> None:
+        """
+        Ensure path has correct write permissions for TrueNAS/Docker environment.
+        Directories: 775 (rwxrwxr-x)
+        Files: 664 (rw-rw-r--)
+        """
+        try:
+            path_obj = Path(path)
+            if not path_obj.exists():
+                return
+                
+            # Set permissions
+            if is_file:
+                # rw-rw-r-- (664)
+                os.chmod(path_obj, 0o664)
+            else:
+                # rwxrwxr-x (775)
+                os.chmod(path_obj, 0o775)
+                
+            # Explicitly try to set gid to 1000 if possible (often restricted, so ignore errors)
+            try:
+                # Get current uid/gid
+                st = path_obj.stat()
+                # Only try to change if not already correct (container user is usually 1000)
+                if st.st_gid != 1000:
+                    os.chown(path_obj, -1, 1000)
+            except Exception:
+                pass
+                
+        except Exception as e:
+            logger.warning(f"Failed to set permissions for {path}: {e}")
         
     def create_episode_structure(self, series_name: str, episode_name: str) -> Dict[str, Path]:
         """
@@ -114,6 +149,7 @@ class OutputManager:
         # Create main episode directory
         episode_dir = self.base_output_dir / normalized_series / normalized_episode
         episode_dir.mkdir(parents=True, exist_ok=True)
+        self.ensure_write_permissions(episode_dir)
         
         # Note: Removed translations/ directory - language folders go directly under episode
         # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
@@ -149,6 +185,7 @@ class OutputManager:
         # Structure: output/Series/Episode/{lang}/ instead of output/Series/Episode/translations/{lang}/
         lang_dir = episode_paths['episode_dir'] / language_code
         lang_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(lang_dir)
         
         # Create language subdirectories
         # Note: context_videos/, tts_audio/, and videos/ directories are not created as they are not used
@@ -162,11 +199,20 @@ class OutputManager:
         long_dir = lang_dir / "long"  # Combined long-form video
         
         subtitles_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(subtitles_dir)
+        
         slides_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(slides_dir)
+        
         # videos_dir is not created - not used in new structure
         expressions_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(expressions_dir)
+        
         shorts_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(shorts_dir)
+        
         long_dir.mkdir(exist_ok=True)
+        self.ensure_write_permissions(long_dir)
         
         # Return language-specific paths
         lang_paths = {

@@ -144,12 +144,20 @@ if [ -d "$OUTPUT_DIR" ]; then
         echo "   현재 권한: $CURRENT_PERM"
     fi
 
-    # 하위 디렉토리(shorts 등) 강제 권한 수정 시도
-    # 오류가 발생했던 shorts 폴더를 찾아 명시적으로 권한 수정
-    find "$OUTPUT_DIR" -type d -name "shorts" -print0 | while IFS= read -r -d '' dir; do
-        sudo chown -R 1000:1000 "$dir" 2>/dev/null
-        sudo chmod -R 775 "$dir" 2>/dev/null
-    done
+    # 하위 디렉토리 강제 권한 수정 (재귀적)
+    # output 디렉토리 내의 모든 파일과 폴더에 대해 권한 설정
+    if sudo chown -R 1000:1000 "$OUTPUT_DIR" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 전체 output 디렉토리 소유권 재설정 완료${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  전체 output 소유권 설정 실패 (ZFS ACL)${NC}"
+    fi
+
+    if sudo chmod -R 775 "$OUTPUT_DIR" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 전체 output 디렉토리 권한 재설정 완료${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  전체 output 권한 설정 실패 (ZFS ACL)${NC}"
+    fi
+
     
     # 최종 상태 확인
     FINAL_OWNER=$(stat -c '%U:%G' "$OUTPUT_DIR" 2>/dev/null || stat -f '%Su:%Sg' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN:UNKNOWN")

@@ -241,9 +241,15 @@ class YouTubeUploader:
                         
                         # Set permissions (read/write for owner only)
                         try:
+                            # Only attempt chmod if we can
                             os.chmod(self.token_file, 0o600)
                         except (OSError, PermissionError) as e:
-                            logger.warning(f"Could not set permissions on {self.token_file}: {e}")
+                            # Suppress "Operation not permitted" (EPERM/Errno 1) which is common in Docker/bind-mounts
+                            # where we can write but not chmod
+                            if getattr(e, 'errno', None) == 1:
+                                logger.debug(f"Skipping chmod on {self.token_file}: Operation not permitted (likely Docker mount)")
+                            else:
+                                logger.warning(f"Could not set permissions on {self.token_file}: {e}")
                         
                         logger.info(f"Saved YouTube token to {self.token_file}")
                     except (OSError, PermissionError) as e:

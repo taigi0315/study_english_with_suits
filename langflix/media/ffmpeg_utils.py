@@ -251,21 +251,33 @@ def _run_ffprobe_uncached(path: str, timeout: int) -> Dict[str, Any]:
     except subprocess.CalledProcessError as e:
         stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else "No stderr")
         logger.error(f"FFprobe failed for {path}: returncode={e.returncode}, stderr={stderr}")
+        
+        # Enhanced diagnostics for TrueNAS permission/data issues
+        try:
+            import os
+            import stat
+            p = Path(path)
+            if not p.exists():
+                logger.error(f"Diagnostic: File does not exist: {path}")
+            else:
+                st = p.stat()
+                mode_oct = oct(st.st_mode)[-4:]
+                access_r = os.access(path, os.R_OK)
+                size_mb = st.st_size / (1024 * 1024)
+                logger.error(
+                    f"Diagnostic: {path} | Size: {size_mb:.2f}MB | Mode: {mode_oct} | "
+                    f"Uid: {st.st_uid} Gid: {st.st_gid} | Readable: {access_r} | "
+                    f"IsFile: {p.is_file()} | IsDir: {p.is_dir()}"
+                )
+        except Exception as diag_e:
+            logger.error(f"Diagnostic validation failed: {diag_e}")
+
         # Try ffmpeg-python probe as a fallback
         try:
             return ffmpeg.probe(path)  # type: ignore[no-any-return]
         except Exception as ee:
             logger.error(f"ffmpeg.probe fallback also failed for {path}: {ee}")
             raise
-    except FileNotFoundError:
-        logger.error("FFprobe not found. Please install ffmpeg.")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse FFprobe JSON output for {path}: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"FFprobe error for {path}: {e}")
-        raise
 
 
 def get_streams(probe: Dict[str, Any], stream_type: str) -> list[Dict[str, Any]]:

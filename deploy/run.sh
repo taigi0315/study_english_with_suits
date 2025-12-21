@@ -143,6 +143,13 @@ if [ -d "$OUTPUT_DIR" ]; then
         CURRENT_PERM=$(stat -c '%a' "$OUTPUT_DIR" 2>/dev/null || stat -f '%A' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN")
         echo "   현재 권한: $CURRENT_PERM"
     fi
+
+    # 하위 디렉토리(shorts 등) 강제 권한 수정 시도
+    # 오류가 발생했던 shorts 폴더를 찾아 명시적으로 권한 수정
+    find "$OUTPUT_DIR" -type d -name "shorts" -print0 | while IFS= read -r -d '' dir; do
+        sudo chown -R 1000:1000 "$dir" 2>/dev/null
+        sudo chmod -R 775 "$dir" 2>/dev/null
+    done
     
     # 최종 상태 확인
     FINAL_OWNER=$(stat -c '%U:%G' "$OUTPUT_DIR" 2>/dev/null || stat -f '%Su:%Sg' "$OUTPUT_DIR" 2>/dev/null || echo "UNKNOWN:UNKNOWN")
@@ -289,6 +296,40 @@ if [ -f "$CREDENTIALS_FILE" ] && [ ! -r "$CREDENTIALS_FILE" ]; then
     echo "   2. 또는 다음 명령어로 ZFS ACL 확인:"
     echo "      zfs get aclmode $(zfs list -H -o name | grep -i langflix | head -1)"
     echo "   3. Docker 컨테이너는 파일이 마운트되면 접근 가능할 수 있습니다"
+fi
+
+# Config 파일 권한 확인 (중요)
+echo ""
+echo -e "${BLUE}⚙️  설정 파일 권한 확인 중...${NC}"
+CONFIG_FILE="$PROJECT_ROOT/config/config.yaml"
+
+if [ -f "$CONFIG_FILE" ]; then
+    echo -e "${GREEN}✅ config.yaml 발견${NC}"
+    
+    # 소유권 설정
+    if sudo chown 1000:1000 "$CONFIG_FILE" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 소유권 설정 완료 (1000:1000)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  소유권 설정 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+    fi
+    
+    # 권한 설정 (644이면 누구나 읽기 가능)
+    if sudo chmod 644 "$CONFIG_FILE" 2>/dev/null; then
+        echo -e "${GREEN}   ✅ 권한 설정 완료 (644)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  권한 설정 실패${NC}"
+    fi
+    
+    # 읽기 가능 여부 확인
+    if [ -r "$CONFIG_FILE" ]; then
+         echo -e "${GREEN}   ✅ 파일 읽기 가능${NC}"
+    else
+         echo -e "${RED}   ❌ 파일 읽기 불가능 - 컨테이너 시작 실패 예상${NC}"
+         echo "   해결: sudo chmod 644 $CONFIG_FILE"
+    fi
+else
+    echo -e "${RED}❌ 오류: config.yaml 파일을 찾을 수 없습니다${NC}"
+    echo "   경로: $CONFIG_FILE"
 fi
 
 # Docker Compose 파일 확인

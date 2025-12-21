@@ -467,8 +467,7 @@ class LangFlixPipeline:
             target_lang_names.append(lang_name)
 
         # Combine source + target languages
-        target_lang = settings.get_default_target_language()
-        required_langs = list(set([self.source_language] + [target_lang] + target_lang_names))
+        required_langs = list(set([self.source_language] + target_lang_names))
 
         logger.info(f"Ensuring subtitles exist for languages: {required_langs}")
 
@@ -678,9 +677,28 @@ class LangFlixPipeline:
             logger.warning("No subtitle languages found, falling back to V1")
             return []
         
-        # Get source and target languages from config
-        source_lang = settings.get_default_source_language()  # e.g., "English"
-        target_lang = settings.get_default_target_language()  # e.g., "Korean"
+        # Get source and target languages
+        # Use provided source language
+        source_lang = self.source_language
+        
+        # Use PRIMARY target language from request (not defaults from config)
+        if self.target_languages:
+            # We need the full name (e.g., 'Korean') not the code (e.g., 'ko')
+            # Assuming self.target_languages stores codes, we convert the first one
+            primary_target_code = self.target_languages[0]
+            
+            # Simple mapping (expand as needed or import unified map)
+            language_code_to_name = {
+                'ko': 'Korean', 'ja': 'Japanese', 'zh': 'Chinese', 'es': 'Spanish',
+                'fr': 'French', 'en': 'English', 'de': 'German', 'pt': 'Portuguese',
+                'ru': 'Russian', 'it': 'Italian'
+            }
+            target_lang = language_code_to_name.get(primary_target_code, primary_target_code.capitalize())
+        else:
+            # Fallback only if no target languages specified
+            target_lang = settings.get_default_target_language()
+
+        logger.info(f"V2 Analysis using Source: {source_lang}, Target: {target_lang}")
         
         # Validate availability
         lang_names = list(languages.keys())

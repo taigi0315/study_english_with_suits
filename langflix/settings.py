@@ -1148,37 +1148,6 @@ LANGUAGE_LEVELS = get_language_levels()
 VIDEO_CONFIG = get_video_config()
 
 
-# Legacy ConfigManager class - use get_* functions instead
-class ConfigManager:
-    """
-    Legacy configuration manager for backward compatibility.
-    
-    Deprecated: Use get_* functions directly instead.
-    """
-    
-    def __init__(self, config_file: Optional[str] = None):
-        logger.warning("ConfigManager is deprecated. Use get_* functions directly.")
-        self.config_loader = _config_loader
-        
-    def get(self, section: str, key: Optional[str] = None, default: Any = None) -> Any:
-        """Get a configuration value"""
-        if key is None:
-            return self.config_loader.get_section(section)
-        else:
-            return self.config_loader.get(section, key, default=default)
-    
-    def set(self, section: str, key: str, value: Any) -> None:
-        """Set a configuration value (runtime only, not persisted)"""
-        logger.warning("ConfigManager.set() does not persist changes. Edit YAML files directly.")
-        
-    def save_config(self):
-        """Save configuration (not implemented)"""
-        logger.warning("ConfigManager.save_config() not implemented. Edit YAML files directly.")
-
-
-# Global config instance for backward compatibility
-config = ConfigManager()
-
 
 # ============================================================================
 # Phase 4: Media Processing & Slide Generation Settings

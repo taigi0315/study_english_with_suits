@@ -399,7 +399,7 @@ export const ui = {
                     <label style="display: block; margin-bottom: 10px; font-weight: 500;">Target Language (Translate TO)</label>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
                         <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">
-                            <input type="checkbox" class="language-checkbox" value="ko" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #3498db;">
+                            <input type="checkbox" class="language-checkbox" value="ko" style="margin-right: 10px; width: 20px; height: 18px; cursor: pointer; accent-color: #3498db;">
                             <span style="font-weight: 500; color: #2c3e50;">Korean (한국어)</span>
                         </label>
                         <label class="language-checkbox-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 5px; transition: all 0.2s; border: 2px solid #e0e0e0;">

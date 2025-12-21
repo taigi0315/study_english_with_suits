@@ -217,6 +217,19 @@ class ShortFormCreator:
 
             shorts_dir = self._get_shorts_dir()
             output_path = shorts_dir / output_filename
+            
+            # TrueNAS Fix: Ensure output file does not exist or we have permission to overwrite
+            if output_path.exists():
+                try:
+                    output_path.unlink()
+                    logger.info(f"Removed existing output key file: {output_path}")
+                except OSError as e:
+                    logger.warning(f"Failed to remove existing file {output_path}: {e}")
+                    # Change filename to avoid permission conflict if delete failed
+                    import time
+                    timestamp = int(time.time())
+                    output_path = shorts_dir / f"short_form_{expression_index+1:02d}_{safe_expression[:40]}_{timestamp}.mkv"
+                    logger.info(f"Using alternative filename: {output_path.name}")
 
             logger.info(f"Creating short-form video from long-form: {expr_text}")
 

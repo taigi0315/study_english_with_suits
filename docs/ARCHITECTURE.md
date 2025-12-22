@@ -1,8 +1,8 @@
-# LangFlix V2 Architecture
+# LangFlix Architecture
 
 ## Overview
 
-LangFlix V2 introduces a dual-language subtitle architecture that eliminates expensive LLM translation calls by using pre-existing professional translations from Netflix downloads.
+LangFlix uses a dual-language subtitle architecture that leverages pre-existing professional translations from Netflix downloads, combined with AI-powered contextual localization.
 
 ```mermaid
 graph TD
@@ -12,7 +12,7 @@ graph TD
     C --> E[Target Subtitles<br>e.g., Spanish.srt]
     D --> F[DualSubtitleService]
     E --> F
-    F --> G[V2 Content Analyzer]
+    F --> G[Content Analyzer]
     G --> H[Index-based Selection]
     H --> I[Video Editor]
     I --> J[Dual-Font Rendering]
@@ -22,9 +22,11 @@ graph TD
 ## Core Components
 
 ### 1. Netflix Folder Detection
+
 **File:** `langflix/media/media_scanner.py`
 
 Automatically detects Netflix-format subtitle folders:
+
 ```
 video.mp4
 video/              ← Folder with same name as video
@@ -35,9 +37,11 @@ video/              ← Folder with same name as video
 ```
 
 ### 2. Dual Subtitle Service
+
 **File:** `langflix/core/dual_subtitle.py`
 
 Loads and aligns source + target subtitle pairs:
+
 ```python
 dual_sub = get_dual_subtitle_service(
     video_folder_path,
@@ -46,20 +50,22 @@ dual_sub = get_dual_subtitle_service(
 )
 ```
 
-### 3. V2 Content Analyzer
+### 3. Content Analyzer
+
 **File:** `langflix/core/content_selection_analyzer.py`
 
 Index-based expression selection (no translation):
+
 - Input: Source dialogues + Target dialogues
 - Output: Expression indices, not text or timestamps
-- Token reduction: ~70% vs V1
-
-**Prompt Template:** `langflix/templates/expression_analysis_prompt_v8.txt`
+- Token efficiency: Uses indices instead of full text
 
 ### 4. Dual-Font Video Editor
+
 **File:** `langflix/core/video_editor.py`
 
 Renders vocabulary annotations with correct fonts:
+
 ```
 [thrown in] : [lanzado]
      ↑           ↑
@@ -67,23 +73,29 @@ Renders vocabulary annotations with correct fonts:
  font       font
 ```
 
-## Data Flow Comparison
+### 5. Contextual Localization Pipeline
 
-### V1 Flow (Single Subtitle + LLM Translation)
-```
-1. Load single subtitle file
-2. Parse dialogues → LLM
-3. LLM selects expressions AND translates
-4. Render video with single font
-```
+**File:** `langflix/pipeline/orchestrator.py`
 
-### V2 Flow (Dual Subtitles, No Translation)
+The pipeline orchestrates context-aware translation:
+
+1. **Show Bible** - Static context from Wikipedia (characters, relationships)
+2. **Chunk Summaries** - Micro-context with emotional tone
+3. **Master Summary** - Episode narrative arc
+4. **Contextual Translation** - Localized with full context
+
+## Data Flow
+
+### Workflow
+
 ```
 1. Detect Netflix subtitle folder
 2. Load source + target subtitle files
-3. LLM selects expressions (returns indices)
-4. Look up text + timestamps from indices
-5. Render video with dual fonts
+3. Create/load Show Bible for character context
+4. Extract expressions with chunk summaries
+5. Aggregate summaries into episode narrative
+6. Translate with full context awareness
+7. Render video with dual fonts
 ```
 
 ## Configuration
@@ -92,13 +104,18 @@ Renders vocabulary annotations with correct fonts:
 # config/default.yaml
 dual_language:
   enabled: true
-  source_language: "Korean"    # Language to learn FROM
-  target_language: "Spanish"   # User's native language
-  
+  source_language: "Korean" # Language to learn FROM
+  target_language: "Spanish" # User's native language
+
   subtitle_discovery:
-    auto_detect: true           # Auto-find Netflix folders
+    auto_detect: true # Auto-find Netflix folders
     source_pattern: "*English*" # Pattern for source subs
-    target_pattern: "*Korean*"  # Pattern for target subs
+    target_pattern: "*Korean*" # Pattern for target subs
+
+pipeline:
+  use_wikipedia: true # Fetch Show Bible from Wikipedia
+  aggregator_model: "gemini-2.5-flash"
+  translator_model: "gemini-1.5-pro"
 ```
 
 ## Pipeline Integration
@@ -107,42 +124,36 @@ dual_language:
 
 ```python
 def run(self, ...):
-    # V2 mode check
     if settings.is_dual_language_enabled():
-        expressions = self._run_v2_analysis(...)
+        # Use dual-language analysis
+        expressions = self._run_dual_language_analysis(...)
     else:
-        expressions = self._run_v1_analysis(...)
+        # Fallback to single-language mode
+        expressions = self._run_single_language_analysis(...)
 ```
 
-## API Changes
+## API
 
-### New Form Parameters
+### Form Parameters
+
 ```python
 # POST /api/v1/jobs
-source_language: Optional[str]  # V2: e.g., "en", "ko"
+source_language: Optional[str]  # e.g., "en", "ko"
+target_languages: List[str]     # e.g., ["ko", "ja", "es"]
 ```
 
-### New Job Data Fields
+### Job Data Fields
+
 ```python
 job_data = {
-    "source_language": "en",  # V2: Source language code
+    "source_language": "en",
+    "target_languages": ["ko"],
     ...
 }
 ```
 
-## Token Usage Comparison
-
-| Prompt Section | V1 Tokens | V2 Tokens |
-|----------------|-----------|-----------|
-| Dialogues output | ~200 | 0 (not needed) |
-| Translation output | ~200 | 0 (pre-existing) |
-| Timestamps | ~50 | 20 (indices only) |
-| **Total per expression** | **~450** | **~150** |
-
-**Savings: ~67% fewer output tokens per expression**
-
 ## Related Documents
 
-- [V2_PROMPT_REQUIREMENTS.md](./V2_PROMPT_REQUIREMENTS.md) - LLM prompt specifications
 - [FEATURE_GLOSSARY.md](./FEATURE_GLOSSARY.md) - Standard terminology
-- [v1/ARCHITECTURE.md](./v1/ARCHITECTURE.md) - Original V1 architecture
+- [CONFIGURATION.md](./CONFIGURATION.md) - Configuration reference
+- [PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md) - Detailed pipeline docs

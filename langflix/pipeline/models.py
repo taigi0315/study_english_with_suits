@@ -1,0 +1,164 @@
+"""
+Pipeline Data Models
+Defines data structures for the Contextual Localization Pipeline
+"""
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+
+
+class ChunkResult(BaseModel):
+    """
+    Result from Script Agent processing a single chunk
+    Includes both expressions and chunk summary
+    """
+    chunk_id: int = Field(..., description="Sequential chunk number")
+    chunk_summary: str = Field(..., description="2-3 sentence summary with emotional context")
+    expressions: List[Dict[str, Any]] = Field(default_factory=list, description="Extracted expressions")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "chunk_id": 1,
+                "chunk_summary": "Harvey angrily confronts Mike about a missing document, asserting his authority. Mike is apologetic but defensive.",
+                "expressions": [
+                    {
+                        "expression": "cut him loose",
+                        "expression_dialogue": "You need to cut him loose before he drags you down.",
+                    }
+                ]
+            }
+        }
+
+
+class EpisodeData(BaseModel):
+    """
+    Complete data for an episode
+    Includes all chunk results and master summary
+    """
+    episode_id: str = Field(..., description="Unique episode identifier")
+    show_name: str = Field(..., description="Name of the show")
+    show_bible: str = Field(..., description="Show Bible content")
+    chunks: List[ChunkResult] = Field(default_factory=list, description="All processed chunks")
+    master_summary: Optional[str] = Field(None, description="Aggregated episode narrative")
+
+    def get_all_expressions(self) -> List[Dict[str, Any]]:
+        """Get all expressions from all chunks"""
+        all_expressions = []
+        for chunk in self.chunks:
+            all_expressions.extend(chunk.expressions)
+        return all_expressions
+
+    def get_all_chunk_summaries(self) -> List[str]:
+        """Get all chunk summaries in order"""
+        return [chunk.chunk_summary for chunk in self.chunks]
+
+
+class LocalizationData(BaseModel):
+    """
+    Localization data for a single expression
+    Context-aware translations
+    """
+    target_lang: str = Field(..., description="Target language code (e.g., 'ko', 'ja', 'es')")
+    target_lang_name: str = Field(..., description="Target language name (e.g., 'Korean', 'Japanese')")
+    expression_translated: str = Field(..., description="Naturalized translation of expression")
+    expression_dialogue_translated: str = Field(..., description="Translation reflecting tone/hierarchy")
+    catchy_keywords_translated: List[str] = Field(default_factory=list, description="Localized keywords")
+    translation_notes: Optional[str] = Field(None, description="Notes about honorifics/formality applied")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "target_lang": "ko",
+                "target_lang_name": "Korean",
+                "expression_translated": "손절해",
+                "expression_dialogue_translated": "그 사람이 너까지 끌어내리기 전에 손절해야 돼.",
+                "catchy_keywords_translated": ["냉정한 손절", "하비의 조언", "위기 상황"],
+                "translation_notes": "Used 반말 for Harvey (senior) speaking"
+            }
+        }
+
+
+class TranslationResult(BaseModel):
+    """
+    Final multilingual expression data combining English + localization
+    """
+    # Original English data
+    expression: str
+    expression_dialogue: str
+    context_summary_eng: Optional[str] = None
+    start_time: str
+    end_time: str
+    scene_type: Optional[str] = None
+    similar_expressions: List[str] = Field(default_factory=list)
+    catchy_keywords: List[str] = Field(default_factory=list)
+
+    # Chunk context
+    chunk_id: int
+    chunk_summary: str = Field(..., description="Micro-context from Script Agent")
+
+    # Episode context
+    episode_summary: Optional[str] = Field(None, description="Master episode summary")
+
+    # Multilingual localizations
+    localizations: List[LocalizationData] = Field(default_factory=list, description="Translations with context")
+
+    def get_localization(self, target_lang: str) -> Optional[LocalizationData]:
+        """Get localization for specific language"""
+        for loc in self.localizations:
+            if loc.target_lang == target_lang:
+                return loc
+        return None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "expression": "cut him loose",
+                "expression_dialogue": "You need to cut him loose before he drags you down.",
+                "chunk_id": 5,
+                "chunk_summary": "Harvey advises Jessica to fire a problematic client, showing his pragmatic authority.",
+                "start_time": "00:12:30.500",
+                "end_time": "00:12:35.000",
+                "localizations": [
+                    {
+                        "target_lang": "ko",
+                        "target_lang_name": "Korean",
+                        "expression_translated": "손절해",
+                        "expression_dialogue_translated": "그 사람이 너까지 끌어내리기 전에 손절해야 돼."
+                    }
+                ]
+            }
+        }
+
+
+class PipelineConfig(BaseModel):
+    """
+    Configuration for pipeline execution
+    """
+    show_name: str
+    episode_name: str
+    target_languages: List[str] = Field(default_factory=list, description="Language codes to translate to")
+    use_wikipedia: bool = Field(True, description="Whether to fetch Show Bible from Wikipedia")
+    aggregator_model: str = Field("gemini-2.5-flash", description="Model for summary aggregation")
+    translator_model: str = Field("gemini-1.5-pro", description="Model for contextual translation")
+    cache_show_bible: bool = Field(True, description="Cache Show Bible for reuse")
+    cache_master_summary: bool = Field(True, description="Cache Master Summary for reuse")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "show_name": "Suits",
+                "episode_name": "S01E01",
+                "target_languages": ["ko", "ja", "es"],
+                "use_wikipedia": True,
+                "aggregator_model": "gemini-2.5-flash",
+                "translator_model": "gemini-1.5-pro"
+            }
+        }
+
+
+# Backward compatibility aliases
+V3ChunkResult = ChunkResult
+V3EpisodeData = EpisodeData
+V3LocalizationData = LocalizationData
+V3TranslationResult = TranslationResult
+V3PipelineConfig = PipelineConfig

@@ -13,28 +13,64 @@ app:
   template_file: "expression_analysis_prompt.txt"
 
 # ============================================================================
-# V2: Dual Language Subtitle Configuration
+# Subtitle Configuration
 # ============================================================================
-dual_language:
-  # Enable V2 dual-language mode (uses Netflix subtitles for both languages)
-  enabled: true  # V2 mode: Load both source and target subtitles, use fuzzy matching
-  
+subtitles:
+  # Enable multi-language subtitle mode (uses Netflix subtitles for both languages)
+  enabled: true  # Load both source and target subtitles, use fuzzy matching
+
   # Default source language (language being learned)
   default_source_language: "English"
 
   # Default target language (user's native language)
   default_target_language: "Korean"
-  
+
   # Subtitle file naming pattern
   # Netflix format: {index}_{Language}.srt (e.g., "3_Korean.srt", "6_English.srt")
   subtitle_pattern: "{index}_{Language}.srt"
-  
+
   # Variant selection when multiple subtitle files exist for same language
   # Options: "first" (use first file), "last" (use last file), "largest" (use largest file)
   variant_selection: "first"
-  
-  # V2 prompt template (used when dual_language.enabled is true)
-  v2_template_file: "content_selection_prompt_v1.txt"
+
+  # Content selection prompt template (used when subtitles.enabled is true)
+  template_file: "content_selection_prompt_v1.txt"
+
+# ============================================================================
+# Contextual Localization Pipeline Configuration
+# ============================================================================
+pipeline:
+  # Show Bible configuration (Wikipedia-sourced context about show/characters)
+  show_bible:
+    # Directory to cache Show Bibles
+    cache_dir: "langflix/pipeline/artifacts/show_bibles"
+
+    # Use Wikipedia for Show Bible generation
+    use_wikipedia: true
+
+    # Force refresh Show Bible (ignore cache)
+    force_refresh: false
+
+  # Master Summary configuration (episode narrative summaries)
+  master_summary:
+    # Directory to cache Master Episode Summaries
+    cache_dir: "langflix/pipeline/artifacts/summaries"
+
+  # Aggregator Agent configuration (combines chunk summaries)
+  aggregator:
+    # Model to use for aggregation (use cheaper model like Flash)
+    model_name: "gemini-2.5-flash"
+
+    # Temperature for aggregation (lower = more consistent)
+    temperature: 0.3
+
+  # Translator Agent configuration (context-aware translation)
+  translator:
+    # Model to use for translation (use smart model like Pro)
+    model_name: "gemini-1.5-pro"
+
+    # Temperature for translation (lower = more consistent)
+    temperature: 0.2
 
 # ============================================================================
 # Database Configuration

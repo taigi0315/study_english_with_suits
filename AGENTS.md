@@ -5,10 +5,12 @@ A guide for AI coding agents working on the LangFlix project.
 ## Project Overview
 
 LangFlix is a language learning video generation platform that:
+
 - Analyzes TV show subtitles to extract educational expressions
-- Uses Gemini AI for content analysis and translation
+- Uses Gemini AI for content analysis and contextual translation
 - Generates short-form and long-form educational videos with dual-language subtitles
-- Supports V2 dual-language workflow with Netflix-style subtitle folders
+- Supports dual-language workflow with Netflix-style subtitle folders
+- Provides context-aware translations using Show Bible and episode summaries
 
 **Tech Stack**: Python 3.9+, FastAPI, Flask, FFmpeg, Gemini AI, PostgreSQL, Redis
 
@@ -54,6 +56,12 @@ langflix/
 │   ├── settings.py          # Configuration management
 │   ├── api/                 # FastAPI endpoints
 │   ├── core/                # Core business logic (video_editor, subtitle_parser, etc.)
+│   ├── pipeline/            # Contextual localization pipeline
+│   │   ├── orchestrator.py  # Pipeline orchestrator
+│   │   ├── models.py        # Pipeline data models
+│   │   ├── bible_manager.py # Show Bible management
+│   │   ├── agents/          # Script agent, translator, aggregator
+│   │   └── prompts/         # LLM prompt templates
 │   ├── services/            # Service layer (translation, processing)
 │   ├── config/              # YAML configuration files
 │   └── templates/           # LLM prompt templates
@@ -71,22 +79,26 @@ langflix/
 ## Code Style
 
 - **Type hints**: Use throughout for function signatures
-- **Pydantic models**: For data validation (`langflix/core/models/`)
+- **Pydantic models**: For data validation (`langflix/core/models/`, `langflix/pipeline/models.py`)
 - **YAML configuration**: Primary config in `langflix/config/default.yaml`
 - **Docstrings**: Include for all public functions and classes
 - **Logging**: Use `logging` module, not print statements
+- **No version prefixes**: Avoid V1/V2/V3 naming in code
 
 ## Key Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Main Pipeline | `langflix/main.py` | Orchestrates video generation workflow |
-| Settings | `langflix/settings.py` | Configuration loading and access |
-| Video Editor | `langflix/core/video_editor.py` | FFmpeg video processing |
-| Subtitle Parser | `langflix/core/subtitle_parser.py` | SRT/VTT parsing |
-| Content Analyzer | `langflix/core/content_selection_analyzer.py` | V2 LLM content selection |
-| API Endpoints | `langflix/api/` | FastAPI REST API |
-| Web UI | `langflix/youtube/web_ui.py` | Flask frontend |
+| Component             | Location                                      | Purpose                                |
+| --------------------- | --------------------------------------------- | -------------------------------------- |
+| Main Pipeline         | `langflix/main.py`                            | Orchestrates video generation workflow |
+| Settings              | `langflix/settings.py`                        | Configuration loading and access       |
+| Video Editor          | `langflix/core/video_editor.py`               | FFmpeg video processing                |
+| Subtitle Parser       | `langflix/core/subtitle_parser.py`            | SRT/VTT parsing                        |
+| Content Analyzer      | `langflix/core/content_selection_analyzer.py` | LLM content selection                  |
+| Pipeline Orchestrator | `langflix/pipeline/orchestrator.py`           | Contextual localization pipeline       |
+| Script Agent          | `langflix/pipeline/agents/script_agent.py`    | Expression extraction + summarization  |
+| Translator Agent      | `langflix/pipeline/agents/translator.py`      | Context-aware translation              |
+| API Endpoints         | `langflix/api/`                               | FastAPI REST API                       |
+| Web UI                | `langflix/youtube/web_ui.py`                  | Flask frontend                         |
 
 ## Testing Instructions
 
@@ -100,7 +112,8 @@ langflix/
 Primary configuration: `langflix/config/default.yaml`
 
 Key settings:
-- `dual_language.enabled`: V2 mode toggle
+
+- `dual_language.enabled`: Dual-language mode toggle
 - `dual_language.source_language`: Language being learned (e.g., "English")
 - `dual_language.target_language`: User's native language (e.g., "Korean")
 - `llm.model_name`: Gemini model for content analysis
@@ -110,7 +123,7 @@ Override via environment variables: `LANGFLIX_<SECTION>_<KEY>=value`
 
 ## Subtitle Folder Structure
 
-LangFlix V2 expects Netflix-style subtitle folders:
+LangFlix expects Netflix-style subtitle folders:
 
 ```
 assets/media/ShowName/
@@ -122,9 +135,18 @@ assets/media/ShowName/
         └── Spanish.srt        # Simple format (translated)
 ```
 
+## Pipeline Architecture
+
+The contextual localization pipeline uses:
+
+1. **Show Bible** - Static context from Wikipedia (characters, relationships)
+2. **Chunk Summaries** - Micro-context with emotional tone per script segment
+3. **Master Summary** - Aggregated episode narrative
+4. **Contextual Translation** - Honorifics, formality, and tone based on context
+
 ## Related Documentation
 
 - [README.md](README.md) - Project overview
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - V2 system design
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Configuration reference
 - [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) - Visual workflows

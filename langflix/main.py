@@ -838,8 +838,8 @@ class LangFlixPipeline:
         Returns:
             List of expression dicts with translations
         """
-        from langflix.v3.pipeline import V3Pipeline
-        from langflix.v3.models import V3PipelineConfig
+        from langflix.pipeline.orchestrator import Pipeline
+        from langflix.pipeline.models import PipelineConfig
         from langflix.utils.language_utils import language_name_to_code
         from langflix.core.subtitle_parser import parse_subtitle_file
 
@@ -907,7 +907,7 @@ class LangFlixPipeline:
             for code in self.target_languages
         ]
 
-        config = V3PipelineConfig(
+        config = PipelineConfig(
             show_name=self.series_name,
             episode_name=self.episode_name,
             target_languages=target_lang_names,
@@ -918,7 +918,7 @@ class LangFlixPipeline:
         )
 
         # Run Pipeline
-        pipeline = V3Pipeline(config)
+        pipeline = Pipeline(config)
 
         try:
             # Phase 1-2: Extract + Summarize

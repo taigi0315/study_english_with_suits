@@ -9,7 +9,7 @@ from pathlib import Path
 
 from langflix.pipeline.models import LocalizationData
 from langflix.core.llm_client import get_gemini_client
-from langflix.utils.language_utils import convert_language_code_to_name
+from langflix.utils.language_utils import language_code_to_name
 
 logger = logging.getLogger(__name__)
 

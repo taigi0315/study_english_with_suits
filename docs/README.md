@@ -59,6 +59,22 @@ dual_language:
   target_language: "Korean"
 ```
 
+### Quick Test (No UI Required)
+
+```bash
+# Run quick test with default settings (Korean → Spanish, English)
+python scripts/test_quick.py
+
+# Custom source/target languages
+python scripts/test_quick.py --source ko --target es,en
+
+# Dry run (analysis only, no video creation)
+python scripts/test_quick.py --dry-run
+
+# Skip short video creation
+python scripts/test_quick.py --no-shorts
+```
+
 ## 📊 Visual Overview
 
 Want to understand the system quickly? Start with the **[Visual System Architecture](./SYSTEM_ARCHITECTURE.md)**!

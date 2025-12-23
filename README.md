@@ -91,7 +91,7 @@ langflix/
 
 5. **Prepare media files**
 
-   LangFlix V2 supports two subtitle folder structures:
+   LangFlix supports two subtitle folder structures:
 
    **NEW (Netflix-style) Structure** (Recommended):
    ```bash
@@ -445,7 +445,7 @@ python tests/functional/manual_prompt_test.py 2
 - ✅ **LLM-Only Testing**: Test expression analysis without video processing
 - ✅ **Real Content Testing**: Successfully processed Suits S01E01
 
-**V2 Updates (December 2025):**
+**Recent Updates (December 2025):**
 - ✅ **Gemini 1.5 Pro Integration**: Full episode context for subtitle translation (2M token context window)
 - ✅ **Non-Split Mode**: Process entire subtitle files without chunking for better quality
 - ✅ **Automatic Subtitle Translation**: Missing languages translated automatically using full context
@@ -453,7 +453,7 @@ python tests/functional/manual_prompt_test.py 2
 - ✅ **Flexible File Naming**: Support both indexed (`3_Korean.srt`) and simple (`Korean.srt`) formats
 - ✅ **Case-Insensitive Language Names**: Automatic normalization to Title Case
 - ✅ **Robust Language Discovery**: Auto-discovers all available subtitle languages and variants
-- ✅ **Dual-Language Workflow**: V2 mode uses both source and target subtitles for content selection
+- ✅ **Dual-Language Workflow**: Uses both source and target subtitles for content selection
 - ✅ **Output Quality**: Generated high-quality learning videos with dual-language subtitles
 - ✅ **Performance**: Optimized chunking and processing
 - ✅ **Reliability**: Robust error handling and recovery mechanisms

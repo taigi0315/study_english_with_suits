@@ -8,9 +8,6 @@
 app:
   # Name of the TV show for prompting
   show_name: "Shows"
-  
-  # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt.txt"
 
 # ============================================================================
 # Subtitle Configuration
@@ -19,11 +16,8 @@ subtitles:
   # Enable multi-language subtitle mode (uses Netflix subtitles for both languages)
   enabled: true  # Load both source and target subtitles, use fuzzy matching
 
-  # Default source language (language being learned)
-  default_source_language: "English"
-
-  # Default target language (user's native language)
-  default_target_language: "Korean"
+  # NOTE: Source/target languages should be passed via API/CLI, not stored here
+  # default_source_language and default_target_language removed - always pass explicitly
 
   # Subtitle file naming pattern
   # Netflix format: {index}_{Language}.srt (e.g., "3_Korean.srt", "6_English.srt")
@@ -33,8 +27,8 @@ subtitles:
   # Options: "first" (use first file), "last" (use last file), "largest" (use largest file)
   variant_selection: "first"
 
-  # Content selection prompt template (used when subtitles.enabled is true)
-  template_file: "content_selection_prompt_v1.txt"
+  # Content selection prompt template
+  template_file: "expression_analysis_prompt.yaml"
 
 # ============================================================================
 # Contextual Localization Pipeline Configuration
@@ -67,7 +61,7 @@ pipeline:
   # Translator Agent configuration (context-aware translation)
   translator:
     # Model to use for translation (use smart model like Pro)
-    model_name: "gemini-1.5-pro"
+    model_name: "gemini-2.5-flash"
 
     # Temperature for translation (lower = more consistent)
     temperature: 0.2
@@ -90,51 +84,43 @@ database:
   echo: false
 
 # ============================================================================
-# LLM (Language Learning Model) Settings
+# LLM (Language Model) Settings
+# ============================================================================
+# MODEL NAME OVERVIEW:
+#   - llm.model_name: Used for expression analysis/content selection
+#   - llm.translation.model_name: Used for subtitle file translation (keep at 2.0 for context)
+#   - pipeline.aggregator.model_name: Used for summarization (can use cheaper model)
+#   - pipeline.translator.model_name: Used for expression localization
+#   - tts.google.model_name: Used for text-to-speech (future use)
 # ============================================================================
 llm:
   # Maximum characters of subtitle content per chunk
-  # 0 = Process entire script at once (requires large context model like Gemini 1.5 Pro)
+  # 0 = Process entire script at once (requires large context model)
   # >0 = Chunk size in characters (e.g., 3000 for smaller models)
   max_input_length: 0
   
+  # Model for expression analysis and content selection
   model_name: "gemini-2.5-flash"
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"
   
-  # Target language for translations
-  target_language: "Korean"
-  
   # API retry configuration
   max_retries: 3
-  retry_backoff_seconds: [3, 6, 12]  # Wait times between retries
+  retry_backoff_seconds: [3, 6, 12]
   
   # Generation configuration
   temperature: 0.1
   top_p: 0.8
   top_k: 40
-  
-  # Expression ranking configuration (Phase 2)
-  # NOTE: These settings are NOT currently used in the codebase
-  # Keeping them commented for future reference
-  # ranking:
-  #   difficulty_weight: 0.4           # Weight for difficulty level (0-1)
-  #   frequency_weight: 0.3             # Weight for expression frequency (0-1)
-  #   educational_value_weight: 0.3     # Weight for educational value (0-1)
-  #   fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
 
   # Subtitle Translation Configuration
-  # Specific settings for translating entire subtitle files
   translation:
-    # Use Gemini 1.5 Pro for its larger context window (up to 2M tokens)
-    # This allows passing the entire movie script as context for better translation quality
-    model_name: "gemini-1.5-pro"
+    # Gemini 2.0 Flash for large context window - translating entire subtitle files
+    model_name: "gemini-2.0-flash"
     
-    # Batch size for translation
-    # -1 = Process all subtitles in a single batch (requires large context model like 1.5 Pro)
-    # >0 = Process in chunks of N subtitles (e.g., 75 for Flash model)
+    # Batch size: -1 = all at once, >0 = chunks of N subtitles
     batch_size: -1
 
 # ============================================================================
@@ -142,9 +128,8 @@ llm:
 # ============================================================================
 processing:
   # Test mode configuration for development
-  # When enabled, limits processing to speed up testing
   test_mode:
-    enabled: true                     # Set to true for development, false for production
+    enabled: false                    # Set to true for development, false for production
     max_chunks: 1                     # Only process 1 chunk of subtitles
     max_expressions_per_chunk: 1      # Only extract 1 expression per chunk
     max_total_expressions: 1          # Total expressions limit for entire video
@@ -152,7 +137,7 @@ processing:
   # Normal mode expression limits (when test_mode.enabled is false)
   min_expressions_per_chunk: 5
   max_expressions_per_chunk: 50        # Up to 6 expressions per chunk in production (V1 mode)
-  max_total_expressions: 50           # V2 mode: Max expressions for entire video
+  max_total_expressions: 50           # Dual-subtitle mode: Max expressions for entire video
 
 # ============================================================================
 # Language Proficiency Levels
@@ -255,9 +240,6 @@ font:
       translation: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
       vocabulary: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
       educational_slide: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
-
-# NOTE: Processing section already defined above (lines 69-80)
-# Duplicate section removed in V2 cleanup
 
 # ============================================================================
 # Video Transition Settings

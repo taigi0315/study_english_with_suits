@@ -65,6 +65,7 @@ def main():
     parser.add_argument('--media-dir', '-m', default='assets/media/test_media', help='Test media directory')
     parser.add_argument('--dry-run', action='store_true', help='Dry run - analyze only, no video creation')
     parser.add_argument('--no-shorts', action='store_true', help='Skip short video creation')
+    parser.add_argument('--duration', '-d', type=float, default=120.0, help='Target duration in seconds (default: 120.0)')
     args = parser.parse_args()
     
     # Find test media
@@ -87,6 +88,7 @@ def main():
     logger.info(f"Source: {args.source}")
     logger.info(f"Target: {args.target}")
     logger.info(f"Output: {args.output}")
+    logger.info(f"Duration: {args.duration}s")
     logger.info("=" * 60)
     
     # Parse target languages
@@ -116,6 +118,7 @@ def main():
             dry_run=args.dry_run,
             no_shorts=args.no_shorts,
             schedule_upload=False,  # Never upload in test
+            target_duration=args.duration,
         )
         
         logger.info("=" * 60)

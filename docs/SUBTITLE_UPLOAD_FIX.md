@@ -13,7 +13,7 @@
 ERROR | Error loading subtitles: Invalid  format: Unsupported format: .
 INFO  | Processing subtitle:  from
 WARNING | Subtitle folder not found for: /var/folders/.../video.mkv
-ERROR | No subtitle folder found. V2 mode requires dual-language subtitles.
+ERROR | No subtitle folder found. Dual-language mode requires dual-language subtitles.
 ```
 
 ### Root Cause
@@ -232,9 +232,9 @@ INFO: Ensuring subtitle availability...
 INFO: Found Netflix-format subtitle folder: .../Subs/Suits.S01E01.720p.HDTV.x264
 INFO: Found exact English subtitle: .../English.srt
 INFO: Subtitles available for: ['English']
-INFO: V2 Mode: Using dual-language subtitle workflow
+INFO: Dual-Language Workflow: Using dual-language subtitle workflow
 INFO: Loading dual-language subtitles...
-INFO: V2 analysis found 1 expressions
+INFO: Content analysis found 1 expressions
 ✅ SUCCESS!
 ```
 
@@ -319,7 +319,7 @@ Before creating a job, verify:
 - [ ] MediaScanner returns `subtitle_path` in `/api/media/scan`
 - [ ] Frontend `data-subtitle` attribute is populated
 - [ ] Source language config matches subtitle file name
-- [ ] V2 mode is enabled in config (`dual_language.enabled: true`)
+- [ ] Dual-language mode is enabled in config (`dual_language.enabled: true`)
 
 ---
 
@@ -439,11 +439,11 @@ If you have multiple subtitle files:
 ```
 Subs/Suits.S01E01.../
 ├── English.srt       ← Source (returned by MediaScanner)
-├── 3_Korean.srt      ← Available for V2 mode
-└── 6_Spanish.srt     ← Available for V2 mode
+├── 3_Korean.srt      ← Available for Dual-language mode
+└── 6_Spanish.srt     ← Available for Dual-language mode
 ```
 
-The MediaScanner returns the **source language** subtitle only. The V2 pipeline will:
+The MediaScanner returns the **source language** subtitle only. The dual-language pipeline will:
 1. Load source subtitle (English.srt)
 2. Check for target language (e.g., Korean)
 3. Auto-translate if missing using Gemini 1.5 Pro

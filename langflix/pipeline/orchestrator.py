@@ -152,6 +152,7 @@ class Pipeline:
             localizations = []
             for lang in self.config.target_languages:
                 lang_localizations = translations_by_lang.get(lang, [])
+                logger.info(f"DEBUG: Pipeline merge - Lang={lang}, ExprIdx={idx}, LocLen={len(lang_localizations)}")
                 if idx < len(lang_localizations):
                     localizations.append(lang_localizations[idx])
 
@@ -162,6 +163,9 @@ class Pipeline:
                 context_summary_eng=expression.get("context_summary_eng"),
                 start_time=expression.get("context_start_time", "00:00:00.000"),
                 end_time=expression.get("context_end_time", "00:00:00.000"),
+                expression_start_time=expression.get("expression_start_time"),
+                expression_end_time=expression.get("expression_end_time"),
+                dialogues=expression.get("dialogues", []),
                 scene_type=expression.get("scene_type"),
                 similar_expressions=expression.get("similar_expressions", []),
                 catchy_keywords=expression.get("catchy_keywords", []),
@@ -224,7 +228,3 @@ class Pipeline:
 
         # Fallback
         return 1, chunks[0].chunk_summary if chunks else ""
-
-
-# Backward compatibility aliases
-V3Pipeline = Pipeline

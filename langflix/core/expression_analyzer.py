@@ -158,8 +158,8 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
         cache_manager = get_cache_manager()
         chunk_text = " ".join([sub.get('text', '') for sub in subtitle_chunk])
         # Add versioning to cache key to force re-analysis when prompt changes
-        # Bumping to v3 to invalidate cache with absolute vocab indices (TICKET-029)
-        cache_version = "v3_source_lang_vocab_fix"
+        # Bumping version to invalidate cache with absolute vocab indices (TICKET-029)
+        cache_version = "source_lang_vocab_fix"
         cache_key = cache_manager.get_expression_key(f"{chunk_text}_{cache_version}", language_code)
         cached_result = cache_manager.get(cache_key)
         
@@ -298,7 +298,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                     import time
                     timestamp = int(time.time())
                     target_dir = Path(output_dir) if output_dir else Path("output")
-                    debug_file = target_dir / f"llm_response_v3_{timestamp}.json"
+                    debug_file = target_dir / f"llm_response_{timestamp}.json"
                     debug_file.parent.mkdir(parents=True, exist_ok=True)
                     debug_file.write_text(response.text, encoding='utf-8')
                     logger.info(f"Saved raw LLM response to {debug_file}")
@@ -479,7 +479,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
 
 def _postprocess_v8_response(raw_expressions: List[Dict[str, Any]], subtitle_chunk: List[dict], target_dialogues: List[dict] = None) -> List[Dict[str, Any]]:
     """
-    V2 Post-processing: Convert V8 index-based LLM output to full ExpressionAnalysis format.
+    Post-processing: Convert V8 index-based LLM output to full ExpressionAnalysis format.
     
     The LLM only provides indices, and we look up actual text from the subtitle chunks.
     

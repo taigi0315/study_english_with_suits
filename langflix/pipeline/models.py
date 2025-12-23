@@ -63,6 +63,10 @@ class LocalizationData(BaseModel):
     expression_translated: str = Field(..., description="Naturalized translation of expression")
     expression_dialogue_translated: str = Field(..., description="Translation reflecting tone/hierarchy")
     catchy_keywords_translated: List[str] = Field(default_factory=list, description="Localized keywords")
+    viral_title: Optional[str] = Field(None, description="Viral/Clickbaity string for the video title")
+    narrations: List[str] = Field(default_factory=list, description="Short narration lines explaining text")
+    vocabulary_annotations: List[Dict[str, str]] = Field(default_factory=list, description="List of vocab items: [{'word': '...', 'meaning': '...', 'example': '...'}]")
+    expression_annotations: List[Dict[str, str]] = Field(default_factory=list, description="List of expression parts: [{'word': '...', 'translation': '...'}]")
     translation_notes: Optional[str] = Field(None, description="Notes about honorifics/formality applied")
 
     class Config:
@@ -86,8 +90,18 @@ class TranslationResult(BaseModel):
     expression: str
     expression_dialogue: str
     context_summary_eng: Optional[str] = None
-    start_time: str
-    end_time: str
+    
+    # Context timing (for video clip extraction)
+    start_time: str  # context_start_time
+    end_time: str    # context_end_time
+    
+    # Expression timing (for highlighting the specific expression)
+    expression_start_time: Optional[str] = None
+    expression_end_time: Optional[str] = None
+    
+    # Source context dialogues (for subtitle mapping)
+    dialogues: List[str] = Field(default_factory=list)
+    
     scene_type: Optional[str] = None
     similar_expressions: List[str] = Field(default_factory=list)
     catchy_keywords: List[str] = Field(default_factory=list)
@@ -139,7 +153,7 @@ class PipelineConfig(BaseModel):
     target_languages: List[str] = Field(default_factory=list, description="Language codes to translate to")
     use_wikipedia: bool = Field(True, description="Whether to fetch Show Bible from Wikipedia")
     aggregator_model: str = Field("gemini-2.5-flash", description="Model for summary aggregation")
-    translator_model: str = Field("gemini-1.5-pro", description="Model for contextual translation")
+    translator_model: str = Field("gemini-2.0-flash", description="Model for contextual translation")
     cache_show_bible: bool = Field(True, description="Cache Show Bible for reuse")
     cache_master_summary: bool = Field(True, description="Cache Master Summary for reuse")
 
@@ -151,14 +165,6 @@ class PipelineConfig(BaseModel):
                 "target_languages": ["ko", "ja", "es"],
                 "use_wikipedia": True,
                 "aggregator_model": "gemini-2.5-flash",
-                "translator_model": "gemini-1.5-pro"
+                "translator_model": "gemini-2.0-flash"
             }
         }
-
-
-# Backward compatibility aliases
-V3ChunkResult = ChunkResult
-V3EpisodeData = EpisodeData
-V3LocalizationData = LocalizationData
-V3TranslationResult = TranslationResult
-V3PipelineConfig = PipelineConfig

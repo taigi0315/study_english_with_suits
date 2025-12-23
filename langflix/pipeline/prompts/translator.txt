@@ -110,7 +110,20 @@ Respond with valid JSON in this structure:
       "하비의 조언",
       "위기 상황"
     ],
-    "translation_notes": "Used 반말 for Harvey (senior) speaking to Jessica. Tone is direct and authoritative per Master Summary showing Harvey asserting dominance."
+    "translation_notes": "Used 반말 for Harvey (senior) speaking to Jessica. Tone is direct and authoritative per Master Summary showing Harvey asserting dominance.",
+    "viral_title": "냉정한 손절의 기술",
+    "narrations": [
+      "손절하다 (to cut ties/cut loose)",
+      "끌어내리다 (to drag down)"
+    ],
+    "vocabulary_annotations": [
+      {{"word": "손절하다", "meaning": "To cut ties/losses", "example": "친구를 손절하다"}},
+      {{"word": "끌어내리다", "meaning": "To drag someone down", "example": "나를 끌어내리지 마"}}
+    ],
+    "expression_annotations": [
+      {{"word": "손절해", "translation": "Cut him loose"}},
+      {{"word": "끌어내리기", "translation": "Dragging down"}}
+    ]
   }}
 ]
 ```

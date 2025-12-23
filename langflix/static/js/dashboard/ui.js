@@ -379,8 +379,9 @@ export const ui = {
 
             <div style="margin-bottom: 20px;">
                 <h3 style="color: #34495e; margin-bottom: 10px;">Languages & Level</h3>
-                
-                <!-- V2: Source Language (language to learn FROM) -->
+
+
+                <!-- Source Language (language to learn FROM) -->
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 500;">Source Language (Learning FROM)</label>
                     <select id="sourceLanguage" style="width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 8px; font-size: 16px;">
@@ -561,7 +562,7 @@ export const ui = {
                 return;
             }
 
-            const sourceLanguage = dialog.querySelector('#sourceLanguage').value;  // V2: Source language
+            const sourceLanguage = dialog.querySelector('#sourceLanguage').value;  // Source language
             const languageLevel = dialog.querySelector('#languageLevel').value;
             const testMode = dialog.querySelector('#testModeCheckbox').checked;
             const testLlm = dialog.querySelector('#testLlmCheckbox').checked;  // Dev: Use cached LLM response
@@ -595,8 +596,8 @@ export const ui = {
                             video_path: checkbox.dataset.video,
                             subtitle_path: checkbox.dataset.subtitle,
                             show_name: showName,  // User-provided show name
-                            language_code: sourceLanguage, // V2: Source language (learned from)
-                            source_language: sourceLanguage, // V2: Explicit source language
+                            language_code: sourceLanguage, // Source language (learned from)
+                            source_language: sourceLanguage, // Explicit source language
                             target_languages: selectedLanguages,
                             language_level: languageLevel,
                             test_mode: testMode,

@@ -85,10 +85,11 @@ Respond with valid JSON in this EXACT structure:
     {{
       "expression": "the key phrase or idiom extracted",
       "expression_dialogue": "The EXACT dialogue line containing the expression",
+      "expression_index": 5,
+      "context_start_index": 3,
+      "context_end_index": 8,
       "expression_translation": "Korean translation of the expression",
       "expression_dialogue_translation": "Korean translation of the dialogue",
-      "context_start_time": "Subtitle start time",
-      "context_end_time": "Subtitle end time",
       "similar_expressions": [
         "Alternative expression 1 with similar meaning",
         "Alternative expression 2 with similar meaning"
@@ -103,11 +104,16 @@ Respond with valid JSON in this EXACT structure:
 }}
 ```
 
+**INDEX EXPLANATION**:
+- `expression_index`: The subtitle line number (0-indexed from chunk start) containing the expression
+- `context_start_index`: Start of context window (2-3 lines BEFORE the expression for setup)
+- `context_end_index`: End of context window (2-3 lines AFTER the expression for resolution)
+
 **CRITICAL INSTRUCTIONS**:
 1. Extract a MAXIMUM of {max_expressions_per_chunk} expressions from this chunk
-2. If no expressions meet ALL the V2 criteria, return empty expressions array: `"expressions": []`
+2. If no expressions meet ALL the criteria, return empty expressions array: `"expressions": []`
 3. The `chunk_summary` field is MANDATORY even if no expressions are found
-4. For `expression_translation` and `expression_dialogue_translation`: Provide BASIC translations now (V3 Translator will refine them later with full context)
+4. For `expression_translation` and `expression_dialogue_translation`: Provide BASIC translations now (Translator Agent will refine them later with full context)
 5. Ensure all JSON is valid and properly escaped
 
 ---
@@ -117,7 +123,7 @@ Respond with valid JSON in this EXACT structure:
 Before finalizing your response, verify:
 - [ ] Did I use the Show Bible to infer likely speakers?
 - [ ] Does my chunk_summary capture the emotional tone and power dynamics?
-- [ ] Do all extracted expressions meet ALL V2 quality criteria?
+- [ ] Do all extracted expressions meet ALL quality criteria?
 - [ ] Are the expressions appropriate for {language_level} level?
 - [ ] Is my JSON valid and complete?
 

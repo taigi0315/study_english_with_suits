@@ -1,20 +1,20 @@
-# LangFlix V2 Configuration
+# LangFlix Configuration
 
 ## Overview
 
-V2 introduces dual-language settings for Netflix subtitle support. All V1 configuration options remain valid.
+LangFlix provides dual-language settings for Netflix subtitle support.
 
 ## Configuration File
 
 **Location:** `langflix/config/default.yaml`
 
-## V2-Specific Settings
+## Dual Language Settings
 
 ### Dual Language Mode
 
 ```yaml
 dual_language:
-  # Master switch for V2 dual-language features
+  # Master switch for dual-language features
   enabled: true
   
   # Source language: The language you're learning FROM (video audio)
@@ -68,7 +68,7 @@ These values are sent to the API as:
 ### Environment Variables
 
 ```bash
-# Enable V2 dual-language mode
+# Enable dual-language mode
 LANGFLIX_DUAL_LANGUAGE_ENABLED=true
 
 # Default source language (overridable per-request)
@@ -89,7 +89,7 @@ Job creation supports per-request language settings:
 
 ## Font Configuration
 
-V2 requires fonts for both source and target languages:
+Dual-language mode requires fonts for both source and target languages:
 
 ```yaml
 fonts:
@@ -115,9 +115,7 @@ language_fonts:
   fr: "Roboto-Medium.ttf"
 ```
 
-## Migration from V1
-
-### Enabling V2
+## Enabling Dual-Language Mode
 
 1. Update `config/default.yaml`:
    ```yaml
@@ -131,9 +129,9 @@ language_fonts:
 
 ### Fallback Behavior
 
-If V2 is enabled but no dual subtitles are found, the system falls back to V1 mode automatically.
+If dual-language mode is enabled but no dual subtitles are found, the system falls back to single-subtitle mode automatically.
 
 ## Related Documents
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - How V2 dual-language works
-- [v1/CONFIGURATION.md](./v1/CONFIGURATION.md) - Original V1 configuration
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - How dual-language mode works
+- [archive/v1/CONFIGURATION.md](./archive/v1/CONFIGURATION.md) - Legacy configuration reference

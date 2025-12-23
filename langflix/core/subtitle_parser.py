@@ -133,7 +133,26 @@ def parse_srt_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
         
         # Parse with detected encoding
         try:
-            subs = pysrt.open(file_path, encoding=encoding)
+            # Read file content first to normalize timestamps
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+
+            # Normalize timestamps:
+            # 1. Replace dot with comma (00:00:00.000 -> 00:00:00,000)
+            # 2. Truncate microseconds to milliseconds (000000 -> 000)
+            # Pattern matches: 00:00:00 followed by DOT or COMMA, then 3 digits, then optional extra digits
+            import re
+            def normalize_timestamp(match):
+                # group(1): HH:MM:SS
+                # group(2): mmm (first 3 digits)
+                return f"{match.group(1)},{match.group(2)}"
+            
+            # Regex: (HH:MM:SS)[.,](\d{3})\d*
+            # We look for lines starting with digit or arrow to be safe, but global replacement on timestamp-like patterns is usually safe in SRT
+            # Standard SRT timestamp: 00:00:00,000 --> 00:00:00,000
+            content = re.sub(r'(\d{2}:\d{2}:\d{2})[.,](\d{3})\d*', normalize_timestamp, content)
+            
+            subs = pysrt.from_string(content)
         except UnicodeDecodeError:
             # Fallback to common encodings
             fallback_encodings = ['utf-8', 'cp949', 'euc-kr', 'latin-1']
@@ -141,7 +160,13 @@ def parse_srt_file(file_path: str, validate: bool = True) -> List[Dict[str, Any]
             
             for fallback in fallback_encodings:
                 try:
-                    subs = pysrt.open(file_path, encoding=fallback)
+                    with open(file_path, 'r', encoding=fallback) as f:
+                        content = f.read()
+                    
+                    # Apply normalization to fallback content
+                    content = re.sub(r'(\d{2}:\d{2}:\d{2})[.,](\d{3})\d*', normalize_timestamp, content)
+                    
+                    subs = pysrt.from_string(content)
                     logger.info(f"Successfully parsed with fallback encoding: {fallback}")
                     break
                 except UnicodeDecodeError:

@@ -200,7 +200,7 @@ class MediaScanner:
                     if subtitle_path.exists():
                         return subtitle_path
         
-        # V2: Netflix folder format - subtitles in folder matching video name
+        # Netflix folder format - subtitles in folder matching video name
         # Supports THREE structures:
         # 1. SIMPLE: {video_dir}/Subs/ folder directly containing English.srt
         # 2. NEW: {video_dir}/Subs/{video_basename}/ containing English.srt, 3_Korean.srt

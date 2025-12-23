@@ -29,11 +29,11 @@ database:
   url: "postgresql://user:password@localhost:5432/langflix"
   pool_size: 10
   max_overflow: 20
-  echo: false  # Set true for SQL debugging
+  echo: false # Set true for SQL debugging
 
 # Storage Configuration
 storage:
-  backend: "local"  # "local" or "gcs"
+  backend: "local" # "local" or "gcs"
   local:
     base_path: "output"
   gcs:
@@ -43,8 +43,8 @@ storage:
 # LLM Configuration
 llm:
   provider: "gemini"
-  model: "gemini-1.5-pro"
-  api_key: "${GEMINI_API_KEY}"  # From environment
+  model: "gemini-2.0-flash"
+  api_key: "${GEMINI_API_KEY}" # From environment
   temperature: 0.7
   top_p: 0.8
   top_k: 40
@@ -54,7 +54,7 @@ llm:
   max_retries: 5
   retry_backoff_seconds: 3
   timeout: 120
-  
+
   # Expression Extraction
   extraction:
     max_expressions_per_chunk: 5
@@ -66,7 +66,7 @@ llm:
       - formal
       - greeting
       - cultural
-  
+
   # Ranking System
   ranking:
     difficulty_weight: 0.4
@@ -76,10 +76,10 @@ llm:
 
 # WhisperX Configuration
 whisper:
-  model_size: "base"  # tiny, base, small, medium, large-v2
-  device: "cpu"       # cpu, cuda
-  compute_type: "float32"  # float32, float16, int8
-  language: null      # null for auto-detect
+  model_size: "base" # tiny, base, small, medium, large-v2
+  device: "cpu" # cpu, cuda
+  compute_type: "float32" # float32, float16, int8
+  language: null # null for auto-detect
   fuzzy_threshold: 0.85
   buffer_start: 0.2
   buffer_end: 0.2
@@ -93,13 +93,13 @@ whisper:
 # Video Processing
 video:
   codec: "libx264"
-  preset: "medium"    # ultrafast, fast, medium, slow, veryslow
-  crf: 20            # 18-28, lower = better quality
+  preset: "medium" # ultrafast, fast, medium, slow, veryslow
+  crf: 20 # 18-28, lower = better quality
   resolution: "1920x1080"
   frame_rate: 23.976
-  hardware_acceleration: null  # null, cuda, qsv, vaapi
-  thread_count: 0    # 0 = auto
-  
+  hardware_acceleration: null # null, cuda, qsv, vaapi
+  thread_count: 0 # 0 = auto
+
   # Quality presets
   quality_presets:
     low:
@@ -128,13 +128,13 @@ tts:
   enabled: true
   provider: "google"
   repeat_count: 2
-  
+
   google:
     language_code: "en-us"
     model_name: "gemini-2.5-flash-preview-tts"
     response_format: "wav"
-    speaking_rate: "slow"  # x-slow, slow, medium, fast, x-fast
-    pitch: "-4st"          # Semitones: -20st to +20st
+    speaking_rate: "slow" # x-slow, slow, medium, fast, x-fast
+    pitch: "-4st" # Semitones: -20st to +20st
     alternate_voices:
       - "Despina"
       - "Puck"
@@ -143,20 +143,20 @@ tts:
 # Media Processing
 media:
   slicing:
-    quality: "high"  # low, medium, high, lossless
+    quality: "high" # low, medium, high, lossless
     buffer_start: 0.2
     buffer_end: 0.2
     output_format: "mp4"
-  
+
   subtitles:
     style: "expression_highlight"
     font_size: 24
-    font_color: "#FFFFFF"           # Source dialogue color (White)
-    translation_color: "#FFFF00"    # Translation color (Yellow)
+    font_color: "#FFFFFF" # Source dialogue color (White)
+    translation_color: "#FFFF00" # Translation color (Yellow)
     background_color: "#000000"
     highlight_color: "#FFD700"
     encoding: "utf-8"
-    max_chars_per_line: 25          # Maximum characters before line wrap
+    max_chars_per_line: 25 # Maximum characters before line wrap
 
 # Slide Generation
 slides:
@@ -190,8 +190,8 @@ slides:
 # Short Video Configuration
 short_video:
   enabled: true
-  target_duration: 120  # seconds
-  resolution: "1080x1920"  # 9:16 aspect ratio
+  target_duration: 120 # seconds
+  resolution: "1080x1920" # 9:16 aspect ratio
   batch_size: 5
   transition_duration: 0.5
 
@@ -215,32 +215,32 @@ youtube:
 
 ```yaml
 app:
-  show_name: "Suits"                    # Default show name
-  language_code: "en"                   # Source language
-  target_language: "Korean"             # Target language for translations
-  template_file: "expression_analysis_prompt.txt"  # LLM prompt template
+  show_name: "Suits" # Default show name
+  language_code: "en" # Source language
+  target_language: "Korean" # Target language for translations
+  template_file: "expression_analysis_prompt.txt" # LLM prompt template
 ```
 
 ### Database Configuration
 
 ```yaml
 database:
-  enabled: true                         # Enable database integration
+  enabled: true # Enable database integration
   url: "postgresql://user:password@localhost:5432/langflix"
-  pool_size: 10                         # Connection pool size
-  max_overflow: 20                      # Maximum overflow connections
-  echo: false                          # SQL query logging
+  pool_size: 10 # Connection pool size
+  max_overflow: 20 # Maximum overflow connections
+  echo: false # SQL query logging
 ```
 
 ### Storage Configuration
 
 ```yaml
 storage:
-  backend: "local"                      # "local" or "gcs"
+  backend: "local" # "local" or "gcs"
   local:
-    base_path: "output"                 # Local storage path
+    base_path: "output" # Local storage path
   gcs:
-    bucket_name: "langflix-storage"     # Google Cloud Storage bucket
+    bucket_name: "langflix-storage" # Google Cloud Storage bucket
     credentials_path: "service-account.json"
 ```
 
@@ -248,48 +248,48 @@ storage:
 
 ```yaml
 llm:
-  provider: "gemini"                    # LLM provider
-  model: "gemini-1.5-pro"              # Model name
-  api_key: "${GEMINI_API_KEY}"         # API key from environment
-  temperature: 0.7                      # Response randomness (0-1)
-  top_p: 0.8                           # Nucleus sampling
-  top_k: 40                            # Top-k sampling
-  max_input_length: 1680               # Maximum input tokens
-  chunk_size: 50                       # Subtitle chunk size
-  overlap: 5                           # Chunk overlap
-  max_retries: 5                       # Maximum retry attempts
-  retry_backoff_seconds: 3             # Retry delay
-  timeout: 120                         # Request timeout
+  provider: "gemini" # LLM provider
+  model: "gemini-2.0-flash" # Model name
+  api_key: "${GEMINI_API_KEY}" # API key from environment
+  temperature: 0.7 # Response randomness (0-1)
+  top_p: 0.8 # Nucleus sampling
+  top_k: 40 # Top-k sampling
+  max_input_length: 1680 # Maximum input tokens
+  chunk_size: 50 # Subtitle chunk size
+  overlap: 5 # Chunk overlap
+  max_retries: 5 # Maximum retry attempts
+  retry_backoff_seconds: 3 # Retry delay
+  timeout: 120 # Request timeout
 ```
 
 ### Video Processing Configuration
 
 ```yaml
 video:
-  codec: "libx264"                     # Video codec
-  preset: "medium"                     # Encoding preset
-  crf: 20                             # Constant Rate Factor (quality)
-  resolution: "1920x1080"             # Output resolution
-  frame_rate: 23.976                  # Frame rate
-  hardware_acceleration: null         # Hardware acceleration
-  thread_count: 0                     # Thread count (0 = auto)
+  codec: "libx264" # Video codec
+  preset: "medium" # Encoding preset
+  crf: 20 # Constant Rate Factor (quality)
+  resolution: "1920x1080" # Output resolution
+  frame_rate: 23.976 # Frame rate
+  hardware_acceleration: null # Hardware acceleration
+  thread_count: 0 # Thread count (0 = auto)
 ```
 
 ### TTS Configuration
 
 ```yaml
 tts:
-  enabled: true                        # Enable TTS
-  provider: "google"                   # TTS provider
-  repeat_count: 2                      # Number of repetitions
-  
+  enabled: true # Enable TTS
+  provider: "google" # TTS provider
+  repeat_count: 2 # Number of repetitions
+
   google:
-    language_code: "en-us"             # Voice language
+    language_code: "en-us" # Voice language
     model_name: "gemini-2.5-flash-preview-tts"
-    response_format: "wav"             # Audio format
-    speaking_rate: "slow"              # Speaking speed
-    pitch: "-4st"                      # Voice pitch
-    alternate_voices:                  # Voice alternatives
+    response_format: "wav" # Audio format
+    speaking_rate: "slow" # Speaking speed
+    pitch: "-4st" # Voice pitch
+    alternate_voices: # Voice alternatives
       - "Despina"
       - "Puck"
       - "Kore"
@@ -421,6 +421,7 @@ app:
 ```
 
 Create `custom_prompt.txt`:
+
 ```
 You are an expert English teacher. Analyze the following subtitle chunk and extract educational expressions.
 
@@ -454,7 +455,7 @@ slides:
 
 ```yaml
 video:
-  hardware_acceleration: "cuda"        # NVIDIA GPU
+  hardware_acceleration: "cuda" # NVIDIA GPU
   # hardware_acceleration: "qsv"       # Intel Quick Sync
   # hardware_acceleration: "vaapi"     # AMD/NVIDIA VA-API
 

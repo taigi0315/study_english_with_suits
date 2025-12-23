@@ -17,7 +17,7 @@ from langflix.subtitles.overlay import apply_dual_subtitle_layers
 
 logger = logging.getLogger(__name__)
 
-# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+# Helper to get attribute from dict or object (expressions can be dicts or objects)
 def get_expr_attr(expr, key, default=None):
     """Get attribute from expression - works with both dict and object types."""
     if isinstance(expr, dict):
@@ -37,8 +37,8 @@ class VideoFactory:
         subtitle_processor: SubtitleProcessor,
         output_dir: Path,
         episode_name: str,
-        subtitle_file: Path = None,  # May be None in V2 mode
-        video_file: Path = None,  # V2: explicit video file path
+        subtitle_file: Path = None,  # May be None in Dual-subtitle mode
+        video_file: Path = None,  # Explicit video file path
         no_long_form: bool = False,
         test_mode: bool = False,
         progress_callback: Optional[callable] = None
@@ -48,7 +48,7 @@ class VideoFactory:
         """
         logger.info(f"Creating long-form videos for {len(expressions)} expressions in {len(target_languages)} languages...")
         
-        # V2 mode: use explicit video_file if provided, otherwise try subtitle_file path
+        # Dual-subtitle mode: use explicit video_file if provided, otherwise try subtitle_file path
         logger.info(f"DEBUG: video_file={video_file}, subtitle_file={subtitle_file}")
         logger.info(f"DEBUG: video_processor.video_file={video_processor.video_file}")
         reference_path = str(video_file) if video_file else (str(subtitle_file) if subtitle_file else None)
@@ -171,7 +171,7 @@ class VideoFactory:
                 logger.info(f"Processing short video for expression {expr_idx + 1}/{len(lang_expressions)}")
                 
                 # Debug: Log vocabulary annotations
-                vocab = getattr(expression, 'vocabulary_annotations', [])
+                vocab = get_expr_attr(expression, 'vocabulary_annotations', [])
                 logger.info(f"DEBUG: Expression {expr_idx+1} vocab annotations raw: {vocab}")
                 if isinstance(vocab, list):
                     logger.info(f"DEBUG: Found {len(vocab)} annotations in Factory")

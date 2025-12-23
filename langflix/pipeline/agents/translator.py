@@ -31,12 +31,12 @@ class TranslatorAgent:
         "en": "English"
     }
 
-    def __init__(self, model_name: str = "gemini-1.5-pro"):
+    def __init__(self, model_name: str = "gemini-2.0-flash"):
         """
         Initialize Translator Agent
 
         Args:
-            model_name: LLM model to use (should be smart model like 1.5 Pro)
+            model_name: LLM model to use (should be smart model like 2.0 Flash)
         """
         self.model_name = model_name
         self.client = get_gemini_client()
@@ -162,8 +162,6 @@ class TranslatorAgent:
         Returns:
             LLM response text
         """
-        model = self.client.GenerativeModel(self.model_name)
-
         generation_config = {
             "temperature": 0.2,  # Lower for more consistent translations
             "top_p": 0.9,
@@ -171,12 +169,32 @@ class TranslatorAgent:
             "max_output_tokens": 8192,
         }
 
-        response = model.generate_content(
+        # Save prompt and response for debugging
+        import time
+        debug_dir = Path("langflix/pipeline/artifacts/debug")
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = int(time.time())
+        
+        # Save Prompt
+        prompt_file = debug_dir / f"translator_prompt_{timestamp}.txt"
+        with open(prompt_file, "w", encoding="utf-8") as f:
+            f.write(prompt)
+            
+        # self.client is already a GenerativeModel from get_gemini_client()
+        response = self.client.generate_content(
             prompt,
             generation_config=generation_config
         )
 
-        return response.text
+        response_text = response.text
+        
+        # Save Response
+        response_file = debug_dir / f"translator_response_{timestamp}.txt"
+        with open(response_file, "w", encoding="utf-8") as f:
+            f.write(response_text)
+
+        logger.info(f"💾 Saved Translation LLM interaction to {debug_dir}/_{timestamp}.txt")
+        return response_text
 
     def _parse_response(
         self,
@@ -216,6 +234,10 @@ class TranslatorAgent:
                     expression_translated=item.get("translated_expression", ""),
                     expression_dialogue_translated=item.get("translated_dialogue", ""),
                     catchy_keywords_translated=item.get("catchy_keywords_translated", []),
+                    viral_title=item.get("viral_title"),
+                    narrations=item.get("narrations", []),
+                    vocabulary_annotations=item.get("vocabulary_annotations", []),
+                    expression_annotations=item.get("expression_annotations", []),
                     translation_notes=item.get("translation_notes", "")
                 )
                 localizations.append(loc)
@@ -226,7 +248,3 @@ class TranslatorAgent:
             logger.error(f"Failed to parse translation JSON: {e}")
             logger.debug(f"Response was: {response[:500]}...")
             raise ValueError(f"Invalid JSON response from translator: {e}")
-
-
-# Backward compatibility alias
-TranslatorAgentV3 = TranslatorAgent

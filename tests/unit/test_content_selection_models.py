@@ -1,25 +1,25 @@
 """
-Unit tests for V2 content selection models and analyzer.
-Updated to match current V2 model requirements.
+Unit tests for content selection models and analyzer.
+Updated to match current model requirements.
 """
 import pytest
 from langflix.core.content_selection_models import (
-    V2VocabularyAnnotation,
-    V2Narration,
-    V2ExpressionAnnotation,
-    V2ContentSelection,
-    V2ContentSelectionResponse,
+    VocabularyAnnotation,
+    Narration,
+    ExpressionAnnotation,
+    ContentSelection,
+    ContentSelectionResponse,
     enrich_from_subtitles,
-    convert_v2_to_v1_format,
+    convert_to_legacy_format,
 )
 
 
-class TestV2VocabularyAnnotation:
-    """Tests for V2VocabularyAnnotation model."""
+class TestVocabularyAnnotation:
+    """Tests for VocabularyAnnotation model."""
     
     def test_create_annotation(self):
         """Should create annotation with word, translation, and index."""
-        annotation = V2VocabularyAnnotation(
+        annotation = VocabularyAnnotation(
             word="knock",
             translation="치다",
             dialogue_index=2
@@ -31,19 +31,19 @@ class TestV2VocabularyAnnotation:
     
     def test_default_dialogue_index(self):
         """Should use default dialogue_index of 0."""
-        annotation = V2VocabularyAnnotation(
+        annotation = VocabularyAnnotation(
             word="test",
             translation="테스트"
         )
         assert annotation.dialogue_index == 0
 
 
-class TestV2Narration:
-    """Tests for V2Narration model."""
+class TestNarration:
+    """Tests for Narration model."""
     
     def test_create_narration(self):
         """Should create narration with text and type."""
-        narration = V2Narration(
+        narration = Narration(
             dialogue_index=1,
             text="¡Momento clave!",
             type="highlight"
@@ -55,19 +55,19 @@ class TestV2Narration:
     
     def test_default_type(self):
         """Should use default type of 'commentary'."""
-        narration = V2Narration(
+        narration = Narration(
             dialogue_index=0,
             text="Test"
         )
         assert narration.type == "commentary"
 
 
-class TestV2ExpressionAnnotation:
-    """Tests for V2ExpressionAnnotation model."""
+class TestExpressionAnnotation:
+    """Tests for ExpressionAnnotation model."""
     
     def test_create_expression_annotation(self):
         """Should create expression annotation."""
-        annotation = V2ExpressionAnnotation(
+        annotation = ExpressionAnnotation(
             expression="knock it out of the park",
             translation="완벽하게 해내다",
             dialogue_index=5
@@ -78,13 +78,13 @@ class TestV2ExpressionAnnotation:
         assert annotation.dialogue_index == 5
 
 
-class TestV2ContentSelection:
-    """Tests for V2ContentSelection model."""
+class TestContentSelection:
+    """Tests for ContentSelection model."""
     
     @pytest.fixture
     def minimal_selection(self):
-        """Create minimal valid V2ContentSelection."""
-        return V2ContentSelection(
+        """Create minimal valid ContentSelection."""
+        return ContentSelection(
             expression="knock it out of the park",
             expression_translation="완벽하게 해내다",
             title="자신감 표현",
@@ -104,7 +104,7 @@ class TestV2ContentSelection:
     
     def test_optional_fields(self):
         """Should handle optional fields correctly."""
-        selection = V2ContentSelection(
+        selection = ContentSelection(
             expression="test",
             expression_translation="테스트",
             title="테스트 제목",
@@ -126,7 +126,7 @@ class TestV2ContentSelection:
     
     def test_with_vocabulary_annotations(self):
         """Should handle vocabulary annotations."""
-        selection = V2ContentSelection(
+        selection = ContentSelection(
             expression="test",
             expression_translation="테스트",
             title="Title",
@@ -135,8 +135,8 @@ class TestV2ContentSelection:
             context_start_index=0,
             context_end_index=1,
             vocabulary_annotations=[
-                V2VocabularyAnnotation(word="knock", translation="치다", dialogue_index=0),
-                V2VocabularyAnnotation(word="park", translation="공원", dialogue_index=0),
+                VocabularyAnnotation(word="knock", translation="치다", dialogue_index=0),
+                VocabularyAnnotation(word="park", translation="공원", dialogue_index=0),
             ]
         )
         
@@ -168,7 +168,7 @@ class TestEnrichFromSubtitles:
         """Should populate context times from source dialogues."""
         source, target = sample_dialogues
         
-        selection = V2ContentSelection(
+        selection = ContentSelection(
             expression="knock it out of the park",
             expression_translation="Lo haré perfectamente",
             title="Expression Title",
@@ -184,8 +184,8 @@ class TestEnrichFromSubtitles:
         assert enriched.context_end_time == "00:00:09,000"
 
 
-class TestConvertV2ToV1Format:
-    """Tests for convert_v2_to_v1_format function."""
+class TestConvertToLegacyFormat:
+    """Tests for convert_to_legacy_format function."""
     
     @pytest.fixture
     def sample_dialogues(self):
@@ -203,10 +203,10 @@ class TestConvertV2ToV1Format:
         return source, target
     
     def test_convert_creates_v1_format(self, sample_dialogues):
-        """Should convert V2 selection to V1-compatible dict."""
+        """Should convert selection to V1-compatible dict."""
         source, target = sample_dialogues
         
-        selection = V2ContentSelection(
+        selection = ContentSelection(
             expression="knock it out of the park",
             expression_translation="Lo haré perfectamente",
             title="완벽한 자신감",
@@ -223,7 +223,7 @@ class TestConvertV2ToV1Format:
         enriched = enrich_from_subtitles(selection, source, target)
         
         # Convert to V1
-        v1 = convert_v2_to_v1_format(enriched, source, target)
+        v1 = convert_to_legacy_format(enriched, source, target)
         
         assert v1['expression'] == "knock it out of the park"
         assert v1['expression_translation'] == "Lo haré perfectamente"
@@ -235,7 +235,7 @@ class TestConvertV2ToV1Format:
         assert v1['translation'][1] == "Lo haré perfectamente."
         assert v1['scene_type'] == "drama"
         
-        # V2 addition: dialogue_entries with timing
+        # Addition: dialogue_entries with timing
         assert 'dialogue_entries' in v1
         assert len(v1['dialogue_entries']) == 3
         assert v1['dialogue_entries'][1]['text'] == "I'll knock it out of the park."
@@ -243,18 +243,18 @@ class TestConvertV2ToV1Format:
         assert v1['dialogue_entries'][1]['start_time'] == "00:00:03,000"
 
 
-class TestV2ContentSelectionResponse:
-    """Tests for V2ContentSelectionResponse model."""
+class TestContentSelectionResponse:
+    """Tests for ContentSelectionResponse model."""
     
     def test_create_empty_response(self):
         """Should create response with empty expressions list."""
-        response = V2ContentSelectionResponse()
+        response = ContentSelectionResponse()
         assert response.expressions == []
     
     def test_create_with_expressions(self):
         """Should create response with expression list."""
         selections = [
-            V2ContentSelection(
+            ContentSelection(
                 expression="test1",
                 expression_translation="테스트1",
                 title="Title1",
@@ -263,7 +263,7 @@ class TestV2ContentSelectionResponse:
                 context_start_index=0,
                 context_end_index=1,
             ),
-            V2ContentSelection(
+            ContentSelection(
                 expression="test2",
                 expression_translation="테스트2",
                 title="Title2",
@@ -274,7 +274,7 @@ class TestV2ContentSelectionResponse:
             ),
         ]
         
-        response = V2ContentSelectionResponse(expressions=selections)
+        response = ContentSelectionResponse(expressions=selections)
         
         assert len(response.expressions) == 2
         assert response.expressions[0].expression == "test1"

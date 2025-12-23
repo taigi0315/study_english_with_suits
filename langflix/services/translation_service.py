@@ -34,6 +34,23 @@ class TranslationService:
         """
         translated_expressions = {}
         
+        # Ensure all expressions are ExpressionAnalysis objects (handle dicts from upstream)
+        # This fixes AttributeError: 'dict' object has no attribute 'translation'
+        validated_expressions = []
+        for expr in expressions:
+            if isinstance(expr, dict):
+                try:
+                    validated_expressions.append(ExpressionAnalysis(**expr))
+                except Exception as e:
+                    logger.error(f"Failed to convert dict to ExpressionAnalysis in TranslationService: {e}")
+                    # If conversion fails, we might have invalid data, but we'll try to keep the dict to see if it works later or fail explicitly
+                    # Actually, failing here is better than obscure error later
+                    logger.warning(f"Skipping invalid expression dict: {expr.keys() if isinstance(expr, dict) else 'unknown'}")
+                    continue
+            else:
+                validated_expressions.append(expr)
+        expressions = validated_expressions
+
         # Check if expressions already have translations from initial LLM call
         has_existing_translations = False
         if expressions and len(expressions) > 0:

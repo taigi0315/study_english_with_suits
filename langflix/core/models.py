@@ -75,25 +75,25 @@ class ExpressionAnalysis(BaseModel):
         description="Complete dialogue lines in the scene",
         min_length=1
     )
-    translation: List[str] = Field(
-        description="Translations of all dialogue lines in the same order",
-        min_length=1
+    translation: Optional[List[str]] = Field(
+        default=None,
+        description="Translations of all dialogue lines in the same order"
     )
     expression_dialogue: str = Field(
         description="The complete dialogue line that contains the expression",
         min_length=1
     )
-    expression_dialogue_translation: str = Field(
-        description="Translation of the dialogue line containing the expression",
-        min_length=1
+    expression_dialogue_translation: Optional[str] = Field(
+        default=None,
+        description="Translation of the dialogue line containing the expression"
     )
     expression: str = Field(
         description="The main expression/phrase to learn (key part extracted from expression_dialogue)",
         min_length=1
     )
-    expression_translation: str = Field(
-        description="Translation of the main expression",
-        min_length=1
+    expression_translation: Optional[str] = Field(
+        default=None,
+        description="Translation of the main expression"
     )
     intro_hook: Optional[str] = Field(
         default=None,
@@ -102,22 +102,22 @@ class ExpressionAnalysis(BaseModel):
     context_start_time: Optional[str] = Field(
         default=None,
         description="Timestamp where conversational context should BEGIN",
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?$"
     )
     context_end_time: Optional[str] = Field(
         default=None,
         description="Timestamp where conversational context should END", 
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?$"
     )
     expression_start_time: Optional[str] = Field(
         default=None,
         description="Exact timestamp where the expression phrase begins (for audio extraction)",
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?$"
     )
     expression_end_time: Optional[str] = Field(
         default=None,
         description="Exact timestamp where the expression phrase ends (for audio extraction)",
-        pattern=r"^\d{2}:\d{2}:\d{2}[.,]\d{3,6}$"
+        pattern=r"^\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?$"
     )
     similar_expressions: List[str] = Field(
         description="List of 1-3 similar expressions or alternative ways to say the same thing",

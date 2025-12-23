@@ -147,7 +147,7 @@ def get_variant_selection() -> str:
 
 def get_content_selection_template_file() -> str:
     """Get content selection prompt template file"""
-    return get_subtitles_config().get('template_file', 'content_selection_prompt_v1.txt')
+    return get_subtitles_config().get('template_file', 'expression_analysis_prompt.yaml')
 
 
 # Backward compatibility aliases
@@ -159,11 +159,6 @@ def get_dual_language_config() -> Dict[str, Any]:
 def is_dual_language_enabled() -> bool:
     """DEPRECATED: Use is_subtitles_enabled() instead"""
     return is_subtitles_enabled()
-
-
-def get_v2_template_file() -> str:
-    """DEPRECATED: Use get_content_selection_template_file() instead"""
-    return get_content_selection_template_file()
 
 
 # ============================================================================
@@ -221,7 +216,7 @@ def get_translator_model() -> str:
     """Get model name for Translator Agent (smart model)"""
     config = get_pipeline_config()
     translator_cfg = config.get('translator', {})
-    return translator_cfg.get('model_name', 'gemini-1.5-pro')
+    return translator_cfg.get('model_name', 'gemini-2.0-flash')
 
 
 def get_translator_temperature() -> float:
@@ -556,7 +551,7 @@ def get_test_mode_max_total_expressions() -> int:
 
 
 def get_max_total_expressions(test_mode: bool = False) -> int:
-    """Get maximum total expressions for entire video (V2 mode).
+    """Get maximum total expressions for entire video.
     
     Args:
         test_mode: If True, use test mode limits

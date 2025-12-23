@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def main():
     logger.info("Starting isolated vocabulary visibility test")
     
-    video_path = "output/v2/whatever.mkv"
+    video_path = "output/whatever.mkv"
     if not os.path.exists(video_path):
         import glob
         # Try finding any MKV in current dir or assets
@@ -94,7 +94,7 @@ def main():
     # But for drawtext testing, it should overlay on top regardless of aspect (if mapped correctly).
     # Wait, create_short_form does crop/scale? 
     # It assumes master clip is pre-processed?
-    # In V2, master clip is 9:16 already?
+    # Note: master clip is 9:16 already?
     # No, create_long_form returns a video.
     
     # Let's verify what create_short_form expects.

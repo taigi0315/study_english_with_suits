@@ -1,5 +1,5 @@
 """
-Dual Language Subtitle Support for LangFlix V2.
+Dual Language Subtitle Support for LangFlix.
 
 This module provides models and services for working with dual-language
 subtitles (source + target) from Netflix.

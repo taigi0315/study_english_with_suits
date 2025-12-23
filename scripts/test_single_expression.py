@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-V2 Dual-Language Video Generation Test Script
+Dual-Language Video Generation Test Script
 
-Tests the V2 dual-language pipeline with Korean (source) and Spanish (target).
+Tests the dual-language pipeline with Korean (source) and Spanish (target).
 This script runs the pipeline directly without needing the API server.
 
 Usage:
-    python scripts/test_v2_generation.py [--test-mode]
+    python scripts/test_generation.py [--test-mode]
 """
 import sys
 import os
@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description='Test V2 dual-language video generation')
+    parser = argparse.ArgumentParser(description='Test dual-language video generation')
     parser.add_argument('--test-mode', action='store_true', default=True,
                         help='Run in test mode (1 expression only)')
     parser.add_argument('--full', action='store_true', 
@@ -41,7 +41,7 @@ def main():
     test_mode = not args.full
     
     logger.info("=" * 60)
-    logger.info("V2 Dual-Language Video Generation Test")
+    logger.info("Dual-Language Video Generation Test")
     logger.info("=" * 60)
     logger.info(f"Test Mode: {test_mode}")
     logger.info(f"Output Dir: {args.output_dir}")
@@ -67,7 +67,7 @@ def main():
         from langflix.main import LangFlixPipeline
         from langflix import settings
         
-        # Verify V2 mode is enabled
+        # Verify Dual-subtitle mode is enabled
         logger.info("Checking configuration...")
         logger.info(f"  - Dual language enabled: {settings.is_dual_language_enabled()}")
         logger.info(f"  - Source language: {settings.get_default_source_language()}")
@@ -75,7 +75,7 @@ def main():
         logger.info("")
         
         if not settings.is_dual_language_enabled():
-            logger.warning("V2 dual language mode is DISABLED in config!")
+            logger.warning("Dual-subtitle dual language mode is DISABLED in config!")
             logger.warning("Enable it in langflix/config/default.yaml: dual_language.enabled = true")
             return 1
             
@@ -99,7 +99,7 @@ def main():
             video_file=video_path,
             subtitle_file=subtitle_path,
             output_dir=str(output_dir),
-            series_name="V2Test",
+            series_name="Test",
             episode_name="The.Glory.S01E01",
             target_languages=["es"],  # Spanish target
         )
@@ -126,7 +126,7 @@ def main():
             
         if output_files:
             logger.info("")
-            logger.info("✅ V2 Video Generation SUCCESSFUL!")
+            logger.info("✅ Video Generation SUCCESSFUL!")
             return 0
         else:
             logger.error("")

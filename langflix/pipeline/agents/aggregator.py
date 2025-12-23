@@ -98,8 +98,6 @@ class AggregatorAgent:
         Returns:
             Master summary text
         """
-        model = self.client.GenerativeModel(self.model_name)
-
         generation_config = {
             "temperature": 0.3,  # Lower temperature for more focused summarization
             "top_p": 0.8,
@@ -107,7 +105,8 @@ class AggregatorAgent:
             "max_output_tokens": 2048,  # Enough for 200-400 word summary
         }
 
-        response = model.generate_content(
+        # self.client is already a GenerativeModel from get_gemini_client()
+        response = self.client.generate_content(
             prompt,
             generation_config=generation_config
         )

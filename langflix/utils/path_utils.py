@@ -1,5 +1,5 @@
 """
-Path utilities for V2 dual-language subtitle file structure.
+Path utilities for Dual-language subtitle file structure.
 
 File Structure Convention (NEW - Netflix-style):
     assets/media/

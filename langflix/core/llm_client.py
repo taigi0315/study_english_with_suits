@@ -1,9 +1,14 @@
 """
 LLM Client: Unified interface for Gemini API
 """
+import os
 import google.generativeai as genai
 import logging
+from dotenv import load_dotenv
 from langflix import settings
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -12,16 +17,16 @@ _api_configured = False
 
 
 def configure_api():
-    """Configure Gemini API with key from settings."""
+    """Configure Gemini API with key from environment."""
     global _api_configured
     if not _api_configured:
-        api_key = settings.get_gemini_api_key()
+        api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
             _api_configured = True
             logger.info(f"Configured Gemini API with key: {api_key[:4]}...{api_key[-4:]}")
         else:
-            logger.warning("No Gemini API key found in settings")
+            logger.warning("GEMINI_API_KEY not found in environment variables")
 
 
 def get_gemini_client(model_name: str = None) -> genai.GenerativeModel:
@@ -37,7 +42,7 @@ def get_gemini_client(model_name: str = None) -> genai.GenerativeModel:
     configure_api()
     
     if not model_name:
-        model_name = settings.get_model_name()
+        model_name = settings.get_llm_model_name()
     
     return genai.GenerativeModel(model_name=model_name)
 

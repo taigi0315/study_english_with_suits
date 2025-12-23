@@ -30,7 +30,7 @@ def test_create_job_mock(mock_get_manager):
         "language_level": "intermediate"
     }
     
-    response = client.post("/api/v1/jobs", files=files, data=data)
+    response = client.post("/api/jobs", files=files, data=data)
     assert response.status_code == 200
     
     result = response.json()
@@ -59,7 +59,7 @@ def test_get_job_status(mock_get_manager):
     }
     mock_manager.get_job.return_value = mock_job
     
-    response = client.get(f"/api/v1/jobs/{job_id}")
+    response = client.get(f"/api/jobs/{job_id}")
     assert response.status_code == 200
     
     result = response.json()
@@ -87,7 +87,7 @@ def test_get_job_expressions_completed(mock_get_manager):
     }
     mock_manager.get_job.return_value = mock_job
     
-    response = client.get(f"/api/v1/jobs/{job_id}/expressions")
+    response = client.get(f"/api/jobs/{job_id}/expressions")
     assert response.status_code == 200
     
     result = response.json()
@@ -115,7 +115,7 @@ def test_get_job_expressions_not_completed(mock_get_manager):
     }
     mock_manager.get_job.return_value = mock_job
     
-    response = client.get(f"/api/v1/jobs/{job_id}/expressions")
+    response = client.get(f"/api/jobs/{job_id}/expressions")
     assert response.status_code == 200
     
     result = response.json()
@@ -136,7 +136,7 @@ def test_get_job_expressions_not_found(mock_get_manager):
     job_id = "non-existent-job-id"
     mock_manager.get_job.return_value = None
     
-    response = client.get(f"/api/v1/jobs/{job_id}/expressions")
+    response = client.get(f"/api/jobs/{job_id}/expressions")
     assert response.status_code == 404
     
     result = response.json()
@@ -167,7 +167,7 @@ def test_list_jobs(mock_get_manager):
     }
     mock_manager.get_all_jobs.return_value = mock_jobs
     
-    response = client.get("/api/v1/jobs")
+    response = client.get("/api/jobs")
     assert response.status_code == 200
     
     result = response.json()
@@ -195,7 +195,7 @@ def test_list_jobs_with_filters(mock_get_manager):
     }
     mock_manager.get_all_jobs.return_value = mock_jobs
     
-    response = client.get("/api/v1/jobs?status=PENDING&limit=10&offset=0")
+    response = client.get("/api/jobs?status=PENDING&limit=10&offset=0")
     assert response.status_code == 200
     
     result = response.json()

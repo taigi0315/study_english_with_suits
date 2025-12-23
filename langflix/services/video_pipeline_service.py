@@ -51,6 +51,7 @@ class VideoPipelineService:
         create_long_form: bool = True,
         create_short_form: bool = True,
         short_form_max_duration: float = 180.0,
+        target_duration: float = 120.0,
         schedule_upload: bool = False,
         progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> Dict[str, Any]:
@@ -126,6 +127,7 @@ class VideoPipelineService:
                 no_shorts=actual_no_shorts,
                 no_long_form=actual_no_long_form,
                 short_form_max_duration=short_form_max_duration,
+                target_duration=target_duration,
                 schedule_upload=schedule_upload
             )
             

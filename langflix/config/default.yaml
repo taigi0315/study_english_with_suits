@@ -362,7 +362,7 @@ short_video:
     # Expression translation (bottom padding area)
     translation:
       font_size: 50
-      y_position: 1685           # Adjusted for new layout
+      y_position: 1700           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
       chars_per_line: 40         # Max characters per line before wrapping
       text_color: 'yellow'

@@ -24,7 +24,7 @@ class TestBackendVideoCreation:
     """End-to-end tests that interact with the actual backend API."""
     
     BASE_URL = "http://localhost:8000"
-    API_ENDPOINT = f"{BASE_URL}/api/v1/jobs"
+    API_ENDPOINT = f"{BASE_URL}/api/jobs"
     
     @pytest.fixture
     def episode1_subtitle_path(self):
@@ -75,7 +75,7 @@ class TestBackendVideoCreation:
         
         This test:
         1. Reads Episode 1 video and subtitle files
-        2. Sends POST request to /api/v1/jobs endpoint
+        2. Sends POST request to /api/jobs endpoint
         3. Polls job status until completion or failure
         4. Verifies job completed successfully
         5. Checks that output was created in test_output directory
@@ -140,7 +140,7 @@ class TestBackendVideoCreation:
         poll_interval = 2  # Poll every 2 seconds
         start_time = time.time()
         
-        job_status_url = f"{self.BASE_URL}/api/v1/jobs/{job_id}"
+        job_status_url = f"{self.BASE_URL}/api/jobs/{job_id}"
         
         print(f"\n⏳ Polling job status at {job_status_url}...")
         
@@ -226,7 +226,7 @@ class TestBackendVideoCreation:
         """Test that job status endpoint is accessible."""
         # Try to get status of a non-existent job (should return 404 or empty)
         response = requests.get(
-            f"{self.BASE_URL}/api/v1/jobs/non-existent-job-id",
+            f"{self.BASE_URL}/api/jobs/non-existent-job-id",
             timeout=5
         )
         

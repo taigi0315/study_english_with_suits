@@ -110,6 +110,8 @@ class OverlayRenderer:
         if not viral_title:
             return video_stream
 
+        logger.info(f'overlaying title: "{viral_title}"')
+
         # Wrap title using configurable chars per line
         title_chars_per_line = settings.get_viral_title_chars_per_line()
         wrapped_viral_title = textwrap.fill(viral_title, width=title_chars_per_line)
@@ -153,7 +155,8 @@ class OverlayRenderer:
         video_stream,
         keywords: List[str],
         settings,
-        target_width: int = 1080
+        target_width: int,
+        duration: float = 0.0
     ):
         """
         Add hashtag keywords below viral title (comma-separated, with line wrapping).
@@ -180,8 +183,8 @@ class OverlayRenderer:
         # Limit to 5 keywords (increased since comma-separated is more compact)
         keywords = keywords[:5]
 
-        # Format keywords: add "#" prefix to each
-        formatted_keywords = [f"#{keyword}" for keyword in keywords]
+        # Format keywords: strip existing # and add single "#" prefix
+        formatted_keywords = [f"#{keyword.lstrip('#')}" for keyword in keywords]
 
         # Get settings
         font_size = settings.get_keywords_font_size()
@@ -250,6 +253,9 @@ class OverlayRenderer:
                 'bordercolor': settings.get_keywords_border_color()
             }
 
+            if duration > 0:
+                keyword_args['enable'] = f"between(t,0,{duration:.2f})"
+
             if keyword_font and os.path.exists(keyword_font):
                 keyword_args['fontfile'] = keyword_font
 
@@ -304,15 +310,21 @@ class OverlayRenderer:
         logger.info(f"Processing {len(narrations)} narration overlays")
 
         for idx, narr_item in enumerate(narrations[:6]):  # Max 6 narrations
-            # Handle both dict and object
-            if isinstance(narr_item, dict):
+            # Handle string, dict, and object
+            dialogue_index = None
+            if isinstance(narr_item, str):
+                narr_text = self._clean_html(narr_item)
+                narr_type = 'commentary'
+                dialogue_index = None
+            elif isinstance(narr_item, dict):
                 narr_text = self._clean_html(narr_item.get('text', ''))
-                narr_dialogue_idx = narr_item.get('dialogue_index', 0)
                 narr_type = narr_item.get('type', 'commentary')
+                dialogue_index = narr_item.get('dialogue_index')
             else:
                 narr_text = self._clean_html(getattr(narr_item, 'text', ''))
-                narr_dialogue_idx = getattr(narr_item, 'dialogue_index', 0)
                 narr_type = getattr(narr_item, 'type', 'commentary')
+                if hasattr(narr_item, 'dialogue_index'):
+                    dialogue_index = getattr(narr_item, 'dialogue_index')
 
             if not narr_text:
                 continue
@@ -324,8 +336,16 @@ class OverlayRenderer:
             # Get color based on narration type
             narr_color = settings.get_narrations_type_color(narr_type)
 
-            # Timing
-            narr_start = max(0, narr_dialogue_idx * time_per_dialogue)
+            # Timing Logic
+            if dialogue_index is not None:
+                narr_start = max(0, dialogue_index * time_per_dialogue)
+            else:
+                # Distribute evenly if no index
+                # Start at 1s, distribute over duration minus buffer
+                safe_duration = max(1.0, context_duration - 2.0)
+                interval = safe_duration / len(narrations[:6])
+                narr_start = 1.0 + (idx * interval)
+            
             narr_end = narr_start + narr_duration
 
             escaped_narr = self.escape_drawtext_string(narr_text)
@@ -341,6 +361,8 @@ class OverlayRenderer:
                 'line_spacing': 8,  # Required for multiline text
                 'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
             }
+            
+            logger.info(f'overlaying narration: "{narr_text}" at t={narr_start:.2f}s')
 
             if target_font and os.path.exists(target_font):
                 narr_args['fontfile'] = target_font
@@ -391,8 +413,8 @@ class OverlayRenderer:
         # Layout Strategy: 4 fixed rotating positions for VOCABULARY
         # These positions are offset from expression annotations to avoid overlap
         ANNOTATION_POSITIONS = [
-            (600, 440),  # Top-right (vocabulary row 1)
-            (600, 580),  # Bottom-right (vocabulary row 2)
+            (40, 900),  # Top-right (vocabulary row 1)
+            (40, 1040),  # Bottom-right (vocabulary row 2)
         ]
         
         font_size = settings.get_vocabulary_font_size()
@@ -405,20 +427,39 @@ class OverlayRenderer:
 
         for idx, vocab_annot in enumerate(vocab_annotations[:5]):  # Max 5
             # Handle both dict and object
+            dialogue_index = None
             if isinstance(vocab_annot, dict):
                 word = self._clean_html(vocab_annot.get('word', ''))
-                translation = self._clean_html(vocab_annot.get('translation', ''))
-                dialogue_index = vocab_annot.get('dialogue_index', 0)
+                # Try translation, then meaning, then definition (robust fallback)
+                translation = self._clean_html(
+                    vocab_annot.get('translation') or 
+                    vocab_annot.get('meaning') or 
+                    vocab_annot.get('definition') or 
+                    ''
+                )
+                dialogue_index = vocab_annot.get('dialogue_index')
             else:
                 word = self._clean_html(getattr(vocab_annot, 'word', ''))
-                translation = self._clean_html(getattr(vocab_annot, 'translation', ''))
-                dialogue_index = getattr(vocab_annot, 'dialogue_index', 0)
+                translation = self._clean_html(
+                    getattr(vocab_annot, 'translation', None) or 
+                    getattr(vocab_annot, 'meaning', None) or 
+                    getattr(vocab_annot, 'definition', '')
+                )
+                if hasattr(vocab_annot, 'dialogue_index'):
+                    dialogue_index = getattr(vocab_annot, 'dialogue_index')
 
             if not word or not translation:
                 continue
 
-            # Timing
-            annot_start = max(0, dialogue_index * time_per_dialogue)
+            # Timing Logic
+            if dialogue_index is not None:
+                annot_start = max(0, dialogue_index * time_per_dialogue)
+            else:
+                # Distribute evenly if no index
+                safe_duration = max(1.0, context_duration - 2.0)
+                interval = safe_duration / len(vocab_annotations[:5])
+                annot_start = 1.0 + (idx * interval)
+            
             annot_end = annot_start + annot_duration
 
             # Get rotating position (cycle through 4 positions)
@@ -427,7 +468,10 @@ class OverlayRenderer:
 
             # Escape text
             escaped_word = self.escape_drawtext_string(word)
-            escaped_translation = self.escape_drawtext_string(translation)
+            
+            # Wrap translation to prevent cutoff (max ~25 chars per line for annotations)
+            wrapped_translation = textwrap.fill(translation, width=25)
+            escaped_translation = self.escape_drawtext_string(wrapped_translation)
 
             # Random color
             random_color = random.choice(voca_colors)
@@ -443,6 +487,8 @@ class OverlayRenderer:
             # VERTICAL STACK LAYOUT (avoids font width estimation issues)
             # Line 1: Source word (Korean)
             # Line 2: Indented translation (Spanish)
+            
+            logger.info(f'overlaying vocabulary: "{word}" -> "{translation}"')
             
             line_spacing = int(font_size * 1.2)
             indent = "    "  # 4 spaces for translation
@@ -521,20 +567,39 @@ class OverlayRenderer:
 
         for idx, ea_item in enumerate(expr_annotations[:3]):  # Max 3
             # Handle both dict and object
+            dialogue_index = None
             if isinstance(ea_item, dict):
-                ea_expr = self._clean_html(ea_item.get('expression', ''))
+                # Try expression, then word, then phrase (robust fallback)
+                ea_expr = self._clean_html(
+                    ea_item.get('expression') or 
+                    ea_item.get('word') or 
+                    ea_item.get('phrase') or 
+                    ''
+                )
                 ea_trans = self._clean_html(ea_item.get('translation', ''))
-                ea_dialogue_idx = ea_item.get('dialogue_index', 0)
+                dialogue_index = ea_item.get('dialogue_index')
             else:
-                ea_expr = self._clean_html(getattr(ea_item, 'expression', ''))
+                ea_expr = self._clean_html(
+                    getattr(ea_item, 'expression', None) or 
+                    getattr(ea_item, 'word', None) or 
+                    getattr(ea_item, 'phrase', '')
+                )
                 ea_trans = self._clean_html(getattr(ea_item, 'translation', ''))
-                ea_dialogue_idx = getattr(ea_item, 'dialogue_index', 0)
+                if hasattr(ea_item, 'dialogue_index'):
+                    dialogue_index = getattr(ea_item, 'dialogue_index')
 
             if not ea_expr:
                 continue
 
-            # Timing
-            ea_start = max(0, ea_dialogue_idx * time_per_dialogue)
+            # Timing Logic
+            if dialogue_index is not None:
+                ea_start = max(0, dialogue_index * time_per_dialogue)
+            else:
+                # Distribute evenly
+                safe_duration = max(1.0, context_duration - 2.0)
+                interval = safe_duration / len(expr_annotations[:3])
+                ea_start = 1.0 + (idx * interval)
+            
             ea_end = ea_start + expr_annot_duration
 
             # Get rotating position (cycle through 4 positions)
@@ -542,7 +607,10 @@ class OverlayRenderer:
             ea_x, ea_y = ANNOTATION_POSITIONS[pos_idx]
 
             escaped_expr = self.escape_drawtext_string(ea_expr)
-            escaped_trans = self.escape_drawtext_string(ea_trans) if ea_trans else ""
+            
+            # Wrap translation
+            wrapped_trans = textwrap.fill(ea_trans, width=25) if ea_trans else ""
+            escaped_trans = self.escape_drawtext_string(wrapped_trans) if wrapped_trans else ""
 
             common_args = {
                 'fontsize': expr_annot_font_size,
@@ -555,6 +623,8 @@ class OverlayRenderer:
             # VERTICAL STACK LAYOUT (avoids font width estimation issues)
             # Line 1: Expression (source language)
             # Line 2: Indented translation (target language)
+            
+            logger.info(f'overlaying expression annotation: "{ea_expr}" -> "{ea_trans}"')
             
             line_spacing = int(expr_annot_font_size * 1.2)
             indent = "    "  # 4 spaces for translation
@@ -584,7 +654,8 @@ class OverlayRenderer:
         video_stream,
         expression_text: str,
         translation_text: str,
-        settings
+        settings,
+        duration: float = 0.0
     ):
         """
         Add expression and translation text at bottom of video (static, entire video).
@@ -623,11 +694,16 @@ class OverlayRenderer:
             'fontsize': expression_font_size,
             'fontcolor': settings.get_expression_text_color(),
             'x': '(w-text_w)/2',
-            'y': expression_y,
+            # Move up slightly to prevent bottom overlap (was settings.get_expression_y_position())
+            # Ensure it leaves room for translation below
+            'y': f"{expression_y} - 50", 
             'borderw': settings.get_expression_border_width(),
             'bordercolor': settings.get_expression_border_color(),
             'line_spacing': 10
         }
+
+        if duration > 0:
+            expr_args['enable'] = f"between(t,0,{duration:.2f})"
 
         source_font = self.font_resolver.get_source_font("expression")
         if source_font and os.path.exists(source_font):
@@ -643,7 +719,8 @@ class OverlayRenderer:
         escaped_translation = self.escape_drawtext_string(wrapped_translation)
 
         padding_between = 20
-        translation_y = f"{expression_y}+{int(expr_height_px) + padding_between}"
+        # Calculate Y relative to moved expression Y
+        translation_y = f"({expression_y} - 50) + {int(expr_height_px) + padding_between}"
 
         trans_args = {
             'text': escaped_translation,

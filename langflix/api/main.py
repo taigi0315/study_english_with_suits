@@ -130,10 +130,10 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(health.router, tags=["health"])
-    app.include_router(jobs.router, prefix="/api/v1", tags=["jobs"])
-    app.include_router(files.router, prefix="/api/v1", tags=["files"])
-    app.include_router(batch.router, prefix="/api/v1", tags=["batch"])
-    app.include_router(media.router, prefix="/api/v2", tags=["media"])  # V2 endpoints
+    app.include_router(jobs.router, prefix="/api", tags=["jobs"])
+    app.include_router(files.router, prefix="/api", tags=["files"])
+    app.include_router(batch.router, prefix="/api", tags=["batch"])
+    app.include_router(media.router, prefix="/api", tags=["media"])
     
     # API-only endpoint (no UI)
     @app.get("/")

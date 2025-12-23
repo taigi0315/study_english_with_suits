@@ -61,16 +61,6 @@ Standard terminology for visual features in generated videos.
 - **Purpose:** Full dialogue context with translation
 - **Style:** Two lines (source above, target below)
 
-## V1 → V2 Terminology Changes
-
-| V1 Term | V2 Standard | Notes |
-|---------|-------------|-------|
-| `catchy_keywords` | **Catch Words** | Keep field name, use display name |
-| `keywords` (config) | `catch_words` | Optional rename for clarity |
-| `expression_highlight` | **Expression Display** | Merged with translation_highlight |
-| `translation_highlight` | **Expression Display** | Part of same feature |
-| `subtitle_styling.expression_highlight` | Remove | Duplicate of expression display |
-
 ## LLM Output Fields Reference
 
 ```json

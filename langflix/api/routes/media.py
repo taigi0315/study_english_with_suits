@@ -1,7 +1,7 @@
 """
 Media management endpoints for LangFlix API.
 
-V2 endpoints for dual-language subtitle support.
+Endpoints for dual-language subtitle support.
 """
 
 import logging
@@ -25,7 +25,7 @@ async def get_media_languages(media_path: str) -> Dict[str, Any]:
     """
     Get available subtitle languages for a media file.
     
-    V2 endpoint for dual-language subtitle support.
+    Endpoint for dual-language subtitle support.
     
     Args:
         media_path: Relative path to the media file (e.g., "assets/media/show.mp4")

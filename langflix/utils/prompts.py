@@ -56,8 +56,8 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     target_language = lang_config['prompt_language']
     
     # Get source language from settings (default to English for learning Korean from English shows)
-    # In V2 dual-subtitle mode, source is the language being learned
-    # In V1 single-subtitle mode, we infer from the target language
+    # In dual-subtitle mode, source is the language being learned
+    # In single-subtitle mode, we infer from the target language
     source_language = settings.get_source_language_name()  # e.g., "Korean", "English"
     if not source_language:
         # Fallback: if target is Korean, source is probably English (or vice versa)
@@ -79,8 +79,8 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         cleaned_dialogues.append(f"[{sub['start_time']}-{sub['end_time']}] {clean_text}")
     
     dialogues = "\\n".join(cleaned_dialogues)
-    
-    # For V8+ prompts that use indexed format
+
+    # For prompts that use indexed format
     indexed_dialogues = []
     for i, sub in enumerate(subtitle_chunk):
         clean_text = re.sub(r'<[^>]+>', '', sub['text'])
@@ -88,13 +88,13 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
         indexed_dialogues.append(f"[{i}] {clean_text}")
     
     source_dialogues = "\\n".join(indexed_dialogues)
-    target_dialogues = source_dialogues  # In V1 mode, use same (translation will be done by LLM)
+    target_dialogues = source_dialogues  # In single-subtitle mode, use same (translation will be done by LLM)
 
     # Load prompt template from file
     template = _load_prompt_template()
-    
+
     # Format the template with variables - include all possible placeholders
-    # This supports both V7 (uses dialogues) and V8 (uses source_dialogues, target_dialogues)
+    # This supports both timestamp-based and indexed formats
     try:
         prompt = template.format(
             dialogues=dialogues,

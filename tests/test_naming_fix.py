@@ -73,9 +73,9 @@ print(f"3. Uploaded subtitle saved as: '{filename}'")
 print(f"4. Translation service translates: '{normalized}' -> 'Chinese'")
 print(f"5. Creates files: '{normalized}.srt', 'Chinese.srt'")
 
-# V2 pipeline looks for Korean + Chinese
-print(f"6. V2 pipeline needs: '{normalized}' + 'Chinese'")
-print(f"7. V2 pipeline finds: '{normalized}.srt' ✅, 'Chinese.srt' ✅")
+# Pipeline looks for Korean + Chinese
+print(f"6. Pipeline needs: '{normalized}' + 'Chinese'")
+print(f"7. Pipeline finds: '{normalized}.srt' ✅, 'Chinese.srt' ✅")
 print(f"8. ✅ SUCCESS - All files found!")
 
 print("=" * 60)

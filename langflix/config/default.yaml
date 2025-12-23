@@ -8,33 +8,63 @@
 app:
   # Name of the TV show for prompting
   show_name: "Shows"
-  
-  # Template file for expression analysis prompt
-  template_file: "expression_analysis_prompt.txt"
 
 # ============================================================================
-# V2: Dual Language Subtitle Configuration
+# Subtitle Configuration
 # ============================================================================
-dual_language:
-  # Enable V2 dual-language mode (uses Netflix subtitles for both languages)
-  enabled: true  # V2 mode: Load both source and target subtitles, use fuzzy matching
-  
-  # Default source language (language being learned)
-  default_source_language: "English"
+subtitles:
+  # Enable multi-language subtitle mode (uses Netflix subtitles for both languages)
+  enabled: true  # Load both source and target subtitles, use fuzzy matching
 
-  # Default target language (user's native language)
-  default_target_language: "Korean"
-  
+  # NOTE: Source/target languages should be passed via API/CLI, not stored here
+  # default_source_language and default_target_language removed - always pass explicitly
+
   # Subtitle file naming pattern
   # Netflix format: {index}_{Language}.srt (e.g., "3_Korean.srt", "6_English.srt")
   subtitle_pattern: "{index}_{Language}.srt"
-  
+
   # Variant selection when multiple subtitle files exist for same language
   # Options: "first" (use first file), "last" (use last file), "largest" (use largest file)
   variant_selection: "first"
-  
-  # V2 prompt template (used when dual_language.enabled is true)
-  v2_template_file: "content_selection_prompt_v1.txt"
+
+  # Content selection prompt template
+  template_file: "expression_analysis_prompt.yaml"
+
+# ============================================================================
+# Contextual Localization Pipeline Configuration
+# ============================================================================
+pipeline:
+  # Show Bible configuration (Wikipedia-sourced context about show/characters)
+  show_bible:
+    # Directory to cache Show Bibles
+    cache_dir: "langflix/pipeline/artifacts/show_bibles"
+
+    # Use Wikipedia for Show Bible generation
+    use_wikipedia: true
+
+    # Force refresh Show Bible (ignore cache)
+    force_refresh: false
+
+  # Master Summary configuration (episode narrative summaries)
+  master_summary:
+    # Directory to cache Master Episode Summaries
+    cache_dir: "langflix/pipeline/artifacts/summaries"
+
+  # Aggregator Agent configuration (combines chunk summaries)
+  aggregator:
+    # Model to use for aggregation (use cheaper model like Flash)
+    model_name: "gemini-2.5-flash"
+
+    # Temperature for aggregation (lower = more consistent)
+    temperature: 0.3
+
+  # Translator Agent configuration (context-aware translation)
+  translator:
+    # Model to use for translation (use smart model like Pro)
+    model_name: "gemini-2.5-flash"
+
+    # Temperature for translation (lower = more consistent)
+    temperature: 0.2
 
 # ============================================================================
 # Database Configuration
@@ -54,51 +84,43 @@ database:
   echo: false
 
 # ============================================================================
-# LLM (Language Learning Model) Settings
+# LLM (Language Model) Settings
+# ============================================================================
+# MODEL NAME OVERVIEW:
+#   - llm.model_name: Used for expression analysis/content selection
+#   - llm.translation.model_name: Used for subtitle file translation (keep at 2.0 for context)
+#   - pipeline.aggregator.model_name: Used for summarization (can use cheaper model)
+#   - pipeline.translator.model_name: Used for expression localization
+#   - tts.google.model_name: Used for text-to-speech (future use)
 # ============================================================================
 llm:
   # Maximum characters of subtitle content per chunk
-  # 0 = Process entire script at once (requires large context model like Gemini 1.5 Pro)
+  # 0 = Process entire script at once (requires large context model)
   # >0 = Chunk size in characters (e.g., 3000 for smaller models)
   max_input_length: 0
   
+  # Model for expression analysis and content selection
   model_name: "gemini-2.5-flash"
   
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"
   
-  # Target language for translations
-  target_language: "Korean"
-  
   # API retry configuration
   max_retries: 3
-  retry_backoff_seconds: [3, 6, 12]  # Wait times between retries
+  retry_backoff_seconds: [3, 6, 12]
   
   # Generation configuration
   temperature: 0.1
   top_p: 0.8
   top_k: 40
-  
-  # Expression ranking configuration (Phase 2)
-  # NOTE: These settings are NOT currently used in the codebase
-  # Keeping them commented for future reference
-  # ranking:
-  #   difficulty_weight: 0.4           # Weight for difficulty level (0-1)
-  #   frequency_weight: 0.3             # Weight for expression frequency (0-1)
-  #   educational_value_weight: 0.3     # Weight for educational value (0-1)
-  #   fuzzy_match_threshold: 85         # Similarity threshold for duplicate detection (0-100)
 
   # Subtitle Translation Configuration
-  # Specific settings for translating entire subtitle files
   translation:
-    # Use Gemini 1.5 Pro for its larger context window (up to 2M tokens)
-    # This allows passing the entire movie script as context for better translation quality
-    model_name: "gemini-1.5-pro"
+    # Gemini 2.0 Flash for large context window - translating entire subtitle files
+    model_name: "gemini-2.0-flash"
     
-    # Batch size for translation
-    # -1 = Process all subtitles in a single batch (requires large context model like 1.5 Pro)
-    # >0 = Process in chunks of N subtitles (e.g., 75 for Flash model)
+    # Batch size: -1 = all at once, >0 = chunks of N subtitles
     batch_size: -1
 
 # ============================================================================
@@ -106,17 +128,16 @@ llm:
 # ============================================================================
 processing:
   # Test mode configuration for development
-  # When enabled, limits processing to speed up testing
   test_mode:
-    enabled: true                     # Set to true for development, false for production
+    enabled: false                    # Set to true for development, false for production
     max_chunks: 1                     # Only process 1 chunk of subtitles
     max_expressions_per_chunk: 1      # Only extract 1 expression per chunk
     max_total_expressions: 1          # Total expressions limit for entire video
   
   # Normal mode expression limits (when test_mode.enabled is false)
-  min_expressions_per_chunk: 5
-  max_expressions_per_chunk: 50        # Up to 6 expressions per chunk in production (V1 mode)
-  max_total_expressions: 50           # V2 mode: Max expressions for entire video
+  min_expressions_per_chunk: 1
+  max_expressions_per_chunk: 5
+  max_total_expressions: 15         
 
 # ============================================================================
 # Language Proficiency Levels
@@ -220,9 +241,6 @@ font:
       vocabulary: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
       educational_slide: "assets/fonts/es/F37 Moon VF/F37Moon-VF.ttf"
 
-# NOTE: Processing section already defined above (lines 69-80)
-# Duplicate section removed in V2 cleanup
-
 # ============================================================================
 # Video Transition Settings
 # ============================================================================
@@ -325,7 +343,7 @@ short_video:
     keywords:
       font_size: 35
       newline: 200
-      y_position: 210            # Adjusted for smaller padding (was 250)
+      y_position: 1750            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -344,7 +362,7 @@ short_video:
     # Expression translation (bottom padding area)
     translation:
       font_size: 50
-      y_position: 1680           # Adjusted for new layout
+      y_position: 1685           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
       chars_per_line: 40         # Max characters per line before wrapping
       text_color: 'yellow'
@@ -355,7 +373,7 @@ short_video:
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
       font_size: 24
-      newline: 60
+      newline: 55
       margin_v: 90
       text_color: 'white'
       outline_width: 1
@@ -393,8 +411,8 @@ short_video:
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
       font_size: 75                # Large font for emphasis
-      y_position: 25               # Below logo, above keywords
-      chars_per_line: 25           # Max characters per line before wrapping
+      y_position: 30               # Below logo, above keywords
+      chars_per_line: 20           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -402,9 +420,9 @@ short_video:
 
     # Narrations (commentary overlays in target language)
     narrations:
-      font_size: 55                # Medium size
-      y_position: 320              # Upper-middle area (below video top padding)
-      chars_per_line: 40           # Max characters per line before wrapping
+      font_size: 53                # Medium size
+      y_position: 315              # Upper-middle area (below video top padding)
+      chars_per_line: 38           # Max characters per line before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent
@@ -435,8 +453,8 @@ short_video:
       font: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
       
       # Show/hide elements (set to false to disable)
-      show_expression_highlight: false      # Yellow expression line (disabled - duplicate)
-      show_translation_highlight: false     # Yellow translation line (disabled - duplicate)
+      show_expression_highlight: true       # Yellow expression line (enabled)
+      show_translation_highlight: true      # Yellow translation line (enabled)
       
       # Font sizes for slide elements
       font_sizes:
@@ -448,12 +466,12 @@ short_video:
 
       # Positioning (Y offsets from center)
       positions:
-        expression_dialogue_y: -180  # Distance above center (moved down)
-        expression_y: -150           # Expression (highlighted)
-        expression_dialogue_trans_y: 40  # At center (moved down slightly)
-        expression_translation_y: 70  # Below center
-        similar_base_offset: 180     # Distance from bottom (lower = moved down from 250)
-        similar_line_spacing: 42     # Space between similar expressions
+        expression_dialogue_y: -300   # Distance above center (moved up)
+        expression_y: -150            # Expression (highlighted)
+        expression_dialogue_trans_y: 50   # Below center
+        expression_translation_y: 200  # Below dialogue translation
+        similar_base_offset: 350      # Distinctly below translation
+        similar_line_spacing: 50      # Space between similar expressions
       
       # Line breaking for long text (max words before adding newline)
       line_breaking:

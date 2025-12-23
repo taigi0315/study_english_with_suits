@@ -2031,7 +2031,7 @@ class VideoManagementUI:
                 # Call FastAPI backend with file uploads
                 import requests
                 # Use configured API base URL (from environment variable)
-                fastapi_url = self._build_api_url("/api/v1/jobs")
+                fastapi_url = self._build_api_url("/api/jobs")
                 
                 # Prepare files for upload
                 files = {}
@@ -2040,7 +2040,7 @@ class VideoManagementUI:
                 
                 form_data = {
                     "language_code": data['language_code'],
-                    "source_language": data.get('source_language', data['language_code']),  # V2: Explicit source language
+                    "source_language": data.get('source_language', data['language_code']),  # Explicit source language
                     "show_name": data.get('show_name', ''),  # User-provided show name from UI
                     "episode_name": os.path.splitext(os.path.basename(data['video_path']))[0],
                     "max_expressions": 50,
@@ -2057,7 +2057,11 @@ class VideoManagementUI:
                 
                 # Add target_languages if provided (for multi-language support)
                 if 'target_languages' in data and data['target_languages']:
-                    form_data['target_languages'] = data['target_languages']
+                    # Explicitly join to string to ensure consistent handling by requests/FastAPI
+                    if isinstance(data['target_languages'], list):
+                        form_data['target_languages'] = ",".join(data['target_languages'])
+                    else:
+                        form_data['target_languages'] = data['target_languages']
                 
                 # Add auto_upload_config if provided
                 if 'auto_upload_config' in data and data['auto_upload_config']:
@@ -2207,7 +2211,7 @@ class VideoManagementUI:
                 else:
                     # Try to get from FastAPI backend as fallback
                     import requests
-                    fastapi_url = self._build_api_url(f"/api/v1/jobs/{job_id}")
+                    fastapi_url = self._build_api_url(f"/api/jobs/{job_id}")
                     response = requests.get(fastapi_url)
                     
                     if response.status_code == 200:
@@ -2234,7 +2238,7 @@ class VideoManagementUI:
                 
                 # Call FastAPI backend batch endpoint
                 import requests
-                fastapi_url = self._build_api_url("/api/v1/batch")
+                fastapi_url = self._build_api_url("/api/batch")
                 
                 # Ensure auto_upload_config is passed if present
                 if 'auto_upload_config' in data:
@@ -2258,7 +2262,7 @@ class VideoManagementUI:
             """Get batch status from FastAPI backend"""
             try:
                 import requests
-                fastapi_url = self._build_api_url(f"/api/v1/batch/{batch_id}")
+                fastapi_url = self._build_api_url(f"/api/batch/{batch_id}")
                 response = requests.get(fastapi_url)
                 
                 if response.status_code == 200:

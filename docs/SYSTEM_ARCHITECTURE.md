@@ -344,7 +344,7 @@ flowchart TD
 
 ## Data Flow Diagrams
 
-### Expression Analysis Flow (V2 Dual-Language)
+### Expression Analysis Flow (Dual-Language)
 
 ```mermaid
 flowchart TB
@@ -992,10 +992,10 @@ graph TB
 
 ## Related Documentation
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - V2 Dual-Language Architecture
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Dual-Language Architecture
 - [font_resolver_guide.md](./font_resolver_guide.md) - FontResolver API & Usage
 - [font_configuration_examples.md](./font_configuration_examples.md) - Font Configuration Examples
-- [V2_PROMPT_REQUIREMENTS.md](./V2_PROMPT_REQUIREMENTS.md) - LLM Prompt Specifications
+- [archive/LEGACY_PROMPT_REQUIREMENTS.md](./archive/LEGACY_PROMPT_REQUIREMENTS.md) - Historical LLM Prompt Specifications
 - [FEATURE_GLOSSARY.md](./FEATURE_GLOSSARY.md) - Standard Terminology
 
 ---

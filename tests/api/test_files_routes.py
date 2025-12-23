@@ -44,7 +44,7 @@ def test_list_files_returns_metadata(api_client: TestClient, storage_root: Path)
     file_path = storage_root / "folder" / "sample.txt"
     _write_file(file_path, "hello world")
 
-    response = api_client.get("/api/v1/files")
+    response = api_client.get("/api/files")
     assert response.status_code == 200
 
     payload = response.json()
@@ -63,7 +63,7 @@ def test_get_file_details_returns_metadata(api_client: TestClient, storage_root:
     file_path = storage_root / "video" / "clip.mp4"
     _write_file(file_path, "video-bytes")
 
-    response = api_client.get("/api/v1/files/video/clip.mp4")
+    response = api_client.get("/api/files/video/clip.mp4")
     assert response.status_code == 200
 
     payload = response.json()
@@ -74,14 +74,14 @@ def test_get_file_details_returns_metadata(api_client: TestClient, storage_root:
 
 
 def test_get_file_details_not_found(api_client: TestClient) -> None:
-    response = api_client.get("/api/v1/files/missing/file.txt")
+    response = api_client.get("/api/files/missing/file.txt")
     assert response.status_code == 404
     payload = response.json()
     assert "File not found" in payload["error"]
 
 
 def test_get_file_details_invalid_path(api_client: TestClient) -> None:
-    response = api_client.get("/api/v1/files/%2E%2E/secrets.env")
+    response = api_client.get("/api/files/%2E%2E/secrets.env")
     assert response.status_code == 400
     payload = response.json()
     assert "Path traversal" in payload["error"]
@@ -92,7 +92,7 @@ def test_delete_file_removes_file(api_client: TestClient, storage_root: Path) ->
     _write_file(file_path, '{"value": 1}')
     assert file_path.exists()
 
-    response = api_client.delete("/api/v1/files/output/data.json")
+    response = api_client.delete("/api/files/output/data.json")
     assert response.status_code == 200
     assert response.json()["deleted"] is True
     assert not file_path.exists()
@@ -102,7 +102,7 @@ def test_delete_file_protected_pattern(api_client: TestClient, storage_root: Pat
     protected_file = storage_root / "config.yaml"
     _write_file(protected_file, "key: value")
 
-    response = api_client.delete("/api/v1/files/config.yaml")
+    response = api_client.delete("/api/files/config.yaml")
     assert response.status_code == 403
     payload = response.json()
     assert "Cannot delete protected file" in payload["error"]
@@ -113,7 +113,7 @@ def test_delete_directory_blocked(api_client: TestClient, storage_root: Path) ->
     directory_path = storage_root / "folder"
     directory_path.mkdir(parents=True, exist_ok=True)
     # Ensure directory is reported by file_exists
-    response = api_client.delete("/api/v1/files/folder")
+    response = api_client.delete("/api/files/folder")
     assert response.status_code == 400
     payload = response.json()
     assert "Deleting directories is not supported" in payload["error"]

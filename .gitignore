@@ -89,3 +89,5 @@ youtube_token.json
 build/
 htmlcov/
 dist/
+langflix/pipeline/artifacts/debug/
+langflix/pipeline/artifacts/show_bibles/

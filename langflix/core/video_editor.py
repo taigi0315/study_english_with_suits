@@ -23,7 +23,7 @@ from .error_handler import handle_error_decorator, ErrorContext, retry_on_error
 
 logger = logging.getLogger(__name__)
 
-# Helper to get attribute from dict or object (V2 returns dicts, V1 returns objects)
+# Helper to get attribute from dict or object (dicts or objects)
 def get_expr_attr(expr, key, default=None):
     """Get attribute from expression - works with both dict and object types."""
     if isinstance(expr, dict):
@@ -64,7 +64,7 @@ class VideoEditor:
         self.temp_manager = get_temp_manager()
         self.cache_manager = get_cache_manager()  # Cache manager for TTS and other data
         
-        # V2: Support both source and target language codes
+        # Support both source and target language codes
         self.language_code = language_code  # Target language (user's native, e.g., "ko")
         self.target_language_code = language_code  # Alias for clarity
         self.source_language_code = source_language_code or "en"  # Source language (being learned)
@@ -125,6 +125,9 @@ class VideoEditor:
         
         # Track short format temp files for preservation (TICKET-029)
         self.short_format_temp_files = []
+        
+        # Track all temp files created by this instance for safe cleanup (TICKET-FIX-Cleanup)
+        self._owned_temp_files = []
     
     @staticmethod
     def _ensure_expression_dialogue(expression) -> dict:
@@ -132,7 +135,7 @@ class VideoEditor:
         Ensure expression has dialogue fields for backward compatibility.
         If fields are missing, fall back to using expression as dialogue.
         Handle edge cases like very long text and expression==dialogue.
-        Works with both V1 objects and V2 dictionaries.
+        Works with both both objects and dictionaries.
         
         Args:
             expression: ExpressionAnalysis object or dict
@@ -249,9 +252,23 @@ class VideoEditor:
             expression_start_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_start_time'))
             expression_end_seconds = self._time_to_seconds(get_expr_attr(expression, 'expression_end_time'))
             
+            # Apply padding to ensure audio is fully captured (TICKET-FIX-SLICING)
+            # Subtitles are often tight, and ffmpeg frame boundaries can cut off start/end
+            AUDIO_PADDING = 0.1
+            padded_start = max(0, expression_start_seconds - AUDIO_PADDING)
+            padded_end = expression_end_seconds + AUDIO_PADDING
+            
+            # Update extraction times
+            logger.info(f"Applying padding to expression: {expression_start_seconds:.3f}-{expression_end_seconds:.3f} -> {padded_start:.3f}-{padded_end:.3f} (+/-{AUDIO_PADDING}s)")
+            expression_start_seconds = padded_start
+            expression_end_seconds = padded_end
+            
+            # Validate expression is within context bounds (should be guaranteed by script_agent validation)
             if expression_start_seconds < context_start_seconds:
-                logger.warning(f"Expression start time {get_expr_attr(expression, 'expression_start_time')} is before context start {get_expr_attr(expression, 'context_start_time')}")
-                expression_start_seconds = context_start_seconds
+                raise ValueError(
+                    f"Expression start ({expression_start_seconds:.2f}s) is before context start ({context_start_seconds:.2f}s). "
+                    f"This indicates invalid data from LLM - expression_dialogue_index must be within context bounds."
+                )
             
             relative_start = expression_start_seconds - context_start_seconds
             relative_end = expression_end_seconds - context_start_seconds
@@ -401,7 +418,32 @@ class VideoEditor:
                 # Check if we have the subtitle file context from above
                 current_subtitle_file = locals().get('subtitle_file')
                 
-                if current_subtitle_file and os.path.exists(current_subtitle_file):
+                # Define the correct seek time for extraction
+                # If using pre-extracted clip (short clip starting at 0), use RELATIVE start.
+                # If using original video (full episode), use ABSOLUTE start.
+                video_seek_start = expression_start_seconds
+                using_pre_extracted = pre_extracted_context_clip and pre_extracted_context_clip.exists()
+                
+                if using_pre_extracted:
+                    video_seek_start = relative_start
+                    logger.info(f"Using RELATIVE seek time for pre-extracted clip: {video_seek_start:.2f}s (Absolute: {expression_start_seconds:.2f}s)")
+                else:
+                    logger.info(f"Using ABSOLUTE seek time for original video: {video_seek_start:.2f}s")
+                
+                # Check if we should apply subtitles or if they are already burned in
+                # Pre-extracted clips from VideoFactory ("Master Clips") already have burned subtitles.
+                should_apply_subtitles = (current_subtitle_file and os.path.exists(current_subtitle_file) and not using_pre_extracted)
+
+                
+                # Define input source
+                if using_pre_extracted:
+                    source_video_path = str(pre_extracted_context_clip)
+                    logger.info(f"Extracting expression from Pre-Extracted Clip: {source_video_path}")
+                else:
+                    source_video_path = str(context_video_path)
+                    logger.info(f"Extracting expression from Original Source: {source_video_path}")
+
+                if should_apply_subtitles:
                      # Create adjusted subtitle file for the expression clip
                      # Since we are extracting from absolute time 'expression_start_seconds', 
                      # we need subtitles to start from 0 relative to that point.
@@ -416,20 +458,10 @@ class VideoEditor:
                          adjusted_subtitle_path
                      )
                      
-                     # Apply subtitles using subs_overlay directly on source for the expression clip
-                     # Note: We use the adjusted subtitle file, but since we are extracting from source
-                     # we might need to be careful. 
-                     # Wait, apply_dual_subtitle_layers uses input seeking (-ss) on the video.
-                     # If we use input seeking on video, the video timestamps reset to 0.
-                     # The adjusted subtitles also start at 0. So they should match!
-                     # BUT apply_dual_subtitle_layers takes 'expression_start_seconds' as argument 
-                     # and does input seeking inside.
-                     # Let's see: video input has -ss expression_start_seconds.
-                     # Video stream starts at 0.
-                     # Adjusted subtitles start at 0.
-                     # Perfect match.
-                     
                      logger.info(f"Applying subtitles to expression clip from: {adjusted_subtitle_path}")
+                     # Note: for apply_dual_subtitle_layers, we still use the context_video_path (original source)
+                     # because it expects absolute timestamps and handles seeking internally.
+                     # This path is executed only if NOT using pre_extracted (as per should_apply_subtitles definition)
                      subs_overlay.apply_dual_subtitle_layers(
                         str(context_video_path),
                         str(adjusted_subtitle_path),
@@ -439,10 +471,14 @@ class VideoEditor:
                         expression_end_seconds
                     )
                 else:
-                    # Direct extraction without subtitles
-                    video_args = self._get_video_output_args(source_video_path=context_video_path)
+                    if using_pre_extracted and current_subtitle_file:
+                        logger.info("Skipping subtitle application (subtitles already burned in pre-extracted clip)")
+
+                    # Direct extraction (either no subs needed, or already burned)
+                    # Use the correct source path (either pre-extracted clip or original context video)
+                    video_args = self._get_video_output_args(source_video_path=source_video_path)
                     (
-                        ffmpeg.input(str(context_video_path))
+                        ffmpeg.input(source_video_path)
                         .output(
                             str(expression_video_clip_path),
                             vcodec=video_args.get('vcodec', 'libx264'),
@@ -451,7 +487,7 @@ class VideoEditor:
                             ar=48000,
                             preset=video_args.get('preset', 'medium'),
                             crf=video_args.get('crf', 18),
-                            ss=expression_start_seconds,
+                            ss=video_seek_start,
                             t=expression_duration
                         )
                         .overwrite_output()
@@ -569,6 +605,16 @@ class VideoEditor:
             # get_duration_seconds is already imported at module level (line 16)
             context_expr_duration = get_duration_seconds(str(context_expr_path))
             logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
+            
+            # Store for downstream services (TICKET-VIDEO-001)
+            try:
+                # Add to expression object so ShortFormCreator can access it
+                if isinstance(expression, dict):
+                    expression['educational_slide_start_time'] = context_expr_duration
+                else:
+                    setattr(expression, 'educational_slide_start_time', context_expr_duration)
+            except Exception:
+                pass
             
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
@@ -795,6 +841,9 @@ class VideoEditor:
     def _register_temp_file(self, file_path: Path) -> None:
         """Register a temporary file for cleanup later"""
         self.temp_manager.register_file(file_path)
+        # Also track as owned by this instance
+        if hasattr(self, '_owned_temp_files'):
+            self._owned_temp_files.append(file_path)
     
     def _get_subtitle_style_config(self) -> Dict[str, Any]:
         """Get subtitle styling configuration from expression settings"""
@@ -928,9 +977,26 @@ class VideoEditor:
                 # Move preserved files to permanent location
                 self._preserve_short_format_files(files_to_preserve)
             
-            # Clean up files registered via _register_temp_file
-            if hasattr(self, 'temp_manager'):
-                # Remove preserved files from temp manager before cleanup
+            # Clean up files OWNED by this instance (safe cleanup)
+            if hasattr(self, 'temp_manager') and hasattr(self, '_owned_temp_files'):
+                cleaned_count = 0
+                for file_path in self._owned_temp_files:
+                    # Skip preserved files
+                    if preserve_short_format and file_path in files_to_preserve:
+                        continue
+                    
+                    try:
+                        # Clean up individual file via manager
+                        self.temp_manager.cleanup_temp_file(Path(file_path))
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup owned file {file_path}: {e}")
+                
+                # Clear owned list (preserved files are handled by manager if they still exist)
+                self._owned_temp_files.clear()
+            elif hasattr(self, 'temp_manager'):
+                # Fallback for old behavior (should not be reached if __init__ is correct)
+                logger.warning("Using potentially unsafe cleanup_all() fallback in VideoEditor")
                 if preserve_short_format:
                     for file_path in files_to_preserve:
                         if Path(file_path) in self.temp_manager.temp_files:
@@ -1327,7 +1393,7 @@ class VideoEditor:
                 # Build drawtext filters for proper layout
                 drawtext_filters = []
                 
-                # --- V2 FONT SETUP: Dual Fonts for Source/Target ---
+                # --- DUAL FONT SETUP: Dual Fonts for Source/Target ---
                 source_font_option = ""
                 target_font_option = ""
                 
@@ -1395,8 +1461,9 @@ class VideoEditor:
                 
                 # 2. Expression (key phrase) - Uses SOURCE font
                 if expression_text and isinstance(expression_text, str) and settings.show_expression_highlight():
+                    expression_escaped = escape_drawtext_string(expression_text)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
+                        f"drawtext=text='{expression_escaped}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{source_font_option}"
                         f"x=(w-text_w)/2:y=h/2{expr_y}:"
                         f"borderw=3:bordercolor=black"
@@ -1415,8 +1482,9 @@ class VideoEditor:
                 
                 # 4. Expression translation (key phrase) - Uses TARGET font
                 if translation_text and isinstance(translation_text, str) and settings.show_translation_highlight():
+                    translation_escaped = escape_drawtext_string(translation_text)
                     drawtext_filters.append(
-                        f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
+                        f"drawtext=text='{translation_escaped}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{target_font_option}"
                         f"x=(w-text_w)/2:y=h/2+{trans_y}:"
                         f"borderw=3:bordercolor=black"

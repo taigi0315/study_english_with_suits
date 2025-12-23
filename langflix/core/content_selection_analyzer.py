@@ -1,8 +1,8 @@
 """
-V2 Content Selection Analyzer for LangFlix.
+Content Selection Analyzer for LangFlix.
 
 Analyzes dual-language subtitles to select engaging educational content.
-Unlike V1, this does NOT handle translation - translations come from Netflix subtitles.
+Translations are sourced from Netflix subtitles.
 """
 import os
 import json
@@ -15,10 +15,10 @@ import google.generativeai as genai
 
 from langflix.core.dual_subtitle import DualSubtitle
 from langflix.core.content_selection_models import (
-    V2ContentSelection,
-    V2ContentSelectionResponse,
+    ContentSelection,
+    ContentSelectionResponse,
     enrich_from_subtitles,
-    convert_v2_to_v1_format,
+    convert_to_legacy_format,
 )
 from langflix import settings
 
@@ -60,12 +60,12 @@ def _format_dialogues_for_prompt(dialogues: List[dict], include_timestamps: bool
     """
     Format dialogue list for the prompt.
     
-    V2 Optimization: By default, excludes timestamps to reduce token usage.
+    Optimization: By default, excludes timestamps to reduce token usage.
     The LLM returns indices, and timestamps are looked up post-processing.
     
     Args:
         dialogues: List of dialogue dicts with 'text', 'start', 'end'
-        include_timestamps: If True, include timestamps (V1 mode). Default False.
+        include_timestamps: If True, include timestamps (higher token usage). Default False.
         
     Returns:
         Formatted string for prompt
@@ -74,10 +74,10 @@ def _format_dialogues_for_prompt(dialogues: List[dict], include_timestamps: bool
     for i, d in enumerate(dialogues):
         text = d.get('text', '')
         if include_timestamps:
-            # V1 mode: include timestamps (higher token usage)
+            # Include timestamps (higher token usage)
             lines.append(f"[{i}] ({d.get('start', '')} - {d.get('end', '')}): {text}")
         else:
-            # V2 mode: index + text only (optimized token usage)
+            # Optimized mode: index + text only (optimized token usage)
             lines.append(f"[{i}] {text}")
     return "\n".join(lines)
 
@@ -103,25 +103,25 @@ def analyze_with_dual_subtitles(
         max_expressions: Maximum expressions to find
         target_duration: Target duration for context clips in seconds
         test_llm: If True, use cached LLM response (for fast development iteration)
-        
+
     Returns:
-        List of expression dicts in V1-compatible format
+        List of expression dicts
     """
     # TEST_LLM MODE: Load from dev test cache if available
     if test_llm:
         from .llm_test_cache import load_llm_test_response, save_llm_test_response
         
         cache_id = show_name or "default"
-        cached_data = load_llm_test_response("content_selection_v2", cache_id)
+        cached_data = load_llm_test_response("content_selection", cache_id)
         
         if cached_data:
-            logger.info(f"🚀 TEST_LLM: Using cached V2 LLM response (skipping API call)")
+            logger.info(f"🚀 TEST_LLM: Using cached LLM response (skipping API call)")
             # Return cached expressions, BUT respect max_expressions limit!
             result = cached_data[:max_expressions] if isinstance(cached_data, list) else cached_data
             logger.info(f"🚀 TEST_LLM: Returning {len(result)} expressions (max_expressions={max_expressions})")
             return result
         else:
-            logger.info(f"🔄 TEST_LLM: No V2 cache found, will call API and save response")
+            logger.info(f"🔄 TEST_LLM: No cache found, will call API and save response")
     
     # Get dialogues in prompt format
     source_dialogues, target_dialogues = dual_subtitle.to_dialogue_format()
@@ -160,7 +160,7 @@ def analyze_with_dual_subtitles(
         
         generation_config = settings.get_generation_config()
         
-        logger.info(f"Calling Gemini API for V2 content selection ({len(source_dialogues)} dialogues)")
+        logger.info(f"Calling Gemini API for content selection ({len(source_dialogues)} dialogues)")
         response = model.generate_content(prompt, generation_config=generation_config)
         
         # Extract response text
@@ -183,11 +183,11 @@ def analyze_with_dual_subtitles(
             # Save in episode directory if provided, otherwise fallback to output/
             debug_dir = Path(output_dir) if output_dir else Path("output")
             debug_dir.mkdir(parents=True, exist_ok=True)
-            debug_file = debug_dir / f"llm_response_v2_{timestamp}_{min_expressions}-{max_expressions}.json"
+            debug_file = debug_dir / f"llm_response_{timestamp}_{min_expressions}-{max_expressions}.json"
             debug_file.write_text(response_text, encoding='utf-8')
-            logger.info(f"Saved raw V2 LLM response to {debug_file}")
+            logger.info(f"Saved raw LLM response to {debug_file}")
         except Exception as e:
-            logger.warning(f"Failed to save debug V2 LLM response: {e}")
+            logger.warning(f"Failed to save debug LLM response: {e}")
 
         # Log first 500 chars of response for debugging
         logger.debug(f"LLM response preview: {response_text[:500]}")
@@ -200,41 +200,41 @@ def analyze_with_dual_subtitles(
             logger.error(f"Raw response text: {response_text}")
             raise
         
-        # Enrich and convert to V1 format
+        # Enrich and convert to legacy format for compatibility
         results = []
         for selection in selections:
             # Enrich with subtitle data
             enriched = enrich_from_subtitles(selection, source_dialogues, target_dialogues)
-            
-            # Convert to V1-compatible dict
-            v1_format = convert_v2_to_v1_format(enriched, source_dialogues, target_dialogues)
-            results.append(v1_format)
+
+            # Convert to legacy format for compatibility
+            legacy_format = convert_to_legacy_format(enriched, source_dialogues, target_dialogues)
+            results.append(legacy_format)
         
         # Save to test cache if test_llm mode is enabled
         if test_llm:
             from .llm_test_cache import save_llm_test_response
             cache_id = show_name or "default"
-            save_llm_test_response("content_selection_v2", results, cache_id, {
+            save_llm_test_response("content_selection", results, cache_id, {
                 "language_level": language_level,
                 "expression_count": len(results)
             })
-            logger.info(f"💾 TEST_LLM: Saved {len(results)} expressions to V2 cache")
+            logger.info(f"💾 TEST_LLM: Saved {len(results)} expressions to cache")
         
         # CRITICAL: Enforce max_expressions limit (for test_mode=1)
         if max_expressions and len(results) > max_expressions:
             logger.info(f"Limiting expressions from {len(results)} to {max_expressions} (test_mode active)")
             results = results[:max_expressions]
         
-        logger.info(f"V2 content selection found {len(results)} expressions")
+        logger.info(f"content selection found {len(results)} expressions")
         return results
         
     except Exception as e:
-        logger.error(f"Error in V2 content selection: {e}", exc_info=True)
+        logger.error(f"Error in content selection: {e}", exc_info=True)
         raise
 
 
-def _parse_response(response_text: str) -> List[V2ContentSelection]:
-    """Parse LLM response into V2ContentSelection objects."""
+def _parse_response(response_text: str) -> List[ContentSelection]:
+    """Parse LLM response into ContentSelection objects."""
     # Clean up response text
     text = response_text.strip()
 
@@ -258,7 +258,7 @@ def _parse_response(response_text: str) -> List[V2ContentSelection]:
         selections = []
         for expr_data in expressions_data:
             try:
-                selection = V2ContentSelection(**expr_data)
+                selection = ContentSelection(**expr_data)
                 selections.append(selection)
             except Exception as e:
                 logger.error(f"Failed to parse expression: {e}")
@@ -273,9 +273,9 @@ def _parse_response(response_text: str) -> List[V2ContentSelection]:
         return []
 
 
-class V2ContentAnalyzer:
+class ContentAnalyzer:
     """
-    Service class for V2 content selection analysis.
+    Service class for content selection analysis.
     
     Provides a higher-level interface for analyzing media with dual subtitles.
     """
@@ -293,8 +293,8 @@ class V2ContentAnalyzer:
     ) -> List[dict]:
         """
         Analyze dual subtitles for content selection.
-        
-        Returns list of V1-compatible expression dicts.
+
+        Returns list of expression dicts.
         """
         return analyze_with_dual_subtitles(
             dual_subtitle=dual_subtitle,

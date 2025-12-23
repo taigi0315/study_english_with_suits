@@ -1,60 +1,78 @@
 # LangFlix Documentation
 
-> **Version 2.0** - Dual-Language Architecture with Visual Guides
+> Language Learning Video Generation Platform
 
 ## 📚 Quick Links
 
 ### 🎯 Core Documentation
 
-| Document | Description |
-|----------|-------------|
-| **[SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md)** | 📊 **Visual system architecture with diagrams** |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | V2 system design with dual-language subtitle support |
-| [CONFIGURATION.md](./CONFIGURATION.md) | Configuration settings for V2 features |
-| [FEATURE_GLOSSARY.md](./FEATURE_GLOSSARY.md) | Standard terminology for V2 components |
+| Document                                               | Description                                       |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| **[SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md)** | 📊 **Visual system architecture with diagrams**   |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)                   | System design with dual-language subtitle support |
+| [CONFIGURATION.md](./CONFIGURATION.md)                 | Configuration settings                            |
+| [FEATURE_GLOSSARY.md](./FEATURE_GLOSSARY.md)           | Standard terminology                              |
+| [PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md) | Contextual localization pipeline                  |
 
 ### 🎨 Component Guides
 
-| Document | Description |
-|----------|-------------|
-| **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** | 🚀 **Visual workflows & quick commands** |
-| [font_resolver_guide.md](./font_resolver_guide.md) | FontResolver API reference & usage patterns |
-| [font_configuration_examples.md](./font_configuration_examples.md) | Real-world font configuration examples |
-| [V2_PROMPT_REQUIREMENTS.md](./V2_PROMPT_REQUIREMENTS.md) | LLM prompt specifications |
+| Document                                                           | Description                                 |
+| ------------------------------------------------------------------ | ------------------------------------------- |
+| **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)**                     | 🚀 **Visual workflows & quick commands**    |
+| [font_resolver_guide.md](./font_resolver_guide.md)                 | FontResolver API reference & usage patterns |
+| [font_configuration_examples.md](./font_configuration_examples.md) | Real-world font configuration examples      |
 
 ### 📂 Archives
 
-| Document | Description |
-|----------|-------------|
-| [v1/](./v1/) | Archived V1 documentation |
+| Document               | Description              |
+| ---------------------- | ------------------------ |
+| [archive/](./archive/) | Historical documentation |
 
-## What's New in V2
+## Key Features
 
 ### Dual-Language Subtitle Architecture
-V2 introduces a fundamentally new approach to language learning content:
 
-| Feature | V1 | V2 |
-|---------|----|----|
-| Subtitle Source | Single file, LLM translates | Dual files from Netflix |
-| Translation | LLM generates on-the-fly | Pre-existing professional translations |
-| Token Usage | ~1000 tokens/expression | ~300 tokens/expression (70% reduction) |
-| Font Support | Single language | Dual-font for mixed content |
+LangFlix uses a dual-language subtitle approach for language learning content:
 
-### Key V2 Components
+| Feature           | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| Subtitle Source   | Dual files from Netflix-style folders                    |
+| Translation       | Pre-existing professional translations + AI localization |
+| Font Support      | Dual-font rendering for mixed content                    |
+| Context Awareness | Show Bible + Episode summaries for accurate translations |
+
+### Core Components
 
 1. **DualSubtitleService** - Loads and aligns source + target subtitle pairs
-2. **V2ContentAnalyzer** - Index-based content selection (no translation)
-3. **Netflix Folder Detection** - Auto-discovers subtitle files from Netflix downloads
-4. **Dual-Font Rendering** - Correct fonts for Korean←→Spanish, etc.
+2. **ContentAnalyzer** - Index-based content selection
+3. **Netflix Folder Detection** - Auto-discovers subtitle files
+4. **Dual-Font Rendering** - Correct fonts for Korean↔Spanish, etc.
+5. **Pipeline** - Contextual localization with Show Bible integration
 
 ## Getting Started
 
 ```bash
-# Enable V2 mode in config
+# Enable dual-language mode in config
 dual_language:
   enabled: true
   source_language: "English"
   target_language: "Korean"
+```
+
+### Quick Test (No UI Required)
+
+```bash
+# Run quick test with default settings (Korean → Spanish, English)
+python scripts/test_quick.py
+
+# Custom source/target languages
+python scripts/test_quick.py --source ko --target es,en
+
+# Dry run (analysis only, no video creation)
+python scripts/test_quick.py --dry-run
+
+# Skip short video creation
+python scripts/test_quick.py --no-shorts
 ```
 
 ## 📊 Visual Overview
@@ -64,6 +82,7 @@ Want to understand the system quickly? Start with the **[Visual System Architect
 ### What You'll Find
 
 The visual architecture guide includes:
+
 - 🏗️ **High-level architecture** with component layers
 - 🔄 **Complete workflow sequences** for video generation
 - 📊 **Data flow diagrams** showing how information moves through the system
@@ -78,7 +97,7 @@ The visual architecture guide includes:
 ```mermaid
 graph LR
     A[📖 Start Here:<br/>README.md] --> B[📊 System Overview:<br/>SYSTEM_ARCHITECTURE.md]
-    B --> C[🔧 V2 Features:<br/>ARCHITECTURE.md]
+    B --> C[🔧 Architecture:<br/>ARCHITECTURE.md]
     B --> D[🎨 Font Setup:<br/>font_resolver_guide.md]
     C --> E[⚙️ Configuration:<br/>CONFIGURATION.md]
     D --> F[📝 Examples:<br/>font_configuration_examples.md]
@@ -96,17 +115,13 @@ graph LR
 ```
 docs/
 ├── README.md                        # 📖 This file - documentation index
-├── SYSTEM_ARCHITECTURE.md           # 📊 NEW: Visual system architecture with diagrams
-├── QUICK_REFERENCE.md               # 🚀 NEW: Visual workflows & quick commands
-├── ARCHITECTURE.md                  # 🔧 V2 dual-language system design
-├── CONFIGURATION.md                 # ⚙️ V2 configuration settings
-├── FEATURE_GLOSSARY.md              # 📚 V2 terminology reference
-├── V2_PROMPT_REQUIREMENTS.md        # 🤖 LLM prompt specifications
-├── font_resolver_guide.md           # 🎨 NEW: FontResolver API & usage
-├── font_configuration_examples.md   # 📝 NEW: Font configuration examples
-└── v1/                              # 📂 Archived V1 documentation
-    ├── API.md
-    ├── ARCHITECTURE.md
-    ├── CLI_REFERENCE.md
-    └── ...
+├── SYSTEM_ARCHITECTURE.md           # 📊 Visual system architecture with diagrams
+├── QUICK_REFERENCE.md               # 🚀 Visual workflows & quick commands
+├── ARCHITECTURE.md                  # 🔧 Dual-language system design
+├── CONFIGURATION.md                 # ⚙️ Configuration settings
+├── FEATURE_GLOSSARY.md              # 📚 Terminology reference
+├── PIPELINE_ARCHITECTURE.md         # 🔄 Contextual localization pipeline
+├── font_resolver_guide.md           # 🎨 FontResolver API & usage
+├── font_configuration_examples.md   # 📝 Font configuration examples
+└── archive/                         # 📂 Historical documentation
 ```

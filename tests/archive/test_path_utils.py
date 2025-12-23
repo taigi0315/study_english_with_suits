@@ -1,6 +1,6 @@
 """
 Unit tests for langflix.utils.path_utils module.
-Tests V2 dual-language subtitle file structure utilities.
+Tests dual-language subtitle file structure utilities.
 """
 import pytest
 from pathlib import Path

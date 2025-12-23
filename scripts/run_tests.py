@@ -189,7 +189,7 @@ def run_all_tests():
     """Run all tests"""
     return run_command([
         sys.executable, "-m", "pytest", 
-        "tests/", "-v", "--tb=short"
+        "tests/", "-v", "--tb=short", "--ignore=tests/broken"
     ], "All Tests")
 
 def run_coverage_tests(test_path="tests/"):

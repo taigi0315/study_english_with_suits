@@ -1,4 +1,4 @@
-# Recent Changes and Updates - LangFlix V2
+# Recent Changes and Updates - LangFlix
 
 **Last Updated**: December 21, 2025
 

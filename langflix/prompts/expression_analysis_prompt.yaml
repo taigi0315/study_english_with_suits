@@ -1,142 +1,240 @@
 name: expression_analysis_prompt
-version: "8.0"
+version: "10.0"
 description: Content selector prompt for extracting expressions from TV show dialogues
 
 prompt: |
-  =**CONTENT SELECTOR for "{show_name}"**
+  **You do NOT need to translate anything.**
+  **Focus purely on CONTENT SELECTION - identifying the best expressions.**
+  **Use INDICES to reference dialogues, not timestamps or text.**
+  ---
+  Here is a segment of dialogue from the TV show "{show_name}":
 
   **SOURCE DIALOGUES ({source_language}):**
+  ---
   {source_dialogues}
+  ---
 
   **TARGET DIALOGUES ({target_language}):**
+  ---
   {target_dialogues}
+  ---
 
-  **Format:** `[index] dialogue_text` - Use indices to reference dialogues.
+  **INPUT FORMAT:**
+  Each dialogue line is formatted as: `[index] dialogue_text`
+  Use these indices in your output to reference specific dialogues.
+  The system will look up actual text and timestamps from the indices you provide.
 
   ---
 
-  **⚠️ LANGUAGE RULES:**
-  - `catchy_keywords`, `narrations`, `intro_hook`, `title_translation` → {target_language}
-  - `title`, `expression`, `similar_expressions` → {source_language}
-  - All `translation` fields → {target_language}
+  **⚠️⚠️⚠️ CRITICAL LANGUAGE REQUIREMENTS - READ CAREFULLY ⚠️⚠️⚠️**
+
+  **MUST BE IN {target_language}:**
+  - `title` - Catchy title for learners
+  - `catchy_keywords` - Social media hook phrases
+  - `narrations` - All narration text
+  - `intro_hook` - Opening hook
+  - `expression_translation` - Translation of the expression
+  - All `translation` fields in annotations
+  - `dialogues.{target_language_code}` - Target language dialogues array
+
+  **MUST BE IN {source_language}:**
+  - `viral_title` - Iconic quote from the scene
+  - `expression` - The key phrase (copied exactly from source dialogue)
+  - `similar_expressions` - Alternative expressions
+  - `word` field in vocabulary_annotations
+  - `expression` field in expression_annotations
+  - `dialogues.{source_language_code}` - Source language dialogues array
+
+  **❌ NEVER MIX LANGUAGES IN THE SAME FIELD**
 
   ---
 
-  **MISSION:** Find {min_expressions}-{max_expressions} expressions learners would be EXCITED to learn.
+  **YOUR MISSION:**
+  Find {min_expressions}-{max_expressions} expressions from the {source_language} dialogues that learners would be EXCITED to learn.
 
-  **LEVEL:** {level_description}
+  **LANGUAGE LEVEL:** {level_description}
 
-  ---
-
-  **WHAT TO EXTRACT:**
-
-  ✅ **HIGH-IMPACT SCENES:**
-  - 😂 Humorous/witty moments
-  - 🔥 Dramatic/tense confrontations  
-  - 😍 Romantic/flirty interactions
-  - 😲 Surprising reveals
-
-  ✅ **REUSABLE EXPRESSIONS (3+ words):**
-  - Phrasal verbs: "put up with", "figure out what to do"
-  - Idioms: "cut to the chase", "get on my nerves"
-  - Colloquial phrases: "no big deal", "you bet"
-  - **⚠️ MUST BE CONTEXT-FREE:** Expression should make sense WITHOUT knowing the drama/scene
-  - Test: Would native speakers use this weekly in everyday life?
-
-  ❌ **NEVER EXTRACT:**
-  - Boring/procedural dialogue
-  - Simple curses or 1-2 word phrases ("bullshit", "damn")
-  - **Scene-specific phrases that only work in this drama's context**
-  - Self-explanatory statements ("I agree", "That's good")
-  - Expressions that require knowing what happened in the scene
+  **PRIORITIZE HIGH-ENERGY MOMENTS:**
+  - 😂 HUMOROUS: Funny, witty, sarcastic moments
+  - 🔥 DRAMATIC: High tension, conflict, confrontation
+  - 😍 ROMANTIC: Flirty, charming interactions
+  - 😲 SURPRISING: Unexpected twists or reveals
 
   ---
 
-  **CONTEXT DESIGN:**
+  **EXPRESSION CRITERIA:**
 
-  **Goal:** Each clip = standalone mini-story (25-45 seconds, ~{target_duration}s target)
+  **✅ EXTRACT expressions that are:**
+  - **COMMON & REUSABLE:** Native speakers use weekly in various situations
+  - **SUBSTANTIAL:** 3+ words (phrasal verbs, idioms, colloquial phrases)
+    - Good: "get on my nerves", "figure out what to do", "cut to the chase"
+    - Bad: "bullshit", "damn it" (too simple)
+  - **NON-OBVIOUS:** Has meaning/usage pattern that isn't self-explanatory
+  - **HIGH-ENERGY SCENE:** Funny, dramatic, tense, romantic, or surprising moment
 
-  **Structure:**
-  - **Beginning:** Setup situation/conflict
-  - **Middle:** Expression appears naturally
-  - **End:** Reaction/resolution
-
-  **Rules:**
-  - Expression should NOT be at very start or end
-  - Include complete sentences at boundaries
-  - **ZERO OVERLAP** between different clips' index ranges
+  **❌ NEVER EXTRACT:**
+  - Plain statements: "I agree", "That's good"
+  - Scene-specific phrases that only work in this exact context
+  - Formal jargon or boring procedural dialogue
+  - Simple 1-2 word phrases or basic curses
 
   ---
 
-  **TITLE:**
-  The iconic, meme-worthy quote from the scene in {source_language}. should be narrative can hook the audience.
+  **⚠️⚠️⚠️ CONTEXT DESIGN - CRITICAL: INCLUDE THE FULL STORY ⚠️⚠️⚠️**
 
-  **Good examples:**
-  - "니까짓 게 날 죽여?" (The Glory)
-  - "I don't have dreams, I have goals." (Suits)
+  **PROBLEM TO AVOID:** Do NOT cut the context short. Learners need the COMPLETE mini-story to understand and enjoy the clip.
+
+  **GOAL:** Each clip = standalone mini-story that makes sense WITHOUT watching the full episode.
+
+  **REQUIRED STRUCTURE:**
+  1. **BEGINNING (Setup):** Establish WHO these people are and WHAT situation they're in
+  2. **MIDDLE (Expression):** The expression appears naturally in context
+  3. **END (Resolution):** Include the reaction/response that completes the moment
+
+  **MANDATORY RULES:**
+  - **Duration:** {target_duration} seconds (±15 seconds flexibility)
+  - **Expression placement:** Must appear in the MIDDLE, NOT at the very start or end
+  - **Complete sentences:** Start and end on complete sentences, no cut-offs
+  - **Story completeness:** A first-time viewer must understand what's happening
+
+  **QUALITY TEST - Ask yourself:**
+  - ✓ Can someone who's never seen this show understand the situation?
+  - ✓ Does the clip have a clear beginning, middle, and end?
+  - ✓ Is there enough setup BEFORE the expression?
+  - ✓ Is there a reaction/response AFTER the expression?
+  - ✓ Would this clip be entertaining on its own?
+
+  **❌ BAD CONTEXT (too short, cuts off story):**
+  - Starting right when expression appears (no setup)
+  - Ending right after expression (no reaction)
+  - Missing who the characters are or why they're talking
+
+  **✅ GOOD CONTEXT (complete story):**
+  - Shows the situation/conflict that leads to the expression
+  - Expression feels natural in the middle of the conversation
+  - Includes the other person's reaction or the consequence
+
+  ---
+
+  **NO OVERLAPPING CLIPS:**
+
+  When extracting multiple expressions:
+  - Each clip's index range must NOT overlap with others
+  - Clip 1 ends at index 8 → Clip 2 must start at index 9 or later
+  - Clips should flow chronologically (gaps OK, overlaps NOT OK)
+
+  ---
+
+  **VIRAL TITLE:**
+
+  The iconic, meme-worthy quote from the scene.
+
+  **Language:** {source_language} (original dialogue)
+  **Length:** 3-12 words
+  **Source:** Preferably a direct quote from the scene's peak moment
+
+  Examples:
+  - "니까짓 게 날 죽여?"
+  - "I don't have dreams, I have goals."
   - "연진아, 이거 누구 딸이니?"
 
-  **Characteristics:** 3-12 words, quotable, makes people click/share.
+  ---
+
+  **CATCHY KEYWORDS:**
+
+  Short, punchy social media hooks.
+
+  **Language:** {target_language}
+  **Format:** 3-6 words each, hashtag/TikTok caption style
+  **Count:** 2-3 keywords per expression
+
+  Good: "#AwkwardQuestion", "#DirectHitToBoss", "#GoosebumpTwist"
+  Bad: "#Scene of interview", "#Two people talking"
 
   ---
 
-  **NARRATIONS (3-6 per clip):**
+  **NARRATIONS:**
 
-  Timestamped commentary in {target_language} throughout the video. Displayed separately from subtitles.
-
-  ⚠️ **CRITICAL: Narrations MUST be written 100% in {target_language} ONLY!**
-  - ❌ WRONG: "Aprende '사회적 약자' (socialmente vulnerable)" - Contains {source_language}!
-  - ❌ WRONG: "Learn '내 꿈은 너야' here" - Contains {source_language}!
-  - ✅ CORRECT: "¡Una frase muy útil para expresar tus sueños!" - Pure {target_language}
-  - ✅ CORRECT: "Esta expresión se usa cuando quieres vengarte" - Pure {target_language}
-
-  **DO NOT include any {source_language} words, even in quotes. Write EVERYTHING in {target_language}.**
+  Timestamped commentary throughout the video in {target_language}.
 
   **Types:**
-  | Type | Purpose | What it does |
-  |------|---------|--------------|
-  | `hook` | Opening attention grab | Get viewer's attention at the start |
-  | `highlight` | Point out key expressions | Explain why this phrase is useful |
-  | `reaction` | Comment on scene/acting | React to dramatic moments |
-  | `tension` | Build suspense | Create anticipation |
-  | `commentary` | Relatable observation | Connect with viewers |
+  - `hook` (start): "Hey, look at this!"
+  - `highlight` (key moment): "This phrase is super common"
+  - `reaction` (dramatic): "Look at that face lol"
+  - `tension` (suspense): "What will they say?"
+  - `commentary` (relatable): "100% relatable for office workers lol"
 
-  **Guidelines:**
-  - Write in casual, conversational {target_language}
+  **Rules:**
+  - 5-9 narrations per clip, spaced throughout
+  - Always include narration at first dialogue index
+  - Casual tone, internet slang OK (lol, omg, fr)
   - 5-15 words each
-  - Space them out - don't narrate every line
-  - Match scene energy (funny scene = funny narration)
+  - **❌ Do NOT just translate the dialogue or expression.** Narration must be COMMENTARY.
+  - Don't narrate every line - let the scene breathe
+
+  **Format:**
+  ```json
+  "narrations": [
+    {{"dialogue_index": 2, "text": "narration in {target_language}", "type": "hook"}},
+    {{"dialogue_index": 5, "text": "narration in {target_language}", "type": "highlight"}}
+  ]
+  ```
 
   ---
 
   **ANNOTATIONS:**
 
-  **vocabulary_annotations** - Single difficult WORDS:
+  **vocabulary_annotations** - Single difficult WORDS from {source_language}:
   ```json
-  {{"word": "leverage", "translation": "영향력", "dialogue_index": 5}}
+  {{"word": "{source_language} word", "translation": "{target_language} translation", "dialogue_index": 5}}
   ```
 
-  **expression_annotations** - Multi-word IDIOMS/PHRASES:
+  **expression_annotations** - Multi-word IDIOMS from {source_language}:
   ```json
-  {{"expression": "cut to the chase", "translation": "본론으로 들어가다", "dialogue_index": 7}}
+  {{"expression": "{source_language} idiom", "translation": "{target_language} translation", "dialogue_index": 7}}
   ```
 
-  **⚠️ CRITICAL: ZERO OVERLAP between vocabulary and expression annotations.**
-  Both display on same visual layer - overlapping = unreadable subtitles.
-
-  ❌ Bad: vocabulary "rat" + expression "rat me out"
-  ✅ Good: vocabulary "leverage" + expression "cut to the chase"
+  **⚠️ ZERO OVERLAP between vocabulary and expression annotations** (displayed on same visual layer)
+  - ❌ vocabulary: "rat" + expression: "rat me out" (OVERLAPS!)
+  - ✅ vocabulary: "leverage" + expression: "cut to the chase" (no overlap)
 
   ---
 
-  **CATCHY KEYWORDS (3 per clip):**
+  **DIALOGUES FIELD - BILINGUAL SUBTITLE EXTRACTION:**
 
-  Short, punchy phrases in {target_language} for social media hooks.
+  For each expression, include the complete subtitle data for the context range in BOTH languages.
+  **CRITICAL:** Maintain the EXACT original structure - only the text content changes between languages.
 
-  **Format:** 3-6 words each, TikTok caption style
+  **Structure per dialogue entry:**
+  ```json
+  {{
+    "index": 3,
+    "timestamp": "00:00:49,460 --> 00:00:50,527",
+    "text": "dialogue text here"
+  }}
+  ```
 
-  **Good:** "면접장 패기 폭발", "소름돋는 첫마디", "상사한테 직구 날림"
-  **Bad:** "Scene of an interview", "두 사람이 대화함"
+  **Format:**
+  ```json
+  "dialogues": {{
+    "{source_language_code}": [
+      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "Gerald Tate's here."}},
+      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "He wants to know what's happening to his deal."}}
+    ],
+    "{target_language_code}": [
+      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "제럴드 테이트가 왔어요."}},
+      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "자기 거래가 어떻게 됐는지 알고 싶대요."}}
+    ]
+  }}
+  ```
+
+  **Rules:**
+  - Extract dialogue entries from `context_start_index` to `context_end_index` (inclusive)
+  - **index**: MUST match the original subtitle index exactly
+  - **timestamp**: MUST be copied exactly from source (same for both languages)
+  - **text**: Copy the dialogue text from respective source/target dialogues
+  - Both language arrays must have the SAME entries (matching index and timestamp)
+  - Use ISO 639-1 language codes (e.g., "en", "ko", "es", "ja", "zh")
 
   ---
 
@@ -146,27 +244,43 @@ prompt: |
   {{
     "expressions": [
       {{
-        "title": "Catchy title in {source_language} - meme-worthy quote (8-15 words)",
-        "title_translation": "natural translation in {target_language}",
-        "expression": "key phrase copied exactly from dialogue (4-8 words)",
-        "expression_translation": "LITERAL translation (직역) in {target_language} - word-by-word, no context",
+        "title": "Catchy title in {target_language} (8-15 words)",
+        "viral_title": "Iconic line in {source_language} (3-12 words)",
+        "expression": "key phrase copied exactly from {source_language} dialogue (4-8 words)",
+        "expression_translation": "translation in {target_language}",
         "expression_dialogue_index": 5,
         "context_start_index": 2,
         "context_end_index": 12,
+        "dialogues": {{
+          "{source_language_code}": [
+            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{source_language} text"}},
+            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{source_language} text"}},
+            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{source_language} text"}}
+          ],
+          "{target_language_code}": [
+            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{target_language} text"}},
+            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{target_language} text"}},
+            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{target_language} text"}}
+          ]
+        }},
         "narrations": [
-          {{"dialogue_index": 2, "text": "Hook text", "type": "hook"}},
-          {{"dialogue_index": 5, "text": "Highlight text", "type": "highlight"}},
-          {{"dialogue_index": 8, "text": "Reaction text", "type": "reaction"}},
-          {{"dialogue_index": 11, "text": "Tension text", "type": "tension"}}
+          {{"dialogue_index": 2, "text": "{target_language} narration", "type": "hook"}},
+          {{"dialogue_index": 5, "text": "{target_language} narration", "type": "highlight"}},
+          {{"dialogue_index": 8, "text": "{target_language} narration", "type": "reaction"}},
+          {{"dialogue_index": 11, "text": "{target_language} narration", "type": "tension"}}
         ],
-        "catchy_keywords": ["keyword 1", "keyword 2", "keyword 3"],
+        "catchy_keywords": [
+          "{target_language} keyword 1",
+          "{target_language} keyword 2",
+          "{target_language} keyword 3"
+        ],
         "vocabulary_annotations": [
-          {{"word": "word", "translation": "번역", "dialogue_index": 3}}
+          {{"word": "{source_language} word", "translation": "{target_language}", "dialogue_index": 3}}
         ],
         "expression_annotations": [
-          {{"expression": "idiom phrase", "translation": "번역", "dialogue_index": 7}}
+          {{"expression": "{source_language} idiom", "translation": "{target_language}", "dialogue_index": 7}}
         ],
-        "similar_expressions": ["alternative 1", "alternative 2"],
+        "similar_expressions": ["{source_language} alt 1", "{source_language} alt 2"],
         "scene_type": "humor|drama|tension|emotional|confrontation|sexy|surprising",
         "intro_hook": "Short hook in {target_language}"
       }}
@@ -177,14 +291,44 @@ prompt: |
   ---
 
   **FINAL CHECKLIST:**
-  - ✓ Expression: 3+ words, common, **CONTEXT-FREE** (learnable without knowing drama), copied exactly
-  - ✓ expression_translation: **LITERAL (직역)** - straight word-by-word translation, no interpretation
-  - ✓ Scene: High-energy (funny/dramatic/tense/romantic)
-  - ✓ Context: ~{target_duration}s, complete story arc, expression in middle
-  - ✓ Clips: NO overlapping index ranges
-  - ✓ Narrations: 3-6 entries, spaced throughout, casual {target_language}
-  - ✓ Annotations: vocabulary (words) vs expression (idioms) - ZERO overlap
-  - ✓ Language rules: correct language for each field
 
-  **Return ONLY valid JSON.**
-  **No good expressions? Return: {{"expressions":[]}}**
+  **Content Quality:**
+  - ✓ Expression is 3+ words, common, reusable
+  - ✓ Scene is high-energy (funny/dramatic/tense/romantic)
+  - ✓ Expression copied exactly from source dialogue
+
+  **Context Completeness:**
+  - ✓ Context is ~{target_duration} seconds (complete story)
+  - ✓ Has setup BEFORE expression (beginning)
+  - ✓ Expression appears in MIDDLE
+  - ✓ Has reaction AFTER expression (end)
+  - ✓ First-time viewer can understand what's happening
+
+  **Dialogues Field:**
+  - ✓ Contains both {source_language_code} and {target_language_code} arrays
+  - ✓ Each entry has: index, timestamp, text
+  - ✓ index and timestamp are IDENTICAL between both languages
+  - ✓ Only text content differs between languages
+  - ✓ Covers all entries from context_start_index to context_end_index
+
+  **Language Compliance:**
+  - ✓ `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
+  - ✓ `viral_title`, `expression`, `similar_expressions` → {source_language}
+  - ✓ All `translation` fields → {target_language}
+  - ✓ Annotation `word`/`expression` fields → {source_language}
+  - ✓ `dialogues.{source_language_code}[].text` → {source_language}
+  - ✓ `dialogues.{target_language_code}[].text` → {target_language}
+
+  **Technical:**
+  - ✓ expression_dialogue_index is BETWEEN context_start_index and context_end_index (CRITICAL!)
+  - ✓ All narration/annotation dialogue_index values are within [context_start_index, context_end_index]
+  - ✓ No overlapping clip index ranges
+  - ✓ No overlap between vocabulary and expression annotations
+  - ✓ Valid JSON format
+
+  ---
+
+  **CRITICAL: Respond with ONLY valid JSON. No markdown, no explanations.**
+
+  If you find expressions: Return the JSON object
+  If NO good expressions found: {{"expressions":[]}}

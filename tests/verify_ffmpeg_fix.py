@@ -16,7 +16,7 @@ def create_dummy_video(filename, width, height, duration=1, color='red'):
 
 def test_concat():
     v1 = "test_720.mp4"
-    v2 = "test_724.mp4"
+    video2 = "test_724.mp4"
     out = "test_concat.mkv"
     
     try:
@@ -27,7 +27,7 @@ def test_concat():
         print(f"Created {v1} (1280x720) and {v2} (1280x724)")
         print("Attempting concatenation with fix...")
         
-        concat_filter_with_explicit_map(v1, v2, out)
+        concat_filter_with_explicit_map(v1, video2, out)
         
         if os.path.exists(out):
             print("✅ Concatenation successful! Output file created.")
@@ -48,7 +48,7 @@ def test_concat():
         print(f"❌ Concatenation failed: {e}")
     finally:
         # Cleanup
-        for f in [v1, v2, out]:
+        for f in [v1, video2, out]:
             if os.path.exists(f):
                 os.remove(f)
 

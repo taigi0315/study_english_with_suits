@@ -112,42 +112,186 @@ def get_transitions_config() -> Dict[str, Any]:
 
 
 # ============================================================================
-# V2: Dual Language Settings
+# Subtitle Settings
 # ============================================================================
 
-def get_dual_language_config() -> Dict[str, Any]:
-    """Get V2 dual language configuration section"""
-    return _config_loader.get_section('dual_language') or {}
+def get_subtitles_config() -> Dict[str, Any]:
+    """Get subtitle configuration section"""
+    return _config_loader.get_section('subtitles') or {}
 
 
-def is_dual_language_enabled() -> bool:
-    """Check if V2 dual-language mode is enabled"""
-    return get_dual_language_config().get('enabled', False)
+def is_subtitles_enabled() -> bool:
+    """Check if multi-language subtitle mode is enabled"""
+    return get_subtitles_config().get('enabled', False)
 
 
 def get_default_source_language() -> str:
     """Get default source language for learning"""
-    return get_dual_language_config().get('default_source_language', 'English')
+    return get_subtitles_config().get('default_source_language', 'English')
 
 
 def get_default_target_language() -> str:
     """Get default target language (user's native language)"""
-    return get_dual_language_config().get('default_target_language', 'Korean')
+    return get_subtitles_config().get('default_target_language', 'Korean')
+
+
+# Shared language name to code mapping (single source of truth)
+LANGUAGE_NAME_TO_CODE = {
+    'English': 'en',
+    'Korean': 'ko',
+    'Japanese': 'ja',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Chinese': 'zh',
+    'Italian': 'it',
+    'Portuguese': 'pt',
+    'Russian': 'ru',
+    'Hindi': 'hi',
+    'Arabic': 'ar',
+    'Dutch': 'nl',
+    'Polish': 'pl',
+    'Thai': 'th',
+    'Vietnamese': 'vi',
+    'Turkish': 'tr',
+    'Swedish': 'sv',
+    'Finnish': 'fi',
+    'Danish': 'da',
+    'Norwegian': 'no',
+}
+
+
+def language_name_to_code(lang_name: str) -> Optional[str]:
+    """
+    Convert language name to ISO 639-1 code.
+    
+    Args:
+        lang_name: Language name (e.g., 'Korean', 'English')
+        
+    Returns:
+        ISO 639-1 code (e.g., 'ko', 'en') or None if not found
+    """
+    return LANGUAGE_NAME_TO_CODE.get(lang_name)
+
+
+def get_source_language_code() -> str:
+    """Get source language code (e.g., 'en' for English)"""
+    lang_name = get_default_source_language()
+    return language_name_to_code(lang_name) or 'en'
+
+
+def get_target_language_code() -> str:
+    """Get target language code (e.g., 'ko' for Korean)"""
+    lang_name = get_default_target_language()
+    return language_name_to_code(lang_name) or 'ko'
+
+
+# Reverse mapping: code to name (generated from LANGUAGE_NAME_TO_CODE)
+LANGUAGE_CODE_TO_NAME = {v: k for k, v in LANGUAGE_NAME_TO_CODE.items()}
+
+
+def language_code_to_name(lang_code: str) -> Optional[str]:
+    """
+    Convert ISO 639-1 code to language name.
+    
+    Args:
+        lang_code: ISO 639-1 code (e.g., 'ko', 'en')
+        
+    Returns:
+        Language name (e.g., 'Korean', 'English') or None if not found
+    """
+    return LANGUAGE_CODE_TO_NAME.get(lang_code)
 
 
 def get_subtitle_pattern() -> str:
     """Get subtitle filename pattern"""
-    return get_dual_language_config().get('subtitle_pattern', '{index}_{Language}.srt')
+    return get_subtitles_config().get('subtitle_pattern', '{index}_{Language}.srt')
 
 
 def get_variant_selection() -> str:
     """Get variant selection strategy when multiple subtitle files exist"""
-    return get_dual_language_config().get('variant_selection', 'first')
+    return get_subtitles_config().get('variant_selection', 'first')
 
 
-def get_v2_template_file() -> str:
-    """Get V2 content selection prompt template file"""
-    return get_dual_language_config().get('v2_template_file', 'content_selection_prompt_v1.txt')
+def get_content_selection_template_file() -> str:
+    """Get content selection prompt template file"""
+    return get_subtitles_config().get('template_file', 'expression_analysis_prompt.yaml')
+
+
+# Backward compatibility aliases
+def get_dual_language_config() -> Dict[str, Any]:
+    """DEPRECATED: Use get_subtitles_config() instead"""
+    return get_subtitles_config()
+
+
+def is_dual_language_enabled() -> bool:
+    """DEPRECATED: Use is_subtitles_enabled() instead"""
+    return is_subtitles_enabled()
+
+
+# ============================================================================
+# Contextual Localization Pipeline Settings
+# ============================================================================
+
+def get_pipeline_config() -> Dict[str, Any]:
+    """Get contextual localization pipeline configuration section"""
+    return _config_loader.get_section('pipeline') or {}
+
+
+def get_show_bible_cache_dir() -> str:
+    """Get Show Bible cache directory path"""
+    config = get_pipeline_config()
+    show_bible_cfg = config.get('show_bible', {})
+    return show_bible_cfg.get('cache_dir', 'langflix/pipeline/artifacts/show_bibles')
+
+
+def get_use_wikipedia() -> bool:
+    """Check if Wikipedia should be used for Show Bible generation"""
+    config = get_pipeline_config()
+    show_bible_cfg = config.get('show_bible', {})
+    return show_bible_cfg.get('use_wikipedia', True)
+
+
+def get_force_refresh_bible() -> bool:
+    """Check if Show Bible should be force refreshed (ignore cache)"""
+    config = get_pipeline_config()
+    show_bible_cfg = config.get('show_bible', {})
+    return show_bible_cfg.get('force_refresh', False)
+
+
+def get_master_summary_cache_dir() -> str:
+    """Get Master Summary cache directory path"""
+    config = get_pipeline_config()
+    summary_cfg = config.get('master_summary', {})
+    return summary_cfg.get('cache_dir', 'langflix/pipeline/artifacts/summaries')
+
+
+def get_aggregator_model() -> str:
+    """Get model name for Aggregator Agent (cheaper model)"""
+    config = get_pipeline_config()
+    aggregator_cfg = config.get('aggregator', {})
+    return aggregator_cfg.get('model_name', 'gemini-2.5-flash')
+
+
+def get_aggregator_temperature() -> float:
+    """Get temperature for Aggregator Agent"""
+    config = get_pipeline_config()
+    aggregator_cfg = config.get('aggregator', {})
+    return aggregator_cfg.get('temperature', 0.3)
+
+
+def get_translator_model() -> str:
+    """Get model name for Translator Agent (smart model)"""
+    config = get_pipeline_config()
+    translator_cfg = config.get('translator', {})
+    return translator_cfg.get('model_name', 'gemini-2.0-flash')
+
+
+def get_translator_temperature() -> float:
+    """Get temperature for Translator Agent"""
+    config = get_pipeline_config()
+    translator_cfg = config.get('translator', {})
+    return translator_cfg.get('temperature', 0.2)
 
 
 def get_ending_credit_config() -> Dict[str, Any]:
@@ -313,10 +457,10 @@ def get_source_language_name() -> str:
     Returns:
         Human-readable language name like "Korean", "English", "Spanish"
     """
-    # Check dual_language config first (V2 mode)
-    dual_lang = get_dual_language_config()
-    if dual_lang.get('enabled', False):
-        source_lang = dual_lang.get('source_language', 'Korean')
+    # Check subtitles config first
+    subtitles_cfg = get_subtitles_config()
+    if subtitles_cfg.get('enabled', False):
+        source_lang = subtitles_cfg.get('source_language', 'Korean')
         # Map language codes to full names
         lang_names = {
             'ko': 'Korean', 'en': 'English', 'es': 'Spanish', 
@@ -475,7 +619,7 @@ def get_test_mode_max_total_expressions() -> int:
 
 
 def get_max_total_expressions(test_mode: bool = False) -> int:
-    """Get maximum total expressions for entire video (V2 mode).
+    """Get maximum total expressions for entire video.
     
     Args:
         test_mode: If True, use test mode limits
@@ -954,8 +1098,8 @@ def get_viral_title_display_duration() -> float:
 
 
 def get_viral_title_chars_per_line() -> int:
-    """Get max characters per line for title before wrapping (default: 25)"""
-    return get_viral_title_config().get('chars_per_line', 25)
+    """Get viral title max chars per line (default: 28 for portrait)"""
+    return get_viral_title_config().get('chars_per_line', 28)
 
 
 # ============================================================================

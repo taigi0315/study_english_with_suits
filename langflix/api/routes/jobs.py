@@ -48,7 +48,7 @@ async def process_video_task(
     video_filename: str,
     subtitle_filename: str,
     language_code: str,
-    source_language: str = "English",
+    source_language: str,
     show_name: str = "",
     episode_name: str = "",
     max_expressions: int = 10,
@@ -57,6 +57,7 @@ async def process_video_task(
     test_llm: bool = False,  # Dev: Use cached LLM response
     no_shorts: bool = False,
     short_form_max_duration: float = 180.0,
+    target_duration: float = 120.0,
     output_dir: str = "output",
     target_languages: Optional[List[str]] = None,
     create_long_form: bool = True,
@@ -125,6 +126,7 @@ async def process_video_task(
             create_long_form=create_long_form,
             create_short_form=create_short_form,
             short_form_max_duration=short_form_max_duration,
+            target_duration=target_duration,
             progress_callback=update_progress
         )
                 
@@ -359,7 +361,7 @@ async def process_video_task(
         
         # Cleanup temp files explicitly
         temp_manager.cleanup_temp_file(Path(video_path))
-        if subtitle_path:  # V2 mode: subtitle_path may be empty
+        if subtitle_path:  # Dual-subtitle mode: subtitle_path may be empty
             temp_manager.cleanup_temp_file(Path(subtitle_path))
         
     except Exception as e:
@@ -386,13 +388,13 @@ async def process_video_task(
         })
         # Cleanup temp files even on error
         temp_manager.cleanup_temp_file(Path(video_path))
-        if subtitle_path:  # V2 mode: subtitle_path may be empty
+        if subtitle_path:  # Dual-subtitle mode: subtitle_path may be empty
             temp_manager.cleanup_temp_file(Path(subtitle_path))
 
 @router.post("/jobs")
 async def create_job(
     video_file: UploadFile = File(...),
-    subtitle_file: Optional[UploadFile] = File(None),  # Optional - V2 mode discovers from Subs/ folder
+    subtitle_file: Optional[UploadFile] = File(None),  # Optional - discovers from Subs/ folder
     language_code: str = Form(...),
     show_name: str = Form(...),
     episode_name: str = Form(...),
@@ -402,9 +404,10 @@ async def create_job(
     test_llm: bool = Form(False),  # Dev: Use cached LLM response
     no_shorts: bool = Form(False),
     short_form_max_duration: float = Form(180.0),
+    target_duration: float = Form(120.0),
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
-    source_language: Optional[str] = Form(None),  # V2: Explicit source language code
+    source_language: str = Form(...),  # Required explicit source language code (TICKET-VIDEO-002)
     create_long_form: bool = Form(True),
     create_short_form: bool = Form(True),
     auto_upload_config: Optional[str] = Form(None), # JSON string
@@ -413,12 +416,20 @@ async def create_job(
     """Create a new video processing job."""
     
     try:
+        # RAW PAYLOAD LOGGING (as requested)
+        logger.info(f"🚀 JOB CREATION RAW PAYLOAD:")
+        logger.info(f"   video_file: {video_file.filename}")
+        logger.info(f"   language_code (primary): {language_code}")
+        logger.info(f"   display_language: {language_code} (Mapped: {LANGUAGE_CODE_MAP.get(language_code, 'Unknown')})")
+        logger.info(f"   source_language (explicit): {source_language}")
+        logger.info(f"   target_languages (raw): '{target_languages}'")
+        
         # Validate file types
         if not video_file.filename or not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
             raise HTTPException(status_code=400, detail="Invalid video file type")
-        
-        # Validate subtitle file if provided (V1 mode)
-        # V2 mode discovers subtitles from Subs/ folder - no subtitle_file required
+
+        # Validate subtitle file if provided
+        # Auto-discovers subtitles from Subs/ folder - no subtitle_file required
         if subtitle_file and subtitle_file.filename:
             supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
             if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
@@ -447,7 +458,7 @@ async def create_job(
         if video_size == 0:
             raise HTTPException(status_code=400, detail="Empty video file uploaded")
         
-        # Handle subtitle file (optional for V2 mode which discovers from Subs/ folder)
+        # Handle subtitle file (optional - auto-discovers from Subs/ folder)
         subtitle_temp_path = None
         if subtitle_file and subtitle_file.filename:
             subtitle_ext = Path(subtitle_file.filename).suffix or '.srt'
@@ -490,7 +501,7 @@ async def create_job(
             "video_size": str(video_size),
             "subtitle_size": str(subtitle_temp_path.stat().st_size if subtitle_temp_path else 0),
             "language_code": language_code,
-            "source_language": source_language or language_code,  # V2: Source language for video
+            "source_language": source_language,  # Source language for video
             "show_name": show_name,
             "episode_name": episode_name,
             "max_expressions": str(max_expressions),
@@ -499,6 +510,7 @@ async def create_job(
             "test_llm": str(test_llm),
             "no_shorts": str(no_shorts),
             "short_form_max_duration": str(short_form_max_duration),
+            "target_duration": str(target_duration),
             "create_long_form": str(create_long_form),
             "create_short_form": str(create_short_form),
             "progress": "0",
@@ -508,7 +520,7 @@ async def create_job(
         redis_manager.create_job(job_id, job_data)
         
         # Start REAL background processing task with file paths (not content)
-        # V2 mode: subtitle_path may be empty - pipeline discovers from Subs/ folder
+        # Dual-subtitle mode: subtitle_path may be empty - pipeline discovers from Subs/ folder
         background_tasks.add_task(
             process_video_task,
             job_id=job_id,
@@ -517,7 +529,7 @@ async def create_job(
             video_filename=video_file.filename,
             subtitle_filename=subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
             language_code=language_code,
-            source_language=source_language or "English",
+            source_language=source_language,
             show_name=show_name,
             episode_name=episode_name,
             max_expressions=max_expressions,
@@ -526,6 +538,7 @@ async def create_job(
             test_llm=test_llm,
             no_shorts=no_shorts,
             short_form_max_duration=short_form_max_duration,
+            target_duration=target_duration,
             output_dir=output_dir,
             target_languages=target_languages_list,
             create_long_form=create_long_form,

@@ -47,8 +47,8 @@ def main():
     logger.info(f"Output Dir: {args.output_dir}")
     
     # Test media paths
-    video_path = "assets/media/test_media/The.Glory.S01E01.KOREAN.1080p.WEBRip.x265-RARBG[eztv.re].mp4"
-    subtitle_path = "assets/media/test_media/The.Glory.S01E01.KOREAN.1080p.WEBRip.x265-RARBG[eztv.re]/Korean.srt"
+    video_path = "assets/media/test_media/The.Glory.S01E01.KOREAN.1080p.WEBRip.x265-RARBG[eztv.re]/The.Glory.S01E01.KOREAN.1080p.WEBRip.x265-RARBG[eztv.re].mp4"
+    subtitle_path = "assets/media/test_media/The.Glory.S01E01.KOREAN.1080p.WEBRip.x265-RARBG[eztv.re]/Subs/Korean.srt"
     
     # Check files exist
     if not Path(video_path).exists():

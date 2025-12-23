@@ -1,5 +1,5 @@
 name: expression_analysis_prompt
-version: "9.0"
+version: "10.0"
 description: Content selector prompt for extracting expressions from TV show dialogues
 
 prompt: |
@@ -30,12 +30,12 @@ prompt: |
 
   **MUST BE IN {target_language}:**
   - `title` - Catchy title for learners
-  - `title` - Catchy title for learners
   - `catchy_keywords` - Social media hook phrases
   - `narrations` - All narration text
   - `intro_hook` - Opening hook
   - `expression_translation` - Translation of the expression
   - All `translation` fields in annotations
+  - `dialogues.{target_language_code}` - Target language dialogues array
 
   **MUST BE IN {source_language}:**
   - `viral_title` - Iconic quote from the scene
@@ -43,6 +43,7 @@ prompt: |
   - `similar_expressions` - Alternative expressions
   - `word` field in vocabulary_annotations
   - `expression` field in expression_annotations
+  - `dialogues.{source_language_code}` - Source language dialogues array
 
   **❌ NEVER MIX LANGUAGES IN THE SAME FIELD**
 
@@ -164,7 +165,8 @@ prompt: |
   - `commentary` (relatable): "100% relatable for office workers lol"
 
   **Rules:**
-  - 3-6 narrations per clip, spaced throughout
+  - 5-9 narrations per clip, spaced throughout
+  - Always include narration at first dialogue index
   - Casual tone, internet slang OK (lol, omg, fr)
   - 5-15 words each
   - **❌ Do NOT just translate the dialogue or expression.** Narration must be COMMENTARY.
@@ -198,6 +200,44 @@ prompt: |
 
   ---
 
+  **DIALOGUES FIELD - BILINGUAL SUBTITLE EXTRACTION:**
+
+  For each expression, include the complete subtitle data for the context range in BOTH languages.
+  **CRITICAL:** Maintain the EXACT original structure - only the text content changes between languages.
+
+  **Structure per dialogue entry:**
+  ```json
+  {{
+    "index": 3,
+    "timestamp": "00:00:49,460 --> 00:00:50,527",
+    "text": "dialogue text here"
+  }}
+  ```
+
+  **Format:**
+  ```json
+  "dialogues": {{
+    "{source_language_code}": [
+      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "Gerald Tate's here."}},
+      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "He wants to know what's happening to his deal."}}
+    ],
+    "{target_language_code}": [
+      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "제럴드 테이트가 왔어요."}},
+      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "자기 거래가 어떻게 됐는지 알고 싶대요."}}
+    ]
+  }}
+  ```
+
+  **Rules:**
+  - Extract dialogue entries from `context_start_index` to `context_end_index` (inclusive)
+  - **index**: MUST match the original subtitle index exactly
+  - **timestamp**: MUST be copied exactly from source (same for both languages)
+  - **text**: Copy the dialogue text from respective source/target dialogues
+  - Both language arrays must have the SAME entries (matching index and timestamp)
+  - Use ISO 639-1 language codes (e.g., "en", "ko", "es", "ja", "zh")
+
+  ---
+
   **OUTPUT FORMAT (JSON only):**
 
   ```json
@@ -211,6 +251,18 @@ prompt: |
         "expression_dialogue_index": 5,
         "context_start_index": 2,
         "context_end_index": 12,
+        "dialogues": {{
+          "{source_language_code}": [
+            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{source_language} text"}},
+            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{source_language} text"}},
+            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{source_language} text"}}
+          ],
+          "{target_language_code}": [
+            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{target_language} text"}},
+            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{target_language} text"}},
+            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{target_language} text"}}
+          ]
+        }},
         "narrations": [
           {{"dialogue_index": 2, "text": "{target_language} narration", "type": "hook"}},
           {{"dialogue_index": 5, "text": "{target_language} narration", "type": "highlight"}},
@@ -252,13 +304,24 @@ prompt: |
   - ✓ Has reaction AFTER expression (end)
   - ✓ First-time viewer can understand what's happening
 
+  **Dialogues Field:**
+  - ✓ Contains both {source_language_code} and {target_language_code} arrays
+  - ✓ Each entry has: index, timestamp, text
+  - ✓ index and timestamp are IDENTICAL between both languages
+  - ✓ Only text content differs between languages
+  - ✓ Covers all entries from context_start_index to context_end_index
+
   **Language Compliance:**
   - ✓ `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
   - ✓ `viral_title`, `expression`, `similar_expressions` → {source_language}
   - ✓ All `translation` fields → {target_language}
   - ✓ Annotation `word`/`expression` fields → {source_language}
+  - ✓ `dialogues.{source_language_code}[].text` → {source_language}
+  - ✓ `dialogues.{target_language_code}[].text` → {target_language}
 
   **Technical:**
+  - ✓ expression_dialogue_index is BETWEEN context_start_index and context_end_index (CRITICAL!)
+  - ✓ All narration/annotation dialogue_index values are within [context_start_index, context_end_index]
   - ✓ No overlapping clip index ranges
   - ✓ No overlap between vocabulary and expression annotations
   - ✓ Valid JSON format

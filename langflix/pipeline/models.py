@@ -33,13 +33,13 @@ class ChunkResult(BaseModel):
 class EpisodeData(BaseModel):
     """
     Complete data for an episode
-    Includes all chunk results and master summary
+    Includes all chunk results
     """
     episode_id: str = Field(..., description="Unique episode identifier")
     show_name: str = Field(..., description="Name of the show")
     show_bible: str = Field(..., description="Show Bible content")
     chunks: List[ChunkResult] = Field(default_factory=list, description="All processed chunks")
-    master_summary: Optional[str] = Field(None, description="Aggregated episode narrative")
+    master_summary: Optional[str] = Field(None, description="DEPRECATED: No longer generated (Aggregator removed)")
 
     def get_all_expressions(self) -> List[Dict[str, Any]]:
         """Get all expressions from all chunks"""
@@ -53,10 +53,23 @@ class EpisodeData(BaseModel):
         return [chunk.chunk_summary for chunk in self.chunks]
 
 
+class DialogueEntry(BaseModel):
+    """
+    Single dialogue entry with timing information
+    Used in bilingual subtitle extraction
+    """
+    index: int = Field(..., description="Subtitle index matching original")
+    timestamp: str = Field(..., description="SRT timestamp format (HH:MM:SS,mmm --> HH:MM:SS,mmm)")
+    text: str = Field(..., description="Dialogue text in respective language")
+
+
 class LocalizationData(BaseModel):
     """
     Localization data for a single expression
     Context-aware translations
+
+    NOTE: This model is no longer actively used. The unified architecture
+    includes translations directly in the dialogues field.
     """
     target_lang: str = Field(..., description="Target language code (e.g., 'ko', 'ja', 'es')")
     target_lang_name: str = Field(..., description="Target language name (e.g., 'Korean', 'Japanese')")
@@ -64,9 +77,9 @@ class LocalizationData(BaseModel):
     expression_dialogue_translated: str = Field(..., description="Translation reflecting tone/hierarchy")
     catchy_keywords_translated: List[str] = Field(default_factory=list, description="Localized keywords")
     viral_title: Optional[str] = Field(None, description="Viral/Clickbaity string for the video title")
-    narrations: List[str] = Field(default_factory=list, description="Short narration lines explaining text")
-    vocabulary_annotations: List[Dict[str, str]] = Field(default_factory=list, description="List of vocab items: [{'word': '...', 'meaning': '...', 'example': '...'}]")
-    expression_annotations: List[Dict[str, str]] = Field(default_factory=list, description="List of expression parts: [{'word': '...', 'translation': '...'}]")
+    narrations: List[Any] = Field(default_factory=list, description="Short narration lines explaining text")
+    vocabulary_annotations: List[Dict[str, Any]] = Field(default_factory=list, description="List of vocab items: [{'word': '...', 'meaning': '...', 'example': '...', 'dialogue_index': 5}]")
+    expression_annotations: List[Dict[str, Any]] = Field(default_factory=list, description="List of expression parts: [{'word': '...', 'translation': '...', 'dialogue_index': 7}]")
     translation_notes: Optional[str] = Field(None, description="Notes about honorifics/formality applied")
 
     class Config:
@@ -90,17 +103,18 @@ class TranslationResult(BaseModel):
     expression: str
     expression_dialogue: str
     context_summary_eng: Optional[str] = None
-    
+
     # Context timing (for video clip extraction)
     start_time: str  # context_start_time
     end_time: str    # context_end_time
-    
+
     # Expression timing (for highlighting the specific expression)
     expression_start_time: Optional[str] = None
     expression_end_time: Optional[str] = None
-    
-    # Source context dialogues (for subtitle mapping)
-    dialogues: List[str] = Field(default_factory=list)
+
+    # Bilingual dialogues (for subtitle mapping)
+    # Format: {"en": [{"index": 3, "timestamp": "...", "text": "..."}], "ko": [...]}
+    dialogues: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
     
     scene_type: Optional[str] = None
     similar_expressions: List[str] = Field(default_factory=list)
@@ -111,7 +125,7 @@ class TranslationResult(BaseModel):
     chunk_summary: str = Field(..., description="Micro-context from Script Agent")
 
     # Episode context
-    episode_summary: Optional[str] = Field(None, description="Master episode summary")
+    episode_summary: Optional[str] = Field(None, description="DEPRECATED: No longer generated (Aggregator removed)")
 
     # Multilingual localizations
     localizations: List[LocalizationData] = Field(default_factory=list, description="Translations with context")
@@ -150,12 +164,11 @@ class PipelineConfig(BaseModel):
     """
     show_name: str
     episode_name: str
-    target_languages: List[str] = Field(default_factory=list, description="Language codes to translate to")
+    source_language: Optional[str] = Field("English", description="Source language name (e.g. English, Korean)")
+    target_languages: List[str] = Field(default_factory=list, description="DEPRECATED: Language codes - now handled in ScriptAgent via settings")
     use_wikipedia: bool = Field(True, description="Whether to fetch Show Bible from Wikipedia")
-    aggregator_model: str = Field("gemini-2.5-flash", description="Model for summary aggregation")
-    translator_model: str = Field("gemini-2.0-flash", description="Model for contextual translation")
     cache_show_bible: bool = Field(True, description="Cache Show Bible for reuse")
-    cache_master_summary: bool = Field(True, description="Cache Master Summary for reuse")
+    output_dir: Optional[str] = Field(None, description="Output directory for results and debug info")
 
     class Config:
         json_schema_extra = {
@@ -163,8 +176,6 @@ class PipelineConfig(BaseModel):
                 "show_name": "Suits",
                 "episode_name": "S01E01",
                 "target_languages": ["ko", "ja", "es"],
-                "use_wikipedia": True,
-                "aggregator_model": "gemini-2.5-flash",
-                "translator_model": "gemini-2.0-flash"
+                "use_wikipedia": True
             }
         }

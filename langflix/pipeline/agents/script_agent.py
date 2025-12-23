@@ -22,20 +22,23 @@ class ScriptAgent:
     Uses Show Bible for speaker inference and context understanding
     """
 
-    def __init__(self, model_name: Optional[str] = None):
+    def __init__(self, model_name: Optional[str] = None, output_dir: Optional[str] = None):
         """
         Initialize Script Agent
 
         Args:
             model_name: LLM model to use (defaults to settings)
+            output_dir: Optional output directory for debug logs
         """
         self.model_name = model_name or settings.get_llm_model_name()
+        self.output_dir = output_dir
         self.client = get_gemini_client()
 
         # Load prompt template
         # Load prompt template from settings (YAML)
         prompt_file = settings.get_content_selection_template_file()
-        prompt_path = Path(__file__).parent.parent / "prompts" / prompt_file
+        # Go up 3 levels: agents -> pipeline -> langflix -> prompts
+        prompt_path = Path(__file__).parent.parent.parent / "prompts" / prompt_file
         
         try:
             with open(prompt_path, 'r', encoding='utf-8') as f:
@@ -55,16 +58,22 @@ class ScriptAgent:
         self,
         chunk_id: int,
         script_chunk: str,
+        target_script_chunk: str,
         show_bible: str,
         language_level: str = "intermediate",
-        max_expressions_per_chunk: int = 3
+        max_expressions_per_chunk: int = 3,
+        target_language: Optional[str] = None,
+        target_language_code: Optional[str] = None,
+        source_language: Optional[str] = None,
+        source_language_code: Optional[str] = None
     ) -> ChunkResult:
         """
         Analyze a single script chunk with Show Bible context
 
         Args:
             chunk_id: Sequential chunk number
-            script_chunk: The subtitle chunk text
+            script_chunk: The source language subtitle chunk text
+            target_script_chunk: The target language subtitle chunk text
             show_bible: Show Bible content for context
             language_level: Target difficulty level
             max_expressions_per_chunk: Max expressions to extract
@@ -77,32 +86,37 @@ class ScriptAgent:
         # Get language level descriptions from settings
         language_level_descriptions = self._get_language_level_descriptions()
 
-        # Build prompt
         # Get config values for prompt placeholders
         show_name = settings.get_show_name()
-        source_lang = settings.get_source_language_name()
-        target_lang = settings.get_default_target_language()
+        source_lang = source_language or settings.get_source_language_name()
+        source_lang_code = source_language_code or settings.get_source_language_code()
+        target_lang = target_language or settings.get_default_target_language()
+        target_lang_code = target_language_code or settings.get_target_language_code()
         min_expr = settings.get_min_expressions_per_chunk()
         target_duration = settings.get_short_video_target_duration()
-        
+
         # Build prompt with exact keys matching expression_analysis_prompt.yaml
         prompt = self.prompt_template.format(
             show_name=show_name,
             source_language=source_lang,
+            source_language_code=source_lang_code,
             target_language=target_lang,
+            target_language_code=target_lang_code,
             min_expressions=min_expr,
             max_expressions=max_expressions_per_chunk,
             level_description=language_level_descriptions,  # Maps to {level_description}
             target_duration=target_duration,
             source_dialogues=script_chunk,                  # Maps to {source_dialogues}
-            target_dialogues="(Target dialogues not available during analysis)", # Placeholder
-            
+            target_dialogues=target_script_chunk,           # Maps to {target_dialogues}
+
             # Legacy/Unused params (kept if template uses them unexpectedly)
             show_bible=show_bible,
             language_level=language_level,
             chunk_id=chunk_id,
             script_chunk=script_chunk
         )
+
+        logger.info(f"🚀 Prompting LLM for {source_lang} -> {target_lang} (Expressions: {min_expr}-{max_expressions_per_chunk})")
 
         # Call LLM
         try:
@@ -160,9 +174,14 @@ class ScriptAgent:
         Returns:
             LLM response text
         """
-        # Get base config from settings and add max_output_tokens
-        generation_config = settings.get_generation_config()
-        generation_config["max_output_tokens"] = 8192  # Allow larger responses for detailed summaries
+        # Create a NEW dict to avoid mutating shared/cached config
+        base_config = settings.get_generation_config()
+        generation_config = {
+            **base_config,  # Spread existing config
+        }
+        
+        # Log config at INFO level for visibility during debugging
+        logger.info(f"🔧 ScriptAgent LLM config: max_output_tokens={generation_config.get('max_output_tokens')}")
 
         # self.client is already a GenerativeModel from get_gemini_client()
         response = self.client.generate_content(
@@ -195,6 +214,27 @@ class ScriptAgent:
             logger.error("LLM response has no text content")
             logger.error(f"Response object: {response}")
             raise ValueError("LLM response has no text content")
+        
+        # Save prompt and response for debugging
+        import time
+        if self.output_dir:
+            debug_dir = Path(self.output_dir) / "debug"
+        else:
+            debug_dir = Path(__file__).parent.parent / "artifacts" / "debug"
+            
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = int(time.time())
+        
+        prompt_file = debug_dir / f"script_agent_prompt_{timestamp}.txt"
+        with open(prompt_file, "w", encoding="utf-8") as f:
+            f.write(prompt)
+        
+        response_file = debug_dir / f"script_agent_response_{timestamp}.txt"
+        with open(response_file, "w", encoding="utf-8") as f:
+            f.write(text)
+        
+        logger.info(f"💾 Saved ScriptAgent host prompt to: {prompt_file.absolute()}")
+        logger.info(f"💾 Saved ScriptAgent LLM response to: {response_file.absolute()}")
         
         logger.debug(f"LLM response length: {len(text)} chars")
         return text
@@ -278,16 +318,22 @@ class ScriptAgent:
     def analyze_chunks_batch(
         self,
         chunks: List[Dict[str, Any]],
+        target_chunks: List[Dict[str, Any]],
         show_bible: str,
         language_level: str = "intermediate",
         max_expressions_per_chunk: int = 3,
-        max_total_expressions: Optional[int] = None
+        max_total_expressions: Optional[int] = None,
+        target_language: Optional[str] = None,
+        target_language_code: Optional[str] = None,
+        source_language: Optional[str] = None,
+        source_language_code: Optional[str] = None
     ) -> List[ChunkResult]:
         """
         Analyze multiple chunks in sequence
 
         Args:
-            chunks: List of subtitle chunk dictionaries
+            chunks: List of source language subtitle chunk dictionaries
+            target_chunks: List of target language subtitle chunk dictionaries
             show_bible: Show Bible content
             language_level: Target difficulty level
             max_expressions_per_chunk: Max expressions per chunk
@@ -299,7 +345,7 @@ class ScriptAgent:
         results = []
         total_expressions = 0
 
-        for idx, chunk in enumerate(chunks):
+        for idx, (chunk, target_chunk) in enumerate(zip(chunks, target_chunks)):
             chunk_id = idx + 1
 
             # Check if we've hit the total expression limit (test mode)
@@ -314,10 +360,25 @@ class ScriptAgent:
             result = self.analyze_chunk(
                 chunk_id=chunk_id,
                 script_chunk=self._format_chunk_text(chunk),
+                target_script_chunk=self._format_chunk_text(target_chunk),
                 show_bible=show_bible,
                 language_level=language_level,
-                max_expressions_per_chunk=max_expressions_per_chunk
+                max_expressions_per_chunk=max_expressions_per_chunk,
+                target_language=target_language,
+                target_language_code=target_language_code,
+                source_language=source_language,
+                source_language_code=source_language_code
             )
+
+            # Truncate expressions if we've exceeded the total limit
+            if max_total_expressions:
+                remaining = max_total_expressions - total_expressions
+                if remaining < len(result.expressions):
+                    logger.info(
+                        f"✂️ Truncating chunk {chunk_id} expressions from {len(result.expressions)} to {remaining} "
+                        f"(max_total_expressions={max_total_expressions})"
+                    )
+                    result.expressions = result.expressions[:remaining]
 
             results.append(result)
             total_expressions += len(result.expressions)
@@ -379,8 +440,8 @@ class ScriptAgent:
             List of dicts with 'start_time', 'end_time', 'text'
         """
         lines = []
-        # Pattern: [timestamp --> timestamp] text
-        pattern = r'\[([^\]]+)\s*-->\s*([^\]]+)\]\s*(.+)'
+        # Pattern: [idx] [timestamp --> timestamp] text
+        pattern = r'(?:\[\d+\]\s*)?\[([^\]]+)\s*-->\s*([^\]]+)\]\s*(.+)'
         
         for line in script_chunk.split('\n'):
             line = line.strip()
@@ -416,21 +477,35 @@ class ScriptAgent:
         
         max_idx = len(subtitle_lines) - 1
         
-        # Get indices from LLM response (or defaults)
-        expr_idx = expr.get('expression_index', 0)
-        start_idx = expr.get('context_start_index', max(0, expr_idx - 3))
-        end_idx = expr.get('context_end_index', min(max_idx, expr_idx + 3))
+        # Get indices from LLM response - these are REQUIRED fields
+        expr_idx = expr.get('expression_dialogue_index')
+        start_idx = expr.get('context_start_index')
+        end_idx = expr.get('context_end_index')
         
-        # Clamp to valid range
-        expr_idx = max(0, min(expr_idx, max_idx))
-        start_idx = max(0, min(start_idx, max_idx))
-        end_idx = max(start_idx, min(end_idx, max_idx))
+        # Validate required fields exist
+        if expr_idx is None:
+            raise ValueError(f"LLM response missing required field 'expression_dialogue_index': {expr}")
+        if start_idx is None:
+            raise ValueError(f"LLM response missing required field 'context_start_index': {expr}")
+        if end_idx is None:
+            raise ValueError(f"LLM response missing required field 'context_end_index': {expr}")
         
-        # Ensure minimum context window of ~10-15 seconds (at least 3 lines)
-        if end_idx - start_idx < 3:
-            start_idx = max(0, expr_idx - 3)
-            end_idx = min(max_idx, expr_idx + 3)
+        # Validate indices are within subtitle range
+        if not (0 <= expr_idx <= max_idx):
+            raise ValueError(f"expression_dialogue_index={expr_idx} is out of range [0, {max_idx}]")
+        if not (0 <= start_idx <= max_idx):
+            raise ValueError(f"context_start_index={start_idx} is out of range [0, {max_idx}]")
+        if not (0 <= end_idx <= max_idx):
+            raise ValueError(f"context_end_index={end_idx} is out of range [0, {max_idx}]")
+        if start_idx > end_idx:
+            raise ValueError(f"context_start_index={start_idx} > context_end_index={end_idx}")
         
+        # CRITICAL: Validate expression_dialogue_index is within context bounds
+        if expr_idx < start_idx or expr_idx > end_idx:
+            raise ValueError(
+                f"expression_dialogue_index={expr_idx} is outside context range [{start_idx}, {end_idx}]. "
+                f"LLM must pick an expression FROM WITHIN the context."
+            )
         # Look up timestamps
         context_start_time = subtitle_lines[start_idx]['start_time']
         context_end_time = subtitle_lines[end_idx]['end_time']
@@ -442,9 +517,10 @@ class ScriptAgent:
         expr['context_end_time'] = context_end_time
         expr['expression_start_time'] = expression_start_time
         expr['expression_end_time'] = expression_end_time
+        expr['expression_dialogue'] = subtitle_lines[expr_idx]['text']
         
         # Extract dialogue lines (Critical for Translation Service validation)
-        expr['dialogues'] = [line['text'] for line in subtitle_lines[start_idx : end_idx + 1]]
+        expr['dialogue_lines'] = [line['text'] for line in subtitle_lines[start_idx : end_idx + 1]]
         
         logger.debug(
             f"Converted indices [{start_idx}-{end_idx}] to times "

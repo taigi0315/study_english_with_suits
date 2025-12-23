@@ -14,8 +14,6 @@ from langflix.pipeline.models import (
 )
 from langflix.pipeline.bible_manager import ShowBibleManager
 from langflix.pipeline.agents.script_agent import ScriptAgent
-from langflix.pipeline.agents.aggregator import AggregatorAgent
-from langflix.pipeline.agents.translator import TranslatorAgent
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +24,10 @@ class Pipeline:
 
     Workflow:
     1. Phase 0: Get/Create Show Bible (Wikipedia)
-    2. Phase 1: Extract expressions + Generate chunk summaries (Script Agent)
-    3. Phase 2: Aggregate summaries into Master Summary (Aggregator)
-    4. Phase 3: Translate with full context (Translator)
+    2. Phase 1: Extract expressions + Translate dialogues (Script Agent)
+
+    Note: Translation is now handled by the Script Agent in Phase 1.
+    Aggregator has been removed as episode_summary was not used anywhere.
     """
 
     def __init__(self, config: PipelineConfig):
@@ -42,15 +41,14 @@ class Pipeline:
 
         # Initialize managers and agents
         self.bible_manager = ShowBibleManager()
-        self.script_agent = ScriptAgent()
-        self.aggregator = AggregatorAgent(model_name=config.aggregator_model)
-        self.translator = TranslatorAgent(model_name=config.translator_model)
+        self.script_agent = ScriptAgent(output_dir=config.output_dir)
 
         logger.info(f"Pipeline initialized for show: {config.show_name}")
 
     def run(
         self,
         subtitle_chunks: List[Dict[str, Any]],
+        target_subtitle_chunks: List[Dict[str, Any]],
         language_level: str = "intermediate",
         max_expressions_per_chunk: int = 3,
         max_total_expressions: Optional[int] = None
@@ -59,7 +57,8 @@ class Pipeline:
         Run the complete pipeline
 
         Args:
-            subtitle_chunks: List of subtitle chunk dictionaries
+            subtitle_chunks: List of source language subtitle chunk dictionaries
+            target_subtitle_chunks: List of target language subtitle chunk dictionaries
             language_level: Target difficulty level
             max_expressions_per_chunk: Max expressions per chunk
             max_total_expressions: Total expression limit (for test mode)
@@ -74,20 +73,39 @@ class Pipeline:
         if not show_bible:
             raise ValueError(f"Failed to get Show Bible for: {self.config.show_name}")
 
-        # Phase 1: Extract + Summarize
-        logger.info("📝 Phase 1: Running Script Agent...")
+        # Phase 1: Extract + Translate
+        logger.info("📝 Phase 1: Running Script Agent (includes expression extraction and dialogue translation)...")
+        
+        from langflix import settings
+        target_lang_name = None
+        target_lang_code = None
+        
+        if self.config.target_languages:
+            target_lang_input = self.config.target_languages[0]
+            # Try to resolve code and name
+            if len(target_lang_input) <= 3:
+                target_lang_code = target_lang_input.lower()
+                target_lang_name = settings.language_code_to_name(target_lang_code) or target_lang_code.capitalize()
+            else:
+                target_lang_name = target_lang_input
+                target_lang_code = settings.language_name_to_code(target_lang_name) or target_lang_input
+        
+        # Get source language code if possible
+        source_lang_name = self.config.source_language
+        source_lang_code = settings.language_name_to_code(source_lang_name) if source_lang_name else None
+
         chunk_results = self.script_agent.analyze_chunks_batch(
             chunks=subtitle_chunks,
+            target_chunks=target_subtitle_chunks,
             show_bible=show_bible,
             language_level=language_level,
             max_expressions_per_chunk=max_expressions_per_chunk,
-            max_total_expressions=max_total_expressions
+            max_total_expressions=max_total_expressions,
+            target_language=target_lang_name,
+            target_language_code=target_lang_code,
+            source_language=source_lang_name,
+            source_language_code=source_lang_code
         )
-
-        # Phase 2: Aggregate Summaries
-        logger.info("📊 Phase 2: Running Aggregator...")
-        chunk_summaries = [chunk.chunk_summary for chunk in chunk_results]
-        master_summary = self.aggregator.aggregate_summaries(chunk_summaries)
 
         # Create episode data
         episode_data = EpisodeData(
@@ -95,7 +113,7 @@ class Pipeline:
             show_name=self.config.show_name,
             show_bible=show_bible,
             chunks=chunk_results,
-            master_summary=master_summary
+            master_summary=None  # No longer generated
         )
 
         logger.info(
@@ -111,7 +129,8 @@ class Pipeline:
         episode_data: EpisodeData
     ) -> List[TranslationResult]:
         """
-        Translate episode expressions to all target languages
+        DEPRECATED: Translation is now handled by Script Agent in run()
+        This method now just converts expressions to TranslationResult format.
 
         Args:
             episode_data: Episode data from run()
@@ -119,28 +138,34 @@ class Pipeline:
         Returns:
             List of TranslationResult with multilingual data
         """
-        if not self.config.target_languages:
-            logger.warning("No target languages specified, skipping translation")
-            return []
+        logger.info("📦 Converting expressions to TranslationResult format...")
 
-        logger.info(f"🌐 Phase 3: Translating to {len(self.config.target_languages)} languages")
-
-        # Get all expressions
+        # Get all expressions (now include dialogues with translations)
         all_expressions = episode_data.get_all_expressions()
         if not all_expressions:
-            logger.warning("No expressions to translate")
+            logger.warning("No expressions to convert")
             return []
 
-        # Translate to all target languages
-        translations_by_lang = self.translator.translate_to_multiple_languages(
-            expressions=all_expressions,
-            show_bible=episode_data.show_bible,
-            master_summary=episode_data.master_summary or "",
-            target_languages=self.config.target_languages
-        )
-
-        # Combine into TranslationResult objects
+        from langflix.pipeline.models import LocalizationData
+        from langflix import settings
+        
+        # Convert into TranslationResult objects
         translation_results = []
+        
+        # Determine target language from config if available (maintains consistency with main.py)
+        if self.config.target_languages:
+            target_lang_input = self.config.target_languages[0]
+            # Try to resolve code and name
+            if len(target_lang_input) <= 3:
+                target_lang_code = target_lang_input.lower()
+                target_lang_name = settings.language_code_to_name(target_lang_code) or target_lang_code.capitalize()
+            else:
+                target_lang_name = target_lang_input
+                target_lang_code = settings.language_name_to_code(target_lang_name) or target_lang_input
+        else:
+            # Fallback to settings
+            target_lang_code = settings.get_target_language_code()
+            target_lang_name = settings.get_default_target_language()
 
         for idx, expression in enumerate(all_expressions):
             # Find which chunk this expression came from
@@ -148,13 +173,36 @@ class Pipeline:
                 idx, episode_data.chunks
             )
 
-            # Collect localizations for this expression
-            localizations = []
-            for lang in self.config.target_languages:
-                lang_localizations = translations_by_lang.get(lang, [])
-                logger.info(f"DEBUG: Pipeline merge - Lang={lang}, ExprIdx={idx}, LocLen={len(lang_localizations)}")
-                if idx < len(lang_localizations):
-                    localizations.append(lang_localizations[idx])
+            # Extract localized dialogue if possible
+            expr_dial_trans = ""
+            expr_idx = expression.get("expression_dialogue_index")
+            dialogues = expression.get("dialogues", {})
+            
+            # Robustness: Check if dialogues is actually a dict as expected by TranslationResult
+            if not isinstance(dialogues, dict):
+                logger.warning(f"Expression {idx} 'dialogues' is not a dict (got {type(dialogues)}). Using empty dict.")
+                dialogues = {}
+
+            if expr_idx is not None and isinstance(dialogues, dict) and target_lang_code in dialogues:
+                for dial in dialogues[target_lang_code]:
+                    if dial.get("index") == expr_idx:
+                        expr_dial_trans = dial.get("text", "")
+                        break
+
+            # Create LocalizationData for the primary target language
+            # This is required for backward compatibility with main.py and downstream services
+            loc_data = LocalizationData(
+                target_lang=target_lang_code,
+                target_lang_name=target_lang_name,
+                expression_translated=expression.get("expression_translation") or expression.get("expression_translated", ""),
+                expression_dialogue_translated=expr_dial_trans,
+                catchy_keywords_translated=expression.get("catchy_keywords", []),
+                viral_title=expression.get("title") or expression.get("viral_title", ""),
+                narrations=expression.get("narrations", []),
+                vocabulary_annotations=expression.get("vocabulary_annotations", []),
+                expression_annotations=expression.get("expression_annotations", []),
+                translation_notes=expression.get("translation_notes", "")
+            )
 
             # Create TranslationResult
             result = TranslationResult(
@@ -165,19 +213,19 @@ class Pipeline:
                 end_time=expression.get("context_end_time", "00:00:00.000"),
                 expression_start_time=expression.get("expression_start_time"),
                 expression_end_time=expression.get("expression_end_time"),
-                dialogues=expression.get("dialogues", []),
+                dialogues=dialogues,
                 scene_type=expression.get("scene_type"),
                 similar_expressions=expression.get("similar_expressions", []),
                 catchy_keywords=expression.get("catchy_keywords", []),
                 chunk_id=chunk_id,
                 chunk_summary=chunk_summary,
-                episode_summary=episode_data.master_summary,
-                localizations=localizations
+                episode_summary=None,
+                localizations=[loc_data]
             )
 
             translation_results.append(result)
 
-        logger.info(f"✅ Translation complete: {len(translation_results)} expressions")
+        logger.info(f"✅ Conversion complete: {len(translation_results)} expressions")
         return translation_results
 
     def _get_show_bible(self) -> str:

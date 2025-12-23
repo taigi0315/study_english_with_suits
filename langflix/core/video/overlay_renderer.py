@@ -155,7 +155,8 @@ class OverlayRenderer:
         video_stream,
         keywords: List[str],
         settings,
-        target_width: int = 1080
+        target_width: int,
+        duration: float = 0.0
     ):
         """
         Add hashtag keywords below viral title (comma-separated, with line wrapping).
@@ -182,8 +183,8 @@ class OverlayRenderer:
         # Limit to 5 keywords (increased since comma-separated is more compact)
         keywords = keywords[:5]
 
-        # Format keywords: add "#" prefix to each
-        formatted_keywords = [f"#{keyword}" for keyword in keywords]
+        # Format keywords: strip existing # and add single "#" prefix
+        formatted_keywords = [f"#{keyword.lstrip('#')}" for keyword in keywords]
 
         # Get settings
         font_size = settings.get_keywords_font_size()
@@ -251,6 +252,9 @@ class OverlayRenderer:
                 'borderw': settings.get_keywords_border_width(),
                 'bordercolor': settings.get_keywords_border_color()
             }
+
+            if duration > 0:
+                keyword_args['enable'] = f"between(t,0,{duration:.2f})"
 
             if keyword_font and os.path.exists(keyword_font):
                 keyword_args['fontfile'] = keyword_font
@@ -650,7 +654,8 @@ class OverlayRenderer:
         video_stream,
         expression_text: str,
         translation_text: str,
-        settings
+        settings,
+        duration: float = 0.0
     ):
         """
         Add expression and translation text at bottom of video (static, entire video).
@@ -696,6 +701,9 @@ class OverlayRenderer:
             'bordercolor': settings.get_expression_border_color(),
             'line_spacing': 10
         }
+
+        if duration > 0:
+            expr_args['enable'] = f"between(t,0,{duration:.2f})"
 
         source_font = self.font_resolver.get_source_font("expression")
         if source_font and os.path.exists(source_font):

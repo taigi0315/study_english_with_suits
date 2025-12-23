@@ -448,20 +448,22 @@ class ShortFormCreator:
         )
 
         # Apply overlays using OverlayRenderer
+        # Get duration for persistent overlays (TICKET-VIDEO-001)
+        # We want to hide viral title, keywords, etc. during the educational slide
+        vid_duration = get_expr_attr(expression, 'educational_slide_start_time', 0.0)
         
-        # 1. Viral title (use title_translation for target language display)
-        # LLM returns: title (source lang), title_translation (target lang)
-        viral_title = get_expr_attr(expression, 'title_translation') or get_expr_attr(expression, 'viral_title')
+        # 1. Viral title
+        viral_title = get_expr_attr(expression, 'viral_title', '')
         if viral_title:
             video_stream = self.overlay_renderer.add_viral_title(
-                video_stream, viral_title, settings
+                video_stream, viral_title, settings, duration=vid_duration
             )
 
         # 2. Catchy keywords
         keywords = get_expr_attr(expression, 'catchy_keywords', [])
         if keywords:
             video_stream = self.overlay_renderer.add_catchy_keywords(
-                video_stream, keywords, settings, target_width
+                video_stream, keywords, settings, target_width, duration=vid_duration
             )
 
         # 3. Expression text at bottom
@@ -469,7 +471,7 @@ class ShortFormCreator:
         translation_text = get_expr_attr(expression, 'expression_translation', '')
         if expression_text:
             video_stream = self.overlay_renderer.add_expression_text(
-                video_stream, expression_text, translation_text, settings
+                video_stream, expression_text, translation_text, settings, duration=vid_duration
             )
 
         # Get timing info for dynamic overlays
@@ -481,13 +483,41 @@ class ShortFormCreator:
             if context_end_time else 30.0
         )
         dialogues = get_expr_attr(expression, 'dialogues', [])
-        dialogue_count = len(dialogues) if dialogues else 1
+        
+        # Calculate min_index for normalization and dialogue_count
+        min_index = 0
+        dialogue_count = 1
+        if isinstance(dialogues, dict):
+            # Use English or any first available language to find the starting index
+            for lang_code, lines in dialogues.items():
+                if isinstance(lines, list) and len(lines) > 0:
+                    dialogue_count = len(lines)
+                    min_index = lines[0].get('index', 0)
+                    break
+        elif isinstance(dialogues, list) and len(dialogues) > 0:
+            dialogue_count = len(dialogues)
+            if isinstance(dialogues[0], dict):
+                min_index = dialogues[0].get('index', 0)
+
+        # Helper to normalize dialogue_index in annotation items
+        def normalize_indices(items):
+            if not items: return []
+            normalized = []
+            for item in items:
+                if isinstance(item, dict) and 'dialogue_index' in item:
+                    item_copy = item.copy()
+                    # Ensure indices are relative to context start
+                    item_copy['dialogue_index'] = max(0, item['dialogue_index'] - min_index)
+                    normalized.append(item_copy)
+                else:
+                    normalized.append(item)
+            return normalized
 
         # 4. Vocabulary annotations
         vocab_annotations = get_expr_attr(expression, 'vocabulary_annotations', [])
         if vocab_annotations:
             video_stream = self.overlay_renderer.add_vocabulary_annotations(
-                video_stream, vocab_annotations,
+                video_stream, normalize_indices(vocab_annotations),
                 dialogue_count, context_duration, settings
             )
 
@@ -495,7 +525,7 @@ class ShortFormCreator:
         narrations = get_expr_attr(expression, 'narrations', [])
         if narrations:
             video_stream = self.overlay_renderer.add_narrations(
-                video_stream, narrations,
+                video_stream, normalize_indices(narrations),
                 dialogue_count, context_duration, settings
             )
 
@@ -503,7 +533,7 @@ class ShortFormCreator:
         expr_annotations = get_expr_attr(expression, 'expression_annotations', [])
         if expr_annotations:
             video_stream = self.overlay_renderer.add_expression_annotations(
-                video_stream, expr_annotations,
+                video_stream, normalize_indices(expr_annotations),
                 dialogue_count, context_duration, settings
             )
 

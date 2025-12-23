@@ -107,8 +107,9 @@ class LangFlixPipeline:
     """
     
     def __init__(self, subtitle_file: str, video_dir: str = "assets/media",
-                 output_dir: str = "output", language_code: str = "ko",
-                 source_language: str = "English",
+                 output_dir: str = "output", 
+                 language_code: Optional[str] = None,
+                 source_language: Optional[str] = None,
                  target_languages: Optional[List[str]] = None,
                  progress_callback: Optional[Callable[[int, str], None]] = None,
                  series_name: str = None, episode_name: str = None,
@@ -129,30 +130,54 @@ class LangFlixPipeline:
                 series_name = extracted_name
                 logging.info(f"Extracted show name from filename: {series_name}")
         
+        # Use utility functions for robust language name/code conversion
+        from langflix.utils.language_utils import language_code_to_name, language_name_to_code
+        
+        # 1. Handle Target Languages
+        self.target_languages = target_languages or []
+        if not self.target_languages and language_code:
+            self.target_languages = [language_code]
+            
+        if not self.target_languages:
+            raise ValueError("Target language is required (TICKET-VIDEO-002)")
+            
+        # Primary language code MUST match the first target language (TICKET-VIDEO-002)
+        self.language_code = self.target_languages[0]
+        
+        # 2. Handle Source Language
+        if not source_language:
+            raise ValueError("Source language is required (TICKET-VIDEO-002)")
+        
+        input_source_lang = source_language
+        
         # If still no series_name, fallback to config (legacy behavior)
         if not series_name:
             series_name = settings.get_show_name()
-            
-        self.language_code = language_code
 
+        # Update source language if subtitle file indicates otherwise
+        if input_source_lang == "English" and self.subtitle_file:
+            sub_name = self.subtitle_file.name.lower()
+            if 'korean' in sub_name or 'ko.' in sub_name:
+                input_source_lang = "Korean"
+            elif 'japanese' in sub_name or 'ja.' in sub_name:
+                input_source_lang = "Japanese"
+            elif 'spanish' in sub_name or 'es.' in sub_name:
+                input_source_lang = "Spanish"
+            elif 'french' in sub_name or 'fr.' in sub_name:
+                input_source_lang = "French"
+            elif 'german' in sub_name or 'de.' in sub_name:
+                input_source_lang = "German"
+            elif 'chinese' in sub_name or 'zh.' in sub_name:
+                input_source_lang = "Chinese"
+
+        self.source_language = input_source_lang
         # Normalize source_language: convert code to full name if needed
-        language_code_to_name = {
-            'ko': 'Korean', 'ja': 'Japanese', 'zh': 'Chinese', 'es': 'Spanish',
-            'fr': 'French', 'en': 'English', 'de': 'German', 'pt': 'Portuguese',
-            'ru': 'Russian', 'ar': 'Arabic', 'it': 'Italian', 'nl': 'Dutch',
-            'pl': 'Polish', 'th': 'Thai', 'vi': 'Vietnamese', 'tr': 'Turkish',
-            'sv': 'Swedish', 'fi': 'Finnish', 'da': 'Danish', 'no': 'Bokmal',
-            'cs': 'Czech', 'el': 'Greek', 'he': 'Hebrew', 'hu': 'Hungarian',
-            'id': 'Indonesian', 'ro': 'Romanian'
-        }
-        # If source_language is a code (2-3 chars), convert to full name
-        if source_language and len(source_language) <= 3 and source_language.lower() in language_code_to_name:
-            self.source_language = language_code_to_name[source_language.lower()]
-            logger.info(f"Converted source language code '{source_language}' to '{self.source_language}'")
-        else:
-            self.source_language = source_language
+        if len(self.source_language) <= 3:
+            self.source_language = language_code_to_name(self.source_language)
+            logger.info(f"Converted source language code to name: '{self.source_language}'")
+            
+        self.source_lang_code = language_name_to_code(self.source_language)
 
-        self.target_languages = target_languages or [language_code]
         self.profiler = profiler
         self.progress_callback = progress_callback
 
@@ -204,6 +229,10 @@ class LangFlixPipeline:
         
         if target_languages:
             self.target_languages = target_languages
+            # Update primary language code (TICKET-VIDEO-002)
+            if self.target_languages:
+                self.language_code = self.target_languages[0]
+                
             # Update paths for new languages
             output_manager = OutputManager(str(self.output_dir))
             for lang in self.target_languages:
@@ -233,7 +262,7 @@ class LangFlixPipeline:
                 max_expr = max_expressions or settings.get_max_total_expressions(test_mode=False)
 
             # Run analysis
-            self.expressions = self._run_analysis(language_level, max_expr, test_llm=test_llm, target_duration=target_duration)
+            self.expressions = self._run_analysis(language_level, max_expr, test_llm=test_llm, target_duration=target_duration, test_mode=test_mode)
 
             # Step 3: Format Translations
             # The Pipeline (_run_analysis) handles translation to ALL target languages in Phase 3.
@@ -251,60 +280,78 @@ class LangFlixPipeline:
             for expr_data in self.expressions:
                 # Base expression data (shared across languages)
                 base_data = expr_data.copy()
-                # Remove _localizations from the individual copies to avoid circular/bloated data
+
+                # Remove large fields to avoid bloat in per-language copies
                 if '_localizations' in base_data:
                     del base_data['_localizations']
-                
+                if 'dialogues' in base_data:
+                    # Keep dialogues in base but will extract per-language later
+                    pass
+
+                # NEW: Check for unified dialogues structure first
+                dialogues = expr_data.get('dialogues', {})
+                # OLD: Fallback to legacy localizations structure
                 localizations = expr_data.get('_localizations', {})
-                
+
                 for lang in self.target_languages:
-                    # Get localization for this language
-                    # Mapping: lang code -> lang name (Pipeline uses names/mixed)
-                    # For now, we trust the pipeline put the key as the language name or code
-                    # The pipeline uses whatever 'target_lang' was passed to it.
-                    # In _run_analysis, we passed FULL NAMES.
-                    
-                    # We need to find the matching key in localizations
-                    # Localizations keys are likely Full Names (e.g. "Spanish")
-                    # self.target_languages are codes (e.g. "es")
-                    
-                    # Helper to find data
-                    lang_data = None
-                    
-                    # Try code directly
-                    if lang in localizations:
-                        lang_data = localizations[lang]
-                    else:
-                        # Try name mapping
-                        from langflix.utils.language_utils import language_code_to_name
-                        lang_name = language_code_to_name(lang)
-                        if lang_name in localizations:
-                            lang_data = localizations[lang_name]
-                        # Try case-insensitive
-                        else:
-                            for loc_key, loc_val in localizations.items():
-                                if loc_key.lower() == lang.lower() or loc_key.lower() == lang_name.lower():
-                                    lang_data = loc_val
-                                    break
-                    
                     # Create language-specific expression object
                     lang_expr = base_data.copy()
+                    lang_expr['target_lang'] = lang
+                    lang_expr['source_lang'] = self.source_lang_code
+                    
+                    # 1. Get Localization Data if available (contains title, keywords, narration)
+                    lang_data = None
+                    if localizations:
+                        # Try code directly
+                        if lang in localizations:
+                            lang_data = localizations[lang]
+                        else:
+                            # Try name mapping
+                            from langflix.utils.language_utils import language_code_to_name
+                            lang_name = language_code_to_name(lang)
+                            if lang_name and lang_name in localizations:
+                                lang_data = localizations[lang_name]
+                            else:
+                                # Try case-insensitive
+                                for loc_key, loc_val in localizations.items():
+                                    if loc_key.lower() == lang.lower() or (lang_name and loc_key.lower() == lang_name.lower()):
+                                        lang_data = loc_val
+                                        break
                     
                     if lang_data:
-                        logger.info(f"DEBUG: Found data for {lang}: Title='{lang_data.get('viral_title')}', Annotations={len(lang_data.get('vocabulary_annotations', []))}")
-                        # Merge localization data
+                        logger.info(f"Merging localization data for {lang}: Title='{lang_data.get('viral_title')}'")
                         lang_expr.update(lang_data)
-                        
                         # Populate legacy fields for compatibility
                         lang_expr['expression_translation'] = lang_data.get('expression_translated', '')
                         lang_expr['translation'] = lang_data.get('expression_dialogue_translated', '')
-                    else:
-                        logger.warning(f"Missing localization for lang '{lang}' in expression: {expr_data.get('expression', 'Unknown')}")
-                        # Fallback: Just use English/Source? Or invalid?
-                        # Video generation might fail or show placeholders.
-                        pass
-                        
+
+                    # 2. Also incorporate unified dialogues for subtitle generation if present
+                    if dialogues and lang in dialogues:
+                        lang_dialogues = dialogues[lang]
+                        if lang_dialogues:
+                            # IMPORTANT: Preserve ALL languages in dialogues for SubtitleProcessor
+                            if 'dialogues' not in lang_expr or not isinstance(lang_expr['dialogues'], dict):
+                                lang_expr['dialogues'] = dialogues.copy()
+                            
+                            # If no specific dialogue translation found in lang_data, use the joined dialogues
+                            if not lang_expr.get('translation'):
+                                translated_dialogue = ' '.join([d.get('text', '') for d in lang_dialogues])
+                                lang_expr['translation'] = translated_dialogue
+                                logger.info(f"Using dialogues for {lang} translation: {translated_dialogue[:50]}...")
+
+                    # 3. Final validation
+                    if not lang_expr.get('translation') and not lang_expr.get('expression_translation'):
+                         raise ValueError(
+                            f"Translation failed for language '{lang}' - expression: {expr_data.get('expression', 'Unknown')}. "
+                            f"No dialogues or localizations found."
+                        )
+                    
                     self.translated_expressions[lang].append(lang_expr)
+            
+            # Verify all translations populated successfully
+            for lang in self.target_languages:
+                if lang not in self.translated_expressions or not self.translated_expressions[lang]:
+                    raise ValueError(f"No translations found for language '{lang}'. Cannot create videos without translations.")
             
             logger.info(f"Populated translations for: {list(self.translated_expressions.keys())}")
 
@@ -718,6 +765,56 @@ class LangFlixPipeline:
                     if temp_files:
                         logger.info(f"Cleaned up {len(temp_files)} temp files from {dir_path}")
 
+    def _save_llm_debug_files(self, target_lang_names: List[str]) -> None:
+        """
+        Copy latest LLM debug files to output directory structure.
+        
+        Saves:
+        - Expression analyst response -> output/{series}/{episode}/llm_responses/
+        - Translation response per lang -> output/{series}/{episode}/{lang}/llm_responses/
+        """
+        import shutil
+        import glob
+        
+        debug_dir = Path("langflix/pipeline/artifacts/debug")
+        if not debug_dir.exists():
+            logger.warning("Debug directory not found, skipping LLM response saving")
+            return
+        
+        try:
+            # 1. Save expression analyst responses to episode level
+            episode_llm_dir = self.output_dir / "llm_responses"
+            episode_llm_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Find latest script_agent files
+            script_prompts = sorted(glob.glob(str(debug_dir / "script_agent_prompt_*.txt")), reverse=True)
+            script_responses = sorted(glob.glob(str(debug_dir / "script_agent_response_*.txt")), reverse=True)
+            
+            if script_prompts:
+                shutil.copy(script_prompts[0], episode_llm_dir / "expression_analyst_prompt.txt")
+                logger.info(f"💾 Saved expression analyst prompt to {episode_llm_dir}")
+            if script_responses:
+                shutil.copy(script_responses[0], episode_llm_dir / "expression_analyst_response.txt")
+                logger.info(f"💾 Saved expression analyst response to {episode_llm_dir}")
+            
+            # 2. Save translation responses to language-specific directories
+            translator_prompts = sorted(glob.glob(str(debug_dir / "translator_prompt_*.txt")), reverse=True)
+            translator_responses = sorted(glob.glob(str(debug_dir / "translator_response_*.txt")), reverse=True)
+            
+            for lang_name in target_lang_names:
+                lang_code = settings.language_name_to_code(lang_name) or lang_name.lower()[:2]
+                lang_llm_dir = self.output_dir / lang_code / "llm_responses"
+                lang_llm_dir.mkdir(parents=True, exist_ok=True)
+                
+                if translator_prompts:
+                    shutil.copy(translator_prompts[0], lang_llm_dir / "translator_prompt.txt")
+                if translator_responses:
+                    shutil.copy(translator_responses[0], lang_llm_dir / "translator_response.txt")
+                    logger.info(f"💾 Saved translator response to {lang_llm_dir}")
+                    
+        except Exception as e:
+            logger.warning(f"Failed to save LLM debug files: {e}")
+
     def _run_dual_subtitle_analysis(self, language_level: str = None, max_expressions: int = None, test_llm: bool = False) -> List[Dict[str, Any]]:
         """
         Dual-Subtitle Analysis: Use dual-language subtitles from Netflix.
@@ -882,7 +979,140 @@ class LangFlixPipeline:
             logger.error(f"Traceback:\n{traceback.format_exc()}")
             return []
 
-    def _run_analysis(self, language_level: str = None, max_expressions: int = None, test_llm: bool = False, target_duration: float = 120.0) -> List[Dict[str, Any]]:
+    def _run_analysis_single_subtitle(self, language_level: str = None, max_expressions: int = None, test_mode: bool = False, test_llm: bool = False, target_duration: int = None) -> List[Dict]:
+        """
+        Run pipeline with single subtitle file (legacy/API upload workflow).
+        Uses source subtitles for both source and target - LLM will translate in its response.
+        """
+        from langflix.core.subtitle_parser import parse_subtitle_file_by_extension as parse_subtitle_file
+
+        logger.info("Using single-subtitle workflow (LLM will translate dialogues)")
+
+        # Parse source subtitle
+        self._update_progress(15, "Parsing source subtitle...")
+        source_subtitles = parse_subtitle_file(str(self.subtitle_file))
+
+        if not source_subtitles:
+            raise ValueError(f"Failed to parse subtitle file: {self.subtitle_file}")
+
+        logger.info(f"Parsed {len(source_subtitles)} source subtitles")
+
+        # Use source subtitles for both source and target
+        # The LLM will translate the target dialogues in its response
+        self._update_progress(30, "Preparing dialogues for LLM...")
+        target_subtitles = source_subtitles  # LLM will translate these
+
+        logger.info("LLM will translate dialogues to target language in response")
+
+        # Proceed with dual-subtitle pipeline (source used for both)
+        return self._run_dual_subtitle_pipeline(
+            source_subtitles=source_subtitles,
+            target_subtitles=target_subtitles,
+            language_level=language_level,
+            max_expressions=max_expressions,
+            test_mode=test_mode,
+            test_llm=test_llm,
+            target_duration=target_duration
+        )
+
+    def _run_dual_subtitle_pipeline(self, source_subtitles: List[Dict], target_subtitles: List[Dict], language_level: str = None, max_expressions: int = None, test_mode: bool = False, test_llm: bool = False, target_duration: int = None) -> List[Dict]:
+        """
+        Core pipeline logic for analyzing with both source and target subtitles.
+        Shared between folder-based and single-file workflows.
+        """
+        from langflix.pipeline.orchestrator import Pipeline
+        from langflix.pipeline.models import PipelineConfig
+
+        self._update_progress(45, "Creating subtitle chunks...")
+
+        # Create chunks - same logic as in dual-folder workflow
+        MAX_SUBTITLES_PER_CHUNK = 200
+        chunk_size = settings.get_llm_config().get('max_input_length', 0)
+
+        if chunk_size == 0:
+            num_chunks = (len(source_subtitles) + MAX_SUBTITLES_PER_CHUNK - 1) // MAX_SUBTITLES_PER_CHUNK
+            chunks = []
+            target_chunks = []
+
+            for i in range(num_chunks):
+                start_idx = i * MAX_SUBTITLES_PER_CHUNK
+                end_idx = min((i + 1) * MAX_SUBTITLES_PER_CHUNK, len(source_subtitles))
+                chunk_subs = source_subtitles[start_idx:end_idx]
+                target_chunk_subs = target_subtitles[start_idx:end_idx]
+
+                chunks.append({
+                    'chunk_id': i + 1,
+                    'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(chunk_subs)]),
+                    'start_time': chunk_subs[0]['start_time'] if chunk_subs else '00:00:00,000',
+                    'end_time': chunk_subs[-1]['end_time'] if chunk_subs else '00:00:00,000',
+                    'subtitles': chunk_subs,
+                })
+                target_chunks.append({
+                    'chunk_id': i + 1,
+                    'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(target_chunk_subs)]),
+                    'start_time': target_chunk_subs[0]['start_time'] if target_chunk_subs else '00:00:00,000',
+                    'end_time': target_chunk_subs[-1]['end_time'] if target_chunk_subs else '00:00:00,000',
+                    'subtitles': target_chunk_subs,
+                })
+            logger.info(f"Created {len(chunks)} chunks")
+        else:
+            chunks = [{'chunk_id': 1, 'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(source_subtitles)]), 'start_time': source_subtitles[0]['start_time'] if source_subtitles else '00:00:00,000', 'end_time': source_subtitles[-1]['end_time'] if source_subtitles else '00:00:00,000', 'subtitles': source_subtitles}]
+            target_chunks = [{'chunk_id': 1, 'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(target_subtitles)]), 'start_time': target_subtitles[0]['start_time'] if target_subtitles else '00:00:00,000', 'end_time': target_subtitles[-1]['end_time'] if target_subtitles else '00:00:00,000', 'subtitles': target_subtitles}]
+
+        if test_mode or settings.is_test_mode_enabled() or (max_expressions is not None and max_expressions <= 5):
+            logger.info("TEST MODE: Limiting to 1 chunk only")
+            chunks = chunks[:1]
+            target_chunks = target_chunks[:1]
+
+        # Run pipeline
+        self._update_progress(55, "Initializing pipeline...")
+        
+        from langflix.utils.language_utils import language_code_to_name
+        target_lang_names = [language_code_to_name(code) for code in self.target_languages]
+        
+        config = PipelineConfig(
+            show_name=self.series_name, 
+            episode_name=self.episode_name, 
+            source_language=self.source_language,
+            target_languages=target_lang_names,  # Use full names (TICKET-VIDEO-002)
+            use_wikipedia=settings.get_use_wikipedia(), 
+            cache_show_bible=not settings.get_force_refresh_bible(),
+            output_dir=str(self.paths.get('episode', {}).get('path', self.output_dir))
+        )
+        pipeline = Pipeline(config)
+
+        try:
+            self._update_progress(60, "Analyzing expressions...")
+            expressions_per_chunk = settings.get_test_mode_max_expressions_per_chunk() if test_mode else settings.get_max_expressions_per_chunk()
+            episode_data = pipeline.run(subtitle_chunks=chunks, target_subtitle_chunks=target_chunks, language_level=language_level or "intermediate", max_expressions_per_chunk=expressions_per_chunk, max_total_expressions=max_expressions)
+
+            self._update_progress(80, "Converting results...")
+            translation_results = pipeline.translate_episode(episode_data)
+
+            expressions = []
+            for result in translation_results:
+                # Convert Result to dict and add _localizations for main.py run logic
+                expr_dict = result.model_dump()
+                
+                # Add timings with legacy keys if needed
+                expr_dict['context_start_time'] = result.start_time
+                expr_dict['context_end_time'] = result.end_time
+                
+                # Format localizations for legacy run loop
+                localizations_dict = {}
+                for loc in result.localizations:
+                    localizations_dict[loc.target_lang] = loc.model_dump()
+                
+                expr_dict['_localizations'] = localizations_dict
+                expressions.append(expr_dict)
+
+            logger.info(f"✅ Pipeline complete: {len(expressions)} expressions extracted")
+            return expressions
+        except Exception as e:
+            logger.error(f"Pipeline failed: {e}")
+            raise
+
+    def _run_analysis(self, language_level: str = None, max_expressions: int = None, test_llm: bool = False, target_duration: float = 120.0, test_mode: bool = False) -> List[Dict[str, Any]]:
         """
         Run contextual localization pipeline.
 
@@ -901,111 +1131,180 @@ class LangFlixPipeline:
         from langflix.utils.language_utils import language_name_to_code
         from langflix.core.subtitle_parser import parse_subtitle_file_by_extension as parse_subtitle_file
 
-        self._update_progress(10, "Loading source subtitle...")
+        self._update_progress(10, "Loading source and target subtitles...")
 
-        # Pipeline only needs ONE subtitle file (source language)
-        # Try to find source subtitle
-        if not self.subtitle_file or not self.subtitle_file.exists():
-            # Try to discover from Subs folder
-            from langflix.utils.path_utils import get_subtitle_folder, discover_subtitle_languages
-            media_path = self.video_file if self.video_file else self.video_dir
-            subtitle_folder = get_subtitle_folder(media_path)
+        # Check if we have a direct subtitle file (API upload workflow)
+        # or need to discover subtitle folder (dual-language workflow)
+        if self.subtitle_file and self.subtitle_file.exists():
+            # Legacy workflow: Single subtitle file provided
+            logger.info(f"Using provided subtitle file: {self.subtitle_file}")
+            # For single file, we'll generate synthetic target subtitles or use translation
+            # This maintains backward compatibility with API uploads
+            return self._run_analysis_single_subtitle(
+                language_level=language_level,
+                max_expressions=max_expressions,
+                test_mode=test_mode,
+                test_llm=test_llm,
+                target_duration=target_duration
+            )
 
-            if subtitle_folder:
-                languages = discover_subtitle_languages(subtitle_folder)
-                if self.source_language in languages:
-                    # Found source subtitle
-                    source_sub_info = languages[self.source_language]
-                    self.subtitle_file = Path(source_sub_info['path'])
-                    logger.info(f"Found source subtitle: {self.subtitle_file}")
-                else:
-                    error_msg = f"Source language '{self.source_language}' subtitle not found in {subtitle_folder}"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-            else:
-                error_msg = f"No subtitle folder found for: {media_path}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+        # New workflow: Discover subtitle folder with both source and target
+        from langflix.utils.path_utils import get_subtitle_folder, discover_subtitle_languages
+        media_path = self.video_file if self.video_file else self.video_dir
+        subtitle_folder = get_subtitle_folder(media_path)
 
-        # Parse subtitle into chunks
-        self._update_progress(20, "Parsing subtitle...")
-        subtitles = parse_subtitle_file(str(self.subtitle_file))
-        if subtitles:
-            logger.info(f"DEBUG: First parsed subtitle (raw): {subtitles[0]}")
-            logger.info(f"DEBUG: Last parsed subtitle (raw): {subtitles[-1]}")
+        if not subtitle_folder:
+            error_msg = f"No subtitle folder found for: {media_path}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        # Create chunks from subtitles
-        # For Pipeline, limit subtitles per chunk to avoid LLM truncation
-        MAX_SUBTITLES_PER_CHUNK = 100  # ~3-5 minutes of dialogue
-        chunk_size = settings.get_llm_config().get('max_input_length', 0)
+        languages = discover_subtitle_languages(subtitle_folder)
+
+        # Load source subtitle
+        if self.source_language not in languages:
+            error_msg = f"Source language '{self.source_language}' subtitle not found in {subtitle_folder}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        source_sub_info = languages[self.source_language]
+        source_subtitle_file = Path(source_sub_info['path'])
+        logger.info(f"Found source subtitle: {source_subtitle_file}")
+
+        # Load target subtitle
+        # Determine target language from self.language_code or first target language
+        from langflix.utils.language_utils import language_code_to_name, language_name_to_code
         
+        target_language = language_code_to_name(self.language_code)
+
+        if not target_language or target_language not in languages:
+            error_msg = f"Target language '{target_language}' (code: {self.language_code}) subtitle not found in {subtitle_folder}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        target_sub_info = languages[target_language]
+        target_subtitle_file = Path(target_sub_info['path'])
+        logger.info(f"Found target subtitle: {target_subtitle_file}")
+
+        # Parse both subtitles into chunks
+        self._update_progress(20, "Parsing subtitles...")
+        source_subtitles = parse_subtitle_file(str(source_subtitle_file))
+        target_subtitles = parse_subtitle_file(str(target_subtitle_file))
+
+        if source_subtitles:
+            logger.info(f"DEBUG: First source subtitle (raw): {source_subtitles[0]}")
+            logger.info(f"DEBUG: Last source subtitle (raw): {source_subtitles[-1]}")
+
+        if target_subtitles:
+            logger.info(f"DEBUG: First target subtitle (raw): {target_subtitles[0]}")
+            logger.info(f"DEBUG: Last target subtitle (raw): {target_subtitles[-1]}")
+
+        # Create chunks from both source and target subtitles
+        # For Pipeline, limit subtitles per chunk to avoid LLM truncation
+        MAX_SUBTITLES_PER_CHUNK = 200
+        chunk_size = settings.get_llm_config().get('max_input_length', 0)
+
         if chunk_size == 0:
-            # Split subtitles into manageable chunks
-            subtitle_chunks = []
-            for i in range(0, len(subtitles), MAX_SUBTITLES_PER_CHUNK):
-                chunk_subtitles = subtitles[i:i + MAX_SUBTITLES_PER_CHUNK]
-                subtitle_chunks.append(chunk_subtitles)
-            
+            # Split subtitles into manageable chunks (both source and target)
+            num_chunks = (len(source_subtitles) + MAX_SUBTITLES_PER_CHUNK - 1) // MAX_SUBTITLES_PER_CHUNK
+
             chunks = []
-            for idx, chunk_subs in enumerate(subtitle_chunks, 1):
+            target_chunks = []
+
+            for i in range(num_chunks):
+                start_idx = i * MAX_SUBTITLES_PER_CHUNK
+                end_idx = min((i + 1) * MAX_SUBTITLES_PER_CHUNK, len(source_subtitles))
+
+                chunk_subs = source_subtitles[start_idx:end_idx]
+                target_chunk_subs = target_subtitles[start_idx:end_idx]
+
+                # Format with indices AND timestamps for LLM to reference and copy
                 chunks.append({
-                    'chunk_id': idx,
-                    'script': '\n'.join([f"[{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for sub in chunk_subs]),
+                    'chunk_id': i + 1,
+                    'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(chunk_subs)]),
                     'start_time': chunk_subs[0]['start_time'] if chunk_subs else '00:00:00,000',
                     'end_time': chunk_subs[-1]['end_time'] if chunk_subs else '00:00:00,000',
+                    'subtitles': chunk_subs,  # Keep subtitle entries for timestamp lookup
                 })
-            
-            logger.info(f"Created {len(chunks)} chunks from {len(subtitles)} subtitles (max {MAX_SUBTITLES_PER_CHUNK} per chunk)")
+
+                target_chunks.append({
+                    'chunk_id': i + 1,
+                    'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(target_chunk_subs)]),
+                    'start_time': target_chunk_subs[0]['start_time'] if target_chunk_subs else '00:00:00,000',
+                    'end_time': target_chunk_subs[-1]['end_time'] if target_chunk_subs else '00:00:00,000',
+                    'subtitles': target_chunk_subs,  # Keep subtitle entries for timestamp lookup
+                })
+
+            logger.info(f"Created {len(chunks)} source and {len(target_chunks)} target chunks from {len(source_subtitles)} subtitles (max {MAX_SUBTITLES_PER_CHUNK} per chunk)")
         else:
             # Chunked mode based on character length (legacy)
             chunks = [{
                 'chunk_id': 1,
-                'script': '\n'.join([f"[{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for sub in subtitles]),
-                'start_time': subtitles[0]['start_time'] if subtitles else '00:00:00,000',
-                'end_time': subtitles[-1]['end_time'] if subtitles else '00:00:00,000',
+                'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(source_subtitles)]),
+                'start_time': source_subtitles[0]['start_time'] if source_subtitles else '00:00:00,000',
+                'end_time': source_subtitles[-1]['end_time'] if source_subtitles else '00:00:00,000',
+                'subtitles': source_subtitles,
+            }]
+            target_chunks = [{
+                'chunk_id': 1,
+                'script': '\n'.join([f"[{idx}] [{sub['start_time']} --> {sub['end_time']}] {sub['text']}" for idx, sub in enumerate(target_subtitles)]),
+                'start_time': target_subtitles[0]['start_time'] if target_subtitles else '00:00:00,000',
+                'end_time': target_subtitles[-1]['end_time'] if target_subtitles else '00:00:00,000',
+                'subtitles': target_subtitles,
             }]
 
+        # If test mode, strictly limit to 1 chunk
+        if test_mode or settings.is_test_mode_enabled() or (max_expressions is not None and max_expressions <= 5):
+             logger.info("TEST MODE: Limiting to 1 chunk only")
+             chunks = chunks[:1]
+             target_chunks = target_chunks[:1]
 
         # Create Pipeline Config
         self._update_progress(30, "Initializing pipeline...")
 
-        # Convert target language codes to full names
-        language_code_to_name = {
-            'ko': 'Korean', 'ja': 'Japanese', 'zh': 'Chinese', 'es': 'Spanish',
-            'fr': 'French', 'en': 'English', 'de': 'German', 'pt': 'Portuguese',
-            'ru': 'Russian', 'it': 'Italian'
-        }
+        from langflix.utils.language_utils import language_code_to_name
         target_lang_names = [
-            language_code_to_name.get(code, code.capitalize())
+            language_code_to_name(code)
             for code in self.target_languages
         ]
 
         config = PipelineConfig(
             show_name=self.series_name,
             episode_name=self.episode_name,
+            source_language=self.source_language,
             target_languages=target_lang_names,
             use_wikipedia=settings.get_use_wikipedia(),
             cache_show_bible=not settings.get_force_refresh_bible(),
-            aggregator_model=settings.get_aggregator_model(),
-            translator_model=settings.get_translator_model()
+            output_dir=str(self.paths.get('episode', {}).get('path', self.output_dir))
         )
 
         # Run Pipeline
         pipeline = Pipeline(config)
 
         try:
-            # Phase 1-2: Extract + Summarize
-            self._update_progress(40, "Analyzing expressions + Creating summaries...")
+            # Phase 1: Extract + Translate
+            self._update_progress(40, "Analyzing expressions and translating dialogues...")
+            
+            # Use test mode limits if test_mode parameter is True (not just config)
+            expressions_per_chunk = (
+                settings.get_test_mode_max_expressions_per_chunk() 
+                if test_mode else 
+                settings.get_max_expressions_per_chunk()
+            )
+            
             episode_data = pipeline.run(
                 subtitle_chunks=chunks,
+                target_subtitle_chunks=target_chunks,
                 language_level=language_level or "intermediate",
-                max_expressions_per_chunk=max_expressions or 50,
+                max_expressions_per_chunk=expressions_per_chunk,
                 max_total_expressions=max_expressions
             )
 
-            # Phase 3: Translate
-            self._update_progress(60, f"Translating to {len(target_lang_names)} languages...")
+            # Phase 2: Convert to TranslationResult format
+            self._update_progress(60, "Converting results...")
             translation_results = pipeline.translate_episode(episode_data)
+
+            # Save debug files to output directory
+            self._save_llm_debug_files(target_lang_names)
 
             # Convert results to expression format
             self._update_progress(80, "Converting results...")
@@ -1032,15 +1331,9 @@ class LangFlixPipeline:
                     'episode_summary': result.episode_summary,
                 }
 
-                # Define language map for code-to-name conversion
-                language_code_to_name = {
-                    'ko': 'Korean', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
-                    'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'ja': 'Japanese',
-                    'zh': 'Chinese', 'hi': 'Hindi', 'ar': 'Arabic', 'nl': 'Dutch',
-                    'pl': 'Polish', 'th': 'Thai', 'vi': 'Vietnamese', 'tr': 'Turkish',
-                    'sv': 'Swedish', 'fi': 'Finnish', 'da': 'Danish', 'no': 'Bokmal'
-                }
-                target_lang_name = language_code_to_name.get(self.language_code, self.language_code.capitalize())
+                # Define target language name for matching (uses utility)
+                from langflix.utils.language_utils import language_code_to_name
+                target_lang_name = language_code_to_name(self.language_code)
 
                 # Add translations from localization data
                 for loc in result.localizations:
@@ -1054,9 +1347,11 @@ class LangFlixPipeline:
                         expr['expression_dialogue_translated'] = loc.expression_dialogue_translated
                         expr['catchy_keywords_translated'] = loc.catchy_keywords_translated
                         
-                        # Add aliases for backward compatibility with SubtitleProcessor
+                        # Add aliases for backward compatibility with SubtitleProcessor and VideoEditor
                         expr['expression_translation'] = loc.expression_translated
-                        expr['translation'] = loc.dialogue_translations
+                        expr['expression_dialogue_translation'] = loc.expression_dialogue_translated
+                        expr['context_translation'] = loc.expression_dialogue_translated
+                        expr['translation'] = loc.expression_dialogue_translated
                         expr['cultural_notes'] = getattr(loc, 'cultural_notes', '')
 
                         # Map overlay fields
@@ -1071,6 +1366,7 @@ class LangFlixPipeline:
                     expr['_localizations'][loc.target_lang] = {
                         'expression_translated': loc.expression_translated,
                         'expression_dialogue_translated': loc.expression_dialogue_translated,
+                        'expression_dialogue_translation': loc.expression_dialogue_translated,  # Alias
                         'catchy_keywords_translated': loc.catchy_keywords_translated,
                         'viral_title': getattr(loc, 'viral_title', ''),
                         'narrations': getattr(loc, 'narrations', []),

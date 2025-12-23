@@ -263,11 +263,12 @@ class VideoEditor:
             expression_start_seconds = padded_start
             expression_end_seconds = padded_end
             
+            # Validate expression is within context bounds (should be guaranteed by script_agent validation)
             if expression_start_seconds < context_start_seconds:
-                # If padding pushes it before context (which shouldn't happen for extraction from source, 
-                # but might be relevant if we relied on context clip boundaries), just log it.
-                # Since we extract from source, we are fine unless it's < 0 (handled by max(0)).
-                pass
+                raise ValueError(
+                    f"Expression start ({expression_start_seconds:.2f}s) is before context start ({context_start_seconds:.2f}s). "
+                    f"This indicates invalid data from LLM - expression_dialogue_index must be within context bounds."
+                )
             
             relative_start = expression_start_seconds - context_start_seconds
             relative_end = expression_end_seconds - context_start_seconds
@@ -604,6 +605,16 @@ class VideoEditor:
             # get_duration_seconds is already imported at module level (line 16)
             context_expr_duration = get_duration_seconds(str(context_expr_path))
             logger.info(f"Context + expression duration: {context_expr_duration:.2f}s")
+            
+            # Store for downstream services (TICKET-VIDEO-001)
+            try:
+                # Add to expression object so ShortFormCreator can access it
+                if isinstance(expression, dict):
+                    expression['educational_slide_start_time'] = context_expr_duration
+                else:
+                    setattr(expression, 'educational_slide_start_time', context_expr_duration)
+            except Exception:
+                pass
             
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
@@ -1450,8 +1461,9 @@ class VideoEditor:
                 
                 # 2. Expression (key phrase) - Uses SOURCE font
                 if expression_text and isinstance(expression_text, str) and settings.show_expression_highlight():
+                    expression_escaped = escape_drawtext_string(expression_text)
                     drawtext_filters.append(
-                        f"drawtext=text='{expression_text}':fontsize={expr_font_size}:fontcolor=yellow:"
+                        f"drawtext=text='{expression_escaped}':fontsize={expr_font_size}:fontcolor=yellow:"
                         f"{source_font_option}"
                         f"x=(w-text_w)/2:y=h/2{expr_y}:"
                         f"borderw=3:bordercolor=black"
@@ -1470,8 +1482,9 @@ class VideoEditor:
                 
                 # 4. Expression translation (key phrase) - Uses TARGET font
                 if translation_text and isinstance(translation_text, str) and settings.show_translation_highlight():
+                    translation_escaped = escape_drawtext_string(translation_text)
                     drawtext_filters.append(
-                        f"drawtext=text='{translation_text}':fontsize={trans_font_size}:fontcolor=yellow:"
+                        f"drawtext=text='{translation_escaped}':fontsize={trans_font_size}:fontcolor=yellow:"
                         f"{target_font_option}"
                         f"x=(w-text_w)/2:y=h/2+{trans_y}:"
                         f"borderw=3:bordercolor=black"

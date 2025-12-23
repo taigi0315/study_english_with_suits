@@ -102,7 +102,6 @@ class AggregatorAgent:
             "temperature": 0.3,  # Lower temperature for more focused summarization
             "top_p": 0.8,
             "top_k": 40,
-            "max_output_tokens": 2048,  # Enough for 200-400 word summary
         }
 
         # self.client is already a GenerativeModel from get_gemini_client()

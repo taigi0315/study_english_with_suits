@@ -22,7 +22,7 @@ class VideoPipelineService:
     - Standardized result format
     """
     
-    def __init__(self, language_code: str, output_dir: str = "output", source_language: str = "English", target_languages: Optional[List[str]] = None):
+    def __init__(self, language_code: str, source_language: str, output_dir: str = "output", target_languages: Optional[List[str]] = None):
         """
         Initialize the video pipeline service
 

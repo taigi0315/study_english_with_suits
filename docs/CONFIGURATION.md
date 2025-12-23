@@ -134,4 +134,4 @@ If dual-language mode is enabled but no dual subtitles are found, the system fal
 ## Related Documents
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - How dual-language mode works
-- [archive/v1/CONFIGURATION.md](./archive/v1/CONFIGURATION.md) - Legacy configuration reference
+- [archive/v1/CONFIGURATION.md](./archive/v1/CONFIGURATION.md) - Historical configuration reference

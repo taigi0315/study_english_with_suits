@@ -70,6 +70,7 @@ class PipelineRunner:
                 video_dir=os.path.dirname(job.video_path),  # Directory containing the video
                 output_dir=output_dir,
                 language_code=job.language_code,
+                source_language="English",  # Default source for runner jobs
                 progress_callback=update_progress  # Pass progress callback to pipeline
             )
             

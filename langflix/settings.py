@@ -135,6 +135,74 @@ def get_default_target_language() -> str:
     return get_subtitles_config().get('default_target_language', 'Korean')
 
 
+# Shared language name to code mapping (single source of truth)
+LANGUAGE_NAME_TO_CODE = {
+    'English': 'en',
+    'Korean': 'ko',
+    'Japanese': 'ja',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Chinese': 'zh',
+    'Italian': 'it',
+    'Portuguese': 'pt',
+    'Russian': 'ru',
+    'Hindi': 'hi',
+    'Arabic': 'ar',
+    'Dutch': 'nl',
+    'Polish': 'pl',
+    'Thai': 'th',
+    'Vietnamese': 'vi',
+    'Turkish': 'tr',
+    'Swedish': 'sv',
+    'Finnish': 'fi',
+    'Danish': 'da',
+    'Norwegian': 'no',
+}
+
+
+def language_name_to_code(lang_name: str) -> Optional[str]:
+    """
+    Convert language name to ISO 639-1 code.
+    
+    Args:
+        lang_name: Language name (e.g., 'Korean', 'English')
+        
+    Returns:
+        ISO 639-1 code (e.g., 'ko', 'en') or None if not found
+    """
+    return LANGUAGE_NAME_TO_CODE.get(lang_name)
+
+
+def get_source_language_code() -> str:
+    """Get source language code (e.g., 'en' for English)"""
+    lang_name = get_default_source_language()
+    return language_name_to_code(lang_name) or 'en'
+
+
+def get_target_language_code() -> str:
+    """Get target language code (e.g., 'ko' for Korean)"""
+    lang_name = get_default_target_language()
+    return language_name_to_code(lang_name) or 'ko'
+
+
+# Reverse mapping: code to name (generated from LANGUAGE_NAME_TO_CODE)
+LANGUAGE_CODE_TO_NAME = {v: k for k, v in LANGUAGE_NAME_TO_CODE.items()}
+
+
+def language_code_to_name(lang_code: str) -> Optional[str]:
+    """
+    Convert ISO 639-1 code to language name.
+    
+    Args:
+        lang_code: ISO 639-1 code (e.g., 'ko', 'en')
+        
+    Returns:
+        Language name (e.g., 'Korean', 'English') or None if not found
+    """
+    return LANGUAGE_CODE_TO_NAME.get(lang_code)
+
+
 def get_subtitle_pattern() -> str:
     """Get subtitle filename pattern"""
     return get_subtitles_config().get('subtitle_pattern', '{index}_{Language}.srt')
@@ -1030,8 +1098,8 @@ def get_viral_title_display_duration() -> float:
 
 
 def get_viral_title_chars_per_line() -> int:
-    """Get max characters per line for title before wrapping (default: 25)"""
-    return get_viral_title_config().get('chars_per_line', 25)
+    """Get viral title max chars per line (default: 28 for portrait)"""
+    return get_viral_title_config().get('chars_per_line', 28)
 
 
 # ============================================================================

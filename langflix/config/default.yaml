@@ -135,9 +135,9 @@ processing:
     max_total_expressions: 1          # Total expressions limit for entire video
   
   # Normal mode expression limits (when test_mode.enabled is false)
-  min_expressions_per_chunk: 5
-  max_expressions_per_chunk: 50        # Up to 6 expressions per chunk in production (V1 mode)
-  max_total_expressions: 50           # Dual-subtitle mode: Max expressions for entire video
+  min_expressions_per_chunk: 1
+  max_expressions_per_chunk: 5
+  max_total_expressions: 15         
 
 # ============================================================================
 # Language Proficiency Levels
@@ -343,7 +343,7 @@ short_video:
     keywords:
       font_size: 35
       newline: 200
-      y_position: 210            # Adjusted for smaller padding (was 250)
+      y_position: 1750            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -362,7 +362,7 @@ short_video:
     # Expression translation (bottom padding area)
     translation:
       font_size: 50
-      y_position: 1680           # Adjusted for new layout
+      y_position: 1685           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
       chars_per_line: 40         # Max characters per line before wrapping
       text_color: 'yellow'
@@ -373,7 +373,7 @@ short_video:
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
       font_size: 24
-      newline: 60
+      newline: 55
       margin_v: 90
       text_color: 'white'
       outline_width: 1
@@ -411,8 +411,8 @@ short_video:
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
       font_size: 75                # Large font for emphasis
-      y_position: 25               # Below logo, above keywords
-      chars_per_line: 25           # Max characters per line before wrapping
+      y_position: 30               # Below logo, above keywords
+      chars_per_line: 20           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -420,9 +420,9 @@ short_video:
 
     # Narrations (commentary overlays in target language)
     narrations:
-      font_size: 55                # Medium size
-      y_position: 320              # Upper-middle area (below video top padding)
-      chars_per_line: 40           # Max characters per line before wrapping
+      font_size: 53                # Medium size
+      y_position: 315              # Upper-middle area (below video top padding)
+      chars_per_line: 38           # Max characters per line before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent
@@ -453,8 +453,8 @@ short_video:
       font: "1HoonGrimdonghwa Regular/1HoonGrimdonghwa Regular.ttf"
       
       # Show/hide elements (set to false to disable)
-      show_expression_highlight: false      # Yellow expression line (disabled - duplicate)
-      show_translation_highlight: false     # Yellow translation line (disabled - duplicate)
+      show_expression_highlight: true       # Yellow expression line (enabled)
+      show_translation_highlight: true      # Yellow translation line (enabled)
       
       # Font sizes for slide elements
       font_sizes:
@@ -466,12 +466,12 @@ short_video:
 
       # Positioning (Y offsets from center)
       positions:
-        expression_dialogue_y: -180  # Distance above center (moved down)
-        expression_y: -150           # Expression (highlighted)
-        expression_dialogue_trans_y: 40  # At center (moved down slightly)
-        expression_translation_y: 70  # Below center
-        similar_base_offset: 180     # Distance from bottom (lower = moved down from 250)
-        similar_line_spacing: 42     # Space between similar expressions
+        expression_dialogue_y: -300   # Distance above center (moved up)
+        expression_y: -150            # Expression (highlighted)
+        expression_dialogue_trans_y: 50   # Below center
+        expression_translation_y: 200  # Below dialogue translation
+        similar_base_offset: 350      # Distinctly below translation
+        similar_line_spacing: 50      # Space between similar expressions
       
       # Line breaking for long text (max words before adding newline)
       line_breaking:

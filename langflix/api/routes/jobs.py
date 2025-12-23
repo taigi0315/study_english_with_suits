@@ -48,7 +48,7 @@ async def process_video_task(
     video_filename: str,
     subtitle_filename: str,
     language_code: str,
-    source_language: str = "English",
+    source_language: str,
     show_name: str = "",
     episode_name: str = "",
     max_expressions: int = 10,
@@ -407,7 +407,7 @@ async def create_job(
     target_duration: float = Form(120.0),
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
-    source_language: Optional[str] = Form(None),  # Explicit source language code
+    source_language: str = Form(...),  # Required explicit source language code (TICKET-VIDEO-002)
     create_long_form: bool = Form(True),
     create_short_form: bool = Form(True),
     auto_upload_config: Optional[str] = Form(None), # JSON string
@@ -501,7 +501,7 @@ async def create_job(
             "video_size": str(video_size),
             "subtitle_size": str(subtitle_temp_path.stat().st_size if subtitle_temp_path else 0),
             "language_code": language_code,
-            "source_language": source_language or language_code,  # Source language for video
+            "source_language": source_language,  # Source language for video
             "show_name": show_name,
             "episode_name": episode_name,
             "max_expressions": str(max_expressions),
@@ -529,7 +529,7 @@ async def create_job(
             video_filename=video_file.filename,
             subtitle_filename=subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
             language_code=language_code,
-            source_language=source_language or "English",
+            source_language=source_language,
             show_name=show_name,
             episode_name=episode_name,
             max_expressions=max_expressions,

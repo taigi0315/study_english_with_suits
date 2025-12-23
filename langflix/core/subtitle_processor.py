@@ -479,16 +479,41 @@ class SubtitleProcessor:
         # Get context start time to adjust all subtitle timestamps
         context_start_time = self._time_to_timedelta(get_expr_attr(expression, 'context_start_time'))
         
+        # Get dialogues and translations (handle both list and dict)
+        dialogues_data = get_expr_attr(expression, 'dialogues', [])
+        
+        # Prepare lists for mapping
+        source_dialogues = []
+        translations = []
+        
+        if isinstance(dialogues_data, dict):
+            # Determine target language from expression or first non-english key
+            target_lang = get_expr_attr(expression, 'target_lang')
+            if not target_lang or target_lang not in dialogues_data:
+                target_lang = next((k for k in dialogues_data.keys() if k != 'en'), 'ko')
+            
+            # Source is usually 'en'
+            source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+            
+            target_entries = dialogues_data.get(target_lang, [])
+            source_entries = dialogues_data.get(source_lang, [])
+            
+            # Extract just the text for the mapping logic
+            source_dialogues = [d.get('text', '') for d in source_entries]
+            translations = [d.get('text', '') for d in target_entries]
+        else:
+            # Legacy list format
+            source_dialogues = dialogues_data
+            translations = get_expr_attr(expression, 'translation', [])
+        
         # Create a mapping between dialogue text and translations
         dialogue_translation_map = {}
-        dialogues = get_expr_attr(expression, 'dialogues', [])
-        translations = get_expr_attr(expression, 'translation', [])
-        if len(dialogues) == len(translations):
-            for dialogue, translation in zip(dialogues, translations):
+        if len(source_dialogues) == len(translations):
+            for dialogue, translation in zip(source_dialogues, translations):
                 clean_dialogue = self._clean_text_for_matching(dialogue)
                 dialogue_translation_map[clean_dialogue] = translation
         
-        subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, dialogues)
+        subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, source_dialogues)
         
         subtitle_entry_num = 1
         for i, subtitle in enumerate(subtitles):
@@ -624,15 +649,30 @@ class SubtitleProcessor:
         # Look up from expression's translation list
         dialogue_idx = subtitle_to_dialogue_map[subtitle_idx] if subtitle_idx < len(subtitle_to_dialogue_map) else -1
         
-        translations = get_expr_attr(expression, 'translation', [])
-        if dialogue_idx >= 0 and dialogue_idx < len(translations):
-            return translations[dialogue_idx]
+        # Determine source and target lists
+        dialogues_data = get_expr_attr(expression, 'dialogues', [])
+        source_list = []
+        target_list = []
+        
+        if isinstance(dialogues_data, dict):
+            target_lang = get_expr_attr(expression, 'target_lang')
+            if not target_lang or target_lang not in dialogues_data:
+                target_lang = next((k for k in dialogues_data.keys() if k != 'en'), 'ko')
+            source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+            
+            source_list = [d.get('text', '') for d in dialogues_data.get(source_lang, [])]
+            target_list = [d.get('text', '') for d in dialogues_data.get(target_lang, [])]
+        else:
+            source_list = dialogues_data
+            target_list = get_expr_attr(expression, 'translation', [])
+
+        if dialogue_idx >= 0 and dialogue_idx < len(target_list):
+            return target_list[dialogue_idx]
         
         # Fallback: use improved matching
-        dialogues = get_expr_attr(expression, 'dialogues', [])
         return self._find_matching_translation(
             subtitle['text'], 
-            dict(zip([self._clean_text_for_matching(d) for d in dialogues], translations)),
+            dict(zip([self._clean_text_for_matching(d) for d in source_list], target_list)),
             expression
         )
     

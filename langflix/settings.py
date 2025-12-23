@@ -1474,11 +1474,12 @@ def get_encoding_preset(test_mode: bool = False) -> Dict[str, Any]:
             'audio_bitrate': '128k',
         }
     else:
-        # Quality mode - for production
+        # Quality mode - for production (read from config)
+        video_config = get_video_config()
         return {
-            'preset': 'slow',
-            'crf': 18,
-            'audio_bitrate': '256k',
+            'preset': video_config.get('preset', 'slow'),
+            'crf': video_config.get('crf', 18),
+            'audio_bitrate': video_config.get('audio_bitrate', '256k'),
         }
 
 

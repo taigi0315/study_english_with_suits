@@ -167,15 +167,15 @@ video:
   # Changed to "medium" for significantly better quality (TICKET-072)
   # Medium preset provides better compression and quality while maintaining reasonable encoding speed
   # ~2x slower than "fast" but much better quality, especially for 720p sources
-  # Changed from "medium" to "slow" to prioritize QUALITY over speed (User Request)
-  # Slow preset provides better compression and quality retention
-  preset: "slow"
+  # Sweet Spot: "medium" balances speed and encoding efficiency well
+  # "slow" was adding ~30-50% time for marginal gains. "ultrafast" is too large/low quality.
+  preset: "medium"
 
-  # Constant Rate Factor - quality (0-51, lower = better quality, 18-28 is good range)
-  # Changed to 18 for high quality output (TICKET-072)
-  # CRF 18 provides near-lossless quality, especially important for 720p source videos
-  # Lower values = better quality: 18-20 is excellent, 21-23 is good, 24+ is acceptable
-  crf: 18
+  # Constant Rate Factor - quality (0-51, lower = better quality)
+  # 18 = Near Lossless (Overkill/Slow)
+  # 23 = Standard High Quality (Default, Recommend for Prod)
+  # 28 = Lower Quality (Visible artifacts, Good for testing)
+  crf: 23
 
 # ============================================================================
 # Dialogue Subtitle Styling (Short-Form Video)

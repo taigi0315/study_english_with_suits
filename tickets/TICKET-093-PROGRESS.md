@@ -10,7 +10,7 @@
 
 | Phase | Status | Completion |
 |-------|--------|------------|
-| Phase 1: Test Suite Cleanup | 🟡 In Progress | 25% |
+| Phase 1: Test Suite Cleanup | 🟢 Major Progress | 60% |
 | Phase 2: Code Cleanup | ⚪ Not Started | 0% |
 | Phase 3: Documentation Updates | ⚪ Not Started | 0% |
 | Phase 4: Configuration & Dependencies | ⚪ Not Started | 0% |
@@ -115,15 +115,25 @@
 
 3. **Created progress tracking**
    - TEST_REVIEW.md for detailed test analysis
-   - This progress report
+   - TICKET-093-PROGRESS.md (this report)
+   - Commit: `b09386d`
+
+4. **Fixed and migrated test_video_processor.py & test_font_configuration.py**
+   - test_video_processor.py: 24/24 passing (100%)
+   - test_font_configuration.py: 10/10 passing (100%)
+   - Installed pytest-cov for coverage metrics
+   - Commit: `683d971`
 
 ### 📊 Metrics
 
-- **Tests Fixed**: 1 file (17 tests)
-- **Tests Migrated**: 1 file
-- **Pass Rate Improvement**: 94% → 100% for test_path_utils.py
-- **Files Removed from Archive**: 1
-- **New Unit Test Coverage**: +17 tests in tests/unit/utils/
+- **Tests Fixed & Migrated**: 3 files (51 tests total)
+  - test_path_utils.py: 17 tests (utils/)
+  - test_video_processor.py: 24 tests (core/)
+  - test_font_configuration.py: 10 tests (core/)
+- **Pass Rate**: 100% for all migrated tests
+- **Files Removed from Archive**: 3
+- **Test Coverage Baseline**: 23% overall (374 tests passing)
+- **Coverage Tool**: pytest-cov installed and configured
 
 ---
 

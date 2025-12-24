@@ -2351,8 +2351,8 @@ def create_app(output_dir: str = "output") -> Flask:
 
 if __name__ == "__main__":
     # Create templates directory if it doesn't exist
-    templates_dir = Path("templates")
-    templates_dir.mkdir(exist_ok=True)
+    # templates_dir = Path("templates")
+    # templates_dir.mkdir(exist_ok=True)
     
     # Run the UI
     output_dir = os.getenv("LANGFLIX_OUTPUT_DIR", "output")

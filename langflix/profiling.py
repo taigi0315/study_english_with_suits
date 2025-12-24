@@ -46,9 +46,9 @@ class PipelineProfiler:
         if output_path:
             self.output_path = Path(output_path)
         else:
-            # Default: profiles/<timestamp>.json
-            profiles_dir = Path("profiles")
-            profiles_dir.mkdir(exist_ok=True)
+            # Default: output/profiling/<timestamp>.json
+            profiles_dir = Path("output/profiling")
+            profiles_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.output_path = profiles_dir / f"profile_{timestamp}.json"
         

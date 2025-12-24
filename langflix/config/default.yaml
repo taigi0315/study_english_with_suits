@@ -341,9 +341,9 @@ short_video:
 
     # Catchy keywords (top padding area)
     keywords:
-      font_size: 35
-      newline: 200
-      y_position: 1750            # Adjusted for smaller padding (was 250)
+      font_size: 40
+      newline: 30
+      y_position: 1650            # Adjusted for smaller padding (was 250)
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'
@@ -420,9 +420,9 @@ short_video:
 
     # Narrations (commentary overlays in target language)
     narrations:
-      font_size: 53                # Medium size
-      y_position: 315              # Upper-middle area (below video top padding)
-      chars_per_line: 38           # Max characters per line before wrapping
+      font_size: 58                # Medium size
+      y_position: 300              # Upper-middle area (below video top padding)
+      chars_per_line: 25           # Max characters per line before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent
@@ -467,7 +467,7 @@ short_video:
       # Positioning (Y offsets from center)
       positions:
         expression_dialogue_y: -300   # Distance above center (moved up)
-        expression_y: -150            # Expression (highlighted)
+        expression_y: -140            # Expression (highlighted)
         expression_dialogue_trans_y: 50   # Below center
         expression_translation_y: 200  # Below dialogue translation
         similar_base_offset: 350      # Distinctly below translation

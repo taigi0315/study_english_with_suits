@@ -41,7 +41,8 @@ class VideoFactory:
         video_file: Path = None,  # Explicit video file path
         no_long_form: bool = False,
         test_mode: bool = False,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        start_index: int = 1
     ):
         """
         Create long-form videos for each expression using extracted video slices.
@@ -94,19 +95,19 @@ class VideoFactory:
             
             logger.info(f"Preparing assets (Subtitles & Master Clips) for {len(lang_expressions)} expressions...")
             
-            for i, expression in enumerate(lang_expressions):
-                if i not in extracted_slices:
-                    logger.warning(f"Skipping asset generation for expression {i+1}: No raw slice found")
+            for i, expression in enumerate(lang_expressions, start=start_index):
+                if (i - start_index) not in extracted_slices:
+                    logger.warning(f"Skipping asset generation for expression {i}: No raw slice found")
                     continue
                     
-                raw_clip_path = extracted_slices[i]
+                raw_clip_path = extracted_slices[i - start_index]
                 
                 try:
                     # 1. Generate Subtitle File
-                    base_expression = expressions[i] if i < len(expressions) else expression
+                    base_expression = expressions[i - start_index] if (i - start_index) < len(expressions) else expression
                     expr_text = get_expr_attr(base_expression, 'expression', '')
                     safe_expression_short = sanitize_for_expression_filename(expr_text)[:30]
-                    subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
+                    subtitle_filename = f"expression_{i:02d}_{safe_expression_short}.srt"
                     subtitle_output_path = subtitle_dir / subtitle_filename
                     
                     success = subtitle_processor.create_dual_language_subtitle_file(
@@ -115,7 +116,7 @@ class VideoFactory:
                     )
                     
                     if not success:
-                        logger.warning(f"Failed to generate subtitle file for expression {i+1}, skipping master clip creation")
+                        logger.warning(f"Failed to generate subtitle file for expression {i}, skipping master clip creation")
                         continue
                         
                     # 2. Create Master Clip (Burn Subtitles into Raw Clip)
@@ -124,7 +125,7 @@ class VideoFactory:
                     # We use apply_dual_subtitle_layers with start=0, duration=full.
                     # This uses "Input Seeking" (ss=0) which is valid and ensures sync.
                     
-                    temp_master_clip = lang_paths['videos'] / f"temp_master_clip_burned_{i+1:02d}_{safe_expression_short}.mkv"
+                    temp_master_clip = lang_paths['videos'] / f"temp_master_clip_burned_{i:02d}_{safe_expression_short}.mkv"
                     temp_master_clip.parent.mkdir(parents=True, exist_ok=True)
                     
                     # Note: apply_dual_subtitle_layers handles the ffmpeg call
@@ -149,12 +150,12 @@ class VideoFactory:
                         master_clips[i] = temp_master_clip
                         logger.debug(f"Created Master Clip with burned subtitles: {temp_master_clip.name}")
                     else:
-                        logger.error(f"Failed to create Master Clip for expression {i+1}")
+                        logger.error(f"Failed to create Master Clip for expression {i}")
 
                 except ffmpeg.Error as e:
-                    logger.error(f"FFmpeg error preparing assets for expression {i+1}: {e.stderr.decode('utf8') if e.stderr else str(e)}")
+                    logger.error(f"FFmpeg error preparing assets for expression {i}: {e.stderr.decode('utf8') if e.stderr else str(e)}")
                 except Exception as e:
-                    logger.error(f"Error preparing assets for expression {i+1}: {e}")
+                    logger.error(f"Error preparing assets for expression {i}: {e}")
             
             lang_video_editor = VideoEditor(
                 str(lang_paths['final_videos']),
@@ -167,19 +168,19 @@ class VideoFactory:
             
             lang_long_form_videos = []
             
-            for expr_idx, expression in enumerate(lang_expressions):
-                logger.info(f"Processing short video for expression {expr_idx + 1}/{len(lang_expressions)}")
+            for expr_idx, expression in enumerate(lang_expressions, start=start_index):
+                logger.info(f"Processing long video for expression {expr_idx}/{len(lang_expressions) + start_index - 1}")
                 
                 # Debug: Log vocabulary annotations
                 vocab = get_expr_attr(expression, 'vocabulary_annotations', [])
-                logger.info(f"DEBUG: Expression {expr_idx+1} vocab annotations raw: {vocab}")
+                logger.info(f"DEBUG: Expression {expr_idx} vocab annotations raw: {vocab}")
                 if isinstance(vocab, list):
                     logger.info(f"DEBUG: Found {len(vocab)} annotations in Factory")
                 else:
                     logger.info(f"DEBUG: Vocab annotations is {type(vocab)}")
                 
                 if expr_idx not in master_clips:
-                    logger.warning(f"Skipping video creation for expression {expr_idx+1}: No master clip")
+                    logger.warning(f"Skipping video creation for expression {expr_idx}: No master clip")
                     continue
                 
                 try:
@@ -190,7 +191,7 @@ class VideoFactory:
                         expression,
                         str(original_video), # Still passed for reference/audio extraction if needed
                         str(original_video),
-                        expression_index=expr_idx,
+                        expression_index=expr_idx - 1,
                         pre_extracted_context_clip=master_clips[expr_idx]
                     )
                     lang_long_form_videos.append(long_form_video)
@@ -255,7 +256,8 @@ class VideoFactory:
         video_editor_factory_method: callable, # Should return a VideoEditor
         short_form_max_duration: float = 180.0,
         output_dir: Path = None,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        start_index: int = 1
     ):
         """Create short videos for target languages."""
         
@@ -287,7 +289,8 @@ class VideoFactory:
                     base_expressions,
                     episode_name,
                     short_form_max_duration,
-                    subtitle_processor
+                    subtitle_processor,
+                    start_index=start_index
                 )
             except Exception as e:
                 logger.error(f"Error creating short videos for {lang}: {e}")
@@ -379,7 +382,8 @@ class VideoFactory:
         base_expressions: List[ExpressionAnalysis],
         episode_name: str,
         max_duration: float,
-        subtitle_processor: SubtitleProcessor
+        subtitle_processor: SubtitleProcessor,
+        start_index: int = 1
     ):
         expressions_dir = lang_paths.get('expressions') or lang_paths['language_dir'] / "expressions"
         long_form_videos = sorted(list(Path(expressions_dir).glob("*.mkv")))
@@ -395,15 +399,15 @@ class VideoFactory:
         
         logger.info(f"Generating subtitle files for {len(lang_expressions)} expressions...")
         
-        for i, expression in enumerate(lang_expressions):
+        for i, expression in enumerate(lang_expressions, start=start_index):
             try:
                 # Get base expression for filename
-                base_expression = base_expressions[i] if i < len(base_expressions) else expression
+                base_expression = base_expressions[i - start_index] if (i - start_index) < len(base_expressions) else expression
                 expr_text = get_expr_attr(base_expression, 'expression', '')
                 safe_expression_short = sanitize_for_expression_filename(expr_text)[:30]
                 
                 # Create subtitle filename matching the pattern expected by create_short_form_from_long_form
-                subtitle_filename = f"expression_{i+1:02d}_{safe_expression_short}.srt"
+                subtitle_filename = f"expression_{i:02d}_{safe_expression_short}.srt"
                 subtitle_output_path = subtitle_dir / subtitle_filename
                 
                 # Generate subtitle file
@@ -423,14 +427,14 @@ class VideoFactory:
         
         short_format_videos = []
         
-        for i, expression in enumerate(lang_expressions):
+        for i, expression in enumerate(lang_expressions, start=start_index):
             # Match using base expression if available logic from main.py
             # Match using constructed filename pattern (matching video_editor.py logic)
             # Use 'expression' (localized) because create_long_form_video uses localized expression for filenames
             expr_text = get_expr_attr(expression, 'expression', '')
             safe_name = sanitize_for_expression_filename(expr_text)
             # Must match creation format: expression_{index}_{safe[:50]}
-            expected_stem = f"expression_{i+1:02d}_{safe_name[:50]}"
+            expected_stem = f"expression_{i:02d}_{safe_name[:50]}"
             
             if expected_stem in long_form_video_map:
                 long_form_video = long_form_video_map[expected_stem]
@@ -438,7 +442,7 @@ class VideoFactory:
                     output_path = video_editor.create_short_form_from_long_form(
                         str(long_form_video),
                         expression,
-                        expression_index=i
+                        expression_index=i - 1
                     )
                     duration = get_duration_seconds(str(output_path))
                     short_format_videos.append({
@@ -451,9 +455,12 @@ class VideoFactory:
                         "source_short": Path(output_path).name
                     })
                 except Exception as e:
-                    logger.error(f"Error creating short for expr {i+1}: {e}")
+                    logger.error(f"❌ Error creating short for expr {i+1}: {e}")
+                    logger.error(f"   Expression: {get_expr_attr(expression, 'expression', 'N/A')}")
+                    logger.error(f"   Long-form video: {long_form_video}")
+                    # Continue processing other expressions instead of failing completely
             else:
-                 logger.warning(f"Could not find long-form video for expression {i+1} (expected: {expected_stem}.mkv)")
+                 logger.warning(f"Could not find long-form video for expression {i} (expected: {expected_stem}.mkv)")
 
         # No batching - 1 expression = 1 short video (TICKET-090)
         # Each short video is already created in the 'shorts' directory

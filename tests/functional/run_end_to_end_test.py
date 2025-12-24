@@ -51,8 +51,8 @@ def run_end_to_end_test():
         clean_test_output()
         
         # Test parameters
-        subtitle_file = str(project_root / "assets/media/Suits/Suits.S01E01.720p.HDTV.x264.srt")
-        video_dir = str(project_root / "assets/media")
+        subtitle_file = str(project_root / "assets/media/Suits/Suits.S01E01.720p.HDTV.x264/Subs/English.srt")
+        video_dir = str(project_root / "assets/media/Suits/Suits.S01E01.720p.HDTV.x264")
         language_code = "ko"
         max_expressions = 5
         test_mode = True
@@ -61,7 +61,7 @@ def run_end_to_end_test():
         if not Path(subtitle_file).exists():
             raise FileNotFoundError(f"Subtitle file not found: {subtitle_file}")
             
-        video_file = project_root / "assets/media/Suits/Suits.S01E01.720p.HDTV.x264.mkv"
+        video_file = project_root / "assets/media/Suits/Suits.S01E01.720p.HDTV.x264/Suits.S01E01.720p.HDTV.x264.mkv"
         if not video_file.exists():
             raise FileNotFoundError(f"Video file not found: {video_file}")
         
@@ -73,12 +73,13 @@ def run_end_to_end_test():
         logger.info(f"  - Test mode: {test_mode}")
         logger.info("=" * 60)
         
-        # Initialize pipeline with test output directory
+        # Initialize pipeline (Legacy Mode by providing subtitle_file)
         pipeline = LangFlixPipeline(
             subtitle_file=subtitle_file,
             video_dir=video_dir,
-            output_dir="test_output",  # Use test_output directory
-            language_code=language_code
+            output_dir="test_output",
+            language_code=language_code,
+            source_language="en"
         )
         
         logger.info("🔄 Running pipeline...")
@@ -95,7 +96,11 @@ def run_end_to_end_test():
         logger.info("=" * 60)
         
         # Analyze results
-        expressions_found = len(result.get('expressions', []))
+        if isinstance(result, dict):
+             expressions_found = len(result.get('expressions', []))
+        else:
+             expressions_found = 0
+             
         logger.info(f"📊 Results Summary:")
         logger.info(f"  - Expressions found: {expressions_found}")
         
@@ -115,15 +120,6 @@ def run_end_to_end_test():
             
             list_files_recursive(output_dir)
             
-            # Check for final videos specifically
-            final_videos_dir = output_dir / "Suits" / "S01E01_720p.HDTV.x264" / "translations" / "ko" / "final_videos"
-            if final_videos_dir.exists():
-                final_videos = list(final_videos_dir.glob("*.mkv"))
-                logger.info(f"\n🎬 Final videos found: {len(final_videos)}")
-                for video in final_videos:
-                    size = video.stat().st_size
-                    logger.info(f"  - {video.name} ({size:,} bytes)")
-        
         logger.info("\n" + "=" * 60)
         logger.info("🎉 End-to-End Test Completed Successfully!")
         logger.info("=" * 60)
@@ -148,37 +144,34 @@ def verify_test_results():
     checks_passed = 0
     total_checks = 0
     
+    # Dynamic search for generated files matching pattern
+    
     # Check 1: Video clips exist
     total_checks += 1
-    video_clips_dir = output_dir / "Suits" / "S01E01_720p.HDTV.x264" / "shared" / "video_clips"
-    if video_clips_dir.exists() and list(video_clips_dir.glob("*.mkv")):
-        logger.info("✅ Video clips generated")
+    video_clips = list(output_dir.rglob("context_clip_*.mkv"))
+    if video_clips:
+        logger.info(f"✅ Found {len(video_clips)} video clips")
         checks_passed += 1
     else:
         logger.error("❌ No video clips found")
     
     # Check 2: Subtitle files exist
     total_checks += 1
-    subtitles_dir = output_dir / "Suits" / "S01E01_720p.HDTV.x264" / "translations" / "ko" / "subtitles"
-    if subtitles_dir.exists() and list(subtitles_dir.glob("*.srt")):
-        logger.info("✅ Subtitle files generated")
+    subtitles = list(output_dir.rglob("expression_*.srt"))
+    if subtitles:
+        logger.info(f"✅ Found {len(subtitles)} subtitle files")
         checks_passed += 1
     else:
         logger.error("❌ No subtitle files found")
     
-    # Check 3: Educational slides exist
+    # Check 3: Final videos (educational/shorts)
     total_checks += 1
-    final_videos_dir = output_dir / "Suits" / "S01E01_720p.HDTV.x264" / "translations" / "ko" / "final_videos"
-    if final_videos_dir.exists():
-        temp_slides = list(final_videos_dir.glob("temp_slide_*.mkv"))
-        temp_contexts = list(final_videos_dir.glob("temp_context_*.mkv"))
-        if temp_slides or temp_contexts:
-            logger.info("✅ Educational video components generated")
-            checks_passed += 1
-        else:
-            logger.error("❌ No educational video components found")
+    final_videos = list(output_dir.rglob("short_form_*.mkv"))
+    if final_videos:
+        logger.info(f"✅ Found {len(final_videos)} short videos")
+        checks_passed += 1
     else:
-        logger.error("❌ Final videos directory not found")
+        logger.error("❌ No short videos found")
     
     success_rate = (checks_passed / total_checks) * 100
     logger.info(f"\n📊 Verification Results: {checks_passed}/{total_checks} checks passed ({success_rate:.1f}%)")
@@ -196,6 +189,3 @@ if __name__ == "__main__":
             logger.warning("\n⚠️  Some tests failed. Check the log for details.")
     else:
         logger.error("\n💥 Test execution failed completely.")
-
-
-

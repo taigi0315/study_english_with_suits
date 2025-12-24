@@ -1010,13 +1010,15 @@ def repeat_av_demuxer(input_path: str, repeat_count: int, out_path: Path | str) 
         concat_file = f.name
     
     try:
+        # Use codec copy for fast concatenation (no re-encoding needed)
+        # This is much faster than re-encoding, especially with slow presets
         (
             ffmpeg
             .input(concat_file, format='concat', safe=0)
             .output(
                 str(out_path),
-                **make_video_encode_args_from_source(input_path),
-                **make_audio_encode_args_copy()
+                vcodec='copy',  # Copy video codec (no re-encoding)
+                acodec='copy'   # Copy audio codec (no re-encoding)
             )
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)

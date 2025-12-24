@@ -138,8 +138,13 @@ class ShortFormCreator:
         shorts_dir.mkdir(parents=True, exist_ok=True)
         return shorts_dir
 
-    def _get_encoding_args(self, source_video_path: Optional[str] = None) -> Dict[str, Any]:
-        """Get encoding arguments based on mode and settings."""
+    def _get_encoding_args(self, source_video_path: Optional[str] = None, fast_fallback: bool = False) -> Dict[str, Any]:
+        """Get encoding arguments based on mode and settings.
+
+        Args:
+            source_video_path: Optional source video path (unused currently)
+            fast_fallback: If True, use faster preset for complex operations
+        """
         from langflix import settings
 
         if self.test_mode:
@@ -152,10 +157,18 @@ class ShortFormCreator:
         else:
             # get_encoding_preset returns a dict with preset, crf, audio_bitrate
             encoding_settings = settings.get_encoding_preset(test_mode=False)
+            preset = encoding_settings.get('preset', 'slow')
+
+            # Use faster preset for complex filter operations to avoid timeouts
+            # Complex overlays with slow preset can cause FFmpeg to hang/timeout
+            if fast_fallback:
+                preset = 'fast' if preset in ('slow', 'medium') else preset
+                logger.info(f"Using faster preset '{preset}' for complex filter operation")
+
             return {
                 'vcodec': 'libx264',
                 'acodec': 'aac',
-                'preset': encoding_settings.get('preset', 'slow'),
+                'preset': preset,
                 'crf': encoding_settings.get('crf', 18)
             }
 
@@ -374,32 +387,37 @@ class ShortFormCreator:
 
         # Output scaled video
         video_args = self._get_encoding_args(input_video)
-        if audio_stream:
-            (
-                ffmpeg.output(
-                    video_stream, audio_stream,
-                    str(scaled_path),
-                    vcodec=video_args.get('vcodec', 'libx264'),
-                    acodec=video_args.get('acodec', 'aac'),
-                    ac=2, ar=48000,
-                    preset=video_args.get('preset', 'medium'),
-                    crf=video_args.get('crf', 18)
+        try:
+            if audio_stream:
+                (
+                    ffmpeg.output(
+                        video_stream, audio_stream,
+                        str(scaled_path),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
+                        ac=2, ar=48000,
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        else:
-            (
-                ffmpeg.output(
-                    video_stream,
-                    str(scaled_path),
-                    vcodec=video_args.get('vcodec', 'libx264'),
-                    preset=video_args.get('preset', 'medium'),
-                    crf=video_args.get('crf', 18)
+            else:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        str(scaled_path),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18)
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+        except ffmpeg.Error as e:
+            stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+            logger.error(f"FFmpeg error scaling video: {stderr}")
+            raise RuntimeError(f"Failed to scale video for short form: {stderr}") from e
 
         return scaled_path
 
@@ -556,33 +574,44 @@ class ShortFormCreator:
         overlayed_path = self.output_dir / f"temp_overlayed_{safe_expression}.mkv"
         self._register_temp_file(overlayed_path)
 
-        video_args = self._get_encoding_args()
-        if audio_stream:
-            (
-                ffmpeg.output(
-                    video_stream, audio_stream,
-                    str(overlayed_path),
-                    vcodec=video_args.get('vcodec', 'libx264'),
-                    acodec=video_args.get('acodec', 'aac'),
-                    ac=2, ar=48000,
-                    preset=video_args.get('preset', 'medium'),
-                    crf=video_args.get('crf', 18)
+        # Use faster preset for complex overlay operations to avoid timeouts
+        video_args = self._get_encoding_args(fast_fallback=True)
+        try:
+            if audio_stream:
+                (
+                    ffmpeg.output(
+                        video_stream, audio_stream,
+                        str(overlayed_path),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        acodec=video_args.get('acodec', 'aac'),
+                        ac=2, ar=48000,
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18),
+                        # Add FFmpeg options to prevent hangs/timeouts with complex filters
+                        # Reduced threads and queue size to prevent OOM (Killed: 9)
+                        **{'max_muxing_queue_size': '1024', 'threads': '2'}
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        else:
-            (
-                ffmpeg.output(
-                    video_stream,
-                    str(overlayed_path),
-                    vcodec=video_args.get('vcodec', 'libx264'),
-                    preset=video_args.get('preset', 'medium'),
-                    crf=video_args.get('crf', 18)
+            else:
+                (
+                    ffmpeg.output(
+                        video_stream,
+                        str(overlayed_path),
+                        vcodec=video_args.get('vcodec', 'libx264'),
+                        preset=video_args.get('preset', 'medium'),
+                        crf=video_args.get('crf', 18),
+                        # Add FFmpeg options to prevent hangs/timeouts with complex filters
+                        **{'max_muxing_queue_size': '9999', 'threads': '4'}
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+        except ffmpeg.Error as e:
+            stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
+            logger.error(f"FFmpeg error applying overlays: {stderr}")
+            raise RuntimeError(f"Failed to apply overlays to short video: {stderr}") from e
 
         return overlayed_path
 
@@ -615,14 +644,36 @@ class ShortFormCreator:
 
                     temp_with_credit = output_path.parent / f"temp_with_credit_{output_path.name}"
 
+                    credit_has_audio = False
+                    try:
+                        probe = ffmpeg.probe(ending_credit_path)
+                        if any(s.get('codec_type') == 'audio' for s in probe.get('streams', [])):
+                            credit_has_audio = True
+                    except Exception as probe_err:
+                        logger.warning(f"Failed to probe ending credit file: {probe_err}. Assuming no audio.")
+
+                    logger.info(f"Appending ending credit ({ending_duration}s) - Has Audio: {credit_has_audio}")
+
+                    filter_complex = (
+                        f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,'
+                        f'pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
+                    )
+                    
+                    if credit_has_audio:
+                        filter_complex += f'[0:v][0:a][credit_v][1:a]concat=n=2:v=1:a=1[outv][outa]'
+                    else:
+                        # Generate silence for the duration of the credit
+                        # We use a trick: anullsrc to generate silence, atrim to cut it
+                        filter_complex += (
+                            f'aevalsrc=0:d={ending_duration}[credit_a];'
+                            f'[0:v][0:a][credit_v][credit_a]concat=n=2:v=1:a=1[outv][outa]'
+                        )
+
                     cmd = [
                         'ffmpeg', '-y',
                         '-i', str(overlayed_path),
                         '-i', ending_credit_path,
-                        '-filter_complex',
-                        f'[1:v]scale=1080:1920:force_original_aspect_ratio=decrease,'
-                        f'pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[credit_v];'
-                        f'[0:v][0:a][credit_v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+                        '-filter_complex', filter_complex,
                         '-map', '[outv]',
                         '-map', '[outa]',
                         '-c:v', 'libx264',

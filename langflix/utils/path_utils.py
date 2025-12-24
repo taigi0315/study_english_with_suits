@@ -61,6 +61,12 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
         srt_files = list(media_file.glob("*.srt"))
         if srt_files:
             return media_file
+            
+        # Check if directory contains Subs folder
+        nested_subs = media_file / "Subs"
+        if nested_subs.exists() and nested_subs.is_dir():
+            if list(nested_subs.glob("*.srt")):
+                return nested_subs
     
     media_base_name = media_file.stem
     
@@ -71,6 +77,14 @@ def get_subtitle_folder(media_path: str) -> Optional[Path]:
         if srt_files:
             logger.debug(f"Found subtitle folder (new structure): {subs_folder}")
             return subs_folder
+            
+    # CHECK: Subs/ folder directly (Flat structure)
+    flat_subs_folder = media_file.parent / "Subs"
+    if flat_subs_folder.exists() and flat_subs_folder.is_dir():
+        srt_files = list(flat_subs_folder.glob("*.srt"))
+        if srt_files:
+             logger.debug(f"Found subtitle folder (flat Subs structure): {flat_subs_folder}")
+             return flat_subs_folder
     
     # LEGACY STRUCTURE: {media_name}/ directly next to media file
     legacy_folder = media_file.parent / media_base_name

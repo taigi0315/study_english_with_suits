@@ -134,9 +134,9 @@ prompt: |
   **Source:** Preferably a direct quote from the scene's peak moment
 
   Examples:
-  - "니까짓 게 날 죽여?"
   - "I don't have dreams, I have goals."
-  - "연진아, 이거 누구 딸이니?"
+  - "Winter is coming."
+  - "I am the one who knocks."
 
   ---
 
@@ -166,6 +166,7 @@ prompt: |
 
   **Rules:**
   - 5-9 narrations per clip, spaced throughout
+  - Make narrations more friendly, conversational tone and HUMOROUS e.g) "와- 이걸 피해가네", "Damn- that's was sick"
   - Always include narration at first dialogue index, and make this narration more engaging, giving hint of the upcoming story. 
   - Casual tone, internet slang OK (lol, omg, fr)
   - 5-15 words each
@@ -287,23 +288,23 @@ prompt: |
     ]
   }}
   ```
-
+  
   ---
-
+  
   **FINAL CHECKLIST:**
-
+  
   **Content Quality:**
   - ✓ Expression is 3+ words, common, reusable
   - ✓ Scene is high-energy (funny/dramatic/tense/romantic)
   - ✓ Expression copied exactly from source dialogue
-
+  
   **Context Completeness:**
   - ✓ Context is ~{target_duration} seconds (complete story)
   - ✓ Has setup BEFORE expression (beginning)
   - ✓ Expression appears in MIDDLE
   - ✓ Has reaction AFTER expression (end)
   - ✓ First-time viewer can understand what's happening
-
+  
   **Dialogues Field:**
   - ✓ Contains both {source_language_code} and {target_language_code} arrays
   - ✓ Each entry has: index, timestamp, text

@@ -22,16 +22,18 @@ class ScriptAgent:
     Uses Show Bible for speaker inference and context understanding
     """
 
-    def __init__(self, model_name: Optional[str] = None, output_dir: Optional[str] = None):
+    def __init__(self, model_name: Optional[str] = None, output_dir: Optional[str] = None, show_name: Optional[str] = None):
         """
         Initialize Script Agent
 
         Args:
             model_name: LLM model to use (defaults to settings)
             output_dir: Optional output directory for debug logs
+            show_name: Show name (defaults to settings if not provided)
         """
         self.model_name = model_name or settings.get_llm_model_name()
         self.output_dir = output_dir
+        self.show_name = show_name
         self.client = get_gemini_client()
 
         # Load prompt template
@@ -87,7 +89,7 @@ class ScriptAgent:
         language_level_descriptions = self._get_language_level_descriptions()
 
         # Get config values for prompt placeholders
-        show_name = settings.get_show_name()
+        show_name = self.show_name or settings.get_show_name()  # Use instance show_name if available
         source_lang = source_language or settings.get_source_language_name()
         source_lang_code = source_language_code or settings.get_source_language_code()
         target_lang = target_language or settings.get_default_target_language()
@@ -125,19 +127,28 @@ class ScriptAgent:
 
             # Parse subtitle lines from script_chunk to get timestamps
             subtitle_lines = self._parse_script_chunk_times(script_chunk)
-            logger.debug(f"Parsed {len(subtitle_lines)} subtitle lines from chunk")
+            target_subtitle_lines = self._parse_script_chunk_times(target_script_chunk) if target_script_chunk else []
+            
+            logger.debug(f"Parsed {len(subtitle_lines)} source lines and {len(target_subtitle_lines)} target lines")
+            
             if subtitle_lines:
                 logger.debug(f"First subtitle: idx=0, {subtitle_lines[0]['start_time']} -> {subtitle_lines[0]['end_time']}")
                 logger.debug(f"Last subtitle: idx={len(subtitle_lines)-1}, {subtitle_lines[-1]['start_time']} -> {subtitle_lines[-1]['end_time']}")
             
 
-            # Convert index-based expressions to timestamp-based
+            # Convert index-based expressions to timestamp-based AND construct dialogues
             expressions = result_data.get("expressions", [])
             for i, expr in enumerate(expressions):
                 logger.debug(f"Expression {i+1} raw keys: {list(expr.keys())}")
-                logger.debug(f"Expression {i+1} before conversion: expr={expr}")
                 logger.debug(f"Expression {i+1} before conversion: start={expr.get('context_start_time', 'N/A')}, start_idx={expr.get('context_start_index', 'N/A')}, expr_idx={expr.get('expression_index', 'N/A')}")
-                expr = self._convert_indices_to_timestamps(expr, subtitle_lines)
+                
+                expr = self._convert_indices_to_timestamps(
+                    expr=expr, 
+                    subtitle_lines=subtitle_lines,
+                    target_subtitle_lines=target_subtitle_lines,
+                    source_lang_code=source_language_code or "en",
+                    target_lang_code=target_language_code or "ko"
+                )
                 logger.debug(f"Expression {i+1} after conversion: start={expr.get('context_start_time', 'N/A')}, end={expr.get('context_end_time', 'N/A')}")
 
             # Create ChunkResult
@@ -330,7 +341,7 @@ class ScriptAgent:
     ) -> List[ChunkResult]:
         """
         Analyze multiple chunks in sequence
-
+        
         Args:
             chunks: List of source language subtitle chunk dictionaries
             target_chunks: List of target language subtitle chunk dictionaries
@@ -338,11 +349,40 @@ class ScriptAgent:
             language_level: Target difficulty level
             max_expressions_per_chunk: Max expressions per chunk
             max_total_expressions: Total expression limit (for test mode)
-
+            
         Returns:
             List of ChunkResults
         """
         results = []
+        # Use generator internally
+        generator = self.analyze_chunks_generator(
+            chunks, target_chunks, show_bible, language_level,
+            max_expressions_per_chunk, max_total_expressions,
+            target_language, target_language_code,
+            source_language, source_language_code
+        )
+        
+        for result in generator:
+            results.append(result)
+            
+        return results
+
+    def analyze_chunks_generator(
+        self,
+        chunks: List[Dict[str, Any]],
+        target_chunks: List[Dict[str, Any]],
+        show_bible: str,
+        language_level: str = "intermediate",
+        max_expressions_per_chunk: int = 3,
+        max_total_expressions: Optional[int] = None,
+        target_language: Optional[str] = None,
+        target_language_code: Optional[str] = None,
+        source_language: Optional[str] = None,
+        source_language_code: Optional[str] = None
+    ):
+        """
+        Analyze multiple chunks in sequence yielding results
+        """
         total_expressions = 0
 
         for idx, (chunk, target_chunk) in enumerate(zip(chunks, target_chunks)):
@@ -380,16 +420,13 @@ class ScriptAgent:
                     )
                     result.expressions = result.expressions[:remaining]
 
-            results.append(result)
+            yield result
             total_expressions += len(result.expressions)
 
         logger.info(
             f"📊 Batch analysis complete: "
-            f"{len(results)} chunks processed, "
             f"{total_expressions} total expressions extracted"
         )
-
-        return results
 
     def _format_chunk_text(self, chunk: Dict[str, Any]) -> str:
         """
@@ -460,16 +497,19 @@ class ScriptAgent:
     def _convert_indices_to_timestamps(
         self,
         expr: Dict[str, Any],
-        subtitle_lines: List[Dict[str, str]]
+        subtitle_lines: List[Dict[str, str]],
+        target_subtitle_lines: List[Dict[str, str]] = None,
+        source_lang_code: str = "en",
+        target_lang_code: str = "ko"
     ) -> Dict[str, Any]:
         """
-        Convert LLM's index-based context to actual timestamps.
+        Convert LLM's index-based context to actual timestamps AND construct dialogues.
         
         Uses context_start_index and context_end_index from LLM response
         to look up actual timestamps from the parsed subtitle lines.
         
-        If indices are missing or invalid, creates a sensible default
-        context window around the expression.
+        Also programmatically constructs the 'dialogues' field to ensure
+        accuracy and prevent LLM hallucinations (like repeating text).
         """
         if not subtitle_lines:
             logger.warning("No subtitle lines to convert indices")
@@ -500,12 +540,25 @@ class ScriptAgent:
         if start_idx > end_idx:
             raise ValueError(f"context_start_index={start_idx} > context_end_index={end_idx}")
         
+        # Clamp indices to valid ranges
+        if start_idx < 0: start_idx = 0
+        if end_idx >= len(subtitle_lines): end_idx = len(subtitle_lines) - 1
+        if expr_idx >= len(subtitle_lines): expr_idx = len(subtitle_lines) - 1
+        
+        # After clamping, check for invalid range (e.g., start > end)
+        if end_idx < start_idx:
+            logger.error(f"❌ Failed to analyze chunk: Invalid context range [{start_idx}, {end_idx}] after clamping. Returning original expression.")
+            return expr
+
         # CRITICAL: Validate expression_dialogue_index is within context bounds
         if expr_idx < start_idx or expr_idx > end_idx:
-            raise ValueError(
-                f"expression_dialogue_index={expr_idx} is outside context range [{start_idx}, {end_idx}]. "
-                f"LLM must pick an expression FROM WITHIN the context."
+            logger.warning(
+                f"expression_dialogue_index={expr_idx} is outside clamped context range [{start_idx}, {end_idx}]. "
+                f"LLM must pick an expression FROM WITHIN the context. Clamping expr_idx to context start."
             )
+            # If expr_idx is outside, clamp it to be within the context for robustness
+            expr_idx = max(start_idx, min(expr_idx, end_idx))
+            
         # Look up timestamps
         context_start_time = subtitle_lines[start_idx]['start_time']
         context_end_time = subtitle_lines[end_idx]['end_time']
@@ -522,9 +575,60 @@ class ScriptAgent:
         # Extract dialogue lines (Critical for Translation Service validation)
         expr['dialogue_lines'] = [line['text'] for line in subtitle_lines[start_idx : end_idx + 1]]
         
+        # -------------------------------------------------------------------------
+        # PROGRAMMATICALLY CONSTRUCT DIALOGUES (Robustness Fix)
+        # -------------------------------------------------------------------------
+        # We REBUILD the dialogues object from the source/target chunks
+        # instead of trusting the LLM's output which can be hallucinated or repetitive.
+        
+        constructed_dialogues = {
+            source_lang_code: [],
+            target_lang_code: []
+        }
+        
+        # Indices are relative to the chunk (0-based)
+        # The 'index' field in the output should probably match the LLM's view (local index)
+        # or global index if we had it. The prompt uses local indices [0..N].
+        
+        for i in range(start_idx, end_idx + 1):
+            # Source Entry
+            src_line = subtitle_lines[i]
+            constructed_dialogues[source_lang_code].append({
+                "index": i,
+                "timestamp": f"{src_line['start_time']} --> {src_line['end_time']}",
+                "text": src_line['text']
+            })
+            
+            # Target Entry (if file exists)
+            # We assume 1-to-1 mapping by index for now (which is how the chunker works)
+            if target_subtitle_lines and i < len(target_subtitle_lines):
+                tgt_line = target_subtitle_lines[i]
+                constructed_dialogues[target_lang_code].append({
+                    "index": i,
+                    "timestamp": f"{tgt_line['start_time']} --> {tgt_line['end_time']}",
+                    "text": tgt_line['text']
+                })
+
+        # HYBRID STRATEGY:
+        # 1. Source is ALWAYS from file (100% accurate)
+        # 2. Target is from file if available (100% accurate)
+        # 3. If target file missing (Legacy/Translation Mode), use LLM output
+        
+        if not target_subtitle_lines:
+            # Fallback to LLM output for target language
+            llm_dialogues = expr.get('dialogues', {})
+            if isinstance(llm_dialogues, dict) and target_lang_code in llm_dialogues:
+                 constructed_dialogues[target_lang_code] = llm_dialogues[target_lang_code]
+            else:
+                 # If no dialogues found, create an empty list to avoid errors
+                 constructed_dialogues[target_lang_code] = []
+                
+        # Overwrite the LLM's dialogues with our robustly constructed ones
+        expr['dialogues'] = constructed_dialogues
+        
         logger.debug(
             f"Converted indices [{start_idx}-{end_idx}] to times "
-            f"[{context_start_time} - {context_end_time}]"
+            f"[{context_start_time} - {context_end_time}] and constructed dialogues"
         )
         
         return expr

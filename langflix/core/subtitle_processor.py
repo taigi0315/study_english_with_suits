@@ -590,33 +590,43 @@ class SubtitleProcessor:
             # Try to find which dialogue this subtitle belongs to
             best_match_idx = -1
             best_score = 0
-            
+            match_type = None  # Track which matching strategy succeeded
+
             # Strategy 1: Check if current accumulated text + this subtitle matches a dialogue
             test_accumulated = (accumulated_text + " " + clean_subtitle).strip()
-            
+
+            # First pass: Exact and substring matches (most reliable)
             for j, clean_dialogue in enumerate(clean_dialogues):
-                # Check for exact substring match
+                # 1. Exact/Substring Match
                 if clean_subtitle in clean_dialogue:
                     score = len(clean_subtitle.split()) / max(len(clean_dialogue.split()), 1)
                     if score > best_score:
                         best_score = score
                         best_match_idx = j
                 
-                # Check if accumulated text matches this dialogue
+                # 2. Accumulated Match
                 if test_accumulated in clean_dialogue:
                     accumulated_score = len(test_accumulated.split()) / max(len(clean_dialogue.split()), 1)
                     if accumulated_score > best_score:
                         best_score = accumulated_score
                         best_match_idx = j
-                
-                # Fuzzy word overlap matching
+
+                # 3. Fuzzy Match (Integrated with Proximity Bias)
                 subtitle_words = set(clean_subtitle.split())
                 dialogue_words = set(clean_dialogue.split())
+                
                 if subtitle_words and dialogue_words:
                     overlap = len(subtitle_words.intersection(dialogue_words))
                     overlap_score = overlap / len(subtitle_words)
-                    # Only use overlap if it's significant and better than current best
-                    if overlap_score > 0.6 and overlap_score > best_score:
+                    
+                    # Proximity Bonus: Boost score if it matches the expected next dialogue
+                    if j == current_dialogue_idx + 1:
+                        overlap_score *= 1.5  # Strong bias to move forward
+                    elif j == current_dialogue_idx:
+                        overlap_score *= 1.1  # Slight bias to stay current
+                        
+                    # Relaxed threshold (0.5) to catch partial matches like "You can burn bud"
+                    if overlap_score > 0.5 and overlap_score > best_score:
                         best_score = overlap_score
                         best_match_idx = j
             
@@ -626,20 +636,42 @@ class SubtitleProcessor:
                     # New dialogue detected, reset accumulation
                     accumulated_text = clean_subtitle
                     current_dialogue_idx = best_match_idx
+                    logger.info(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Score: {best_score:.2f})")
                 else:
                     # Same dialogue, accumulate
                     accumulated_text = test_accumulated
+                    # logger.info(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Accumulating)")
             else:
-                # No match found, try to continue with previous dialogue
-                if current_dialogue_idx >= 0:
+                # No match found - don't reuse previous dialogue for non-speech subtitles
+                # Check if this looks like a sound effect or metadata (brackets, special chars)
+                if ('[' in subtitle['text'] or ']' in subtitle['text'] or
+                    '♪' in subtitle['text'] or '==' in subtitle['text'] or
+                    'sync' in subtitle['text'].lower() or 'font' in subtitle['text'].lower()):
+                    # This is likely metadata/sound effect, don't map to any dialogue
+                    best_match_idx = -1
+                    # Don't update accumulated_text or current_dialogue_idx
+                elif current_dialogue_idx >= 0 and len(clean_subtitle.split()) <= 3:
+                    # Very short subtitle (1-3 words) that didn't match - might be continuation
+                    # Only reuse if subtitle is very short (likely part of previous line)
                     best_match_idx = current_dialogue_idx
                     accumulated_text = test_accumulated
-            
+                    logger.info(f"FALLBACK: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Short Continuation)")
+                else:
+                    # Longer subtitle with no match - keep as -1 (will use fallback translation)
+                    best_match_idx = -1
+                    # Reset accumulation
+                    accumulated_text = ""
+                    logger.info(f"NO MATCH: Subtitle '{clean_subtitle[:30]}...' (Clean: '{clean_subtitle}')")
+
             subtitle_to_dialogue.append(best_match_idx)
-        
+
+            # Debug logging for mismatches (only log failures)
+            if best_match_idx == -1 and not ('[' in subtitle['text'] or ']' in subtitle['text']):
+                pass # Already logged above as info
+                
         return subtitle_to_dialogue
     
-    def _get_translation_for_subtitle(self, subtitle_idx: int, subtitle: Dict[str, Any], 
+    def _get_translation_for_subtitle(self, subtitle_idx: int, subtitle: Dict[str, Any],
                                     subtitle_to_dialogue_map: List[int], expression: ExpressionAnalysis) -> str:
         """Get the appropriate translation for a subtitle"""
         # DUAL-SUBTITLE MODE: Check if subtitle has direct translation (from dialogue_entries)
@@ -648,18 +680,18 @@ class SubtitleProcessor:
 
         # Look up from expression's translation list
         dialogue_idx = subtitle_to_dialogue_map[subtitle_idx] if subtitle_idx < len(subtitle_to_dialogue_map) else -1
-        
+
         # Determine source and target lists
         dialogues_data = get_expr_attr(expression, 'dialogues', [])
         source_list = []
         target_list = []
-        
+
         if isinstance(dialogues_data, dict):
             target_lang = get_expr_attr(expression, 'target_lang')
             if not target_lang or target_lang not in dialogues_data:
                 target_lang = next((k for k in dialogues_data.keys() if k != 'en'), 'ko')
             source_lang = get_expr_attr(expression, 'source_lang') or 'en'
-            
+
             source_list = [d.get('text', '') for d in dialogues_data.get(source_lang, [])]
             target_list = [d.get('text', '') for d in dialogues_data.get(target_lang, [])]
         else:
@@ -668,10 +700,18 @@ class SubtitleProcessor:
 
         if dialogue_idx >= 0 and dialogue_idx < len(target_list):
             return target_list[dialogue_idx]
-        
-        # Fallback: use improved matching
+
+        # No direct match found - check if this is a non-speech subtitle
+        subtitle_text = subtitle.get('text', '')
+        if ('[' in subtitle_text or ']' in subtitle_text or
+            '♪' in subtitle_text or '==' in subtitle_text or
+            'sync' in subtitle_text.lower() or 'font' in subtitle_text.lower()):
+            # Sound effect or metadata - keep original text (don't translate)
+            return subtitle_text
+
+        # Fallback: use improved matching for regular speech
         return self._find_matching_translation(
-            subtitle['text'], 
+            subtitle_text,
             dict(zip([self._clean_text_for_matching(d) for d in source_list], target_list)),
             expression
         )

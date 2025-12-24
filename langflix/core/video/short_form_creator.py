@@ -22,15 +22,9 @@ from langflix.core.models import ExpressionAnalysis
 from langflix.core.video.font_resolver import FontResolver
 from langflix.core.video.overlay_renderer import OverlayRenderer
 from langflix.media.ffmpeg_utils import get_video_params
+from langflix.utils.expression_utils import get_expr_attr
 
 logger = logging.getLogger(__name__)
-
-
-def get_expr_attr(expression, attr_name: str, default=None):
-    """Helper to get attribute from expression object or dict."""
-    if isinstance(expression, dict):
-        return expression.get(attr_name, default)
-    return getattr(expression, attr_name, default)
 
 
 class ShortFormCreator:
@@ -505,17 +499,19 @@ class ShortFormCreator:
         # Calculate min_index for normalization and dialogue_count
         min_index = 0
         dialogue_count = 1
-        if isinstance(dialogues, dict):
+        if isinstance(dialogues, list) and len(dialogues) > 0:
+            # New paired format: [{"index": 0, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+            dialogue_count = len(dialogues)
+            if isinstance(dialogues[0], dict):
+                min_index = dialogues[0].get('index', 0)
+        elif isinstance(dialogues, dict):
+            # Legacy dict format (for backward compatibility)
             # Use English or any first available language to find the starting index
             for lang_code, lines in dialogues.items():
                 if isinstance(lines, list) and len(lines) > 0:
                     dialogue_count = len(lines)
                     min_index = lines[0].get('index', 0)
                     break
-        elif isinstance(dialogues, list) and len(dialogues) > 0:
-            dialogue_count = len(dialogues)
-            if isinstance(dialogues[0], dict):
-                min_index = dialogues[0].get('index', 0)
 
         # Helper to normalize dialogue_index in annotation items
         def normalize_indices(items):

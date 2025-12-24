@@ -12,15 +12,9 @@ import re
 from .models import ExpressionAnalysis
 from .subtitle_parser import parse_srt_file, parse_subtitle_file_by_extension
 from langflix import settings
+from langflix.utils.expression_utils import get_expr_attr, clean_text_for_matching, is_non_speech_subtitle
 
 logger = logging.getLogger(__name__)
-
-# Helper to get attribute from dict or object (dicts or objects)
-def get_expr_attr(expr, key, default=None):
-    """Get attribute from expression - works with both dict and object types."""
-    if isinstance(expr, dict):
-        return expr.get(key, default)
-    return getattr(expr, key, default)
 
 
 class SubtitleProcessor:
@@ -106,32 +100,35 @@ class SubtitleProcessor:
                 logger.debug(f"Found exact match in subtitle: {subtitle['text']}")
                 return subtitle['start_time'], subtitle['end_time'], 1.0
         
+        # UNIFIED MATCHING THRESHOLD: 0.65 for consistency
+        # This prevents some expressions passing at 0.5 while others fail at 0.7
+        MATCH_THRESHOLD = 0.65
+
         # Strategy 2: Fuzzy word sequence matching
         expression_word_list = expression_clean.split()
         for i, subtitle in enumerate(context_subtitles):
-            subtitle_clean = self._clean_text_for_matching(subtitle['text'])
+            subtitle_clean = clean_text_for_matching(subtitle['text'])
             subtitle_word_list = subtitle_clean.split()
-            
+
             # Check for consecutive word sequence match
             score = self._calculate_sequence_match_score(expression_word_list, subtitle_word_list)
-            if score > best_score and score > 0.6:
+            if score > best_score and score > MATCH_THRESHOLD:
                 best_match = (subtitle['start_time'], subtitle['end_time'], score)
                 best_score = score
                 logger.debug(f"Found sequence match (score {score:.2f}): {subtitle['text']}")
-        
-        # Strategy 3: Word overlap with position weighting
-        if not best_match or best_score < 0.8:
-            for subtitle in context_subtitles:
-                subtitle_clean = self._clean_text_for_matching(subtitle['text'])
-                subtitle_words = set(subtitle_clean.split())
-                
-                if expression_words and subtitle_words:
-                    # Calculate weighted overlap considering word position
-                    overlap_score = self._calculate_weighted_overlap(expression_clean, subtitle_clean)
-                    if overlap_score > best_score and overlap_score > 0.5:
-                        best_match = (subtitle['start_time'], subtitle['end_time'], overlap_score)
-                        best_score = overlap_score
-                        logger.debug(f"Found weighted overlap match (score {overlap_score:.2f}): {subtitle['text']}")
+
+        # Strategy 3: Word overlap with position weighting (always try, not conditional)
+        for subtitle in context_subtitles:
+            subtitle_clean = clean_text_for_matching(subtitle['text'])
+            subtitle_words = set(subtitle_clean.split())
+
+            if expression_words and subtitle_words:
+                # Calculate weighted overlap considering word position
+                overlap_score = self._calculate_weighted_overlap(expression_clean, subtitle_clean)
+                if overlap_score > best_score and overlap_score > MATCH_THRESHOLD:
+                    best_match = (subtitle['start_time'], subtitle['end_time'], overlap_score)
+                    best_score = overlap_score
+                    logger.debug(f"Found weighted overlap match (score {overlap_score:.2f}): {subtitle['text']}")
         
         # Strategy 4: Multi-subtitle span matching for longer expressions
         if not best_match and len(expression_word_list) > 3:
@@ -188,22 +185,25 @@ class SubtitleProcessor:
         """Find matches that span multiple subtitles for longer expressions"""
         if len(context_subtitles) < 2:
             return None
-        
+
+        # Use consistent threshold (0.65) across all matching strategies
+        MATCH_THRESHOLD = 0.65
+
         # Try to find expression across 2-3 consecutive subtitles
         for i in range(min(len(context_subtitles), 3)):
             combined_text = " ".join([
-                self._clean_text_for_matching(sub['text']) 
+                clean_text_for_matching(sub['text'])
                 for sub in context_subtitles[i:i+2]
             ])
             combined_words = combined_text.split()
-            
+
             score = self._calculate_sequence_match_score(expression_words, combined_words)
-            if score > 0.7:
+            if score > MATCH_THRESHOLD:
                 # Use the timing of the first subtitle as start
                 start_subtitle = context_subtitles[i]
                 end_subtitle = context_subtitles[min(i+1, len(context_subtitles)-1)]
                 return start_subtitle['start_time'], end_subtitle['end_time'], score
-            
+
         return None
 
     def find_expression_timing(self, expression: ExpressionAnalysis) -> tuple[str, str]:
@@ -233,7 +233,7 @@ class SubtitleProcessor:
             # Clean the expression text for matching
             expr_text = get_expr_attr(expression, 'expression', '')
             expression_text = expr_text.lower().strip()
-            expression_clean = self._clean_text_for_matching(expr_text)
+            expression_clean = clean_text_for_matching(expr_text)
             expression_words = set(expression_clean.split())
             
             best_match_start = None
@@ -479,38 +479,39 @@ class SubtitleProcessor:
         # Get context start time to adjust all subtitle timestamps
         context_start_time = self._time_to_timedelta(get_expr_attr(expression, 'context_start_time'))
         
-        # Get dialogues and translations (handle both list and dict)
+        # Get dialogues and translations (handle new paired format)
         dialogues_data = get_expr_attr(expression, 'dialogues', [])
-        
+
         # Prepare lists for mapping
         source_dialogues = []
         translations = []
-        
-        if isinstance(dialogues_data, dict):
-            # Determine target language from expression or first non-english key
-            target_lang = get_expr_attr(expression, 'target_lang')
-            if not target_lang or target_lang not in dialogues_data:
-                target_lang = next((k for k in dialogues_data.keys() if k != 'en'), 'ko')
-            
-            # Source is usually 'en'
-            source_lang = get_expr_attr(expression, 'source_lang') or 'en'
-            
-            target_entries = dialogues_data.get(target_lang, [])
-            source_entries = dialogues_data.get(source_lang, [])
-            
-            # Extract just the text for the mapping logic
-            source_dialogues = [d.get('text', '') for d in source_entries]
-            translations = [d.get('text', '') for d in target_entries]
+
+        # Determine source and target language codes
+        source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+        target_lang = get_expr_attr(expression, 'target_lang') or 'ko'
+
+        if isinstance(dialogues_data, list) and len(dialogues_data) > 0:
+            # Check if it's new paired format or old string list format
+            if isinstance(dialogues_data[0], dict):
+                # New paired format: [{"index": 0, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+                # Extract source and target dialogues from paired entries
+                for entry in dialogues_data:
+                    source_dialogues.append(entry.get(source_lang, ''))
+                    translations.append(entry.get(target_lang, ''))
+            else:
+                # Old format: list of strings
+                source_dialogues = dialogues_data
+                translations = get_expr_attr(expression, 'translation', [])
         else:
-            # Legacy list format
-            source_dialogues = dialogues_data
+            # Fallback for empty or non-list dialogues
+            source_dialogues = []
             translations = get_expr_attr(expression, 'translation', [])
         
         # Create a mapping between dialogue text and translations
         dialogue_translation_map = {}
         if len(source_dialogues) == len(translations):
             for dialogue, translation in zip(source_dialogues, translations):
-                clean_dialogue = self._clean_text_for_matching(dialogue)
+                clean_dialogue = clean_text_for_matching(dialogue)
                 dialogue_translation_map[clean_dialogue] = translation
         
         subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, source_dialogues)
@@ -527,6 +528,12 @@ class SubtitleProcessor:
             
             # Skip subtitles that are completely before context start
             if relative_end.total_seconds() <= 0:
+                continue
+
+            # Strict filter for metadata/credits in OUTPUT generation
+            raw_text = subtitle['text'].lower()
+            if ('sync' in raw_text and 'corrected by' in raw_text) or \
+               ('==' in raw_text and 'elderman' in raw_text):
                 continue
             
             if relative_start.total_seconds() < 0:
@@ -578,14 +585,26 @@ class SubtitleProcessor:
         subtitle_to_dialogue = []
         
         # Clean dialogues for matching
-        clean_dialogues = [self._clean_text_for_matching(dialogue) for dialogue in dialogues]
+        clean_dialogues = [clean_text_for_matching(dialogue) for dialogue in dialogues]
         
         # Accumulate subtitle text to match against full dialogues
         accumulated_text = ""
         current_dialogue_idx = -1
         
+        # Pre-filter subtitles to ignore junk metadata
+        # We process them but mark them as -1 immediately in the loop
+        
         for i, subtitle in enumerate(subtitles):
-            clean_subtitle = self._clean_text_for_matching(subtitle['text'])
+            # Strict filter for metadata/credits
+            raw_text = subtitle['text'].lower()
+            if ('sync' in raw_text and 'corrected by' in raw_text) or \
+               ('==' in raw_text and 'elderman' in raw_text) or \
+               ('<font' in raw_text):
+                logger.debug(f"SKIPPING METADATA: Subtitle '{subtitle['text']}' identified as junk metadata.")
+                subtitle_to_dialogue.append(-1)
+                continue
+
+            clean_subtitle = clean_text_for_matching(subtitle['text'])
             
             # Try to find which dialogue this subtitle belongs to
             best_match_idx = -1
@@ -636,17 +655,15 @@ class SubtitleProcessor:
                     # New dialogue detected, reset accumulation
                     accumulated_text = clean_subtitle
                     current_dialogue_idx = best_match_idx
-                    logger.info(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Score: {best_score:.2f})")
+                    logger.debug(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Score: {best_score:.2f})")
                 else:
                     # Same dialogue, accumulate
                     accumulated_text = test_accumulated
-                    # logger.info(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Accumulating)")
+                    # logger.debug(f"MATCH: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Accumulating)")
             else:
                 # No match found - don't reuse previous dialogue for non-speech subtitles
-                # Check if this looks like a sound effect or metadata (brackets, special chars)
-                if ('[' in subtitle['text'] or ']' in subtitle['text'] or
-                    '♪' in subtitle['text'] or '==' in subtitle['text'] or
-                    'sync' in subtitle['text'].lower() or 'font' in subtitle['text'].lower()):
+                # Check if this looks like a sound effect or metadata
+                if is_non_speech_subtitle(subtitle['text']):
                     # This is likely metadata/sound effect, don't map to any dialogue
                     best_match_idx = -1
                     # Don't update accumulated_text or current_dialogue_idx
@@ -655,18 +672,18 @@ class SubtitleProcessor:
                     # Only reuse if subtitle is very short (likely part of previous line)
                     best_match_idx = current_dialogue_idx
                     accumulated_text = test_accumulated
-                    logger.info(f"FALLBACK: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Short Continuation)")
+                    logger.debug(f"FALLBACK: Subtitle '{clean_subtitle[:20]}...' -> Dialogue {best_match_idx} (Short Continuation)")
                 else:
                     # Longer subtitle with no match - keep as -1 (will use fallback translation)
                     best_match_idx = -1
                     # Reset accumulation
                     accumulated_text = ""
-                    logger.info(f"NO MATCH: Subtitle '{clean_subtitle[:30]}...' (Clean: '{clean_subtitle}')")
+                    logger.debug(f"NO MATCH: Subtitle '{clean_subtitle[:30]}...' (Clean: '{clean_subtitle}')")
 
             subtitle_to_dialogue.append(best_match_idx)
 
             # Debug logging for mismatches (only log failures)
-            if best_match_idx == -1 and not ('[' in subtitle['text'] or ']' in subtitle['text']):
+            if best_match_idx == -1 and not is_non_speech_subtitle(subtitle['text']):
                 pass # Already logged above as info
                 
         return subtitle_to_dialogue
@@ -686,16 +703,24 @@ class SubtitleProcessor:
         source_list = []
         target_list = []
 
-        if isinstance(dialogues_data, dict):
-            target_lang = get_expr_attr(expression, 'target_lang')
-            if not target_lang or target_lang not in dialogues_data:
-                target_lang = next((k for k in dialogues_data.keys() if k != 'en'), 'ko')
-            source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+        # Determine source and target language codes
+        source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+        target_lang = get_expr_attr(expression, 'target_lang') or 'ko'
 
-            source_list = [d.get('text', '') for d in dialogues_data.get(source_lang, [])]
-            target_list = [d.get('text', '') for d in dialogues_data.get(target_lang, [])]
+        if isinstance(dialogues_data, list) and len(dialogues_data) > 0:
+            # Check if it's new paired format or old string list format
+            if isinstance(dialogues_data[0], dict):
+                # New paired format: [{"index": 0, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+                for entry in dialogues_data:
+                    source_list.append(entry.get(source_lang, ''))
+                    target_list.append(entry.get(target_lang, ''))
+            else:
+                # Old format: list of strings
+                source_list = dialogues_data
+                target_list = get_expr_attr(expression, 'translation', [])
         else:
-            source_list = dialogues_data
+            # Fallback for empty or non-list dialogues
+            source_list = []
             target_list = get_expr_attr(expression, 'translation', [])
 
         if dialogue_idx >= 0 and dialogue_idx < len(target_list):
@@ -703,29 +728,16 @@ class SubtitleProcessor:
 
         # No direct match found - check if this is a non-speech subtitle
         subtitle_text = subtitle.get('text', '')
-        if ('[' in subtitle_text or ']' in subtitle_text or
-            '♪' in subtitle_text or '==' in subtitle_text or
-            'sync' in subtitle_text.lower() or 'font' in subtitle_text.lower()):
+        if is_non_speech_subtitle(subtitle_text):
             # Sound effect or metadata - keep original text (don't translate)
             return subtitle_text
 
         # Fallback: use improved matching for regular speech
         return self._find_matching_translation(
             subtitle_text,
-            dict(zip([self._clean_text_for_matching(d) for d in source_list], target_list)),
+            dict(zip([clean_text_for_matching(d) for d in source_list], target_list)),
             expression
         )
-    
-    def _clean_text_for_matching(self, text: str) -> str:
-        """Clean text for better matching between dialogue and subtitle"""
-        if not text:
-            return ""
-        
-        # Remove extra whitespace, normalize case, remove punctuation
-        cleaned = " ".join(text.strip().lower().split())
-        # Remove common punctuation that might cause mismatch
-        cleaned = ''.join(c for c in cleaned if c.isalnum() or c.isspace())
-        return cleaned
     
     def _find_matching_translation(self, subtitle_text: str, dialogue_translation_map: dict, expression: ExpressionAnalysis) -> str:
         """Find the best matching translation for a subtitle text"""
@@ -733,7 +745,7 @@ class SubtitleProcessor:
             return get_expr_attr(expression, 'expression_translation', '')
         
         # Clean the subtitle text for matching
-        clean_subtitle = self._clean_text_for_matching(subtitle_text)
+        clean_subtitle = clean_text_for_matching(subtitle_text)
         
         # Try exact match first
         for dialogue_key, translation in dialogue_translation_map.items():

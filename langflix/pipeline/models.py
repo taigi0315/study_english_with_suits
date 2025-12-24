@@ -113,8 +113,9 @@ class TranslationResult(BaseModel):
     expression_end_time: Optional[str] = None
 
     # Bilingual dialogues (for subtitle mapping)
-    # Format: {"en": [{"index": 3, "timestamp": "...", "text": "..."}], "ko": [...]}
-    dialogues: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+    # New Format: [{"index": 3, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+    # Each dialogue entry contains all language translations paired together
+    dialogues: List[Dict[str, Any]] = Field(default_factory=list)
     
     scene_type: Optional[str] = None
     similar_expressions: List[str] = Field(default_factory=list)

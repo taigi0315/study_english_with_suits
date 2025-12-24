@@ -576,53 +576,53 @@ class ScriptAgent:
         expr['dialogue_lines'] = [line['text'] for line in subtitle_lines[start_idx : end_idx + 1]]
         
         # -------------------------------------------------------------------------
-        # PROGRAMMATICALLY CONSTRUCT DIALOGUES (Robustness Fix)
+        # PROGRAMMATICALLY CONSTRUCT DIALOGUES (New Paired Format)
         # -------------------------------------------------------------------------
-        # We REBUILD the dialogues object from the source/target chunks
-        # instead of trusting the LLM's output which can be hallucinated or repetitive.
-        
-        constructed_dialogues = {
-            source_lang_code: [],
-            target_lang_code: []
-        }
-        
+        # We REBUILD the dialogues as a list where each entry contains ALL language
+        # translations paired together. This reduces LLM hallucination by keeping
+        # translations aligned by index.
+        #
+        # New Format: [{"index": 0, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+
+        constructed_dialogues = []
+
         # Indices are relative to the chunk (0-based)
         # The 'index' field in the output should probably match the LLM's view (local index)
         # or global index if we had it. The prompt uses local indices [0..N].
-        
+
         for i in range(start_idx, end_idx + 1):
             # Source Entry
             src_line = subtitle_lines[i]
-            constructed_dialogues[source_lang_code].append({
+
+            dialogue_entry = {
                 "index": i,
                 "timestamp": f"{src_line['start_time']} --> {src_line['end_time']}",
-                "text": src_line['text']
-            })
-            
+                source_lang_code: src_line['text']
+            }
+
             # Target Entry (if file exists)
             # We assume 1-to-1 mapping by index for now (which is how the chunker works)
             if target_subtitle_lines and i < len(target_subtitle_lines):
                 tgt_line = target_subtitle_lines[i]
-                constructed_dialogues[target_lang_code].append({
-                    "index": i,
-                    "timestamp": f"{tgt_line['start_time']} --> {tgt_line['end_time']}",
-                    "text": tgt_line['text']
-                })
-
-        # HYBRID STRATEGY:
-        # 1. Source is ALWAYS from file (100% accurate)
-        # 2. Target is from file if available (100% accurate)
-        # 3. If target file missing (Legacy/Translation Mode), use LLM output
-        
-        if not target_subtitle_lines:
-            # Fallback to LLM output for target language
-            llm_dialogues = expr.get('dialogues', {})
-            if isinstance(llm_dialogues, dict) and target_lang_code in llm_dialogues:
-                 constructed_dialogues[target_lang_code] = llm_dialogues[target_lang_code]
+                dialogue_entry[target_lang_code] = tgt_line['text']
             else:
-                 # If no dialogues found, create an empty list to avoid errors
-                 constructed_dialogues[target_lang_code] = []
-                
+                # No target subtitle file available
+                # Try to get from LLM output (fallback for Legacy/Translation Mode)
+                llm_dialogues = expr.get('dialogues', [])
+                if isinstance(llm_dialogues, list):
+                    # Check if LLM already returned the new format
+                    for llm_entry in llm_dialogues:
+                        if llm_entry.get("index") == i:
+                            dialogue_entry[target_lang_code] = llm_entry.get(target_lang_code, "")
+                            break
+                    else:
+                        dialogue_entry[target_lang_code] = ""
+                else:
+                    # LLM might still return old format, leave empty
+                    dialogue_entry[target_lang_code] = ""
+
+            constructed_dialogues.append(dialogue_entry)
+
         # Overwrite the LLM's dialogues with our robustly constructed ones
         expr['dialogues'] = constructed_dialogues
         

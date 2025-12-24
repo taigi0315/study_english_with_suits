@@ -1148,12 +1148,12 @@ class LangFlixPipeline:
         target_subtitles = parse_subtitle_file(str(target_subtitle_file))
 
         if source_subtitles:
-            logger.info(f"DEBUG: First source subtitle (raw): {source_subtitles[0]}")
-            logger.info(f"DEBUG: Last source subtitle (raw): {source_subtitles[-1]}")
+            logger.debug(f"First source subtitle (raw): {source_subtitles[0]}")
+            logger.debug(f"Last source subtitle (raw): {source_subtitles[-1]}")
 
         if target_subtitles:
-            logger.info(f"DEBUG: First target subtitle (raw): {target_subtitles[0]}")
-            logger.info(f"DEBUG: Last target subtitle (raw): {target_subtitles[-1]}")
+            logger.debug(f"First target subtitle (raw): {target_subtitles[0]}")
+            logger.debug(f"Last target subtitle (raw): {target_subtitles[-1]}")
 
         # Create chunks from both source and target subtitles
         # For Pipeline, limit subtitles per chunk to avoid LLM truncation
@@ -1294,7 +1294,7 @@ class LangFlixPipeline:
 
                 # Add translations from localization data
                 for loc in result.localizations:
-                    logger.info(f"DEBUG: Processing loc for {loc.target_lang}: Title='{loc.viral_title}', Vocab={len(loc.vocabulary_annotations)}")
+                    logger.debug(f"Processing loc for {loc.target_lang}: Title='{loc.viral_title}', Vocab={len(loc.vocabulary_annotations)}")
                     # Match against the configured target language (checking both name and potential code)
                     # Handle precise matching (e.g. 'Spanish' vs 'SPANISH')
                     if (loc.target_lang.lower() == target_lang_name.lower() or 

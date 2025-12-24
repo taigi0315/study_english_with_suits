@@ -327,7 +327,7 @@ def analyze_chunk(subtitle_chunk: List[dict], language_level: str = None, langua
                     # DEBUG: Log vocabulary annotations from response
                     for i, expr in enumerate(expressions):
                         vocab = getattr(expr, 'vocabulary_annotations', [])
-                        logger.info(f"DEBUG: Analyzed Expression {i+1} vocab raw: {vocab}")
+                        logger.debug(f"Analyzed Expression {i+1} vocab raw: {vocab}")
                     
                     # Save to test cache if test_llm mode is enabled
                     if test_llm:

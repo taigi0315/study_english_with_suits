@@ -16,19 +16,13 @@ from .models import ExpressionAnalysis
 from .cache_manager import get_cache_manager
 from langflix import settings
 from langflix.settings import get_expression_subtitle_styling
-from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain
+from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain, apply_loudness_normalization
 from langflix.subtitles import overlay as subs_overlay
 from langflix.utils.filename_utils import sanitize_for_expression_filename
+from langflix.utils.expression_utils import get_expr_attr
 from .error_handler import handle_error_decorator, ErrorContext, retry_on_error
 
 logger = logging.getLogger(__name__)
-
-# Helper to get attribute from dict or object (dicts or objects)
-def get_expr_attr(expr, key, default=None):
-    """Get attribute from expression - works with both dict and object types."""
-    if isinstance(expr, dict):
-        return expr.get(key, default)
-    return getattr(expr, key, default)
 
 class VideoEditor:
     """
@@ -203,7 +197,8 @@ class VideoEditor:
         expression_video_path: str,
         expression_index: int = 0,
         pre_extracted_context_clip: Optional[Path] = None,
-        language_code: Optional[str] = None
+        language_code: Optional[str] = None,
+        subtitle_path: Optional[str] = None
     ) -> str:
         """
         Create long-form video with unified layout:
@@ -216,8 +211,9 @@ class VideoEditor:
             context_video_path: Path to context video (used for extracting expression clip if pre_extracted_context_clip not provided)
             expression_video_path: Path to expression video (for audio extraction)
             expression_index: Index of expression (for voice alternation)
-            pre_extracted_context_clip: Optional pre-extracted context clip path (reused for multi-language)
+            pre_extracted_context_clip: Optional pre-extracted context clip path (Clean)
             language_code: Optional language code for language-specific subtitle paths
+            subtitle_path: Optional path to SRT/ASS file to burn into context
             
         Returns:
             Path to created long-form video
@@ -385,6 +381,24 @@ class VideoEditor:
             reset_input = ffmpeg.input(str(context_clip_path))
             reset_video = ffmpeg.filter(reset_input['v'], 'setpts', 'PTS-STARTPTS')
             reset_audio = ffmpeg.filter(reset_input['a'], 'asetpts', 'PTS-STARTPTS')
+
+            # Burn subtitles if provided (Clean Source -> Burned Output)
+            if subtitle_path and Path(subtitle_path).exists():
+                logger.info(f"Burning subtitles for Long Form: {subtitle_path}")
+                # Long Form (16:9) style:
+                # FontSize=16 (standard), MarginV=35 (bottom)
+                try:
+                    from langflix.settings import FONTS_DIR
+                    style_string = "FontSize=16,MarginV=35,Outline=1,Shadow=1"
+                    reset_video = ffmpeg.filter(
+                        reset_video,
+                        'subtitles',
+                        subtitle_path,
+                        force_style=style_string,
+                        fontsdir=str(FONTS_DIR)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to apply subtitles filter: {e}")
 
             # Get quality settings from config (TICKET-072: improved quality)
             video_args = self._get_video_output_args(source_video_path=context_video_path)
@@ -717,10 +731,10 @@ class VideoEditor:
             else:
                 logger.debug(f"Logo file not found: {logo_path}, continuing without logo")
             
-            # Step 7: Apply final audio gain
-            logger.info("Applying final audio gain to long-form video")
-            from langflix.media.ffmpeg_utils import apply_final_audio_gain
-            apply_final_audio_gain(str(long_form_temp_path), str(output_path), gain_factor=1.69)
+            # Step 7: Apply loudness normalization (EBU R128 standard for YouTube/Mobile)
+            logger.info("Applying loudness normalization to long-form video (Target: -16 LUFS)")
+            from langflix.media.ffmpeg_utils import apply_loudness_normalization
+            apply_loudness_normalization(str(long_form_temp_path), str(output_path), target_lufs=-16.0)
             
             logger.info(f"✅ Long-form video created: {output_path}")
             
@@ -1632,7 +1646,7 @@ class VideoEditor:
                             .output(video_input['v'], audio_input['a'], str(output_path),
                                    vcodec=video_args.get('vcodec', 'libx264'),
                                    acodec=video_args.get('acodec', 'aac'),
-                                   audio_bitrate='256k',
+                                   audio_bitrate='320k',
                                    preset=video_args.get('preset', 'slow'),
                                    crf=video_args.get('crf', 18))
                             .overwrite_output()

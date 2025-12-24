@@ -832,7 +832,34 @@ class OverlayRenderer:
 
     @staticmethod
     def _clean_html(text: str) -> str:
-        """Remove HTML tags from text."""
+        """Remove HTML tags and remove emojis/unsupported symbols."""
         if not text:
             return ""
-        return re.sub(r'<[^>]+>', '', text)
+        # Remove HTML tags
+        clean = re.sub(r'<[^>]+>', '', text)
+        # Sanitize text
+        return OverlayRenderer._sanitize_text(clean)
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        """
+        Sanitize text by removing emojis and unsupported special characters.
+        Keeps alphanumerics, punctuation, Hangul, and Latin extensions.
+        """
+        if not text:
+            return ""
+        
+        # 1. Remove non-BMP characters (Astral Plane) - this covers most modern emojis (U+10000-U+10FFFF)
+        # Python structs are unicode, so filtering by ord() is reliable
+        text = "".join(c for c in text if ord(c) <= 0xFFFF)
+        
+        # 2. Remove specific BMP symbol ranges often used as icons
+        # Dingbats (U+2700-U+27BF)
+        # Misc Symbols (U+2600-U+26FF)
+        # Transport and Map Symbols are mostly Astral, but some older ones might be here
+        
+        # Using regex to remove specific ranges within BMP
+        text = re.sub(r'[\u2600-\u27BF]', '', text) # Misc Symbols + Dingbats
+        text = re.sub(r'[\u200B-\u200F\uFEFF]', '', text) # Zero width spaces/joiners
+
+        return text.strip()

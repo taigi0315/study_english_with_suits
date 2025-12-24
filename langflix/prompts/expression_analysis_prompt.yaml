@@ -203,38 +203,34 @@ prompt: |
 
   **DIALOGUES FIELD - BILINGUAL SUBTITLE EXTRACTION:**
 
-  For each expression, include the complete subtitle data for the context range in BOTH languages.
-  **CRITICAL:** Maintain the EXACT original structure - only the text content changes between languages.
-
-  **Structure per dialogue entry:**
-  ```json
-  {{
-    "index": 3,
-    "timestamp": "00:00:49,460 --> 00:00:50,527",
-    "text": "dialogue text here"
-  }}
-  ```
+  For each expression, include the complete subtitle data for the context range with BOTH languages paired together.
+  **NEW FORMAT:** Each dialogue entry contains ALL language translations paired together to prevent misalignment.
 
   **Format:**
   ```json
-  "dialogues": {{
-    "{source_language_code}": [
-      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "Gerald Tate's here."}},
-      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "He wants to know what's happening to his deal."}}
-    ],
-    "{target_language_code}": [
-      {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "제럴드 테이트가 왔어요."}},
-      {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "자기 거래가 어떻게 됐는지 알고 싶대요."}}
-    ]
-  }}
+  "dialogues": [
+    {{
+      "index": 3,
+      "timestamp": "00:00:49,460 --> 00:00:50,527",
+      "{source_language_code}": "Gerald Tate's here.",
+      "{target_language_code}": "제럴드 테이트가 왔어요."
+    }},
+    {{
+      "index": 4,
+      "timestamp": "00:00:50,595 --> 00:00:51,929",
+      "{source_language_code}": "He wants to know what's happening to his deal.",
+      "{target_language_code}": "자기 거래가 어떻게 됐는지 알고 싶대요."
+    }}
+  ]
   ```
 
   **Rules:**
   - Extract dialogue entries from `context_start_index` to `context_end_index` (inclusive)
   - **index**: MUST match the original subtitle index exactly
-  - **timestamp**: MUST be copied exactly from source (same for both languages)
-  - **text**: Copy the dialogue text from respective source/target dialogues
-  - Both language arrays must have the SAME entries (matching index and timestamp)
+  - **timestamp**: MUST be copied exactly from source
+  - **{source_language_code}**: Source language text (e.g., "en": "English text")
+  - **{target_language_code}**: Target language text (e.g., "ko": "한국어 텍스트")
+  - Each entry pairs the translations together to prevent hallucination
   - Use ISO 639-1 language codes (e.g., "en", "ko", "es", "ja", "zh")
 
   ---
@@ -252,18 +248,26 @@ prompt: |
         "expression_dialogue_index": 5,
         "context_start_index": 2,
         "context_end_index": 12,
-        "dialogues": {{
-          "{source_language_code}": [
-            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{source_language} text"}},
-            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{source_language} text"}},
-            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{source_language} text"}}
-          ],
-          "{target_language_code}": [
-            {{"index": 2, "timestamp": "00:00:20,765 --> 00:00:23,933", "text": "{target_language} text"}},
-            {{"index": 3, "timestamp": "00:00:49,460 --> 00:00:50,527", "text": "{target_language} text"}},
-            {{"index": 4, "timestamp": "00:00:50,595 --> 00:00:51,929", "text": "{target_language} text"}}
-          ]
-        }},
+        "dialogues": [
+          {{
+            "index": 2,
+            "timestamp": "00:00:20,765 --> 00:00:23,933",
+            "{source_language_code}": "{source_language} text",
+            "{target_language_code}": "{target_language} text"
+          }},
+          {{
+            "index": 3,
+            "timestamp": "00:00:49,460 --> 00:00:50,527",
+            "{source_language_code}": "{source_language} text",
+            "{target_language_code}": "{target_language} text"
+          }},
+          {{
+            "index": 4,
+            "timestamp": "00:00:50,595 --> 00:00:51,929",
+            "{source_language_code}": "{source_language} text",
+            "{target_language_code}": "{target_language} text"
+          }}
+        ],
         "narrations": [
           {{"dialogue_index": 2, "text": "{target_language} narration", "type": "hook"}},
           {{"dialogue_index": 5, "text": "{target_language} narration", "type": "highlight"}},
@@ -306,10 +310,10 @@ prompt: |
   - ✓ First-time viewer can understand what's happening
   
   **Dialogues Field:**
-  - ✓ Contains both {source_language_code} and {target_language_code} arrays
-  - ✓ Each entry has: index, timestamp, text
-  - ✓ index and timestamp are IDENTICAL between both languages
-  - ✓ Only text content differs between languages
+  - ✓ Array of paired dialogue entries (not language-separated)
+  - ✓ Each entry has: index, timestamp, {source_language_code}, {target_language_code}
+  - ✓ Each entry contains BOTH language translations paired together
+  - ✓ index and timestamp are the same across all entries
   - ✓ Covers all entries from context_start_index to context_end_index
 
   **Language Compliance:**
@@ -317,8 +321,8 @@ prompt: |
   - ✓ `viral_title`, `expression`, `similar_expressions` → {source_language}
   - ✓ All `translation` fields → {target_language}
   - ✓ Annotation `word`/`expression` fields → {source_language}
-  - ✓ `dialogues.{source_language_code}[].text` → {source_language}
-  - ✓ `dialogues.{target_language_code}[].text` → {target_language}
+  - ✓ `dialogues[].{source_language_code}` → {source_language}
+  - ✓ `dialogues[].{target_language_code}` → {target_language}
 
   **Technical:**
   - ✓ expression_dialogue_index is BETWEEN context_start_index and context_end_index (CRITICAL!)

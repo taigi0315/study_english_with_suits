@@ -50,22 +50,22 @@ class VideoFactory:
         logger.info(f"Creating long-form videos for {len(expressions)} expressions in {len(target_languages)} languages...")
         
         # Dual-subtitle mode: use explicit video_file if provided, otherwise try subtitle_file path
-        logger.info(f"DEBUG: video_file={video_file}, subtitle_file={subtitle_file}")
-        logger.info(f"DEBUG: video_processor.video_file={video_processor.video_file}")
+        logger.debug(f"video_file={video_file}, subtitle_file={subtitle_file}")
+        logger.debug(f"video_processor.video_file={video_processor.video_file}")
         reference_path = str(video_file) if video_file else (str(subtitle_file) if subtitle_file else None)
-        logger.info(f"DEBUG: reference_path={reference_path}")
+        logger.debug(f"reference_path={reference_path}")
         original_video = video_processor.find_video_file(reference_path) if reference_path else None
-        
+
         if not original_video:
             logger.error("No original video file found, cannot create long-form videos")
             raise RuntimeError("Original video file not found")
-        
+
         logger.info(f"Using original video file: {original_video}")
-        logger.info(f"DEBUG: original_video exists: {Path(original_video).exists()}")
-        
+        logger.debug(f"original_video exists: {Path(original_video).exists()}")
+
         # Step 1: Extract video slices (reused) - These are RAW clips (no subs)
         extracted_slices = self._extract_slices(expressions, video_processor, original_video, test_mode=test_mode)
-        logger.info(f"DEBUG: Extracted {len(extracted_slices)} slices from {len(expressions)} expressions")
+        logger.debug(f"Extracted {len(extracted_slices)} slices from {len(expressions)} expressions")
         
         # Step 2: Create videos for each language
         all_long_form_videos = {}
@@ -173,11 +173,11 @@ class VideoFactory:
                 
                 # Debug: Log vocabulary annotations
                 vocab = get_expr_attr(expression, 'vocabulary_annotations', [])
-                logger.info(f"DEBUG: Expression {expr_idx} vocab annotations raw: {vocab}")
+                logger.debug(f"Expression {expr_idx} vocab annotations raw: {vocab}")
                 if isinstance(vocab, list):
-                    logger.info(f"DEBUG: Found {len(vocab)} annotations in Factory")
+                    logger.debug(f"Found {len(vocab)} annotations in Factory")
                 else:
-                    logger.info(f"DEBUG: Vocab annotations is {type(vocab)}")
+                    logger.debug(f"Vocab annotations is {type(vocab)}")
                 
                 if expr_idx not in master_clips:
                     logger.warning(f"Skipping video creation for expression {expr_idx}: No master clip")
@@ -307,7 +307,7 @@ class VideoFactory:
                 
                 start_time = get_expr_attr(base_expression, 'context_start_time')
                 end_time = get_expr_attr(base_expression, 'context_end_time')
-                logger.info(f"DEBUG: Expression {expr_idx+1} timing: {start_time} -> {end_time}")
+                logger.debug(f"Expression {expr_idx+1} timing: {start_time} -> {end_time}")
                 
                 if not start_time or not end_time:
                     logger.warning(f"Skipping expression {expr_idx+1}: Missing timestamps (start={start_time}, end={end_time})")

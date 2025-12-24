@@ -458,13 +458,13 @@ def make_audio_encode_args(normalize: bool = False, quality: str = "high") -> Di
     """
     if normalize:
         # Use high-quality AAC encoding to preserve original audio quality
-        # High bitrate (256kbps) ensures minimal quality loss during re-encoding
+        # High bitrate (320kbps) ensures minimal quality loss during re-encoding
         bitrate_map = {
-            "high": "256k",
+            "high": "320k",
             "medium": "192k",
             "low": "128k"
         }
-        bitrate = bitrate_map.get(quality, "256k")
+        bitrate = bitrate_map.get(quality, "320k")
         return {
             "acodec": "aac",
             "ac": 2,  # Stereo
@@ -1048,41 +1048,40 @@ def repeat_av_demuxer(input_path: str, repeat_count: int, out_path: Path | str) 
     ensure_dir(Path(out_path))
 
 
-# --------------------------- Final audio gain helpers ---------------------------
+# --------------------------- Final audio optimization helpers ---------------------------
 
-def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: float = 1.25) -> None:
-    """Apply audio gain as a separate final pass (simple map, no filter_complex).
+def apply_loudness_normalization(input_path: str, out_path: Path | str, target_lufs: float = -16.0) -> None:
+    """Apply loudness normalization using loudnorm filter (EBU R128).
     
-    This function applies volume boost to audio stream while preserving video stream
-    as-is. Used as the final step in the pipeline to boost audio without modifying
-    the video stream or using complex filter graphs.
+    This replaces simple gain boosting with sophisticated loudness normalization
+    targeting YouTube/Mobile standards (-16 LUFS default).
     
     Args:
         input_path: Path to input video file
         out_path: Path to output video file
-        gain_factor: Audio gain multiplier (default 1.25 = +25%)
-    
-    Returns:
-        None (writes to out_path)
+        target_lufs: Target Integrated Loudness (default -16.0 for YouTube)
     """
     input_stream = ffmpeg.input(str(input_path))
-    
-    # Get video and audio streams
     video_stream = input_stream['v']
     audio_stream = input_stream['a']
     
-    # Apply volume filter to audio only
-    boosted_audio = audio_stream.filter('volume', str(gain_factor))
+    # Loudness Normalization params:
+    # I: Integrated loudness target (YouTube is -14 to -16 LUFS)
+    # LRA: Loudness Range target (11 LU is good for general content)
+    # TP: True Peak limit (-1.5 dBTP to leave headroom)
+    loudnorm_filter = f"loudnorm=I={target_lufs}:LRA=11:TP=-1.5"
     
-    # Output with explicit stream mapping
-    # Video: copy if possible, Audio: boosted (requires encoding due to filter)
+    # Apply loudnorm filter to audio
+    normalized_audio = audio_stream.filter('loudnorm', I=target_lufs, LRA=11, TP=-1.5)
+    
+    # Output encoding args - prioritize copy for video, AAC 320k for audio
     if should_copy_video(str(input_path)):
         encode_args = {
             'vcodec': 'copy',
             'acodec': 'aac',
             'ac': 2,
             'ar': 48000,
-            'b:a': '256k'
+            'b:a': '320k'
         }
     else:
         encode_args = {
@@ -1090,26 +1089,36 @@ def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: f
             'acodec': 'aac',
             'ac': 2,
             'ar': 48000,
-            'b:a': '256k'
+            'b:a': '320k'
         }
-    
+        
     try:
         (
             ffmpeg
-            .output(video_stream, boosted_audio, str(out_path), **encode_args)
+            .output(video_stream, normalized_audio, str(out_path), **encode_args)
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
         )
         ensure_dir(Path(out_path))
+        logger.info(f"✅ Applied loudness normalization to {target_lufs} LUFS: {out_path}")
     except ffmpeg.Error as e:
         stderr = e.stderr.decode('utf-8') if e.stderr else str(e)
         logger.error(
-            f"❌ apply_final_audio_gain FAILED:\n"
+            f"❌ apply_loudness_normalization FAILED:\n"
             f"   Input: {input_path}\n"
             f"   Output: {out_path}\n"
-            f"   Gain: {gain_factor}\n"
+            f"   Target: {target_lufs} LUFS\n"
             f"   Error: {stderr[:1000]}"
         )
         raise
+
+def apply_final_audio_gain(input_path: str, out_path: Path | str, gain_factor: float = 1.25) -> None:
+    """Wrapper for backward compatibility - calls apply_loudness_normalization.
+    
+    DEPRECATED: Use apply_loudness_normalization directly.
+    The `gain_factor` argument is ignored in favor of standard loudness targets.
+    """
+    logger.info(f"DEPRECATED: apply_final_audio_gain called with gain={gain_factor}. using loudness normalization instead.")
+    return apply_loudness_normalization(input_path, out_path, target_lufs=-16.0)
 
 

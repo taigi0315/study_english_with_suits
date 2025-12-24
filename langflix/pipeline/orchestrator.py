@@ -179,17 +179,13 @@ class Pipeline:
             # Extract localized dialogue if possible
             expr_dial_trans = ""
             expr_idx = expression.get("expression_dialogue_index")
-            dialogues = expression.get("dialogues", {})
-            
-            # Robustness: Check if dialogues is actually a dict as expected by TranslationResult
-            if not isinstance(dialogues, dict):
-                logger.warning(f"Expression {idx} 'dialogues' is not a dict (got {type(dialogues)}). Using empty dict.")
-                dialogues = {}
+            dialogues = expression.get("dialogues", [])
 
-            if expr_idx is not None and isinstance(dialogues, dict) and target_lang_code in dialogues:
-                for dial in dialogues[target_lang_code]:
-                    if dial.get("index") == expr_idx:
-                        expr_dial_trans = dial.get("text", "")
+            # New format: dialogues is a list of {index, timestamp, en, ko, ...}
+            if expr_idx is not None and isinstance(dialogues, list):
+                for dial_entry in dialogues:
+                    if dial_entry.get("index") == expr_idx:
+                        expr_dial_trans = dial_entry.get(target_lang_code, "")
                         break
 
             # Create LocalizationData for the primary target language
@@ -384,15 +380,13 @@ class Pipeline:
             # Extract localized dialogue if possible
             expr_dial_trans = ""
             expr_idx = expression.get("expression_dialogue_index")
-            dialogues = expression.get("dialogues", {})
-            
-            if not isinstance(dialogues, dict):
-                dialogues = {}
+            dialogues = expression.get("dialogues", [])
 
-            if expr_idx is not None and isinstance(dialogues, dict) and target_lang_code in dialogues:
-                for dial in dialogues[target_lang_code]:
-                    if dial.get("index") == expr_idx:
-                        expr_dial_trans = dial.get("text", "")
+            # New format: dialogues is a list of {index, timestamp, en, ko, ...}
+            if expr_idx is not None and isinstance(dialogues, list):
+                for dial_entry in dialogues:
+                    if dial_entry.get("index") == expr_idx:
+                        expr_dial_trans = dial_entry.get(target_lang_code, "")
                         break
             
             # Create LocalizationData

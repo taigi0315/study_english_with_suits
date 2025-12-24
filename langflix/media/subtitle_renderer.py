@@ -130,23 +130,51 @@ class SubtitleRenderer:
         # Add context dialogues if available
         dialogues = get_expr_attr(expression, 'dialogues', [])
         translations = get_expr_attr(expression, 'translation', [])
+
+        # Determine source and target language codes
+        source_lang = get_expr_attr(expression, 'source_lang') or 'en'
+        target_lang = get_expr_attr(expression, 'target_lang') or 'ko'
+
         if dialogues:
-            for i, dialogue in enumerate(dialogues, 2):
-                if i <= 5:  # Limit to 5 context lines
+            # Check if it's new paired format or old string list format
+            if isinstance(dialogues, list) and len(dialogues) > 0 and isinstance(dialogues[0], dict):
+                # New paired format: [{"index": 0, "timestamp": "...", "en": "...", "ko": "..."}, ...]
+                for i, dialogue_entry in enumerate(dialogues[:4], 2):  # Limit to 4 context lines
                     context_start = expression_data.get('start_time', 0) + (i - 1) * 0.5
                     context_end = context_start + 2.0
-                    
+
                     srt_content.append(str(i))
                     srt_content.append(f"{self._format_timestamp(context_start)} --> {self._format_timestamp(context_end)}")
-                    # Wrap dialogue text
-                    wrapped_dialogue = self._wrap_text(dialogue)
+                    # Wrap dialogue text from source language
+                    dialogue_text = dialogue_entry.get(source_lang, '')
+                    wrapped_dialogue = self._wrap_text(dialogue_text)
                     srt_content.append(f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{wrapped_dialogue}</font>")
-                    if i - 2 < len(translations):
+                    # Add translation from target language
+                    translation_text = dialogue_entry.get(target_lang, '')
+                    if translation_text:
                         # Wrap translation text
-                        wrapped_trans = self._wrap_text(translations[i-2])
+                        wrapped_trans = self._wrap_text(translation_text)
                         # Context translation in Yellow
                         srt_content.append(f"<font color='#FFFF00'>{wrapped_trans}</font>")
                     srt_content.append("")
+            else:
+                # Old format: list of strings - fallback to original logic
+                for i, dialogue in enumerate(dialogues[:4], 2):
+                    if i <= 5:  # Limit to 5 context lines
+                        context_start = expression_data.get('start_time', 0) + (i - 1) * 0.5
+                        context_end = context_start + 2.0
+
+                        srt_content.append(str(i))
+                        srt_content.append(f"{self._format_timestamp(context_start)} --> {self._format_timestamp(context_end)}")
+                        # Wrap dialogue text
+                        wrapped_dialogue = self._wrap_text(dialogue)
+                        srt_content.append(f"<font color='{self.default_style.get('color', '#FFFFFF')}'>{wrapped_dialogue}</font>")
+                        if i - 2 < len(translations):
+                            # Wrap translation text
+                            wrapped_trans = self._wrap_text(translations[i-2])
+                            # Context translation in Yellow
+                            srt_content.append(f"<font color='#FFFF00'>{wrapped_trans}</font>")
+                        srt_content.append("")
         
         return "\n".join(srt_content)
     

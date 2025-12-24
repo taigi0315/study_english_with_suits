@@ -94,10 +94,17 @@ database:
 #   - tts.google.model_name: Used for text-to-speech (future use)
 # ============================================================================
 llm:
-  # Maximum characters of subtitle content per chunk
-  # 0 = Process entire script at once (requires large context model)
-  # >0 = Chunk size in characters (e.g., 3000 for smaller models)
-  max_input_length: 0
+
+  # | Chunk Size | Duration  | Subtitle Entries | Best For                                  |
+  # |------------|-----------|------------------|-------------------------------------------|
+  # | 2000       | ~2.9 min  | 64 entries       | Too small - May miss good expressions     |
+  # | 3000       | ~4.4 min  | 96 entries       | OPTIMAL - Current setting is good!        |
+  # | 4000       | ~5.8 min  | 128 entries      | Balanced - More context, still manageable |
+  # | 5000       | ~7.3 min  | 160 entries      | Larger context, higher hallucination risk |
+  # | 6000       | ~8.8 min  | 193 entries      | Large - May cause quality issues          |
+  # | 8000       | ~11.7 min | 257 entries      | Too large - High hallucination risk       |
+
+  max_input_length: 4000
   
   # Model for expression analysis and content selection
   model_name: "gemini-2.5-flash"
@@ -114,14 +121,6 @@ llm:
   temperature: 0.1
   top_p: 0.8
   top_k: 40
-
-  # Subtitle Translation Configuration
-  translation:
-    # Gemini 2.0 Flash for large context window - translating entire subtitle files
-    model_name: "gemini-2.0-flash"
-    
-    # Batch size: -1 = all at once, >0 = chunks of N subtitles
-    batch_size: -1
 
 # ============================================================================
 # Processing Configuration

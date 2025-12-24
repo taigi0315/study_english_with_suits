@@ -150,10 +150,15 @@ These are safe to do but not critical:
 
 1. Delete unused legacy files:
    ```bash
-   rm langflix/pipeline/agents/translator.py
+   # translator.py has already been removed ✓
    rm langflix/pipeline/agents/aggregator.py
    rm langflix/pipeline/prompts/aggregator.txt
    ```
+
+   **Status Update (2025-12-24):**
+   - ✅ `translator.py` - Already removed
+   - ⏳ `aggregator.py` - Still exists, not imported anywhere (safe to remove)
+   - ⏳ `aggregator.txt` - Still exists (safe to remove)
 
 2. Remove deprecated fields from models (breaking change - wait for major version):
    - `EpisodeData.master_summary`

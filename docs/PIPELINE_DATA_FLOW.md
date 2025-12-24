@@ -110,10 +110,10 @@
 
 ## Key Points
 
-### 1. **TranslatorAgent File Still Exists** (`translator.py`)
-   - **Location**: `langflix/pipeline/agents/translator.py`
-   - **Status**: Present but **NOT IMPORTED** anywhere
-   - **Reason**: Kept for backward compatibility in case other code references it
+### 1. **TranslatorAgent Removed** (`translator.py`)
+   - **Previous Location**: `langflix/pipeline/agents/translator.py`
+   - **Status**: ✅ **REMOVED** (as of Dec 2024)
+   - **Reason**: No longer needed - ScriptAgent handles translation in single LLM call
    - **Usage**: Zero - not used in any pipeline flow
 
 ### 2. **Pipeline Orchestrator Changes**
@@ -145,18 +145,18 @@
 The following files are no longer part of the pipeline:
 
 ### translator.py
-- **Status**: Unused
+- **Status**: ✅ **REMOVED** (deleted Dec 2024)
 - **Original Purpose**: Separate translation agent
-- **Can be deleted**: No code references it
+- **Removal Reason**: No code referenced it - translation now handled by ScriptAgent
 
 ### aggregator.py
-- **Status**: Unused
+- **Status**: ⏳ **Still exists but unused** (safe to delete)
 - **Original Purpose**: Combined chunk summaries into episode summary
-- **Can be deleted**: Output was never used in video generation
+- **Can be deleted**: Output was never used in video generation; no code imports it
 
-To verify nothing uses these files:
+To verify nothing uses aggregator:
 ```bash
-grep -r "TranslatorAgent\|AggregatorAgent" langflix/ --include="*.py" | grep -v "translator.py\|aggregator.py"
+grep -r "AggregatorAgent\|from.*aggregator" langflix/ --include="*.py" | grep -v "aggregator.py"
 ```
 
 ## Summary

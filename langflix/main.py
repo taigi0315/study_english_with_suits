@@ -253,6 +253,10 @@ class LangFlixPipeline:
             
             # Streaming Mode (Chunk-by-Chunk)
             logger.info("Running in Streaming Mode (Chunk-by-Chunk)")
+            
+            # Ensure subtitles exist and environment is set up
+            self._ensure_subtitles_exist()
+            
             self.expressions = []
             self.translated_expressions = {lang: [] for lang in self.target_languages}
             
@@ -519,25 +523,33 @@ class LangFlixPipeline:
 
         subtitle_folder = Path(subtitle_folder)
 
-        # Copy uploaded subtitle file to Netflix folder as source language
-        # The uploaded subtitle file is the source language subtitle
-        # Note: subtitle_file may be None - subtitles discovered from Subs/ folder
-        source_subtitle_path = subtitle_folder / f"{self.source_language}.srt"
-        
-        # Logic to copy self.subtitle_file to source_subtitle_path
-        # We do this if:
-        # a) source_subtitle_path doesn't exist
-        # b) OR self.subtitle_file is explicitly provided AND different from source_subtitle_path
+        # Copy uploaded subtitle file to Netflix folder
+        # logic:
+        # 1. If valid subtitle provided, copy it to the folder
+        # 2. Do NOT rename to {source_language}.srt immediately - let discovery logic handle it
+        # 3. If filename is non-standard, rename to 'Original.srt' so discovery picks it up as a valid fallback
         if self.subtitle_file and self.subtitle_file.exists():
-            if not source_subtitle_path.exists() or self.subtitle_file.resolve() != source_subtitle_path.resolve():
-                # Only copy if we are not overwriting the exact same file
+            import re
+            # Check if filename is standard (supported by discovery)
+            is_standard = re.match(r'^(\d+_)?([A-Za-z]+)\.srt$', self.subtitle_file.name)
+            
+            dest_name = self.subtitle_file.name
+            if not is_standard:
+                dest_name = "Original.srt"
+                logger.info(f"Renaming non-standard subtitle {self.subtitle_file.name} to {dest_name} for discovery")
+
+            dest_path = subtitle_folder / dest_name
+            
+            if not dest_path.exists() or self.subtitle_file.resolve() != dest_path.resolve():
                 try:
-                    shutil.copy2(str(self.subtitle_file), str(source_subtitle_path))
-                    logger.info(f"Copied uploaded/provided subtitle to persistent location: {source_subtitle_path}")
-                    # Update self.subtitle_file to point to the persistent copy
-                    self.subtitle_file = source_subtitle_path
+                    shutil.copy2(str(self.subtitle_file), str(dest_path))
+                    logger.info(f"Copied uploaded subtitle to: {dest_path}")
                 except Exception as copy_err:
                      logger.warning(f"Failed to copy subtitle to persistent location: {copy_err}")
+
+        # Update self.subtitle_file to point to the canonical source language file
+        # This file will be created by ensure_subtitles_exist if it doesn't exist
+        self.subtitle_file = subtitle_folder / f"{self.source_language}.srt"
 
         # Get required languages (convert codes to names)
         language_code_to_name = {

@@ -64,3 +64,4 @@ google-auth-oauthlib>=1.2.0
 # Redis for shared job state (Phase 7)
 redis>=5.0.0
 hiredis>=2.2.0  # High-performance Redis parser
+pytest-cov>=7.0.0

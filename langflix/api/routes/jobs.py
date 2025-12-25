@@ -428,15 +428,26 @@ async def create_job(
         if not video_file.filename or not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
             raise HTTPException(status_code=400, detail="Invalid video file type")
 
-        # Validate subtitle file if provided
-        # Auto-discovers subtitles from Subs/ folder - no subtitle_file required
-        if subtitle_file and subtitle_file.filename:
-            supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
-            if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
-                )
+        # Validate subtitle file - REQUIRED for processing
+        # Note: Auto-discovery from Subs/ folder only works if video is already in assets/media
+        if subtitle_file is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."
+            )
+
+        if not subtitle_file.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."
+            )
+
+        supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
+        if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
+            )
         
         # Check file sizes (optional validation)
         # Generate job ID first for temp file naming

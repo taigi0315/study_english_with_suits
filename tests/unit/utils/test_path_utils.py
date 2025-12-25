@@ -43,13 +43,17 @@ class TestGetSubtitleFolder:
     """Tests for get_subtitle_folder function."""
     
     def test_existing_folder(self, tmp_path):
-        """Should return folder path when it exists."""
-        # Create media file and subtitle folder
+        """Should return folder path when it exists (Netflix Subs/ structure)."""
+        # Create media file and subtitle folder in Netflix structure
         media_file = tmp_path / "show.mp4"
         media_file.touch()
-        subtitle_folder = tmp_path / "show"
+        subs_dir = tmp_path / "Subs"
+        subs_dir.mkdir()
+        subtitle_folder = subs_dir / "show"
         subtitle_folder.mkdir()
-        
+        # Add at least one .srt file so the folder is recognized
+        (subtitle_folder / "test.srt").touch()
+
         result = get_subtitle_folder(str(media_file))
         assert result == subtitle_folder
     

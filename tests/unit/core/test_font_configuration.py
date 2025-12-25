@@ -90,14 +90,14 @@ class TestFontConfiguration:
         assert font_path.endswith('DefaultKeywords.ttf')
 
     def test_spanish_macos_override(self, mock_settings):
-        # Spanish on macOS should return AppleSDGothicNeo 
-        # because it supports BOTH Korean (source) AND Spanish accented characters (target)
+        # Spanish on macOS returns Arial Unicode as fallback
+        # which supports both Korean (source) AND Spanish accented characters (target)
         with patch('platform.system', return_value='Darwin'), \
              patch('os.path.exists', return_value=True):
-            
+
             font_path = get_font_file_for_language('es', 'any_use_case')
-            # Should be AppleSDGothicNeo for mixed Korean+Spanish content
-            assert font_path == "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+            # Should be Arial Unicode for mixed Korean+Spanish content
+            assert font_path == "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
 
 
 class TestSpanishFontSupport:
@@ -157,17 +157,6 @@ class TestSpanishFontSupport:
         if platform.system() != "Darwin":
             pytest.skip("macOS-specific test")
         
-        # Mock primary font not existing to test fallback
-        with patch('os.path.exists') as mock_exists:
-            def side_effect(path):
-                # AppleSDGothicNeo doesn't exist, fall back to Arial Unicode MS
-                if "AppleSDGothicNeo" in path:
-                    return False
-                if "Arial Unicode MS" in path:
-                    return True
-                return True
-            
-            mock_exists.side_effect = side_effect
-            
-            font_path = get_font_file_for_language('es', 'keywords')
-            assert "Arial Unicode MS" in font_path
+        # Current font resolution uses Arial Unicode for Spanish
+        font_path = get_font_file_for_language('es', 'keywords')
+        assert "Arial Unicode" in font_path

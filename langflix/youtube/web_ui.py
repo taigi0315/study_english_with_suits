@@ -2092,8 +2092,8 @@ class VideoManagementUI:
                         source_lang_code = data.get('source_language') or form_data.get('source_language', 'en')
 
                         # Convert language code to name (e.g., 'en' -> 'English', 'ko' -> 'Korean')
-                        from langflix.utils.language_utils import convert_language_code_to_name
-                        source_lang = convert_language_code_to_name(source_lang_code)
+                        from langflix.utils.language_utils import language_code_to_name
+                        source_lang = language_code_to_name(source_lang_code)
 
                         logger.info(f"Auto-discovery using source language: {source_lang} (from code: {source_lang_code})")
 
@@ -2144,14 +2144,9 @@ class VideoManagementUI:
                                         logger.info(f"✅ Auto-discovered subtitle: {subtitle_path} (pattern match)")
                                         break
 
-                            # Try any subtitle file as fallback
-                            if not subtitle_path:
-                                for ext in ['.srt', '.vtt', '.ass', '.smi']:
-                                    matches = list(subs_folder.glob(f"*{ext}"))
-                                    if matches:
-                                        subtitle_path = str(matches[0])
-                                        logger.info(f"✅ Auto-discovered subtitle: {subtitle_path} (fallback - any file)")
-                                        break
+                            # Priority 3: Fallback - removed to prevent picking wrong language
+                            # We should rely on exact language matches or user upload
+                            pass
 
                             if subtitle_path:
                                 break

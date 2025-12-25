@@ -237,10 +237,9 @@ class MediaScanner:
                     logger.info(f"Found {source_lang} subtitle (pattern): {sub_file}")
                     return sub_file
 
-                # Priority 3: Fallback to any subtitle if source language not found
-                for sub_file in subs_folder.glob(f"*{ext}"):
-                    logger.info(f"Found subtitle (fallback): {sub_file}")
-                    return sub_file
+                # Priority 3: Fallback was removed to prevent incorrect language selection
+                # Only return exact or pattern matches for the requested language
+                pass
 
         return None
     

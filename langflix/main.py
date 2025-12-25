@@ -461,6 +461,7 @@ class LangFlixPipeline:
             # Deduplicate paths
             search_paths = list(dict.fromkeys(search_paths))
 
+            found_existing = False
             for media_root in search_paths:
                 # Check NEW structure: {media_root}/Subs/{episode_name}/
                 subs_folder = Path(media_root) / "Subs" / self.episode_name
@@ -469,6 +470,7 @@ class LangFlixPipeline:
                     if srt_files:
                         subtitle_folder = str(subs_folder)
                         logger.info(f"Found Netflix folder (Subs structure): {subtitle_folder}")
+                        found_existing = True
                         break
                 
                 # Check LEGACY structure: {media_root}/{episode_name}/
@@ -478,48 +480,66 @@ class LangFlixPipeline:
                     if srt_files:
                         subtitle_folder = str(legacy_folder)
                         logger.info(f"Found Netflix folder (legacy structure): {subtitle_folder}")
+                        found_existing = True
                         break
-
-        # If still not found, create Netflix folder in persistent media path (permanent location)
-            if self.episode_name:
-                # 1. Try to create relative to persistent media file (preferred)
-                # Check if media_path is not a temp location
-                is_media_temp = any(p in str(media_path).lower() for p in ['/tmp/', '/var/folders/', 'temp'])
-                
-                created_relative = False
-                if not is_media_temp and media_path.exists():
-                    try:
-                        # assets/media/ShowName/Video.mkv -> assets/media/ShowName/Subs/EpisodeName
-                        if media_path.is_file():
-                            relative_subs = media_path.parent / "Subs" / self.episode_name
-                        else: # directory
-                            relative_subs = media_path / "Subs" / self.episode_name
-                            
-                        relative_subs.mkdir(parents=True, exist_ok=True)
-                        subtitle_folder = relative_subs
-                        logger.info(f"Created subtitle folder relative to media: {subtitle_folder}")
-                        created_relative = True
-                    except Exception as e:
-                        logger.warning(f"Could not create relative subtitle folder: {e}")
-
-                # 2. Fallback: Create in persistent media path (e.g., /media/shows/{ShowName}/Subs/{EpisodeName})
-                if not created_relative:
-                    if self.series_name:
-                        subtitle_folder = Path(persistent_media_root) / self.series_name / "Subs" / self.episode_name
-                    else:
-                        subtitle_folder = Path(persistent_media_root) / self.episode_name
+            
+            if not found_existing and self.episode_name:
+                logger.info(f"Deep scan: searching 'assets/media' for '{self.episode_name}'...")
+                root_search = Path("assets/media")
+                if root_search.exists():
+                    # Manual iteration needed because glob fails on special chars like []
+                    # Limit depth is implicit by how many dirs we follow, but here we just iterate everything
+                    for path in root_search.rglob("*"):
+                         if path.is_dir() and path.name == self.episode_name:
+                             # Check if it contains subtitles
+                             srt_files = list(path.glob("*.srt"))
+                             if srt_files:
+                                 subtitle_folder = str(path)
+                                 logger.info(f"Found subtitle folder via deep scan: {subtitle_folder}")
+                                 found_existing = True
+                                 break
+            
+            if not found_existing:
+                # If still not found, create Netflix folder in persistent media path (permanent location)
+                if self.episode_name:
+                    # 1. Try to create relative to persistent media file (preferred)
+                    # Check if media_path is not a temp location
+                    is_media_temp = any(p in str(media_path).lower() for p in ['/tmp/', '/var/folders/', 'temp'])
                     
-                    subtitle_folder.mkdir(parents=True, exist_ok=True)
-                    logger.info(f"Created persistent subtitle folder (fallback): {subtitle_folder}")
-            else:
-                # Fallback: create based on media path (temp location - not ideal)
-                media_path_obj = Path(media_path)
-                if media_path_obj.is_file():
-                    subtitle_folder = media_path_obj.parent / media_path_obj.stem
+                    created_relative = False
+                    if not is_media_temp and media_path.exists():
+                        try:
+                            # assets/media/ShowName/Video.mkv -> assets/media/ShowName/Subs/EpisodeName
+                            if media_path.is_file():
+                                relative_subs = media_path.parent / "Subs" / self.episode_name
+                            else: # directory
+                                relative_subs = media_path / "Subs" / self.episode_name
+                                
+                            relative_subs.mkdir(parents=True, exist_ok=True)
+                            subtitle_folder = relative_subs
+                            logger.info(f"Created subtitle folder relative to media: {subtitle_folder}")
+                            created_relative = True
+                        except Exception as e:
+                            logger.warning(f"Could not create relative subtitle folder: {e}")
+
+                    # 2. Fallback: Create in persistent media path (e.g., /media/shows/{ShowName}/Subs/{EpisodeName})
+                    if not created_relative:
+                        if self.series_name:
+                            subtitle_folder = Path(persistent_media_root) / self.series_name / "Subs" / self.episode_name
+                        else:
+                            subtitle_folder = Path(persistent_media_root) / self.episode_name
+                        
+                        subtitle_folder.mkdir(parents=True, exist_ok=True)
+                        logger.info(f"Created persistent subtitle folder (fallback): {subtitle_folder}")
                 else:
-                    subtitle_folder = media_path_obj
-                subtitle_folder.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"Created subtitle folder in temp location (no episode name): {subtitle_folder}")
+                    # Fallback: create based on media path (temp location - not ideal)
+                    media_path_obj = Path(media_path)
+                    if media_path_obj.is_file():
+                        subtitle_folder = media_path_obj.parent / media_path_obj.stem
+                    else:
+                        subtitle_folder = media_path_obj
+                    subtitle_folder.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"Created subtitle folder in temp location (no episode name): {subtitle_folder}")
 
         subtitle_folder = Path(subtitle_folder)
 
@@ -616,6 +636,17 @@ class LangFlixPipeline:
         except Exception as e:
             logger.warning(f"Subtitle translation failed: {e}")
             logger.info("Continuing with available subtitles...")
+
+        # RELOAD SubtitleProcessor with the confirmed source subtitle file
+        # This is critical because subtitle_processor might have been initialized with empty path
+        # if the file didn't exist initially.
+        expected_sub = Path(subtitle_folder) / f"{self.source_language}.srt"
+        if expected_sub.exists():
+            logger.info(f"Reloading SubtitleProcessor with: {expected_sub}")
+            self.subtitle_file = expected_sub
+            self.subtitle_processor = SubtitleProcessor(str(expected_sub))
+        else:
+            logger.warning(f"Source subtitle file not found at {expected_sub} after ensure_subtitles_exist")
 
     def _get_llm_output_dir(self):
         try:
@@ -1469,7 +1500,8 @@ class LangFlixPipeline:
             target_subtitle_chunks=target_chunks,
             language_level=language_level or "intermediate",
             max_expressions_per_chunk=expressions_per_chunk,
-            max_total_expressions=max_expressions
+            max_total_expressions=max_expressions,
+            target_duration=target_duration
         )
 
         for chunk_result in generator:

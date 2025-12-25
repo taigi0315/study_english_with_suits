@@ -26,7 +26,7 @@ class ExpressionService:
         save_llm_output: bool = False,
         test_mode: bool = False,
         output_dir: Optional[Union[str, Path]] = None,
-        target_duration: float = 120.0,
+        target_duration: float = 60.0,
         progress_callback: Optional[callable] = None
     ) -> List[ExpressionAnalysis]:
         """

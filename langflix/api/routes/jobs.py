@@ -430,7 +430,13 @@ async def create_job(
 
         # Validate subtitle file - REQUIRED for processing
         # Note: Auto-discovery from Subs/ folder only works if video is already in assets/media
-        if not subtitle_file or not subtitle_file.filename:
+        if subtitle_file is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."
+            )
+
+        if not subtitle_file.filename:
             raise HTTPException(
                 status_code=400,
                 detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."

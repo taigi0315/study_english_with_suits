@@ -219,7 +219,7 @@ class SubtitleTranslationService:
 
         # Last resort: use first available
         first_lang = list(available.keys())[0]
-        logger.warning(f"Neither source nor targets found, using '{first_lang}' as base")
+        logger.warning(f"Neither source nor targets found, using '{first_lang}' as base for translation (Pivot Mode)")
         return first_lang, available[first_lang][0]
 
     def _load_subtitle_entries(self, subtitle_path: str) -> List[SubtitleEntry]:
@@ -425,14 +425,20 @@ class SubtitleTranslationService:
 
     def _get_default_batch_translation_prompt(self) -> str:
         """Default batch translation prompt template."""
-        return """Translate the following subtitle entries from {source_language} to {target_language}.
+        return """You are a professional subtitle translator.
+Translate the following subtitle entries from {source_language} to {target_language}.
+
+CONTEXT:
+- Source Language (Current Text): {source_language}
+- Target Language (Desired Output): {target_language}
 
 CRITICAL REQUIREMENTS:
-1. Provide natural, contextual translations that capture meaning and emotion
-2. Preserve the EXACT index order
-3. Translate ALL {count} subtitle entries
-4. DO NOT modify timestamps
-5. Output ONLY valid JSON
+1. Provide natural, contextual translations that capture meaning and emotion.
+2. If converting back to the original audio language, try to reconstruct standard phrasing for that language.
+3. Preserve the EXACT index order.
+4. Translate ALL {count} subtitle entries.
+5. DO NOT modify timestamps.
+6. Output ONLY valid JSON.
 
 INPUT SUBTITLES:
 {subtitles_json}

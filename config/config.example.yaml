@@ -184,7 +184,7 @@ short_video:
   resolution: "1080x1920"
 
   # Target duration for each short-form video (seconds)
-  target_duration: 120
+  target_duration: 60
 
   # Allow variance (+/- seconds)
   duration_variance: 10

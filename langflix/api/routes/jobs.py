@@ -430,24 +430,18 @@ async def create_job(
 
         # Validate subtitle file - REQUIRED for processing
         # Note: Auto-discovery from Subs/ folder only works if video is already in assets/media
+        # With new pipeline logic, we allow missing subtitle to trigger fallback generation
         if subtitle_file is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."
-            )
-
-        if not subtitle_file.filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Subtitle file is required. Please upload a subtitle file (.srt, .vtt, .smi, .ass, or .ssa) along with the video."
-            )
-
-        supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
-        if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
-            )
+             logger.info("No subtitle file provided in upload. Will attempt pipeline auto-discovery/generation.")
+        elif not subtitle_file.filename:
+             logger.info("Empty subtitle file object provided. Will attempt pipeline auto-discovery/generation.")
+        else:
+            supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
+            if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
+                )
         
         # Check file sizes (optional validation)
         # Generate job ID first for temp file naming
@@ -477,9 +471,11 @@ async def create_job(
             with open(subtitle_temp_path, 'wb') as buffer:
                 shutil.copyfileobj(subtitle_file.file, buffer)
             
-            subtitle_size = subtitle_temp_path.stat().st_size
-            if subtitle_size == 0:
-                raise HTTPException(status_code=400, detail="Empty subtitle file uploaded")
+            # Check size only if file was provided and written
+            if subtitle_temp_path.exists():
+                subtitle_size = subtitle_temp_path.stat().st_size
+                if subtitle_size == 0:
+                     logger.warning("Uploaded subtitle file is empty.")
         
         # Get Redis job manager
         redis_manager = get_redis_job_manager()
@@ -565,7 +561,10 @@ async def create_job(
             "subtitle_size_kb": round(subtitle_temp_path.stat().st_size / 1024, 2) if subtitle_temp_path else 0
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error creating job: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating job: {str(e)}")
 
 @router.get("/jobs/{job_id}")

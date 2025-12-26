@@ -342,11 +342,7 @@ short_video:
     keywords:
       font_size: 40
       newline: 30
-<<<<<<< HEAD
       y_position: 1750            # Adjusted for smaller padding (was 250)
-=======
-      y_position: 1700            # Adjusted for smaller padding (was 250)
->>>>>>> 2012c893911aa54460cd9bc096e5ba9769dd8f20
       line_height_factor: 1.2    # Line spacing as multiple of font size
       max_width_percent: 0.9     # Maximum width as percentage of video width
       text_color: 'white'

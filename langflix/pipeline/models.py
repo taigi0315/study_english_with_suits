@@ -39,7 +39,6 @@ class EpisodeData(BaseModel):
     show_name: str = Field(..., description="Name of the show")
     show_bible: str = Field(..., description="Show Bible content")
     chunks: List[ChunkResult] = Field(default_factory=list, description="All processed chunks")
-    master_summary: Optional[str] = Field(None, description="DEPRECATED: No longer generated (Aggregator removed)")
 
     def get_all_expressions(self) -> List[Dict[str, Any]]:
         """Get all expressions from all chunks"""
@@ -124,9 +123,6 @@ class TranslationResult(BaseModel):
     # Chunk context
     chunk_id: int
     chunk_summary: str = Field(..., description="Micro-context from Script Agent")
-
-    # Episode context
-    episode_summary: Optional[str] = Field(None, description="DEPRECATED: No longer generated (Aggregator removed)")
 
     # Multilingual localizations
     localizations: List[LocalizationData] = Field(default_factory=list, description="Translations with context")

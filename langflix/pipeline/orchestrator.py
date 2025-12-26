@@ -107,8 +107,7 @@ class Pipeline:
             episode_id=f"{self.config.show_name}_{self.config.episode_name}",
             show_name=self.config.show_name,
             show_bible=show_bible,
-            chunks=chunk_results,
-            master_summary=None  # No longer generated
+            chunks=chunk_results
         )
 
         logger.info(
@@ -290,7 +289,6 @@ class Pipeline:
                 catchy_keywords=expression.get("catchy_keywords", []),
                 chunk_id=chunk_result.chunk_id,
                 chunk_summary=chunk_result.chunk_summary,
-                episode_summary=None,
                 localizations=[loc_data]
             )
             translation_results.append(result)

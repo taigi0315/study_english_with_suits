@@ -259,41 +259,6 @@ def get_force_refresh_bible() -> bool:
     return show_bible_cfg.get('force_refresh', False)
 
 
-def get_master_summary_cache_dir() -> str:
-    """Get Master Summary cache directory path"""
-    config = get_pipeline_config()
-    summary_cfg = config.get('master_summary', {})
-    return summary_cfg.get('cache_dir', 'langflix/pipeline/artifacts/summaries')
-
-
-def get_aggregator_model() -> str:
-    """Get model name for Aggregator Agent (cheaper model)"""
-    config = get_pipeline_config()
-    aggregator_cfg = config.get('aggregator', {})
-    return aggregator_cfg.get('model_name', 'gemini-2.5-flash')
-
-
-def get_aggregator_temperature() -> float:
-    """Get temperature for Aggregator Agent"""
-    config = get_pipeline_config()
-    aggregator_cfg = config.get('aggregator', {})
-    return aggregator_cfg.get('temperature', 0.3)
-
-
-def get_translator_model() -> str:
-    """Get model name for Translator Agent (smart model)"""
-    config = get_pipeline_config()
-    translator_cfg = config.get('translator', {})
-    return translator_cfg.get('model_name', 'gemini-2.0-flash')
-
-
-def get_translator_temperature() -> float:
-    """Get temperature for Translator Agent"""
-    config = get_pipeline_config()
-    translator_cfg = config.get('translator', {})
-    return translator_cfg.get('temperature', 0.2)
-
-
 def get_ending_credit_config() -> Dict[str, Any]:
     """Get ending credit configuration"""
     return get_transitions_config().get('ending_credit', {})
@@ -503,35 +468,6 @@ def get_llm_model_name() -> str:
     if env_model:
         return env_model
     return get_llm_config().get('model_name', 'gemini-2.5-flash')
-
-
-def get_subtitle_translation_config() -> Dict[str, Any]:
-    """Get subtitle translation specific configuration"""
-    llm_cfg = get_llm_config()
-    return llm_cfg.get('translation', {})
-
-
-def get_subtitle_translation_model() -> str:
-    """Get the model to use for subtitle translation"""
-    # Check for direct override first
-    config = get_subtitle_translation_config()
-    if 'model_name' in config:
-        return config['model_name']
-    
-    # Fallback to main LLM model if not specified
-    return get_llm_model_name()
-
-
-def get_subtitle_translation_batch_size() -> int:
-    """
-    Get the batch size for subtitle translation.
-    
-    Returns:
-        int: Batch size (-1 for all, or positive integer)
-    """
-    config = get_subtitle_translation_config()
-    # Default to 75 if not specified (safe for Flash model)
-    return config.get('batch_size', 75)
 
 
 # ============================================================================

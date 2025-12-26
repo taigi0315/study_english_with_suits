@@ -409,7 +409,6 @@ class LangFlixPipeline:
         Called BEFORE subtitle loading.
         """
         import shutil
-        from langflix.services.subtitle_translation_service import SubtitleTranslationService
         from langflix.utils.path_utils import get_subtitle_folder
 
         # Determine media path
@@ -608,49 +607,15 @@ class LangFlixPipeline:
             lang_name = language_code_to_name.get(lang_code, lang_code.capitalize())
             target_lang_names.append(lang_name)
 
-        # Combine source + target languages
-        # CHANGED: Only require source language subtitle. 
-        # Target language translation is now handled by the LLM during expression analysis.
-        # We do NOT want to auto-translate the entire subtitle file anymore.
-        required_langs = [self.source_language]
-
-        logger.info(f"Ensuring subtitles exist for languages: {required_langs}")
-
-        # Initialize translation service
-        translation_service = SubtitleTranslationService()
-
-        # Ensure subtitles exist
-        try:
-            results = translation_service.ensure_subtitles_exist(
-                subtitle_folder=subtitle_folder,
-                source_language=self.source_language,
-                required_languages=required_langs,
-                progress_callback=lambda p, m: self._update_progress(5 + int(p * 0.05), m)
-            )
-
-            # Log results
-            successful = [lang for lang, success in results.items() if success]
-            failed = [lang for lang, success in results.items() if not success]
-
-            if successful:
-                logger.info(f"Subtitles available for: {successful}")
-            if failed:
-                logger.warning(f"Failed to ensure subtitles for: {failed}")
-
-        except Exception as e:
-            logger.warning(f"Subtitle translation failed: {e}")
-            logger.info("Continuing with available subtitles...")
-
-        # RELOAD SubtitleProcessor with the confirmed source subtitle file
-        # This is critical because subtitle_processor might have been initialized with empty path
-        # if the file didn't exist initially.
+        # Check if source subtitle file exists
+        # Target language translation is handled by the LLM during expression analysis
         expected_sub = Path(subtitle_folder) / f"{self.source_language}.srt"
         if expected_sub.exists():
-            logger.info(f"Reloading SubtitleProcessor with: {expected_sub}")
+            logger.info(f"Found source subtitle file: {expected_sub}")
             self.subtitle_file = expected_sub
             self.subtitle_processor = SubtitleProcessor(str(expected_sub))
         else:
-            logger.warning(f"Source subtitle file not found at {expected_sub} after ensure_subtitles_exist")
+            logger.warning(f"Source subtitle file not found at {expected_sub}")
 
     def _get_llm_output_dir(self):
         try:
@@ -1332,7 +1297,6 @@ class LangFlixPipeline:
                     # Pipeline metadata
                     'chunk_id': result.chunk_id,
                     'chunk_summary': result.chunk_summary,
-                    'episode_summary': result.episode_summary,
                 }
 
                 # Define target language name for matching (uses utility)
@@ -1534,7 +1498,6 @@ class LangFlixPipeline:
                     'catchy_keywords': result.catchy_keywords,
                     'chunk_id': result.chunk_id,
                     'chunk_summary': result.chunk_summary,
-                    'episode_summary': result.episode_summary,
                 }
                 
                 # ... [Localization logic shared with _run_analysis] ...

@@ -45,26 +45,6 @@ pipeline:
     # Force refresh Show Bible (ignore cache)
     force_refresh: true
 
-  # Master Summary configuration (episode narrative summaries)
-  master_summary:
-    # Directory to cache Master Episode Summaries
-    cache_dir: "langflix/pipeline/artifacts/summaries"
-
-  # Aggregator Agent configuration (combines chunk summaries)
-  aggregator:
-    # Model to use for aggregation (use cheaper model like Flash)
-    model_name: "gemini-2.5-flash"
-
-    # Temperature for aggregation (lower = more consistent)
-    temperature: 0.3
-
-  # Translator Agent configuration (context-aware translation)
-  translator:
-    # Model to use for translation (use smart model like Pro)
-    model_name: "gemini-2.5-flash"
-
-    # Temperature for translation (lower = more consistent)
-    temperature: 0.2
 
 # ============================================================================
 # Database Configuration
@@ -88,9 +68,6 @@ database:
 # ============================================================================
 # MODEL NAME OVERVIEW:
 #   - llm.model_name: Used for expression analysis/content selection
-#   - llm.translation.model_name: Used for subtitle file translation (keep at 2.0 for context)
-#   - pipeline.aggregator.model_name: Used for summarization (can use cheaper model)
-#   - pipeline.translator.model_name: Used for expression localization
 #   - tts.google.model_name: Used for text-to-speech (future use)
 # ============================================================================
 llm:

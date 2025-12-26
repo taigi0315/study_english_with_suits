@@ -107,8 +107,7 @@ class Pipeline:
             episode_id=f"{self.config.show_name}_{self.config.episode_name}",
             show_name=self.config.show_name,
             show_bible=show_bible,
-            chunks=chunk_results,
-            master_summary=None  # No longer generated
+            chunks=chunk_results
         )
 
         logger.info(
@@ -206,6 +205,7 @@ class Pipeline:
         source_lang_name = self.config.source_language
         source_lang_code = settings.language_name_to_code(source_lang_name) if source_lang_name else None
 
+        logger.info(f"🎯 Pipeline.run_generator(): Calling script_agent with target_duration={target_duration}")
         generator = self.script_agent.analyze_chunks_generator(
             chunks=subtitle_chunks,
             target_chunks=target_subtitle_chunks,
@@ -290,7 +290,6 @@ class Pipeline:
                 catchy_keywords=expression.get("catchy_keywords", []),
                 chunk_id=chunk_result.chunk_id,
                 chunk_summary=chunk_result.chunk_summary,
-                episode_summary=None,
                 localizations=[loc_data]
             )
             translation_results.append(result)

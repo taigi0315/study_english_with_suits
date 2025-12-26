@@ -43,28 +43,8 @@ pipeline:
     use_wikipedia: true
 
     # Force refresh Show Bible (ignore cache)
-    force_refresh: false
+    force_refresh: true
 
-  # Master Summary configuration (episode narrative summaries)
-  master_summary:
-    # Directory to cache Master Episode Summaries
-    cache_dir: "langflix/pipeline/artifacts/summaries"
-
-  # Aggregator Agent configuration (combines chunk summaries)
-  aggregator:
-    # Model to use for aggregation (use cheaper model like Flash)
-    model_name: "gemini-2.5-flash"
-
-    # Temperature for aggregation (lower = more consistent)
-    temperature: 0.3
-
-  # Translator Agent configuration (context-aware translation)
-  translator:
-    # Model to use for translation (use smart model like Pro)
-    model_name: "gemini-2.5-flash"
-
-    # Temperature for translation (lower = more consistent)
-    temperature: 0.2
 
 # ============================================================================
 # Database Configuration
@@ -88,9 +68,6 @@ database:
 # ============================================================================
 # MODEL NAME OVERVIEW:
 #   - llm.model_name: Used for expression analysis/content selection
-#   - llm.translation.model_name: Used for subtitle file translation (keep at 2.0 for context)
-#   - pipeline.aggregator.model_name: Used for summarization (can use cheaper model)
-#   - pipeline.translator.model_name: Used for expression localization
 #   - tts.google.model_name: Used for text-to-speech (future use)
 # ============================================================================
 llm:
@@ -352,7 +329,7 @@ short_video:
     # Expression text (bottom padding area)
     expression:
       font_size: 50              # Main expression font size (increased by 10 from 45)
-      y_position: 1530           # Adjusted for new layout (video ends at 1480)
+      y_position: 1580           # Adjusted for new layout
       chars_per_line: 40         # Characters per line before wrapping (increased from 28)
       text_color: 'yellow'
       border_width: 2
@@ -409,9 +386,9 @@ short_video:
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 60                # Large font for emphasis
-      y_position: 30               # Below logo, above keywords
-      chars_per_line: 40           # Max characters per line before wrapping
+      font_size: 75                # Large font for emphasis
+      y_position: 27               # Below logo, above keywords
+      chars_per_line: 20           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'

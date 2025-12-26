@@ -33,6 +33,28 @@ logger = logging.getLogger(__name__)
 
 def find_test_media(test_media_dir: Path) -> tuple:
     """Find first available test media (video + subtitle)."""
+    # 1. Check root directory first
+    video_file = None
+    for ext in ['.mp4', '.mkv', '.avi']:
+        videos = list(test_media_dir.glob(f'*{ext}'))
+        if videos:
+            video_file = videos[0]
+            break
+            
+    if video_file:
+        # Look for subtitle in Subs folder
+        subs_folder = test_media_dir / 'Subs'
+        if subs_folder.exists():
+            # Try to find subtitle matching video name stem first
+            sub_candidates = list(subs_folder.glob(f'*{video_file.stem}*/*.srt'))
+            if not sub_candidates:
+                # Try shallow search in Subs/
+                sub_candidates = list(subs_folder.glob('*.srt'))
+                
+            if sub_candidates:
+                return video_file, sub_candidates[0], subs_folder
+                
+    # 2. Check subdirectories (Episode folders)
     for episode_dir in test_media_dir.iterdir():
         if episode_dir.is_dir() and not episode_dir.name.startswith('.'):
             # Look for video
@@ -109,6 +131,7 @@ def main():
             output_dir=str(output_dir),
             language_code=args.source,
             target_languages=target_languages,
+            source_language=args.source,
         )
         
         # Run in test mode (limit to 1 expression)

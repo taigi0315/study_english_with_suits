@@ -231,6 +231,12 @@ else
     echo ""
     echo "   Docker Compose는 파일이 없어도 마운트를 시도하지만,"
     echo "   YouTube 기능을 사용하려면 실제 OAuth2 자격 증명 파일이 필요합니다."
+    
+    # [FIX] 빈 파일 생성 (Docker가 디렉토리로 생성하는 것 방지)
+    echo "   [FIX] Docker 마운트 오류 방지를 위해 빈 파일 생성 중..."
+    sudo touch "$CREDENTIALS_FILE"
+    sudo chown 1000:1000 "$CREDENTIALS_FILE" 2>/dev/null || true
+    sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null || true
 fi
 
 # youtube_token.json 처리
@@ -256,6 +262,13 @@ else
     echo -e "${YELLOW}⚠️  youtube_token.json 없음 (첫 로그인 시 자동 생성됨)${NC}"
     echo "   첫 YouTube 로그인 시 자동으로 생성됩니다"
     echo "   디렉토리 권한 확인: $AUTH_DIR"
+    
+    # [FIX] 빈 파일 생성 (Docker가 디렉토리로 생성하는 것 방지)
+    # 토큰 파일은 앱이 시작되면서 쓰기를 시도하므로 미리 생성해두는 것이 안전
+    echo "   [FIX] Docker 마운트 오류 방지를 위해 빈 파일 생성 중..."
+    sudo touch "$TOKEN_FILE"
+    sudo chown 1000:1000 "$TOKEN_FILE" 2>/dev/null || true
+    sudo chmod 666 "$TOKEN_FILE" 2>/dev/null || true
 fi
 
 # auth 디렉토리 내 모든 YouTube 관련 파일의 권한 확인 및 수정

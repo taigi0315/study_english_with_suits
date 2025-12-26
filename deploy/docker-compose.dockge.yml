@@ -37,7 +37,7 @@ services:
 
     volumes:
       # IMPORTANT: Mount your TrueNAS media directory
-      # If 192.168.86.43/media/shows is accessible as /mnt/pool/media/shows on TrueNAS:
+      # If 192.168.1.194/media/shows is accessible as /mnt/pool/media/shows on TrueNAS:
       - /mnt/pool/media/shows:/media/shows:ro # Read-only mount for safety
 
       # Or if it's a network mount already on TrueNAS host:

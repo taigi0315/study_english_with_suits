@@ -98,6 +98,7 @@ class ScriptAgent:
         min_expr = settings.get_min_expressions_per_chunk()
         # Prefer provided target_duration argument, else fall back to settings
         target_duration_val = target_duration if target_duration is not None else settings.get_short_video_target_duration()
+        logger.info(f"🎯 ScriptAgent.analyze_chunk(): target_duration param={target_duration}, using target_duration_val={target_duration_val}")
 
         # Build prompt with exact keys matching expression_analysis_prompt.yaml
         prompt = self.prompt_template.format(
@@ -119,6 +120,13 @@ class ScriptAgent:
             chunk_id=chunk_id,
             script_chunk=script_chunk
         )
+
+        # Verify target_duration in formatted prompt
+        if "Duration:** " in prompt:
+            duration_match = re.search(r'Duration:\*\* ([\d.]+) seconds', prompt)
+            if duration_match:
+                actual_duration = duration_match.group(1)
+                logger.info(f"🎯 Formatted prompt contains Duration: {actual_duration} seconds (expected: {target_duration_val})")
 
         logger.info(f"🚀 Prompting LLM for {source_lang} -> {target_lang} (Expressions: {min_expr}-{max_expressions_per_chunk})")
 

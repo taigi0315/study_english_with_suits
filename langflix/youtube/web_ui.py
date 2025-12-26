@@ -729,7 +729,7 @@ class VideoManagementUI:
         @self.app.route('/api/youtube/login', methods=['POST'])
         def youtube_login():
             """Authenticate with YouTube (supports both Desktop and Web flow)"""
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             email = data.get('email')  # Optional email for web flow
             use_web_flow = data.get('use_web_flow', False)  # Default to Desktop flow
             
@@ -2035,9 +2035,10 @@ class VideoManagementUI:
                 
                 # Prepare files for upload
                 files = {}
-                # Get short_form_max_duration from request (default: 180)
+                # Get duration parameters from request
+                target_duration = data.get('target_duration', 45.0)  # Default: 45 seconds per video
                 short_form_max_duration = data.get('short_form_max_duration', 180.0)
-                
+
                 form_data = {
                     "language_code": data['language_code'],
                     "source_language": data.get('source_language', data['language_code']),  # Explicit source language
@@ -2048,6 +2049,7 @@ class VideoManagementUI:
                     "test_mode": str(test_mode).lower(),
                     "test_llm": str(test_llm).lower(),  # Forward to FastAPI backend
                     "no_shorts": False,
+                    "targetDuration": target_duration,  # 🎯 Use camelCase to match FastAPI Form parameter
                     "short_form_max_duration": short_form_max_duration,
                     "create_long_form": data.get('create_long_form', True),
                     "create_short_form": data.get('create_short_form', True)

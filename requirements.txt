@@ -65,3 +65,4 @@ google-auth-oauthlib>=1.2.0
 redis>=5.0.0
 hiredis>=2.2.0  # High-performance Redis parser
 pytest-cov>=7.0.0
+wikipedia>=1.4.0

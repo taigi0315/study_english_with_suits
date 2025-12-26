@@ -11,6 +11,8 @@ Usage:
 Options:
     --dry-run   Preview changes without applying them
     --limit N   Limit to processing N videos (default: all)
+    --show-name S   Force show name (default: Suits)
+    --learn-language L  Force learn language (default: English)
 """
 import os
 import sys
@@ -97,6 +99,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Preview changes only")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of videos to process")
     parser.add_argument("--video-id", type=str, help="Process specific video ID only")
+    parser.add_argument("--show-name", type=str, default="Suits", help="Show Name for metadata (default: Suits)")
+    parser.add_argument("--learn-language", type=str, default="English", help="Language being learned (default: English)")
     
     args = parser.parse_args()
     
@@ -165,9 +169,11 @@ def main():
             expression=meta.get('expression'),
             expression_translation=meta.get('translation'),
             # Guess video type based on title/tags? Default to 'short' if #Shorts in desc/tags, else educational
+            # Guess video type based on title/tags? Default to 'short' if #Shorts in desc/tags, else educational
             video_type="short" if "#Shorts" in description or "#shorts" in description else "educational",
-            language="ko" # Enforce target language
-        )
+            language="ko", # Enforce target language (Audience language)
+            show_name=args.show_name,
+            learn_language=args.learn_language
         
         # 3. Generate new metadata using Korean template
         new_metadata = generator.generate_metadata(

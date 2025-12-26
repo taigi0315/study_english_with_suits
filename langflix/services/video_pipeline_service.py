@@ -117,6 +117,7 @@ class VideoPipelineService:
             actual_no_long_form = not create_long_form
             
             # Run the pipeline
+            logger.info(f"🎯 VideoPipelineService: Calling pipeline.run() with target_duration={target_duration}")
             result = pipeline.run(
                 max_expressions=max_expressions,
                 dry_run=False,

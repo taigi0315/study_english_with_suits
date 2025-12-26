@@ -15,11 +15,9 @@ LangFlix uses a contextual localization pipeline that creates context-aware mult
    ↓
 3. Extract Expressions + Generate Chunk Summaries (Script Agent)
    ↓
-4. Aggregate Summaries → Master Episode Summary (Aggregator)
+4. Context-Aware Translation (LLM with full context)
    ↓
-5. Context-Aware Translation (Translator Agent)
-   ↓
-6. Generate Educational Videos
+5. Generate Educational Videos
 ```
 
 ## Key Components
@@ -38,23 +36,17 @@ LangFlix uses a contextual localization pipeline that creates context-aware mult
   - Chunk summaries with emotional context
 - **Model**: `gemini-2.5-flash` (configurable)
 
-### 3. Aggregator
-- **Purpose**: Combine chunk summaries into cohesive episode narrative
-- **Input**: List of chronological chunk summaries
-- **Output**: Master Episode Summary (200-400 words)
-- **Model**: `gemini-2.5-flash` (cheaper model)
-
-### 4. Translator
-- **Purpose**: Context-aware multilingual translation
+### 3. Expression Translation
+- **Purpose**: Context-aware multilingual translation via LLM
 - **Input**:
   - Expressions
   - Show Bible
-  - Master Episode Summary
+  - Chunk Summary (micro-context)
 - **Output**: Localized translations respecting:
   - Character hierarchy (honorifics)
   - Emotional tone
   - Cultural context
-- **Model**: `gemini-1.5-pro` (smart model)
+- **Model**: Uses configured LLM model
 
 ## Configuration
 
@@ -63,20 +55,9 @@ Pipeline settings are in `langflix/config/default.yaml`:
 ```yaml
 pipeline:
   show_bible:
-    cache_dir: "langflix/v3/artifacts/show_bibles"
+    cache_dir: "langflix/pipeline/artifacts/show_bibles"
     use_wikipedia: true
     force_refresh: false
-
-  master_summary:
-    cache_dir: "langflix/v3/artifacts/summaries"
-
-  aggregator:
-    model_name: "gemini-2.5-flash"
-    temperature: 0.3
-
-  translator:
-    model_name: "gemini-1.5-pro"
-    temperature: 0.2
 ```
 
 ## Language Support
@@ -86,7 +67,7 @@ pipeline:
 - **Japanese**: 常体 (plain) vs 敬語 (keigo)
 - **Spanish**: tú (informal) vs usted (formal)
 
-The Translator uses Show Bible to determine character relationships and apply appropriate formality levels.
+The translation service uses Show Bible and chunk summaries to determine character relationships and apply appropriate formality levels.
 
 ## Data Flow
 
@@ -110,31 +91,27 @@ The Translator uses Show Bible to determine character relationships and apply ap
 ## Cost Optimization
 
 1. **Show Bible**: Generated once per show, cached forever
-2. **Master Summary**: Generated once per episode, cached
-3. **Aggregator**: Uses cheaper Flash model
-4. **Translator**: Uses Pro model but only translates expressions (not full script)
+2. **Chunk Summaries**: Generated during expression extraction
+3. **LLM Translation**: Translates expressions only (not full script), using context from Show Bible and chunk summaries
 
 ## Directory Structure
 
 ```
 langflix/
-├── v3/
+├── pipeline/
 │   ├── agents/
-│   │   ├── script_agent_v3.py      # Expression extraction + summarization
-│   │   ├── aggregator.py            # Summary aggregation
-│   │   └── translator.py            # Context-aware translation
+│   │   └── script_agent.py          # Expression extraction + summarization
 │   ├── tools/
 │   │   └── wikipedia_tool.py        # Wikipedia API wrapper
 │   ├── prompts/
-│   │   ├── script_agent_v3.txt      # Script agent prompt
-│   │   ├── aggregator.txt           # Aggregator prompt
-│   │   └── translator_v3.txt        # Translator prompt
+│   │   └── script_agent.txt         # Script agent prompt
 │   ├── artifacts/
-│   │   ├── show_bibles/             # Cached Show Bibles
-│   │   └── summaries/               # Cached Master Summaries
+│   │   └── show_bibles/             # Cached Show Bibles
 │   ├── models.py                    # Data models
-│   ├── pipeline.py                  # Pipeline orchestrator
+│   ├── orchestrator.py              # Pipeline orchestrator
 │   └── bible_manager.py             # Show Bible cache manager
+├── core/
+│   └── translator.py                # Expression translation service
 ```
 
 ## Key Advantages
@@ -174,8 +151,7 @@ from langflix import settings
 # Pipeline configuration
 settings.get_show_bible_cache_dir()
 settings.get_use_wikipedia()
-settings.get_aggregator_model()
-settings.get_translator_model()
+settings.get_llm_model_name()
 ```
 
 ## Future Enhancements

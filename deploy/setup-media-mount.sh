@@ -6,7 +6,7 @@ set -e
 
 # Default values
 MOUNT_TYPE="${1:-nfs}"
-MEDIA_SERVER="${2:-192.168.86.43}"
+MEDIA_SERVER="${2:-192.168.1.194}"
 MEDIA_SHARE="${3:-/media/shows}"
 MOUNT_POINT="${4:-/mnt/media-server}"
 

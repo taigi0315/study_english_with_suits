@@ -81,8 +81,7 @@ The pipeline orchestrates context-aware translation:
 
 1. **Show Bible** - Static context from Wikipedia (characters, relationships)
 2. **Chunk Summaries** - Micro-context with emotional tone
-3. **Master Summary** - Episode narrative arc
-4. **Contextual Translation** - Localized with full context
+3. **Contextual Translation** - Localized with full context via LLM
 
 ## Data Flow
 
@@ -90,12 +89,11 @@ The pipeline orchestrates context-aware translation:
 
 ```
 1. Detect Netflix subtitle folder
-2. Load source + target subtitle files
+2. Load source subtitle file
 3. Create/load Show Bible for character context
 4. Extract expressions with chunk summaries
-5. Aggregate summaries into episode narrative
-6. Translate with full context awareness
-7. Render video with dual fonts
+5. Translate expressions with LLM using full context awareness
+6. Render video with dual fonts
 ```
 
 ## Configuration
@@ -113,9 +111,8 @@ dual_language:
     target_pattern: "*Korean*" # Pattern for target subs
 
 pipeline:
-  use_wikipedia: true # Fetch Show Bible from Wikipedia
-  aggregator_model: "gemini-2.5-flash"
-  translator_model: "gemini-1.5-pro"
+  show_bible:
+    use_wikipedia: true # Fetch Show Bible from Wikipedia
 ```
 
 ## Pipeline Integration

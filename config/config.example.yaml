@@ -6,9 +6,7 @@
 # Application Settings
 # ============================================================================
 app:
-  # Name of the TV show for prompting
-  show_name: "Suits"
-  
+
   # Template file for expression analysis prompt
   template_file: "expression_analysis_prompt_v5.txt"
 
@@ -40,9 +38,6 @@ llm:
   # Default language proficiency level for expression extraction
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"
-  
-  # Target language for translations
-  target_language: "Korean"
   
   # API retry configuration
   max_retries: 3

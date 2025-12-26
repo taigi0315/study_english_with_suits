@@ -35,7 +35,9 @@ class VideoMetadata:
     expressions_included: Optional[List[Dict[str, str]]] = None
     ready_for_upload: bool = False
     uploaded_to_youtube: bool = False
+    uploaded_to_youtube: bool = False
     youtube_video_id: Optional[str] = None
+    learn_language: str = "English"  # The language being learned (default: English)
 
 class VideoFileManager:
     """Manages generated video files for YouTube upload"""
@@ -139,11 +141,11 @@ class VideoFileManager:
             resolution = f"{width}x{height}" if width and height else "unknown"
             
             # Determine video type and extract episode/expression info
-            video_type, episode, expression, language = self._parse_video_path(video_path)
+            video_type, episode, expression, language, show_name_from_path, learn_language = self._parse_video_path(video_path)
             expression_translation = None
             title_translation = None  # For YouTube title in target language
             catchy_keywords = None  # For YouTube description
-            show_name = None  # For YouTube tags and description
+            show_name = show_name_from_path  # Initial value from path
             expressions_included = None
             metadata_path = video_path.with_suffix(".meta.json")
             if metadata_path.exists():
@@ -170,6 +172,10 @@ class VideoFileManager:
                     # Extract show_name for YouTube tags and description
                     if "show_name" in metadata_content:
                         show_name = metadata_content["show_name"]
+                        
+                    # Extract learn_language if available
+                    if "learn_language" in metadata_content:
+                        learn_language = metadata_content["learn_language"]
                     
                     # Check expressions list
                     expressions_included = metadata_content.get("expressions")
@@ -234,6 +240,7 @@ class VideoFileManager:
                 expressions_included=expressions_included,
                 video_type=video_type,
                 language=language,
+                learn_language=learn_language,
                 ready_for_upload=self._is_ready_for_upload(video_type, duration),
                 uploaded_to_youtube=uploaded_to_youtube,
                 youtube_video_id=youtube_video_id
@@ -246,8 +253,8 @@ class VideoFileManager:
             logger.error(f"Error extracting metadata from {video_path}: {e}")
             return None
     
-    def _parse_video_path(self, video_path: Path) -> tuple[str, str, str, str]:
-        """Parse video path to extract type, episode, expression, and language"""
+    def _parse_video_path(self, video_path: Path) -> tuple[str, str, str, str, Optional[str], str]:
+        """Parse video path to extract type, episode, expression, language, show_name, and learn_language"""
         path_parts = video_path.parts
         
         # Default values
@@ -255,8 +262,47 @@ class VideoFileManager:
         episode = "unknown"
         expression = "unknown"
         language = "unknown"
+        learn_language = "English"  # Default to English
+        show_name = None
         
         try:
+            # Extract Show Name from path (Dynamic)
+            # Strategy: Look for specific markers like "Shows" or "Media"
+            # Path structure often: /.../Media/Shows/{ShowName}/{Season}/...
+            for i, part in enumerate(path_parts):
+                if part.lower() in ["shows", "drama", "series"] and i + 1 < len(path_parts):
+                    # The next folder is likely the show name
+                    candidate = path_parts[i + 1]
+                    # Filter out common non-show tokens just in case
+                    if candidate.lower() not in ["season", "specials", "subs", "assets"]:
+                        show_name = candidate
+                        break
+            
+            # Fallback for Show Name: check parent of parent if applicable
+            if not show_name:
+                # e.g. /.../Reply_1988/Season 1/Episode.mp4 -> Reply_1988
+                if len(path_parts) >= 3 and "Season" in path_parts[-2]:
+                    show_name = path_parts[-3]
+                elif len(path_parts) >= 2:
+                    # Check if parent looks like a show name (not "output" or "test")
+                    parent = path_parts[-2]
+                    if parent.lower() not in ["output", "test", "assets", "media"]:
+                        show_name = parent
+            
+            # Clean up Show Name (underscores to spaces, but usually better kept as is for tags)
+            # For now, we prefer the directory name as is, or we can title case it.
+            if show_name:
+                # e.g. Reply_1988 -> Reply 1988 used for tags? No, often tags prefer specific formats.
+                # We'll keep it raw for now, let metadata generator handle formatting.
+                pass
+
+            # Detect Learn Language
+            # This is hard to detect solely from path unless we have a convention.
+            # However, if the Show Name is "Reply_1988", it's likely Korean.
+            # Ideally this comes from a config or database. For now, we default to English.
+            # But we can allow overrides or simple mapping.
+            # TODO: Add map or config reader here.
+            
             # Find episode info (S01E01, S02E03, etc.) from any path segment
             for part in path_parts:
                 match = re.search(r'(S\d+E\d+)', part, flags=re.IGNORECASE)
@@ -369,7 +415,7 @@ class VideoFileManager:
         except Exception as e:
             logger.warning(f"Error parsing path {video_path}: {e}")
         
-        return video_type, episode, expression, language
+        return video_type, episode, expression, language, show_name, learn_language
     
     def _is_ready_for_upload(self, video_type: str, duration: float) -> bool:
         """Determine if video is ready for YouTube upload"""

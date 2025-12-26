@@ -2035,8 +2035,7 @@ class VideoManagementUI:
                 
                 # Prepare files for upload
                 files = {}
-                # Get duration parameters from request
-                target_duration = data.get('target_duration', 45.0)  # Default: 45 seconds per video
+                # Get duration parameter from request - short_form_max_duration is used for both expression clip target and max short-form duration
                 short_form_max_duration = data.get('short_form_max_duration', 180.0)
 
                 form_data = {
@@ -2049,7 +2048,7 @@ class VideoManagementUI:
                     "test_mode": str(test_mode).lower(),
                     "test_llm": str(test_llm).lower(),  # Forward to FastAPI backend
                     "no_shorts": False,
-                    "targetDuration": target_duration,  # 🎯 Use camelCase to match FastAPI Form parameter
+                    "targetDuration": short_form_max_duration,  # 🎯 Use short_form_max_duration for expression clip target duration
                     "short_form_max_duration": short_form_max_duration,
                     "create_long_form": data.get('create_long_form', True),
                     "create_short_form": data.get('create_short_form', True)

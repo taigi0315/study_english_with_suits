@@ -167,10 +167,10 @@ prompt: |
   **Rules:**
   - 5-9 narrations per clip, spaced throughout
   - Make narrations more friendly, conversational tone and HUMOROUS e.g) "와- 이걸 피해가네", "Damn- that's was sick"
-  - Always include narration at first dialogue index, and make this narration more engaging, giving hint of the upcoming story. 
+  - Always include narration at dialogue index, and make this narration more engaging, giving hint of the upcoming story. 
+  - Make sure narration comes with the dialogue that is related or right after that dialogue. narration is like watching video with someone else, sharing thoughts with audience. it always should coems `after` the scene.
   - Casual tone, internet slang OK (lol, omg, fr)
-  - 5-15 words each
-  - **❌ Do NOT just translate the dialogue or expression.** Narration must be COMMENTARY.
+  - 5-10 words each
   - Don't narrate every line - let the scene breathe
 
   **Format:**
@@ -194,10 +194,6 @@ prompt: |
   ```json
   {{"expression": "{source_language} idiom", "translation": "{target_language} translation", "dialogue_index": 7}}
   ```
-
-  **⚠️ ZERO OVERLAP between vocabulary and expression annotations** (displayed on same visual layer)
-  - ❌ vocabulary: "rat" + expression: "rat me out" (OVERLAPS!)
-  - ✅ vocabulary: "leverage" + expression: "cut to the chase" (no overlap)
 
   ---
 
@@ -337,3 +333,6 @@ prompt: |
 
   If you find expressions: Return the JSON object
   If NO good expressions found: {{"expressions":[]}}
+  **REVIEW each dialogue translation one by one.**
+  Check each dialogue translated correctly
+  

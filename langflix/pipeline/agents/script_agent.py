@@ -67,7 +67,8 @@ class ScriptAgent:
         target_language: Optional[str] = None,
         target_language_code: Optional[str] = None,
         source_language: Optional[str] = None,
-        source_language_code: Optional[str] = None
+        source_language_code: Optional[str] = None,
+        target_duration: Optional[float] = None
     ) -> ChunkResult:
         """
         Analyze a single script chunk with Show Bible context
@@ -95,7 +96,8 @@ class ScriptAgent:
         target_lang = target_language or settings.get_default_target_language()
         target_lang_code = target_language_code or settings.get_target_language_code()
         min_expr = settings.get_min_expressions_per_chunk()
-        target_duration = settings.get_short_video_target_duration()
+        # Prefer provided target_duration argument, else fall back to settings
+        target_duration_val = target_duration if target_duration is not None else settings.get_short_video_target_duration()
 
         # Build prompt with exact keys matching expression_analysis_prompt.yaml
         prompt = self.prompt_template.format(
@@ -107,7 +109,7 @@ class ScriptAgent:
             min_expressions=min_expr,
             max_expressions=max_expressions_per_chunk,
             level_description=language_level_descriptions,  # Maps to {level_description}
-            target_duration=target_duration,
+            target_duration=target_duration_val,
             source_dialogues=script_chunk,                  # Maps to {source_dialogues}
             target_dialogues=target_script_chunk,           # Maps to {target_dialogues}
 
@@ -337,7 +339,8 @@ class ScriptAgent:
         target_language: Optional[str] = None,
         target_language_code: Optional[str] = None,
         source_language: Optional[str] = None,
-        source_language_code: Optional[str] = None
+        source_language_code: Optional[str] = None,
+        target_duration: Optional[float] = None
     ) -> List[ChunkResult]:
         """
         Analyze multiple chunks in sequence
@@ -359,7 +362,8 @@ class ScriptAgent:
             chunks, target_chunks, show_bible, language_level,
             max_expressions_per_chunk, max_total_expressions,
             target_language, target_language_code,
-            source_language, source_language_code
+            source_language, source_language_code,
+            target_duration
         )
         
         for result in generator:
@@ -378,7 +382,8 @@ class ScriptAgent:
         target_language: Optional[str] = None,
         target_language_code: Optional[str] = None,
         source_language: Optional[str] = None,
-        source_language_code: Optional[str] = None
+        source_language_code: Optional[str] = None,
+        target_duration: Optional[float] = None
     ):
         """
         Analyze multiple chunks in sequence yielding results
@@ -407,7 +412,8 @@ class ScriptAgent:
                 target_language=target_language,
                 target_language_code=target_language_code,
                 source_language=source_language,
-                source_language_code=source_language_code
+                source_language_code=source_language_code,
+                target_duration=target_duration
             )
 
             # Truncate expressions if we've exceeded the total limit

@@ -98,6 +98,7 @@ class ScriptAgent:
         min_expr = settings.get_min_expressions_per_chunk()
         # Prefer provided target_duration argument, else fall back to settings
         target_duration_val = target_duration if target_duration is not None else settings.get_short_video_target_duration()
+        logger.info(f"🎯 ScriptAgent.analyze_chunk(): target_duration param={target_duration}, using target_duration_val={target_duration_val}")
 
         # Build prompt with exact keys matching expression_analysis_prompt.yaml
         prompt = self.prompt_template.format(

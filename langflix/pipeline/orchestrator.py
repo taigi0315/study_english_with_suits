@@ -205,6 +205,7 @@ class Pipeline:
         source_lang_name = self.config.source_language
         source_lang_code = settings.language_name_to_code(source_lang_name) if source_lang_name else None
 
+        logger.info(f"🎯 Pipeline.run_generator(): Calling script_agent with target_duration={target_duration}")
         generator = self.script_agent.analyze_chunks_generator(
             chunks=subtitle_chunks,
             target_chunks=target_subtitle_chunks,

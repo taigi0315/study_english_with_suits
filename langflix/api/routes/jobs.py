@@ -422,8 +422,10 @@ async def create_job(
     try:
         # Handle parameter aliases (frontend sends camelCase)
         if targetDuration is not None:
-            logger.info(f"Using targetDuration alias: {targetDuration}")
+            logger.info(f"🎯 Using targetDuration alias: {targetDuration}")
             target_duration = targetDuration
+
+        logger.info(f"🎯 API: Final target_duration value: {target_duration}")
             
         if shortFormMaxDuration is not None:
             logger.info(f"Using shortFormMaxDuration alias: {shortFormMaxDuration}")

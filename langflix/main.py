@@ -261,6 +261,7 @@ class LangFlixPipeline:
             self.translated_expressions = {lang: [] for lang in self.target_languages}
             
             # Streaming Generator
+            logger.info(f"🎯 LangFlixPipeline.run(): Calling _run_analysis_streaming with target_duration={target_duration}")
             chunk_stream = self._run_analysis_streaming(
                 language_level=language_level,
                 max_expressions=max_expressions,

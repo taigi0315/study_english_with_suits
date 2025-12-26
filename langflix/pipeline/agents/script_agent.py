@@ -121,6 +121,13 @@ class ScriptAgent:
             script_chunk=script_chunk
         )
 
+        # Verify target_duration in formatted prompt
+        if "Duration:** " in prompt:
+            duration_match = re.search(r'Duration:\*\* ([\d.]+) seconds', prompt)
+            if duration_match:
+                actual_duration = duration_match.group(1)
+                logger.info(f"🎯 Formatted prompt contains Duration: {actual_duration} seconds (expected: {target_duration_val})")
+
         logger.info(f"🚀 Prompting LLM for {source_lang} -> {target_lang} (Expressions: {min_expr}-{max_expressions_per_chunk})")
 
         # Call LLM

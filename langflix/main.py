@@ -1557,7 +1557,15 @@ class LangFlixPipeline:
                 source_lang_code = language_name_to_code(self.source_language)
                 expr['_source_language_code'] = source_lang_code
                 
+                expr['_source_language_code'] = source_lang_code
+                
                 chunk_expressions.append(expr)
+
+            # FORCE LIMIT in test mode causing strict 1 expression processing
+            if test_mode or settings.is_test_mode_enabled():
+                if len(chunk_expressions) > 1:
+                     logger.info(f"TEST MODE: Limiting expressions from {len(chunk_expressions)} to 1")
+                     chunk_expressions = chunk_expressions[:1]
 
             yield chunk_expressions
 

@@ -729,7 +729,7 @@ class VideoManagementUI:
         @self.app.route('/api/youtube/login', methods=['POST'])
         def youtube_login():
             """Authenticate with YouTube (supports both Desktop and Web flow)"""
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             email = data.get('email')  # Optional email for web flow
             use_web_flow = data.get('use_web_flow', False)  # Default to Desktop flow
             

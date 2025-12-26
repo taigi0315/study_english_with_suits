@@ -17,6 +17,7 @@ class YouTubeContentTemplate:
     """Template for YouTube content generation"""
     title_template: str
     description_template: str
+    # default_tags is now deprecated in favor of dynamic tags, but kept for backward compatibility if needed
     default_tags: List[str]
     category_mapping: Dict[str, str]
 
@@ -178,7 +179,7 @@ class YouTubeMetadataGenerator:
         return {
             "educational": YouTubeContentTemplate(
                 title_template="{expression} | {translation} | from {episode}",
-                description_template="""🎬 Learn English expressions from the hit TV show Suits!
+                description_template="""🎬 Learn {learn_language} expressions from the hit TV show {show_name}!
 
 📚 In this video, we'll learn the expression: "{expression}"
 📖 Translation: {translation}
@@ -191,48 +192,38 @@ class YouTubeMetadataGenerator:
 • Similar expressions you can use
 • Pronunciation tips
 
-📺 Watch the original scene from Suits and learn naturally!
+📺 Watch the original scene from {show_name} and learn naturally!
 
-#EnglishLearning #Suits #EnglishExpressions #LearnEnglish #EnglishWithTV #EnglishConversation #EnglishGrammar #EnglishVocabulary #EnglishSpeaking #EnglishPractice #SuitsTVShow #EnglishLessons #EnglishTips #EnglishStudy #EnglishFluency""",
-                default_tags=[
-                    "English Learning", "Suits", "English Expressions", "Learn English",
-                    "English with TV", "English Conversation", "English Grammar",
-                    "English Vocabulary", "English Speaking", "English Practice"
-                ],
+#{learn_language}Learning #{show_name} #{learn_language}Expressions #Learn{learn_language} #{learn_language}WithTV #{learn_language}Conversation #{learn_language}Grammar #{learn_language}Vocabulary #{learn_language}Speaking #{learn_language}Practice #{show_name}TVShow #{learn_language}Lessons #{learn_language}Tips #{learn_language}Study #{learn_language}Fluency""",
+                default_tags=[],  # Dynamic tags used instead
                 category_mapping={"educational": "22"}
             ),
             
             "short": YouTubeContentTemplate(
                 title_template="{title_template}",  # Will be replaced with target language version
                 description_template="{description_template}",  # Will be replaced with target language version
-                default_tags=[
-                    "Shorts", "EnglishLearning", "Suits", "EnglishExpressions", "LearnEnglish"
-                ],  # Reduced to 3-5 most relevant tags (TICKET-056)
+                default_tags=[],  # Dynamic tags used instead
+# Reduced to 3-5 most relevant tags (TICKET-056)
                 category_mapping={"short": "22"}
             ),
             
             "final": YouTubeContentTemplate(
-                title_template="Complete English Lesson: {episode} | Learn 5+ Expressions from Suits",
-                description_template="""🎬 Complete English lesson from Suits {episode}!
+                title_template="Complete {learn_language} Lesson: {episode} | Learn 5+ Expressions from {show_name}",
+                description_template="""🎬 Complete {learn_language} lesson from {show_name} {episode}!
 
-📚 In this comprehensive lesson, you'll learn multiple English expressions:
+📚 In this comprehensive lesson, you'll learn multiple {learn_language} expressions:
 • {expressions_list}
 
 🎯 What you'll master:
-• Real English expressions used by native speakers
+• Real {learn_language} expressions used by native speakers
 • Context and proper usage
 • Pronunciation and intonation
 • Similar expressions and alternatives
 
 📺 Watch the original scenes and learn naturally!
 
-#EnglishLearning #Suits #EnglishExpressions #LearnEnglish #EnglishWithTV #EnglishConversation #EnglishGrammar #EnglishVocabulary #EnglishSpeaking #EnglishPractice #SuitsTVShow #EnglishLessons #EnglishTips #EnglishStudy #EnglishFluency""",
-                default_tags=[
-                    "English Learning", "Suits", "English Expressions", "Learn English",
-                    "English with TV", "English Conversation", "English Grammar",
-                    "English Vocabulary", "English Speaking", "English Practice",
-                    "Complete Lesson", "English Study"
-                ],
+#{learn_language}Learning #{show_name} #{learn_language}Expressions #Learn{learn_language} #{learn_language}WithTV #{learn_language}Conversation #{learn_language}Grammar #{learn_language}Vocabulary #{learn_language}Speaking #{learn_language}Practice #{show_name}TVShow #{learn_language}Lessons #{learn_language}Tips #{learn_language}Study #{learn_language}Fluency""",
+                default_tags=[],  # Dynamic tags used instead
                 category_mapping={"final": "22"}
             )
         }
@@ -585,12 +576,19 @@ class YouTubeMetadataGenerator:
             return description
         
         # Fallback to English template for unknown types or if target language not available
+        # Fallback to English template for unknown types or if target language not available
+        # But now we inject dynamic variables
+        learn_language = getattr(video_metadata, 'learn_language', "English")
+        show_name = getattr(video_metadata, 'show_name', "TV Show") or "TV Show"
+        
         return template.description_template.format(
             expression=expression,
             translation=translation,
             episode=episode_display,
             language=video_metadata.language.upper(),
-            expressions_list=expressions_list
+            expressions_list=expressions_list,
+            learn_language=learn_language,
+            show_name=show_name
         )
     
     def _generate_tags(self, video_metadata: VideoMetadata, template: YouTubeContentTemplate, additional_tags: Optional[List[str]], target_language: Optional[str] = None) -> List[str]:
@@ -623,7 +621,22 @@ class YouTubeMetadataGenerator:
                     final_tags.append(tag_clean)
                     char_count += len(tag_clean) + 1
         else:
-            # For other video types, use default template tags (already limited to 5 in template)
+            # For other video types, use localized tags as well since default_tags are removed
+            if target_language:
+                 # Extract hashtags from localized tag string
+                localized_tags_str = self._generate_localized_tags(video_metadata, target_language)
+                # Parse hashtags (they're space-separated)
+                hashtags = [tag.strip() for tag in localized_tags_str.split() if tag.strip().startswith("#")]
+                for tag in hashtags:
+                    # Remove # for tag list (YouTube API expects tags without #)
+                    tag_clean = tag.replace("#", "")
+                    if tag_clean not in final_tags and char_count + len(tag_clean) + 1 <= 500 and len(final_tags) < max_tags:
+                        final_tags.append(tag_clean)
+                        char_count += len(tag_clean) + 1
+            elif template.default_tags:
+                # Legacy fallback if no target language
+                for tag in template.default_tags:
+                     pass # default_tags are empty now, but structure kept
             for tag in template.default_tags:
                 if tag not in final_tags and char_count + len(tag) + 1 <= 500 and len(final_tags) < max_tags:
                     final_tags.append(tag)
@@ -637,7 +650,8 @@ class YouTubeMetadataGenerator:
                 expression_words = expression.lower().split()
                 for word in expression_words:
                     if len(word) > 3 and len(final_tags) < max_tags:  # Only add meaningful words
-                        tag = f"English {word.title()}"
+                        learn_language = getattr(video_metadata, 'learn_language', "English")
+                        tag = f"{learn_language} {word.title()}"
                         if tag not in final_tags and char_count + len(tag) + 1 <= 500:
                             final_tags.append(tag)
                             char_count += len(tag) + 1
@@ -719,40 +733,60 @@ class YouTubeMetadataGenerator:
         
         # Dynamic #Learn{TargetLanguage}
         # e.g., #LearnKorean, #LearnEnglish
-        learn_target_hashtag = f"#Learn{target_language.replace(' ', '')}"
+        learn_language = getattr(video_metadata, 'learn_language', "English").replace(" ", "")
+        learn_target_hashtag = f"#Learn{target_language.replace(' ', '')}" # This is target language of the AUDIENCE (e.g. Korean people learning English)
+        
+        # Correction: The logic was:
+        # target_language = audience language (e.g. Korean)
+        # learn_language = content language (e.g. English)
+        
+        # Tags should reflect:
+        # 1. Audience Language keywords (e.g. #영어학습 - Learning English)
+        # 2. Content Language keywords (e.g. #EnglishExpressions)
+        
+        # We need tags for "Learn [Content Language]" in [Audience Language]
+        # e.g. If Audience=Korean, Content=English -> #영어공부 #EnglishLearning
+        
+        # If Audience=English, Content=Korean -> #LearnKorean #KoreanExpressions
+        
+        # Since we don't have a full matrix yet, we'll try to be smart.
+        # But notice `tag_translations` below already handles "english_learning" logic for different audiences.
+        # We need to make THAT dynamic.
+        
+        learn_lang_clean = learn_language.replace(" ", "")
 
         tag_translations = {
             "Korean": {
                 "shorts": "#쇼츠",
-                "english_learning": "#영어학습",
-                "english_expressions": "#영어표현",
+                "english_learning": f"#{learn_language}학습", # Dynamic: #{Lang}학습
+                "english_expressions": f"#{learn_language}표현", # Dynamic: #{Lang}표현
                 # "suits" and "learn_english" are now dynamic
             },
             "English": {
                 "shorts": "#Shorts",
-                "english_learning": "#EnglishLearning",
-                "english_expressions": "#EnglishExpressions",
+                "english_learning": f"#{learn_lang_clean}Learning",
+                "english_expressions": f"#{learn_lang_clean}Expressions",
             },
             # ... preserve other languages structure but we use dynamic logic mainly
             "Japanese": {
                 "shorts": "#ショート",
-                "english_learning": "#英語学習",
-                "english_expressions": "#英語表現",
+                "english_learning": f"#{learn_language}学習",
+                "english_expressions": f"#{learn_language}表現",
             },
             "Chinese": {
                 "shorts": "#短片",
-                "english_learning": "#英语学习",
-                "english_expressions": "#英语表达",
+                "english_learning": f"#{learn_language}学习",
+                "english_expressions": f"#{learn_language}表达",
             },
             "Spanish": {
                 "shorts": "#Shorts",
-                "english_learning": "#AprenderInglés",
-                "english_expressions": "#ExpresionesInglesas",
+                "english_learning": f"#Aprender{learn_lang_clean}",
+                "english_expressions": f"#Expresiones{learn_lang_clean}",
             },
             "French": {
                 "shorts": "#Shorts",
-                "english_learning": "#ApprendreAnglais",
-                "english_expressions": "#ExpressionsAnglaises",
+                "english_learning": f"#Apprendre{learn_lang_clean}",
+                "english_expressions": f"#Expressions{learn_lang_clean}",
             }
         }
         

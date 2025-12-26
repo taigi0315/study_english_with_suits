@@ -43,7 +43,7 @@ pipeline:
     use_wikipedia: true
 
     # Force refresh Show Bible (ignore cache)
-    force_refresh: false
+    force_refresh: true
 
   # Master Summary configuration (episode narrative summaries)
   master_summary:
@@ -352,7 +352,7 @@ short_video:
     # Expression text (bottom padding area)
     expression:
       font_size: 50              # Main expression font size (increased by 10 from 45)
-      y_position: 1530           # Adjusted for new layout (video ends at 1480)
+      y_position: 1580           # Adjusted for new layout
       chars_per_line: 40         # Characters per line before wrapping (increased from 28)
       text_color: 'yellow'
       border_width: 2
@@ -409,9 +409,9 @@ short_video:
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 60                # Large font for emphasis
-      y_position: 30               # Below logo, above keywords
-      chars_per_line: 40           # Max characters per line before wrapping
+      font_size: 75                # Large font for emphasis
+      y_position: 27               # Below logo, above keywords
+      chars_per_line: 30           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'

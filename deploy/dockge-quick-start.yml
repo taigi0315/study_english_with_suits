@@ -21,7 +21,7 @@ services:
     
     volumes:
       # CHANGE THIS: Your TrueNAS media path
-      # If 192.168.86.43/media/shows is at /mnt/pool/media/shows on TrueNAS:
+      # If 192.168.1.194/media/shows is at /mnt/pool/media/shows on TrueNAS:
       - /mnt/pool/media/shows:/media/shows:ro
       
       # CHANGE THIS: Path to your config.yaml file

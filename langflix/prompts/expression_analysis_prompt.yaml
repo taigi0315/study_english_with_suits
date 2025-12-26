@@ -92,7 +92,7 @@ prompt: |
   3. **END (Resolution):** Include the reaction/response that completes the moment
 
   **MANDATORY RULES:**
-  - **Duration:** {target_duration} seconds (±15 seconds flexibility)
+  - **Duration:** {target_duration} seconds (±5 seconds flexibility). **STRICTLY ENFORCED.**
   - **Expression placement:** Must appear in the MIDDLE, NOT at the very start or end
   - **Complete sentences:** Start and end on complete sentences, no cut-offs
   - **Story completeness:** A first-time viewer must understand what's happening
@@ -303,7 +303,7 @@ prompt: |
   - ✓ Expression copied exactly from source dialogue
   
   **Context Completeness:**
-  - ✓ Context is ~{target_duration} seconds (complete story)
+  - ✓ Context is ~{target_duration} seconds (±5s)
   - ✓ Has setup BEFORE expression (beginning)
   - ✓ Expression appears in MIDDLE
   - ✓ Has reaction AFTER expression (end)

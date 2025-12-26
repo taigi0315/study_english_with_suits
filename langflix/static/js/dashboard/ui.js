@@ -451,10 +451,16 @@ export const ui = {
                     When checked, uses previously saved LLM responses for faster development iteration.
                 </p>
                 <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
-                    <input type="number" id="shortFormMaxDuration" value="120" min="60" max="300" step="10" 
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Target Duration per Video (seconds)</label>
+                    <input type="number" id="targetDuration" value="45" min="30" max="180" step="5"
                            style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
-                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">Videos exceeding this duration will be dropped from batching (default: 120)</small>
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">🎯 Ideal length for each educational video (default: 45s). LLM will select clip duration around this target.</small>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
+                    <input type="number" id="shortFormMaxDuration" value="180" min="60" max="300" step="10"
+                           style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">Maximum duration for short-form batching - videos longer than this will be dropped (default: 180)</small>
                 </div>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Video Formats to Create</label>
@@ -566,6 +572,7 @@ export const ui = {
             const languageLevel = dialog.querySelector('#languageLevel').value;
             const testMode = dialog.querySelector('#testModeCheckbox').checked;
             const testLlm = dialog.querySelector('#testLlmCheckbox').checked;  // Dev: Use cached LLM response
+            const targetDuration = parseFloat(dialog.querySelector('#targetDuration').value);  // Target duration per video
             const shortFormMaxDuration = parseFloat(dialog.querySelector('#shortFormMaxDuration').value);
             const createLongForm = dialog.querySelector('#createLongFormCheckbox').checked;
             const createShortForm = dialog.querySelector('#createShortFormCheckbox').checked;
@@ -602,6 +609,7 @@ export const ui = {
                             language_level: languageLevel,
                             test_mode: testMode,
                             test_llm: testLlm,  // Dev: Use cached LLM response
+                            target_duration: targetDuration,  // 🎯 Target duration per video
                             create_long_form: createLongForm,
                             create_short_form: createShortForm,
                             short_form_max_duration: shortFormMaxDuration,

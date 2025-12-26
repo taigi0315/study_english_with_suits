@@ -415,7 +415,7 @@ def parse_subtitle_file(file_path: str) -> List[pysrt.SubRipItem]:
         subs = pysrt.open(file_path)
         return subs
     except Exception as e:
-        print(f"Error parsing subtitle file: {e}")
+        logger.error(f"Error parsing subtitle file: {e}")
         return []
 
 def chunk_subtitles(subtitles: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:

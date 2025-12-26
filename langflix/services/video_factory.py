@@ -9,6 +9,7 @@ from langflix.core.video_processor import VideoProcessor
 from langflix.core.subtitle_processor import SubtitleProcessor
 from langflix.core.video_editor import VideoEditor
 from langflix.utils.filename_utils import sanitize_for_expression_filename
+from langflix.utils.expression_utils import get_expr_attr
 from langflix.services.output_manager import OutputManager
 from langflix.utils.temp_file_manager import get_temp_manager
 from langflix.media.ffmpeg_utils import get_duration_seconds
@@ -16,13 +17,6 @@ from langflix import settings
 from langflix.subtitles.overlay import apply_dual_subtitle_layers
 
 logger = logging.getLogger(__name__)
-
-# Helper to get attribute from dict or object (expressions can be dicts or objects)
-def get_expr_attr(expr, key, default=None):
-    """Get attribute from expression - works with both dict and object types."""
-    if isinstance(expr, dict):
-        return expr.get(key, default)
-    return getattr(expr, key, default)
 
 class VideoFactory:
     """Service for orchestrating video creation."""

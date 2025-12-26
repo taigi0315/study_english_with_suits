@@ -12,17 +12,11 @@ import tempfile
 import logging
 from langflix.core.models import ExpressionAnalysis
 # Note: AlignedExpression import removed - using external transcription
+from langflix.utils.expression_utils import get_expr_attr
 from langflix import settings
 from .exceptions import SubtitleRenderingError
 
 logger = logging.getLogger(__name__)
-
-# Helper to get attribute from dict or object (expressions can be dicts or objects)
-def get_expr_attr(expr, key, default=None):
-    """Get attribute from expression - works with both dict and object types."""
-    if isinstance(expr, dict):
-        return expr.get(key, default)
-    return getattr(expr, key, default)
 
 
 class SubtitleRenderer:

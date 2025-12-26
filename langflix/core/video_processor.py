@@ -358,17 +358,17 @@ if __name__ == "__main__":
         video_file = get_video_file_for_subtitle(subtitle_path)
         
         if video_file:
-            print(f"Found video file: {video_file}")
-            
+            logger.info(f"Found video file: {video_file}")
+
             # Validate the video file
             processor = VideoProcessor()
             result = processor.validate_video_file(video_file)
-            
+
             if result['valid']:
-                print(f"Video is valid. Metadata: {result['metadata']}")
+                logger.info(f"Video is valid. Metadata: {result['metadata']}")
             else:
-                print(f"Video validation failed: {result['error']}")
+                logger.error(f"Video validation failed: {result['error']}")
         else:
-            print("No video file found")
+            logger.warning("No video file found")
     else:
-        print("Usage: python video_processor.py <subtitle_file_path>")
+        logger.info("Usage: python video_processor.py <subtitle_file_path>")

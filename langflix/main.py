@@ -261,7 +261,7 @@ class LangFlixPipeline:
             self.translated_expressions = {lang: [] for lang in self.target_languages}
             
             # Streaming Generator
-            logger.info(f"🎯 LangFlixPipeline.run(): Calling _run_analysis_streaming with target_duration={target_duration}")
+            logger.info(f"[PIPELINE] LangFlixPipeline.run(): Calling _run_analysis_streaming with target_duration={target_duration}")
             chunk_stream = self._run_analysis_streaming(
                 language_level=language_level,
                 max_expressions=max_expressions,
@@ -1365,7 +1365,7 @@ class LangFlixPipeline:
         Run contextual localization pipeline in STREAMING mode (Generator).
         Yields a list of expressions for each processed chunk.
         """
-        logger.info(f"🎯 _run_analysis_streaming() ENTRY: target_duration={target_duration}")
+        logger.info(f"[PIPELINE] _run_analysis_streaming() ENTRY: target_duration={target_duration}")
         from langflix.pipeline.orchestrator import Pipeline
         from langflix.pipeline.models import PipelineConfig
         from langflix.utils.language_utils import language_name_to_code, language_code_to_name

@@ -912,15 +912,15 @@ if __name__ == "__main__":
         
         # Extract subtitles
         subtitles = processor.extract_subtitles_for_expression(dummy_expression)
-        print(f"Found {len(subtitles)} subtitles for expression")
-        
+        logger.info(f"Found {len(subtitles)} subtitles for expression")
+
         # Create subtitle file
         output_path = "test_output.srt"
         success = processor.create_dual_language_subtitle_file(dummy_expression, output_path)
-        
+
         if success:
-            print(f"Created subtitle file: {output_path}")
+            logger.info(f"Created subtitle file: {output_path}")
         else:
-            print("Failed to create subtitle file")
+            logger.error("Failed to create subtitle file")
     else:
-        print("Usage: python subtitle_processor.py <subtitle_file_path>")
+        logger.info("Usage: python subtitle_processor.py <subtitle_file_path>")

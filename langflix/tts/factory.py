@@ -260,13 +260,7 @@ def create_tts_client(provider: str, config: Dict[str, Any]) -> TTSClient:
         except Exception as e:
             logger.error(f"Failed to create Gemini TTS client: {e}")
             raise ValueError(f"Failed to initialize Gemini TTS client: {e}")
-    
-    # Future providers can be added here
-    # elif provider == "aws":
-    #     return AWSPollyClient(config)
-    # elif provider == "azure":
-    #     return AzureTTSClient(config)
-    
+
     # Unknown provider
     supported_providers = ["lemonfox"]
     if GOOGLE_AVAILABLE:

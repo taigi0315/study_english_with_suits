@@ -411,7 +411,7 @@ short_video:
     title:
       font_size: 75                # Large font for emphasis
       y_position: 27               # Below logo, above keywords
-      chars_per_line: 30           # Max characters per line before wrapping
+      chars_per_line: 20           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'

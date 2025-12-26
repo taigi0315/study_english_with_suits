@@ -405,6 +405,10 @@ async def create_job(
     no_shorts: bool = Form(False),
     short_form_max_duration: float = Form(180.0),
     target_duration: float = Form(120.0),
+    # CamelCase aliases for frontend compatibility
+    targetDuration: Optional[float] = Form(None),
+    shortFormMaxDuration: Optional[float] = Form(None),
+    
     output_dir: str = Form("output"),
     target_languages: Optional[str] = Form(None),  # Comma-separated string like "ko,ja,zh"
     source_language: str = Form(...),  # Required explicit source language code (TICKET-VIDEO-002)
@@ -416,10 +420,20 @@ async def create_job(
     """Create a new video processing job."""
     
     try:
+        # Handle parameter aliases (frontend sends camelCase)
+        if targetDuration is not None:
+            logger.info(f"Using targetDuration alias: {targetDuration}")
+            target_duration = targetDuration
+            
+        if shortFormMaxDuration is not None:
+            logger.info(f"Using shortFormMaxDuration alias: {shortFormMaxDuration}")
+            short_form_max_duration = shortFormMaxDuration
+
         # RAW PAYLOAD LOGGING (as requested)
         logger.info(f"🚀 JOB CREATION RAW PAYLOAD:")
         logger.info(f"   video_file: {video_file.filename}")
         logger.info(f"   language_code (primary): {language_code}")
+        logger.info(f"   target_duration used: {target_duration}s")
         logger.info(f"   display_language: {language_code} (Mapped: {LANGUAGE_CODE_MAP.get(language_code, 'Unknown')})")
         logger.info(f"   source_language (explicit): {source_language}")
         logger.info(f"   target_languages (raw): '{target_languages}'")

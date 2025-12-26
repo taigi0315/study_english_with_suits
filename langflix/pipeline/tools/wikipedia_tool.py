@@ -40,7 +40,7 @@ class WikipediaTool:
         query = f"{show_name} TV series plot summary premise"
         logger.info(f"Searching Wikipedia for premise: {query}")
 
-        return self._search_with_retry(query, section="premise")
+        return self._search_with_retry(query, section="premise", show_name=show_name)
 
     def search_show_characters(self, show_name: str) -> Optional[str]:
         """
@@ -55,9 +55,9 @@ class WikipediaTool:
         query = f"{show_name} TV series main characters descriptions relationships"
         logger.info(f"Searching Wikipedia for characters: {query}")
 
-        return self._search_with_retry(query, section="characters")
+        return self._search_with_retry(query, section="characters", show_name=show_name)
 
-    def _search_with_retry(self, query: str, section: str) -> Optional[str]:
+    def _search_with_retry(self, query: str, section: str, show_name: str) -> Optional[str]:
         """
         Execute Wikipedia search with exponential backoff retry
 
@@ -71,14 +71,26 @@ class WikipediaTool:
         for attempt in range(self.max_retries):
             try:
                 # Search for the page
-                search_results = wikipedia.search(query, results=3)
+                search_results = wikipedia.search(query, results=5)
 
                 if not search_results:
                     logger.warning(f"No Wikipedia results found for: {query}")
                     return None
 
-                # Try to get the first result's summary
-                page_title = search_results[0]
+                # Smart Selection: Find first result that contains the show name
+                page_title = None
+                normalized_show_name = show_name.lower().strip()
+                
+                for result in search_results:
+                    if normalized_show_name in result.lower():
+                        page_title = result
+                        break
+                
+                # Fallback to first result if no name match found
+                if not page_title:
+                    page_title = search_results[0]
+                    logger.warning(f"No exact title match for '{show_name}' in results: {search_results}. Using first result: {page_title}")
+
                 logger.info(f"Found Wikipedia page: {page_title}")
 
                 # Get full page content (not just summary)
@@ -91,10 +103,20 @@ class WikipediaTool:
                 return content
 
             except wikipedia.exceptions.DisambiguationError as e:
-                # Multiple possible pages - try the first option
-                logger.warning(f"Disambiguation error for '{query}', trying first option: {e.options[0]}")
+                # Multiple possible pages - try to find best match among options
+                logger.warning(f"Disambiguation error for '{query}', options: {e.options[:5]}")
+                
+                selected_option = e.options[0]
+                normalized_show_name = show_name.lower().strip()
+                for option in e.options:
+                    if normalized_show_name in option.lower():
+                        selected_option = option
+                        break
+                
+                logger.info(f"Selected disambiguation option: {selected_option}")
+                
                 try:
-                    page = wikipedia.page(e.options[0], auto_suggest=False)
+                    page = wikipedia.page(selected_option, auto_suggest=False)
                     content = page.content
                     logger.info(f"✅ Retrieved {section} from disambiguation ({len(content)} chars)")
                     return content

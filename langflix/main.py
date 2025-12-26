@@ -555,7 +555,8 @@ class LangFlixPipeline:
             
             dest_name = self.subtitle_file.name
             if not is_standard:
-                dest_name = "Original.srt"
+                # Rename to source language to ensure correct discovery
+                dest_name = f"{self.source_language}.srt"
                 logger.info(f"Renaming non-standard subtitle {self.subtitle_file.name} to {dest_name} for discovery")
 
             dest_path = subtitle_folder / dest_name
@@ -608,7 +609,10 @@ class LangFlixPipeline:
             target_lang_names.append(lang_name)
 
         # Combine source + target languages
-        required_langs = list(set([self.source_language] + target_lang_names))
+        # CHANGED: Only require source language subtitle. 
+        # Target language translation is now handled by the LLM during expression analysis.
+        # We do NOT want to auto-translate the entire subtitle file anymore.
+        required_langs = [self.source_language]
 
         logger.info(f"Ensuring subtitles exist for languages: {required_langs}")
 

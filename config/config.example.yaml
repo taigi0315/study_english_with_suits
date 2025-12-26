@@ -39,9 +39,6 @@ llm:
   # Options: beginner, intermediate, advanced, mixed
   default_language_level: "intermediate"
   
-  # Target language for translations
-  target_language: "Korean"
-  
   # API retry configuration
   max_retries: 3
   retry_backoff_seconds: [3, 6, 12]  # Wait times between retries

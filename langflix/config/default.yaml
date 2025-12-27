@@ -81,7 +81,7 @@ llm:
   # | 6000       | ~8.8 min  | 193 entries      | Large - May cause quality issues          |
   # | 8000       | ~11.7 min | 257 entries      | Too large - High hallucination risk       |
 
-  max_input_length: 4000
+  max_input_length: 3000
   
   # Model for expression analysis and content selection
   model_name: "gemini-2.5-flash"
@@ -112,8 +112,8 @@ processing:
   
   # Normal mode expression limits (when test_mode.enabled is false)
   min_expressions_per_chunk: 1
-  max_expressions_per_chunk: 5
-  max_total_expressions: 15         
+  max_expressions_per_chunk: 2
+  max_total_expressions: 20         
 
 # ============================================================================
 # Language Proficiency Levels

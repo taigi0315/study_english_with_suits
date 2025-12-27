@@ -77,10 +77,6 @@ class VideoEditor:
             source_language_code=self.source_language_code  # Source language
         )
 
-        # Initialize PathResolver for centralized path management
-        from langflix.core.utils.path_resolver import PathResolver
-        self.path_resolver = PathResolver(output_dir=self.output_dir)
-
         # Store show_name for metadata
         self.show_name = show_name or "Unknown Show"
         

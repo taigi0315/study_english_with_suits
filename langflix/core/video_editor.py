@@ -890,89 +890,6 @@ class VideoEditor:
         # ASS uses BGR format
         return f"&H{b:02x}{g:02x}{r:02x}"
     
-    def _get_cached_tts(self, text: str, expression_index: int) -> Optional[Tuple[str, float]]:
-        """Get cached TTS audio if available (enhanced with advanced cache)"""
-        # Try advanced cache first
-        cache_key = self.cache_manager.get_tts_key(text, "default", "en", expression_index)
-        cached_data = self.cache_manager.get(cache_key)
-        
-        if cached_data and isinstance(cached_data, dict):
-            tts_path = cached_data.get('path')
-            duration = cached_data.get('duration')
-            if tts_path and Path(tts_path).exists():
-                logger.info(f"✅ Using advanced cached TTS for: '{text}' (duration: {duration:.2f}s)")
-                return tts_path, duration
-
-        # No cache found
-        return None
-    
-    def _cache_tts(self, text: str, expression_index: int, tts_path: str, duration: float) -> None:
-        """Cache TTS audio for reuse"""
-        # Cache in cache manager
-        cache_key = self.cache_manager.get_tts_key(text, "default", "en", expression_index)
-        cache_data = {
-            'path': tts_path,
-            'duration': duration,
-            'text': text,
-            'expression_index': expression_index
-        }
-        self.cache_manager.set(cache_key, cache_data, ttl=86400, persist_to_disk=True)  # 24 hours
-        logger.info(f"💾 Cached TTS for: '{text}' (duration: {duration:.2f}s)")
-    
-    @retry_on_error(max_attempts=2, delay=1.0)
-    def _create_timeline_from_tts(self, tts_path: str, tts_duration: float, tts_audio_dir: Path, expression_index: int) -> Tuple[Path, float]:
-        """Create timeline from existing TTS audio file"""
-        try:
-            from langflix import settings
-            
-            # Get repeat count from settings
-            repeat_count = settings.get_tts_repeat_count()
-            
-            # Create timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
-            pause_duration = 1.0
-            gap_duration = 0.5
-            
-            # Calculate total duration
-            total_duration = pause_duration + (tts_duration * repeat_count) + (gap_duration * (repeat_count - 1)) + pause_duration
-            
-            # Create timeline audio file
-            timeline_filename = f"timeline_{sanitize_for_expression_filename(tts_path.split('/')[-1])}"
-            timeline_path = tts_audio_dir / timeline_filename
-            
-            # Build FFmpeg filter for timeline
-            filters = []
-            
-            # Start with 1 second pause
-            filters.append(f"anullsrc=duration={pause_duration}")
-            
-            # Add TTS repetitions with gaps
-            for i in range(repeat_count):
-                filters.append(f"amovie={tts_path}")
-                if i < repeat_count - 1:  # Add gap between repetitions (except after last)
-                    filters.append(f"anullsrc=duration={gap_duration}")
-            
-            # End with 1 second pause
-            filters.append(f"anullsrc=duration={pause_duration}")
-            
-            # Concatenate all audio segments
-            filter_complex = "concat=n=" + str(len(filters)) + ":v=0:a=1[out]"
-            
-            # Apply the filter
-            (
-                ffmpeg
-                .filter_complex(filter_complex, *filters)
-                .output(str(timeline_path), map='[out]', acodec='pcm_s16le', ar=44100)
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            
-            logger.info(f"Created timeline from cached TTS: {total_duration:.2f}s")
-            return timeline_path, total_duration
-            
-        except Exception as e:
-            logger.error(f"Error creating timeline from cached TTS: {e}")
-            raise
-    
     def _cleanup_temp_files(self, preserve_short_format: bool = False) -> None:
         """Clean up all temporary files created by this VideoEditor instance.
         
@@ -1109,16 +1026,9 @@ class VideoEditor:
             background_input, input_type = self._get_background_config()
             
             from langflix import settings
-            
-            tts_config = settings.get_tts_config() or {}
-            provider = settings.get_tts_provider() if tts_config else None
-            provider_config = tts_config.get(provider, {}) if provider else {}
-            provider_config_for_audio = provider_config if provider_config else {"response_format": "wav"}
-            tts_enabled = settings.is_tts_enabled() and provider and bool(provider_config)
-            
-            # Note: tts_audio directory is no longer created as it's not needed
-            # Audio files are created in temporary locations and embedded directly in videos
-            tts_audio_dir = self.output_dir.parent / "tts_audio"  # Used for path reference only, not created
+
+            # Audio directory for original audio extraction
+            audio_dir = self.output_dir.parent / "audio"
             
             # Check if we should use expression audio instead of TTS
             if use_expression_audio and expression_video_clip_path:
@@ -1238,69 +1148,26 @@ class VideoEditor:
                 audio_path = audio_2x_path
                 expression_duration = slide_duration
                 
-            # Check if TTS is enabled and decide on audio workflow
-            elif tts_enabled:
-                try:
-                    from langflix.tts.factory import create_tts_client
-                    
-                    # Prepare dialogue text for TTS generation
-                    tts_text = get_expr_attr(expression, 'expression_dialogue', '') or ""
-                    if not isinstance(tts_text, str):
-                        tts_text = str(tts_text)
-                    
-                    MAX_TTS_CHARS = 500  # Adjust based on provider
-                    if len(tts_text) > MAX_TTS_CHARS:
-                        logger.warning(f"TTS text too long ({len(tts_text)} chars), truncating to {MAX_TTS_CHARS}")
-                        tts_text = tts_text[:MAX_TTS_CHARS]
-                    
-                    logger.info(f"TTS enabled - generating synthetic audio for: '{tts_text}'")
-                    logger.info(f"Using TTS provider: {provider}")
-                    logger.info(f"Provider config keys: {list(provider_config.keys())}")
-                    
-                    # TTS Workflow: Generate synthetic speech
-                    logger.info("TTS is enabled - using synthetic speech")
-                    logger.info("Creating TTS client...")
-                    tts_client = create_tts_client(provider, provider_config)
-                    
-                    # Generate timeline with voice alternation: 1 sec pause - TTS - 0.5 sec pause - TTS - 0.5 sec pause - TTS - 1 sec pause
-                    logger.info(f"Generating TTS timeline for: '{tts_text}' (expression index: {expression_index})")
-                    audio_path, expression_duration = self._generate_tts_timeline(
-                        tts_text, tts_client, provider_config, tts_audio_dir, expression_index
-                    )
-                    
-                    logger.info(f"Generated TTS timeline duration: {expression_duration:.2f}s")
-                    
-                except Exception as tts_error:
-                    logger.error(f"Error generating TTS audio: {tts_error}")
-                    logger.error(f"TTS Error details: {tts_error}")
-                    
-                    # Fallback to original audio when TTS fails
-                    logger.warning("TTS failed, falling back to original audio extraction")
-                    audio_path, expression_duration = self._extract_original_audio_timeline(
-                        expression, expression_source_video, tts_audio_dir, expression_index, provider_config_for_audio
-                    )
+            # Use original audio extraction
             else:
-                if settings.is_tts_enabled():
-                    logger.warning("TTS is enabled but provider configuration is missing; falling back to original audio extraction")
-                else:
-                    logger.info("TTS is disabled - using original audio extraction")
+                logger.info("Using original audio extraction for slide")
                 audio_path, expression_duration = self._extract_original_audio_timeline(
-                    expression, expression_source_video, tts_audio_dir, expression_index, provider_config_for_audio
+                    expression, expression_source_video, audio_dir, expression_index
                 )
             
-            # audio_path and expression_duration are now set by one of the three branches above
+            # audio_path and expression_duration are now set by one of the two branches above
             # Prepare final audio path and slide duration
             audio_2x_path = audio_path  # Unified variable for slide audio
-            
+
             # For expression audio, slide_duration is already set exactly to audio duration (no padding)
-            # For TTS/original audio, add small padding
+            # For original audio, add small padding
             if use_expression_audio and expression_video_clip_path:
                 # Expression audio: slide_duration already set to exact audio duration (no padding, no target_duration override)
                 # Do not modify slide_duration here - it's already set correctly above
                 # CRITICAL: Do NOT override with target_duration for expression audio
                 logger.info(f"Expression audio slide: using exact duration {slide_duration:.2f}s (no padding, no target_duration override)")
             else:
-                # TTS or original audio: add small padding
+                # Original audio: add small padding
                 slide_duration = expression_duration + 0.5  # Add small padding for slide
                 
                 # If target_duration is provided, use that instead (for hstack matching)
@@ -1704,160 +1571,6 @@ class VideoEditor:
             logger.error(f"Error creating educational slide: {e}")
             raise
 
-    def _generate_tts_timeline(self, text: str, tts_client, provider_config: dict, tts_audio_dir: Path, expression_index: int = 0) -> Tuple[Path, float]:
-        """
-        Generate TTS audio with timeline: 1 sec pause - TTS - 0.5 sec pause - TTS - ... - 1 sec pause
-        Uses alternating voices between expressions (not within the same expression).
-        Repeat count is configurable via settings.
-        Uses caching to avoid duplicate TTS generation.
-        
-        Args:
-            text: Text to convert to speech
-            tts_client: TTS client instance
-            provider_config: TTS provider configuration
-            tts_audio_dir: Directory to save audio files
-            expression_index: Index of expression (0-based) for voice alternation
-            
-        Returns:
-            Tuple of (final_audio_path, total_duration)
-        """
-        # Check cache first for the base TTS audio
-        cached_result = self._get_cached_tts(text, expression_index)
-        if cached_result:
-            # Use cached TTS and create timeline from it
-            cached_tts_path, cached_duration = cached_result
-            logger.info(f"Using cached TTS for timeline: '{text}' (duration: {cached_duration:.2f}s)")
-            
-            # Create timeline from cached TTS
-            return self._create_timeline_from_tts(cached_tts_path, cached_duration, tts_audio_dir, expression_index)
-        
-        try:
-            import tempfile
-            import shutil
-            
-            # Get alternate voices from config - this is the single source of truth for voice selection
-            alternate_voices = provider_config.get('alternate_voices', ['Laomedeia'])
-            if not alternate_voices:
-                raise ValueError("No alternate_voices configured in TTS config. This is required for voice selection.")
-            
-            # Select voice based on expression index (alternate between expressions)
-            voice_index = expression_index % len(alternate_voices)
-            selected_voice = alternate_voices[voice_index]
-            
-            logger.info(f"Expression {expression_index}: Using voice '{selected_voice}' (from alternate_voices: {alternate_voices})")
-            
-            # Generate ONE TTS audio file with the selected voice
-            from langflix.tts.factory import create_tts_client
-            voice_config = provider_config.copy()
-            voice_config['voice_name'] = selected_voice
-            
-            voice_client = create_tts_client('google', voice_config)
-            temp_tts_path = voice_client.generate_speech(text)
-            
-            # Register for cleanup
-            self._register_temp_file(temp_tts_path)
-            
-            # Get duration of the single TTS file
-            try:
-                probe = ffmpeg.probe(str(temp_tts_path))
-                if 'streams' in probe and len(probe['streams']) > 0 and 'duration' in probe['streams'][0]:
-                    tts_duration = float(probe['streams'][0]['duration'])
-                else:
-                    tts_duration = 2.0  # Fallback
-            except:
-                tts_duration = 2.0  # Fallback
-            
-            logger.info(f"Generated TTS with {selected_voice}: {tts_duration:.2f}s")
-            
-            # Get repeat count from settings
-            repeat_count = settings.get_tts_repeat_count()
-            logger.info(f"Using TTS repeat count: {repeat_count}")
-            
-            # Create timeline: 1s pause - TTS - 0.5s pause - TTS - ... - 1s pause (repeat_count repetitions)
-            timeline_path = self.output_dir / f"temp_timeline_{sanitize_for_expression_filename(text)}.wav"
-            self._register_temp_file(timeline_path)
-            
-            try:
-                # Create silence segments
-                silence_1s_path = self.output_dir / f"temp_silence_1s_{sanitize_for_expression_filename(text)}.wav"
-                silence_0_5s_path = self.output_dir / f"temp_silence_0_5s_{sanitize_for_expression_filename(text)}.wav"
-                
-                self._register_temp_file(silence_1s_path)
-                self._register_temp_file(silence_0_5s_path)
-                
-                # Generate silence files
-                (ffmpeg.input('anullsrc=r=44100:cl=mono', f='lavfi', t=1.0)
-                 .output(str(silence_1s_path), acodec='pcm_s16le')
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                (ffmpeg.input('anullsrc=r=44100:cl=mono', f='lavfi', t=0.5)
-                 .output(str(silence_0_5s_path), acodec='pcm_s16le')
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Convert the single TTS file to WAV for concatenation
-                tts_wav_path = self.output_dir / f"temp_tts_{sanitize_for_expression_filename(text)}.wav"
-                self._register_temp_file(tts_wav_path)
-                
-                (ffmpeg.input(str(temp_tts_path))
-                 .output(str(tts_wav_path), acodec='pcm_s16le', ar=44100, ac=1)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Build dynamic input files based on repeat_count: silence_1s + (tts + silence_0.5s) * repeat_count + silence_1s
-                input_files = [str(silence_1s_path)]  # Start with 1s silence
-                
-                # Add TTS segments with 0.5s silence between them
-                for i in range(repeat_count):
-                    input_files.append(str(tts_wav_path))  # TTS audio
-                    if i < repeat_count - 1:  # Don't add silence after the last TTS
-                        input_files.append(str(silence_0_5s_path))  # 0.5s silence
-                
-                input_files.append(str(silence_1s_path))  # End with 1s silence
-                
-                # Create concat file
-                concat_file = self.output_dir / f"temp_concat_timeline_{sanitize_for_expression_filename(text)}.txt"
-                self._register_temp_file(concat_file)
-                
-                with open(concat_file, 'w') as f:
-                    for file_path in input_files:
-                        f.write(f"file '{Path(file_path).absolute()}'\n")
-                
-                # Concatenate all audio segments
-                (ffmpeg.input(str(concat_file), format='concat', safe=0)
-                 .output(str(timeline_path), acodec='pcm_s16le', ar=44100, ac=1)
-                 .overwrite_output()
-                 .run(quiet=True))
-                
-                # Calculate total duration: 1s start + (tts_duration + 0.5s) * repeat_count - 0.5s + 1s end
-                total_duration = 2.0 + (tts_duration * repeat_count) + (0.5 * (repeat_count - 1))
-                
-                logger.info(f"Created TTS timeline: {total_duration:.2f}s total duration (1 call, {repeat_count} repetitions)")
-                
-                # Cache the base TTS for reuse
-                self._cache_tts(text, expression_index, str(temp_tts_path), tts_duration)
-                
-                # Save the original TTS file permanently (for reference)
-                audio_format = provider_config.get('response_format', 'mp3')
-                if audio_format:
-                    original_audio_filename = f"tts_original_{sanitize_for_expression_filename(text)}.{audio_format}"
-                    original_audio_path = tts_audio_dir / original_audio_filename
-                    
-                    # Copy the TTS file as the "original"
-                    shutil.copy2(str(temp_tts_path), str(original_audio_path))
-                    logger.info(f"Saved original TTS file to: {original_audio_path}")
-                
-                return timeline_path, total_duration
-                
-            except Exception as timeline_error:
-                logger.error(f"Error creating TTS timeline: {timeline_error}")
-                # Fallback to simple single TTS
-                return temp_tts_path, tts_duration
-                
-        except Exception as e:
-            logger.error(f"Error in _generate_tts_timeline: {e}")
-            raise
 
     def _create_context_audio_timeline_direct(
         self, 

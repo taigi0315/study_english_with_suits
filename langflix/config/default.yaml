@@ -249,40 +249,6 @@ transitions:
     video_path: "assets/ending_credit_mp4.mp4"  # MP4 or GIF file
 
 # ============================================================================
-# Text-to-Speech (TTS) Settings
-# ============================================================================
-tts:
-  # Enable TTS for expression audio
-  enabled: true
-  
-  # TTS provider (lemonfox, google, aws, etc.)
-  provider: "google"
-
-  # Gemini TTS Configuration (Google GenAI library)
-  google:
-    # api_key: "set via GEMINI_API_KEY environment variable"
-    language_code: "en-us"  # Original language (English) for audio generation
-    model_name: "gemini-2.5-flash"  # Gemini TTS model for high-quality synthesis
-    response_format: "wav"  # Audio format (WAV for new API)
-    # SSML speaking rate options: x-slow, slow, medium, fast, x-fast, or percentage like "0.8"
-    speaking_rate: "high" 
-    # SSML pitch options: x-low, low, medium, high, x-high, percentage like "+10%" or semitones like "-2st"
-    pitch: "-2st"  # SSML pitch: one semitone lower for more natural sound
-    # Voice selection for TTS generation (uses Gemini voices from https://ai.google.dev/gemini-api/docs/speech-generation#voices)
-    alternate_voices: ["Despina", "Puck"]  # Available Gemini voices
-  
-  # LemonFox TTS Configuration (fallback)
-  lemonfox:
-    # api_key: "set via LEMONFOX_API_KEY environment variable"
-    voice: "sarah"
-    response_format: "mp3"  # mp3 format as requested
-  # 
-  # aws:
-  #   region: "us-east-1"
-  #   voice_id: "Joanna"
-  #   engine: "neural"
-
-# ============================================================================
 # Short Video Settings
 # ============================================================================
 short_video:

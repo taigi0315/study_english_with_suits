@@ -447,7 +447,7 @@ Three packages with conditional imports:
 ## 🎯 Next Session Recommendations
 
 ### Immediate (Next 30 minutes)
-1. Delete media/exceptions.py (now unused)
+1. ✅ **DONE** - Delete media/exceptions.py (now unused)
 2. Review and commit/discard default.yaml changes
 3. Check google_client.py usage
 4. Clean __pycache__ directories
@@ -462,6 +462,65 @@ Three packages with conditional imports:
 9. Create GitHub issues for remaining TODOs
 10. Consolidate or compress archive documentation
 11. Standardize on single language for ADRs (or keep separate)
+
+---
+
+## 📦 Session 2 - Additional Cleanup (2025-12-26)
+
+### ✅ Completed Items
+
+**1. TTS Removal (Commit: b3df036)**
+- Deleted `/langflix/tts/` directory (6 files, ~800 LOC)
+  - `__init__.py`, `base.py`, `factory.py`
+  - `gemini_client.py`, `google_client.py`, `lemonfox_client.py`
+- Deleted `/tests/test_tts_integration.py`
+- Removed TTS workflow from `video_editor.py`
+  - Deleted `_generate_tts_timeline()` method (~155 LOC)
+  - Deleted `_get_cached_tts()` method
+  - Deleted `_cache_tts()` method
+  - Deleted `_create_timeline_from_tts()` method
+  - Simplified audio workflow to always use original audio extraction
+- Removed TTS configuration from `default.yaml` (~35 lines)
+- **Impact**: ~1,000 LOC removed, simplified audio pipeline
+
+**2. Video Enhancer Removal (Commit: b3df036)**
+- Deleted `/langflix/video/video_enhancer.py` (~363 LOC)
+- User confirmed: "we don't need to enhance the video quality, we just use as is"
+- **Impact**: 363 LOC removed
+
+**3. Assets Directory Organization (Commit: 72cc6ae)**
+- Created clean directory structure:
+  - `/assets/images/` - All PNG/GIF images (6 files)
+  - `/assets/videos/` - Video files (1 file)
+  - `/assets/audio/` - Sound effects (1 file)
+  - `/assets/icons/` - Icon files (2 files, renamed from `/icon/`)
+  - `/assets/fonts/` - Font files (unchanged)
+  - `/assets/background_music/` - Background music (unchanged)
+  - `/assets/media/` - User media files (unchanged)
+- Deleted `/assets/cache/` directory (test cache not needed)
+- Updated all code references:
+  - `default.yaml`: Updated 6 asset paths
+  - `video_editor.py`: Updated 5 asset paths
+  - `settings.py`: Updated 1 asset path
+- **Impact**: Clean, organized assets directory with logical categorization
+
+**4. Media Exceptions Cleanup**
+- Deleted `/langflix/media/exceptions.py` (~60 LOC)
+- Updated `/langflix/media/__init__.py` to remove exception imports
+- User confirmed: Exception classes were only used in deleted media files
+- **Impact**: 60 LOC removed
+
+### 📊 Session 2 Summary
+
+| Metric | Value |
+|--------|-------|
+| Commits | 3 |
+| Files Deleted | 9 |
+| Lines Removed | ~1,423 LOC |
+| Directories Reorganized | 1 (/assets/) |
+| Code References Updated | 12 |
+
+**Total Cleanup Across Both Sessions**: ~4,696 LOC removed, 33 files deleted
 
 ---
 

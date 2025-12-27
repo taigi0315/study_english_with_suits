@@ -349,7 +349,7 @@ short_video:
     # Dialogue subtitles (bottom padding area, below expression)
     dialogue_subtitle:
       font_size: 24
-      newline: 55
+      newline: 32
       margin_v: 90
       text_color: 'white'
       outline_width: 1

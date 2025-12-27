@@ -559,8 +559,8 @@ class VideoEditor:
             if transition_enabled:
                 # Create transition video (0.3s with image and sound effect)
                 transition_duration = transition_config.get('duration', 0.3)
-                transition_image = transition_config.get('image_path_16_9', 'assets/transition_16_9.png')
-                sound_effect = transition_config.get('sound_effect_path', 'assets/sound_effect.mp3')
+                transition_image = transition_config.get('image_path_16_9', 'assets/images/transition_16_9.png')
+                sound_effect = transition_config.get('sound_effect_path', 'assets/audio/sound_effect.mp3')
 
                 logger.info(f"Creating {transition_duration}s transition between context and expression")
                 transition_video = self._create_transition_video(
@@ -821,10 +821,10 @@ class VideoEditor:
         
         # Try multiple possible background image locations with absolute paths
         possible_paths = [
-            Path("assets/education_slide_background.png"),
-            Path("assets/education_slide_background.jpg"),
-            Path("assets/background.png"),
-            Path("assets/background.jpg"),
+            Path("assets/images/education_slide_background.png"),
+            Path("assets/images/education_slide_background.jpg"),
+            Path("assets/images/background.png"),
+            Path("assets/images/background.jpg"),
             Path(".").absolute() / "assets" / "education_slide_background.png",
             Path(os.getcwd()) / "assets" / "education_slide_background.png",
             Path(__file__).parent.parent / "assets" / "education_slide_background.png",
@@ -843,7 +843,7 @@ class VideoEditor:
             return str(background_path), "image2"
         else:
             logger.warning("No background image found, using solid color fallback")
-            logger.info("To add a custom background, place 'education_slide_background.png' in the assets/ directory")
+            logger.info("To add a custom background, place 'education_slide_background.png' in the assets/images/ directory")
             # Use a more appealing gradient background instead of solid black
             background_input = "color=c=0x1a1a2e:size=1920x1080"  # Dark blue gradient-like color
             return background_input, "lavfi"

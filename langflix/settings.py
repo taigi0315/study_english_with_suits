@@ -277,7 +277,7 @@ def get_ending_credit_duration() -> float:
 def get_ending_credit_video_path() -> Optional[str]:
     """Get ending credit video path (relative to project root)"""
     from pathlib import Path
-    video_rel = get_ending_credit_config().get('video_path', 'assets/ending_credit_mp4.mp4')
+    video_rel = get_ending_credit_config().get('video_path', 'assets/videos/ending_credit_mp4.mp4')
     # Convert relative path to absolute
     project_root = Path(__file__).parent.parent
     video_path = project_root / video_rel

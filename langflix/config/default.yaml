@@ -227,26 +227,26 @@ transitions:
   # Context to expression transition (dedicated transition video segment)
   context_to_expression_transition:
     enabled: true
-    duration: 1.2 
-    image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
-    image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
-    sound_effect_path: "assets/sound_effect.mp3"
+    duration: 1.2
+    image_path_9_16: "assets/images/transition_9_16.png"  # For short-form (9:16 aspect ratio)
+    image_path_16_9: "assets/images/transition_16_9.png"  # For long-form (16:9 aspect ratio)
+    sound_effect_path: "assets/audio/sound_effect.mp3"
     sound_effect_volume: 0.5  # Volume level (0.0-1.0)
 
   # Transition from video segment to educational slide (long-form and short-form sequential layout)
   context_to_slide_transition:
     enabled: true
     duration: 1.0  # 1 second transition
-    image_path_16_9: "assets/transition_16_9.png"  # For long-form (16:9 aspect ratio)
-    image_path_9_16: "assets/transition_9_16.png"  # For short-form (9:16 aspect ratio)
-    sound_effect_path: "assets/sound_effect.mp3"
+    image_path_16_9: "assets/images/transition_16_9.png"  # For long-form (16:9 aspect ratio)
+    image_path_9_16: "assets/images/transition_9_16.png"  # For short-form (9:16 aspect ratio)
+    sound_effect_path: "assets/audio/sound_effect.mp3"
     sound_effect_volume: 0.5  # Volume level (0.0-1.0)
 
   # Ending credit (appended at the very end of the video)
   ending_credit:
     enabled: true
     duration: 2.0  # How long to show the ending credit (seconds)
-    video_path: "assets/ending_credit_mp4.mp4"  # MP4 or GIF file
+    video_path: "assets/videos/ending_credit_mp4.mp4"  # MP4 or GIF file
 
 # ============================================================================
 # Short Video Settings

@@ -274,3 +274,195 @@ If step 3 fails, the code is likely unused (unless it's utility functions called
 - CLEANUP_TASKS.md - Original analysis
 - CLEANUP_CORE_VIDEO.md - Core video analysis
 - CLEANUP_SESSION_SUMMARY.md - Session summary
+
+---
+
+## 🎯 Additional Cleanup Items Identified
+
+### 1. Exception Classes That Are Never Raised
+
+**Issue:** Exception classes exist in `media/exceptions.py` but are only raised in the DELETED unused files.
+
+| Exception Class | Defined In | Raised In | Status |
+|-----------------|------------|-----------|--------|
+| MediaValidationError | exceptions.py:9 | ~~media_validator.py~~ (DELETED) | ❌ **UNUSED NOW** |
+| VideoSlicingError | exceptions.py:21 | ~~expression_slicer.py~~ (DELETED) | ❌ **UNUSED NOW** |
+| SubtitleRenderingError | exceptions.py:38 | ~~subtitle_renderer.py~~ (DELETED) | ❌ **UNUSED NOW** |
+
+**Recommendation:**
+- Delete `/langflix/media/exceptions.py` (~60 LOC)
+- Update `/langflix/media/__init__.py` to remove exception imports
+
+**Impact:** 60 additional LOC removed
+
+---
+
+### 2. Unused Config in default.yaml
+
+**File:** `/langflix/config/default.yaml`
+
+**Unstaged Changes:** There's a modified config file not committed yet
+
+**Recommendation:** Review and commit or discard changes to default.yaml
+
+---
+
+### 3. Documentation Files to Review
+
+**File:** `/langflix/docs/temp.md`
+
+**Content:** Old Software Design Document from October 2023 (V3 architecture proposal)
+- Lines 1-30: Describes "V3 Context Injection Pipeline"  
+- Status: Marked as "Proposed Design" from October 2023
+- Size: Unknown (need to read full file)
+
+**Recommendation:** 
+- If architecture is implemented, archive or delete this proposal doc
+- If still relevant, rename to indicate it's historical/archive
+
+---
+
+### 4. Archived Documentation
+
+**Directory:** `/langflix/docs/archive/`
+
+**Files:**
+- AGGREGATOR_REMOVAL.md (~4,715 bytes)
+- LEGACY_IMPLEMENTATION_TASKS.md (~13,135 bytes)
+- LEGACY_PROMPT_REQUIREMENTS.md (~7,980 bytes)  
+- LEGACY_SDD.md (~18,013 bytes)
+- RECENT_CHANGES.md (~19,086 bytes)
+- v1/ subdirectory with more docs
+
+**Recommendation:**
+- Review if any are still needed for reference
+- Consider moving very old docs to a separate archive repo
+- Or compress into a single HISTORICAL_DOCS.md
+
+---
+
+### 5. Test Directory Cleanup
+
+**Already Deleted:**
+- tests/broken/ ✅
+- tests/archive/ ✅
+- tests/step_by_step/ ✅
+
+**Check for orphaned test cache:**
+```
+tests/broken/__pycache__/
+tests/archive/__pycache__/
+tests/step_by_step/__pycache__/
+tests/unit/core/utils/__pycache__/
+```
+
+**Recommendation:** Clean up __pycache__ directories from deleted test folders
+
+---
+
+### 6. TODO Comments to Address
+
+From previous analysis (CLEANUP_TASKS.md):
+
+| File | Line | TODO | Priority |
+|------|------|------|----------|
+| youtube/video_manager.py | 304 | Add map or config reader | Low |
+| core/language_config.py | 204 | Add character support validation | Low |
+| core/subtitle_parser.py | 400 | Implement VTT, ASS, SSA parsers | Low |
+| static/js/dashboard/ui.js | 151 | Implement video player modal | Low |
+
+**Recommendation:** 
+- Create GitHub issues for each TODO
+- OR remove TODOs if not planned
+- OR implement them
+
+---
+
+### 7. Optional Dependencies Decision
+
+**From CLEANUP_TASKS.md:**
+
+Three packages with conditional imports:
+- `rapidfuzz` - Only used in core/expression_analyzer.py with fallback
+- `chardet` - Used in core/subtitle_parser.py with fallback  
+- `inflect` - Used in tts/base.py and gemini_client.py with fallback
+
+**Recommendation:**
+- Make them required dependencies (remove try/except)
+- OR fully remove them and their fallback code
+- Current state creates maintenance burden
+
+---
+
+### 8. Google TTS Client (Unused)
+
+**File:** `/langflix/tts/google_client.py` (~229 LOC)
+
+**Status:** Imports `google.cloud.texttospeech` which we already removed from requirements.txt
+
+**Check:** Is this file actually used or just exists as alternative to Gemini TTS?
+
+**Recommendation:** Verify usage and potentially delete if Gemini TTS replaced it
+
+---
+
+### 9. Duplicate ADR Files
+
+**Directory:** `/langflix/docs/adr/`
+
+**Potential Duplicates:**
+- ADR-010-database-schema-design.md
+- ADR-010-database-schema-implementation.md
+- ADR-011-storage-abstraction-layer.md
+- ADR-011-storage-abstraction-layer-implementation.md
+- ADR-012-fastapi-application-scaffold.md
+- ADR-012-migration-strategy.md
+- ADR-015-ffmpeg-pipeline-standardization_eng.md
+- ADR-015-ffmpeg-pipeline-standardization_kor.md
+
+**Recommendation:** 
+- Check if "design" vs "implementation" ADRs should be merged
+- Check if eng/kor versions are truly duplicates or translations
+
+---
+
+## 📊 Potential Additional Cleanup Summary
+
+| Item | Files/LOC | Priority | Estimated Effort |
+|------|-----------|----------|------------------|
+| Exception classes | 1 file, ~60 LOC | High | 5 min |
+| Config file review | 1 file | Medium | 10 min |
+| temp.md doc | 1 file | Low | 5 min |
+| Archive docs | ~6 files | Low | 30 min |
+| __pycache__ cleanup | Multiple dirs | Low | 5 min |
+| TODO comments | 4 locations | Low | Varies |
+| Optional dependencies | 3 packages | Medium | 1 hour |
+| Google TTS client | 1 file, ~229 LOC | Medium | 15 min |
+| Duplicate ADRs | ~8 files | Low | 30 min |
+
+**Total Potential:** ~300+ additional LOC
+
+---
+
+## 🎯 Next Session Recommendations
+
+### Immediate (Next 30 minutes)
+1. Delete media/exceptions.py (now unused)
+2. Review and commit/discard default.yaml changes
+3. Check google_client.py usage
+4. Clean __pycache__ directories
+
+### Short-term (1 hour)
+5. Review docs/temp.md and archive docs
+6. Decide on optional dependencies (make required or remove)
+7. Address or document TODO comments
+8. Check for duplicate ADR files
+
+### Long-term (Technical Debt)
+9. Create GitHub issues for remaining TODOs
+10. Consolidate or compress archive documentation
+11. Standardize on single language for ADRs (or keep separate)
+
+---
+
+**End of Additional Cleanup Items**

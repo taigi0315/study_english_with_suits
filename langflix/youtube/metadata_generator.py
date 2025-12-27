@@ -758,14 +758,17 @@ class YouTubeMetadataGenerator:
         tag_translations = {
             "Korean": {
                 "shorts": "#쇼츠",
-                "english_learning": f"#{learn_language}학습", # Dynamic: #{Lang}학습
-                "english_expressions": f"#{learn_language}표현", # Dynamic: #{Lang}표현
-                # "suits" and "learn_english" are now dynamic
+                "english_learning": f"#{learn_language}학습", 
+                "english_expressions": f"#{learn_language}표현",
+                "learn_english": f"#{learn_language}배우기",
+                "learn_with_tv": f"#{learn_language}쉐도잉",
             },
             "English": {
                 "shorts": "#Shorts",
                 "english_learning": f"#{learn_lang_clean}Learning",
                 "english_expressions": f"#{learn_lang_clean}Expressions",
+                "learn_english": f"#Learn{learn_lang_clean}",
+                "learn_with_tv": f"#{learn_lang_clean}WithTV",
             },
             # ... preserve other languages structure but we use dynamic logic mainly
             "Japanese": {
@@ -796,8 +799,16 @@ class YouTubeMetadataGenerator:
         # Construct hashtags: #Shorts #EnglishLearning #ShowName #EnglishExpressions #LearnTarget
         # Base tags
         shorts_tag = translations.get('shorts', '#Shorts')
-        learning_tag = translations.get('english_learning', '#EnglishLearning')
-        exp_tag = translations.get('english_expressions', '#EnglishExpressions')
+        learning_tag = translations.get('english_learning', f'#{learn_language}Learning')
+        exp_tag = translations.get('english_expressions', f'#{learn_language}Expressions')
+        learn_tag = translations.get('learn_english', f'#Learn{learn_language}')
+        tv_tag = translations.get('learn_with_tv', f'#{learn_language}WithTV')
+        
+        # Combine all tags
+        tags = [shorts_tag, learning_tag, show_hashtag, exp_tag, learn_tag, tv_tag, learn_target_hashtag]
+        
+        # Filter empty and join
+        return " ".join([t for t in tags if t])
         
         # For short videos, use all tags.
         if video_metadata.video_type == "short":

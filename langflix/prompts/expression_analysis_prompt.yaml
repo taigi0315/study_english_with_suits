@@ -46,6 +46,7 @@ prompt: |
   - `dialogues.{source_language_code}` - Source language dialogues array
 
   **❌ NEVER MIX LANGUAGES IN THE SAME FIELD**
+  **❌ NO EMOJIS IN ANY FIELD** - Use text only. Emojis cause rendering errors.
 
   ---
 
@@ -170,6 +171,7 @@ prompt: |
   - Always include narration at dialogue index, and make this narration more engaging, giving hint of the upcoming story. 
   - Make sure narration comes with the dialogue that is related or right after that dialogue. narration is like watching video with someone else, sharing thoughts with audience. it always should coems `after` the scene.
   - Casual tone, internet slang OK (lol, omg, fr)
+  - **❌ NO EMOJIS:** Do NOT include any emojis (e.g., 😂, 🔥) in narrations or any other text fields. Use text only.
   - 5-10 words each
   - Don't narrate every line - let the scene breathe
 

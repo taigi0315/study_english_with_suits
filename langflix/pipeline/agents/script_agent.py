@@ -544,20 +544,24 @@ class ScriptAgent:
         if end_idx is None:
             raise ValueError(f"LLM response missing required field 'context_end_index': {expr}")
         
-        # Validate indices are within subtitle range
-        if not (0 <= expr_idx <= max_idx):
-            raise ValueError(f"expression_dialogue_index={expr_idx} is out of range [0, {max_idx}]")
-        if not (0 <= start_idx <= max_idx):
-            raise ValueError(f"context_start_index={start_idx} is out of range [0, {max_idx}]")
-        if not (0 <= end_idx <= max_idx):
-            raise ValueError(f"context_end_index={end_idx} is out of range [0, {max_idx}]")
+        # Softly clamp start/end indices if they are close to valid range (e.g. slight LLM hallucination)
+        # We clamp first, THEN validate if clamp resulted in invalid logical range (e.g. start > end)
+        if start_idx < 0: 
+            logger.warning(f"Clamping context_start_index {start_idx} -> 0")
+            start_idx = 0
+            
+        if end_idx > max_idx:
+            logger.warning(f"Clamping context_end_index {end_idx} -> {max_idx}")
+            end_idx = max_idx
+            
+        if expr_idx > max_idx:
+             logger.warning(f"Clamping expression_dialogue_index {expr_idx} -> {max_idx}")
+             expr_idx = max_idx
+
+        # Validate valid range AFTER clamping
         if start_idx > end_idx:
-            raise ValueError(f"context_start_index={start_idx} > context_end_index={end_idx}")
-        
-        # Clamp indices to valid ranges
-        if start_idx < 0: start_idx = 0
-        if end_idx >= len(subtitle_lines): end_idx = len(subtitle_lines) - 1
-        if expr_idx >= len(subtitle_lines): expr_idx = len(subtitle_lines) - 1
+            # If clamping made range invalid (or LLM gave invalid range), raise error
+             raise ValueError(f"Invalid context range: start={start_idx} > end={end_idx} (max_idx={max_idx})")
         
         # After clamping, check for invalid range (e.g., start > end)
         if end_idx < start_idx:

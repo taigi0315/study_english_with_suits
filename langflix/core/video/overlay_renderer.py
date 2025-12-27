@@ -112,11 +112,6 @@ class OverlayRenderer:
 
         logger.info(f'overlaying title: "{viral_title}"')
 
-        # Wrap title using configurable chars per line
-        title_chars_per_line = settings.get_viral_title_chars_per_line()
-        wrapped_viral_title = textwrap.fill(viral_title, width=title_chars_per_line)
-        escaped_viral_title = self.escape_drawtext_string(wrapped_viral_title)
-
         # Get settings
         viral_font_size = settings.get_viral_title_font_size()
         viral_y = settings.get_viral_title_y_position()
@@ -125,28 +120,41 @@ class OverlayRenderer:
         viral_border_color = settings.get_viral_title_border_color()
         viral_duration = settings.get_viral_title_display_duration() if duration == 0 else duration
 
-        viral_title_args = {
-            'text': escaped_viral_title,
-            'fontsize': viral_font_size,
-            'fontcolor': viral_color,
-            'x': '(w-text_w)/2',  # Center horizontally
-            'y': viral_y,
-            'borderw': viral_border,
-            'bordercolor': viral_border_color,
-            'line_spacing': 8
-        }
+        # Wrap title using configurable chars per line
+        title_chars_per_line = settings.get_viral_title_chars_per_line()
+        wrapped_viral_title = textwrap.fill(viral_title, width=title_chars_per_line)
+        
+        # Split into lines to render individually (avoids newline artifact issues)
+        start_lines = wrapped_viral_title.split('\n')
+        line_height = int(viral_font_size * 1.2)
+        
+        for i, line in enumerate(start_lines):
+            escaped_line = self.escape_drawtext_string(line)
+            line_y = viral_y + (i * line_height)
+            
+            viral_title_args = {
+                'text': escaped_line,
+                'fontsize': viral_font_size,
+                'fontcolor': viral_color,
+                'x': '(w-text_w)/2',  # Center horizontally
+                'y': line_y,
+                'borderw': viral_border,
+                'bordercolor': viral_border_color,
+                'line_spacing': 8
+            }
 
-        # Add timing if duration is specified (0 = entire video)
-        if viral_duration > 0:
-            viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+            # Add timing if duration is specified (0 = entire video)
+            if viral_duration > 0:
+                viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
 
-        # Use TARGET language font for title (title is in user's native language)
-        target_font = self.font_resolver.get_target_font("title")
-        if target_font and os.path.exists(target_font):
-            viral_title_args['fontfile'] = target_font
+            # Use TARGET language font for title (title is in user's native language)
+            target_font = self.font_resolver.get_target_font("title")
+            if target_font and os.path.exists(target_font):
+                viral_title_args['fontfile'] = target_font
 
-        video_stream = ffmpeg.filter(video_stream, 'drawtext', **viral_title_args)
-        logger.info(f"Added title overlay: '{viral_title[:50]}...'")
+            video_stream = ffmpeg.filter(video_stream, 'drawtext', **viral_title_args)
+
+        logger.info(f"Added title overlay: '{viral_title[:50]}...' ({len(start_lines)} lines)")
 
         return video_stream
 
@@ -331,7 +339,7 @@ class OverlayRenderer:
 
             # Wrap narration text to configured chars per line
             narr_chars_per_line = settings.get_narrations_chars_per_line()
-            narr_text = textwrap.fill(narr_text, width=narr_chars_per_line)
+            narr_text_wrapped = textwrap.fill(narr_text, width=narr_chars_per_line)
 
             # Get color based on narration type
             narr_color = settings.get_narrations_type_color(narr_type)
@@ -347,28 +355,35 @@ class OverlayRenderer:
                 narr_start = 1.0 + (idx * interval)
             
             narr_end = narr_start + narr_duration
-
-            escaped_narr = self.escape_drawtext_string(narr_text)
-
-            narr_args = {
-                'text': escaped_narr,
-                'fontsize': narr_font_size,
-                'fontcolor': narr_color,
-                'x': '(w-text_w)/2',
-                'y': narr_y,
-                'borderw': narr_border,
-                'bordercolor': narr_border_color,
-                'line_spacing': 8,  # Required for multiline text
-                'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
-            }
             
-            logger.info(f'overlaying narration: "{narr_text}" at t={narr_start:.2f}s')
+            # Split lines for manual rendering
+            narr_lines = narr_text_wrapped.split('\n')
+            line_height = int(narr_font_size * 1.2)
 
-            if target_font and os.path.exists(target_font):
-                narr_args['fontfile'] = target_font
+            for line_i, n_line in enumerate(narr_lines):
+                escaped_narr = self.escape_drawtext_string(n_line)
+                
+                # Calculate Y for this specific line
+                current_line_y = narr_y + (line_i * line_height)
 
-            video_stream = ffmpeg.filter(video_stream, 'drawtext', **narr_args)
-            logger.debug(f"Added narration [{narr_type}]: '{narr_text[:30]}' at t={narr_start:.2f}-{narr_end:.2f}s")
+                narr_args = {
+                    'text': escaped_narr,
+                    'fontsize': narr_font_size,
+                    'fontcolor': narr_color,
+                    'x': '(w-text_w)/2',
+                    'y': current_line_y,
+                    'borderw': narr_border,
+                    'bordercolor': narr_border_color,
+                    'line_spacing': 8,  # Kept for compatibility though unused in single lines
+                    'enable': f"between(t,{narr_start:.2f},{narr_end:.2f})",
+                }
+                
+                if target_font and os.path.exists(target_font):
+                    narr_args['fontfile'] = target_font
+
+                video_stream = ffmpeg.filter(video_stream, 'drawtext', **narr_args)
+            
+            logger.debug(f"Added narration [{narr_type}]: '{narr_text[:30]}' at t={narr_start:.2f}-{narr_end:.2f}s ({len(narr_lines)} lines)")
 
         logger.info(f"Added {len(narrations[:6])} narration overlays")
         return video_stream

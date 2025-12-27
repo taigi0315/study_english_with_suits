@@ -91,8 +91,8 @@ llm:
   default_language_level: "intermediate"
   
   # API retry configuration
-  max_retries: 3
-  retry_backoff_seconds: [3, 6, 12]
+  max_retries: 10
+  retry_backoff_seconds: [3, 10, 300, 6000, 12000, 24000, 48000, 96000, 192000, 384000]
   
   # Generation configuration
   temperature: 0.1

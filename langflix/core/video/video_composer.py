@@ -24,18 +24,15 @@ class VideoComposer:
     Handles video composition and concatenation operations.
 
     Responsibilities:
-    - Create long-form educational videos (context → expression → slide)
     - Extract video clips with precise timing
     - Concatenate multiple videos
     - Manage encoding quality settings
 
     Example:
         >>> composer = VideoComposer(output_dir="/tmp/videos", test_mode=False)
-        >>> video_path = composer.create_long_form_video(
-        ...     expression=expr,
-        ...     context_video_path="context.mp4",
-        ...     expression_video_path="expression.mp4",
-        ...     expression_index=0
+        >>> combined_path = composer.combine_videos(
+        ...     video_paths=["clip1.mp4", "clip2.mp4"],
+        ...     output_path="combined.mp4"
         ... )
     """
 
@@ -65,36 +62,6 @@ class VideoComposer:
             self.temp_manager = None
 
         logger.info(f"VideoComposer initialized: output_dir={output_dir}, test_mode={test_mode}")
-
-    def create_long_form_video(
-        self,
-        expression: ExpressionAnalysis,
-        context_video_path: str,
-        expression_video_path: str,
-        expression_index: int = 0,
-        pre_extracted_context_clip: Optional[Path] = None
-    ) -> str:
-        """
-        Create long-form educational video.
-
-        Video structure: context → expression (2x) → educational slide
-
-        Args:
-            expression: Expression analysis data
-            context_video_path: Path to context video
-            expression_video_path: Path to expression video
-            expression_index: Index for file naming
-            pre_extracted_context_clip: Optional pre-extracted context clip
-
-        Returns:
-            Path to created long-form video
-
-        Note:
-            This method will be implemented by copying logic from
-            video_editor.py lines 165-653
-        """
-        # TODO: Implementation in Phase 1, Day 2
-        raise NotImplementedError("Will be implemented in Phase 1, Day 2")
 
     def combine_videos(
         self,

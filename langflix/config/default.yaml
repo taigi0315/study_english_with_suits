@@ -92,6 +92,7 @@ llm:
   
   # API retry configuration
   max_retries: 10
+  # 3 sec, 10 sec, 5 min, 1 hour, 2 hours, 4 hours, 8 hours, 16 hours, 32 hours, 64 hours
   retry_backoff_seconds: [3, 10, 300, 6000, 12000, 24000, 48000, 96000, 192000, 384000]
   
   # Generation configuration

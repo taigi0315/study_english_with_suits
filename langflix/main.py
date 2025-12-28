@@ -178,6 +178,15 @@ class LangFlixPipeline:
             
         self.source_lang_code = language_name_to_code(self.source_language)
 
+        # Update primary language_code to avoid creating source language folder
+        # if the first target language happens to be the source language.
+        if self.language_code == self.source_lang_code and len(self.target_languages) > 1:
+            for lang in self.target_languages:
+                if lang != self.source_lang_code:
+                    self.language_code = lang
+                    logger.info(f"Switched primary output language to {self.language_code} (skipping source language '{self.source_lang_code}')")
+                    break
+
         self.profiler = profiler
         self.progress_callback = progress_callback
 
@@ -200,7 +209,7 @@ class LangFlixPipeline:
         path_reference = str(self.subtitle_file) if self.subtitle_file else (str(self.video_file) if self.video_file else "")
         self.paths = create_output_structure(
             path_reference, 
-            language_code, 
+            self.language_code, 
             str(self.output_dir),
             series_name=series_name,
             episode_name=episode_name
@@ -214,6 +223,8 @@ class LangFlixPipeline:
         if 'languages' not in self.paths:
             self.paths['languages'] = {}
         for lang in self.target_languages:
+            if lang == self.source_lang_code:
+                continue
             if lang not in self.paths['languages']:
                 self.paths['languages'][lang] = output_manager.create_language_structure(episode_paths, lang)
 
@@ -236,6 +247,8 @@ class LangFlixPipeline:
             # Update paths for new languages
             output_manager = OutputManager(str(self.output_dir))
             for lang in self.target_languages:
+                if lang == self.source_lang_code:
+                    continue
                 if lang not in self.paths['languages']:
                     self.paths['languages'][lang] = output_manager.create_language_structure(self.paths['episode'], lang)
 
@@ -759,10 +772,10 @@ class LangFlixPipeline:
             script_responses = sorted(glob.glob(str(debug_dir / "script_agent_response_*.txt")), reverse=True)
             
             if script_prompts:
-                shutil.copy(script_prompts[0], episode_llm_dir / "expression_analyst_prompt.txt")
+                shutil.copyfile(script_prompts[0], episode_llm_dir / "expression_analyst_prompt.txt")
                 logger.info(f"💾 Saved expression analyst prompt to {episode_llm_dir}")
             if script_responses:
-                shutil.copy(script_responses[0], episode_llm_dir / "expression_analyst_response.txt")
+                shutil.copyfile(script_responses[0], episode_llm_dir / "expression_analyst_response.txt")
                 logger.info(f"💾 Saved expression analyst response to {episode_llm_dir}")
             
             # 2. Save translation responses to language-specific directories
@@ -778,9 +791,9 @@ class LangFlixPipeline:
                 lang_llm_dir.mkdir(parents=True, exist_ok=True)
                 
                 if translator_prompts:
-                    shutil.copy(translator_prompts[0], lang_llm_dir / "translator_prompt.txt")
+                    shutil.copyfile(translator_prompts[0], lang_llm_dir / "translator_prompt.txt")
                 if translator_responses:
-                    shutil.copy(translator_responses[0], lang_llm_dir / "translator_response.txt")
+                    shutil.copyfile(translator_responses[0], lang_llm_dir / "translator_response.txt")
                     logger.info(f"💾 Saved translator response to {lang_llm_dir}")
                     
         except Exception as e:

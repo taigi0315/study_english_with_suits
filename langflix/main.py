@@ -973,12 +973,15 @@ class LangFlixPipeline:
 
         # Parse source subtitle
         self._update_progress(15, "Parsing source subtitle...")
-        source_subtitles = parse_subtitle_file(str(self.subtitle_file))
+        # Parse source subtitle using SubtitleProcessor to ensure cleaning
+        from langflix.core.subtitle_processor import SubtitleProcessor
+        src_processor = SubtitleProcessor(str(self.subtitle_file))
+        source_subtitles = src_processor.subtitles
 
         if not source_subtitles:
             raise ValueError(f"Failed to parse subtitle file: {self.subtitle_file}")
 
-        logger.info(f"Parsed {len(source_subtitles)} source subtitles")
+        logger.info(f"Loaded {len(source_subtitles)} cleaned source subtitles")
 
         # Use source subtitles for both source and target
         # The LLM will translate the target dialogues in its response
@@ -1168,10 +1171,15 @@ class LangFlixPipeline:
         target_subtitle_file = Path(target_sub_info['path'])
         logger.info(f"Found target subtitle: {target_subtitle_file}")
 
-        # Parse both subtitles into chunks
+        # Parse both subtitles into chunks using SubtitleProcessor (cleaned)
         self._update_progress(20, "Parsing subtitles...")
-        source_subtitles = parse_subtitle_file(str(source_subtitle_file))
-        target_subtitles = parse_subtitle_file(str(target_subtitle_file))
+        from langflix.core.subtitle_processor import SubtitleProcessor
+        
+        src_processor = SubtitleProcessor(str(source_subtitle_file))
+        source_subtitles = src_processor.subtitles
+        
+        tgt_processor = SubtitleProcessor(str(target_subtitle_file))
+        target_subtitles = tgt_processor.subtitles
 
         if source_subtitles:
             logger.debug(f"First source subtitle (raw): {source_subtitles[0]}")
@@ -1393,7 +1401,12 @@ class LangFlixPipeline:
         # Check for direct file input (API / Single File Mode)
         if self.subtitle_file and self.subtitle_file.exists():
             logger.info(f"Using provided subtitle file for streaming: {self.subtitle_file}")
-            source_subtitles = parse_subtitle_file(str(self.subtitle_file))
+            # Use SubtitleProcessor to ensure cleaning logic is applied
+            # source_subtitles = parse_subtitle_file(str(self.subtitle_file))
+            from langflix.core.subtitle_processor import SubtitleProcessor
+            src_processor = SubtitleProcessor(str(self.subtitle_file))
+            source_subtitles = src_processor.subtitles
+            logger.info(f"Loaded {len(source_subtitles)} cleaned source subtitles")
             # In single file mode, target subtitles are initially empty (LLM will translate)
             target_subtitles = []
         else:
@@ -1421,13 +1434,19 @@ class LangFlixPipeline:
                 target_sub_paths = languages[target_language]
                 target_subtitle_file = Path(target_sub_paths[0])
                 logger.info(f"Found target subtitle: {target_subtitle_file}")
-                target_subtitles = parse_subtitle_file(str(target_subtitle_file))
+                # Use SubtitleProcessor for target too
+                from langflix.core.subtitle_processor import SubtitleProcessor
+                tgt_processor = SubtitleProcessor(str(target_subtitle_file))
+                target_subtitles = tgt_processor.subtitles
             else:
                  logger.warning(f"Target language '{target_language}' (code: {self.language_code}) subtitle not found. Proceeding with Source Only (Translation Mode).")
                  target_subtitles = []
 
-            # Parse source subtitles
-            source_subtitles = parse_subtitle_file(str(source_subtitle_file))
+            # Parse source subtitles using SubtitleProcessor (cleaned)
+            from langflix.core.subtitle_processor import SubtitleProcessor
+            src_processor = SubtitleProcessor(str(source_subtitle_file))
+            source_subtitles = src_processor.subtitles
+            logger.info(f"Loaded {len(source_subtitles)} cleaned source subtitles")
 
         # Create chunks logic (Shared with _run_analysis - simplified duplication for now)
         MAX_SUBTITLES_PER_CHUNK = 200

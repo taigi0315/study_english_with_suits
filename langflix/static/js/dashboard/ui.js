@@ -452,9 +452,9 @@ export const ui = {
                 </p>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Short-form Max Duration (seconds)</label>
-                    <input type="number" id="shortFormMaxDuration" value="180" min="60" max="300" step="10"
+                    <input type="number" id="shortFormMaxDuration" value="45" min="15" max="300" step="5"
                            style="width: 100%; padding: 10px; border: 1px solid #ecf0f1; border-radius: 6px;">
-                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">🎯 Target duration for expression clips and max duration for short-form batching (default: 180s)</small>
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">🎯 Target duration for expression clips and max duration for short-form batching (default: 45s)</small>
                 </div>
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Video Formats to Create</label>

@@ -1,0 +1,207 @@
+services:
+  # PostgreSQL Database (Optional - only start if DATABASE_ENABLED=true)
+  # To enable: Set DATABASE_ENABLED=true in .env file
+  postgres:
+    image: postgres:15-alpine
+    container_name: langflix-spanish-postgres
+    restart: unless-stopped
+    profiles:
+      - database # Only start when explicitly enabled
+
+    environment:
+      - POSTGRES_USER=langflix
+      - POSTGRES_DB=langflix
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-langflix123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+
+    volumes:
+      # PostgreSQL 데이터 영구 저장
+      - postgres_spanish_data:/var/lib/postgresql/data
+      # 백업 디렉토리 (선택사항)
+      - ${TRUENAS_DATA_PATH}/db-backups:/backups:rw
+
+    ports:
+      - "${SPANISH_POSTGRES_PORT:-5433}:5432"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U langflix -d langflix" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Redis for caching and job queue
+  redis:
+    image: redis:7-alpine
+    container_name: langflix-spanish-redis
+    restart: unless-stopped
+
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+
+    volumes:
+      - redis_spanish_data:/data
+
+    ports:
+      - "${SPANISH_REDIS_PORT:-6380}:6379"
+
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # FastAPI Backend
+  langflix-api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+      target: api
+    container_name: langflix-spanish-api
+    restart: unless-stopped
+
+    environment:
+      # Database (Optional - only if DATABASE_ENABLED=true)
+      - DATABASE_URL=postgresql://langflix:${POSTGRES_PASSWORD:-langflix123}@postgres:5432/langflix
+      - DATABASE_ENABLED=${DATABASE_ENABLED:-false}
+
+      # Redis
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis123}@redis:6379/0
+
+      # APIs
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      
+      # Target Language Configuration
+      - LANGFLIX_LLM_TARGET_LANGUAGE=Spanish
+
+      # Media storage path (TrueNAS 미디어 경로)
+      - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
+
+      # Output paths
+      - LANGFLIX_OUTPUT_DIR=/data/output
+      - LANGFLIX_ASSETS_DIR=/data/assets
+      - LANGFLIX_LOG_DIR=/data/logs
+
+      # Logging
+      - LANGFLIX_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    ports:
+      - "${SPANISH_API_PORT:-8001}:8000"
+
+    volumes:
+      # TrueNAS 미디어 파일 (쓰기 가능 - 자막 생성을 위해)
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:rw
+
+      # 출력 디렉토리 (쓰기 가능)
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      # 파이프라인 기본 경로(`/app/output`)에 직접 매핑하여 결과물이 호스트에 저장되도록 보장
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
+
+      # Assets (읽기 전용)
+      - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
+
+      # 로그 (쓰기 가능)
+      - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
+
+      # 캐시 (쓰기 가능)
+      - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
+
+      # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
+      # Use auth/ directory (after file reorganization)
+      - ${TRUENAS_DATA_PATH}/auth/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/auth/youtube_token.json:/app/auth/youtube_token.json:rw
+
+      # 설정 파일 (읽기 전용)
+      # Note: .env file is not mounted - all environment variables are passed via 'environment' section
+      - ../config/config.yaml:/app/config/config.yaml:ro
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      # PostgreSQL is optional - uncomment if DATABASE_ENABLED=true
+      # postgres:
+      #   condition: service_healthy
+
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+        reservations:
+          cpus: '4'
+          memory: 8G
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  langflix-ui:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile
+      target: ui
+    container_name: langflix-spanish-ui
+    restart: unless-stopped
+
+    environment:
+      # Update to use the Spanish Redis container name or service name
+      - REDIS_URL=${LANGFLIX_REDIS_URL:-redis://:${REDIS_PASSWORD}@langflix-spanish-redis:6379/0}
+      - LANGFLIX_API_BASE_URL=http://langflix-api:8000
+      - LANGFLIX_OUTPUT_DIR=/data/output
+      - LANGFLIX_MEDIA_DIR=/media/shows
+      - LANGFLIX_UI_PORT=${UI_PORT:-5000}
+      - YOUTUBE_CREDENTIALS_FILE=/app/auth/youtube_credentials.json
+      - YOUTUBE_TOKEN_FILE=/app/auth/youtube_token.json
+      # Database (Optional - only if DATABASE_ENABLED=true)
+      - DATABASE_URL=postgresql://langflix:${POSTGRES_PASSWORD:-langflix123}@postgres:5432/langflix
+      - DATABASE_ENABLED=${DATABASE_ENABLED:-false}
+
+    ports:
+      - "${SPANISH_UI_PORT:-5001}:5000"
+
+    volumes:
+      - ${TRUENAS_MEDIA_PATH}:/media/shows:ro
+      - ${TRUENAS_DATA_PATH}/output:/data/output:rw
+      - ${TRUENAS_DATA_PATH}/output:/app/output:rw
+      - ${TRUENAS_DATA_PATH}/assets:/data/assets:ro
+      - ${TRUENAS_DATA_PATH}/logs:/data/logs:rw
+      - ${TRUENAS_DATA_PATH}/cache:/app/cache:rw
+      # YouTube OAuth credentials (읽기 전용) 및 토큰 (쓰기 가능)
+      # Use auth/ directory (after file reorganization)
+      - ${TRUENAS_DATA_PATH}/auth/youtube_credentials.json:/app/auth/youtube_credentials.json:ro
+      - ${TRUENAS_DATA_PATH}/auth/youtube_token.json:/app/auth/youtube_token.json:rw
+
+    depends_on:
+      langflix-api:
+        condition: service_started
+  
+volumes:
+  postgres_spanish_data:
+    driver: local
+    # Note: Only created if PostgreSQL service is started
+  redis_spanish_data:
+    driver: local
+
+networks:
+  default:
+    name: langflix-spanish-network
+    driver: bridge

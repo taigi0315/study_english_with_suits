@@ -57,30 +57,20 @@ class SubtitleProcessor:
         """
         Clean subtitles by removing hearing-impaired descriptions (e.g., [sound])
         and filtering out empty subtitles.
-        
-        Args:
-            subtitles: List of subtitle dictionaries
-            
-        Returns:
-            List of cleaned subtitle dictionaries
         """
         cleaned_subtitles = []
-        # Pattern to match content inside square brackets, including the brackets
-        bracket_pattern = re.compile(r'\[.*?\]')
-        
+        from langflix.utils.expression_utils import clean_display_text
+
         for subtitle in subtitles:
             text = subtitle.get('text', '')
             
-            # Remove content in brackets
-            cleaned_text = bracket_pattern.sub('', text)
+            # Use unified cleaning logic for display processing
+            cleaned_text = clean_display_text(text)
             
-            # Clean up extra whitespace that might be left behind
-            cleaned_text = ' '.join(cleaned_text.split())
+            # Note: clean_display_text already handles whitespace normalization
             
             # Only keep subtitle if there is text remaining
             if cleaned_text:
-                # Create a copy to avoid modifying original if needed, 
-                # though here we are building a new list
                 cleaned_subtitle = subtitle.copy()
                 cleaned_subtitle['text'] = cleaned_text
                 cleaned_subtitles.append(cleaned_subtitle)
@@ -600,6 +590,12 @@ class SubtitleProcessor:
             # --- Target/translation text (BOTTOM) ---
             # Use configured target color
             translation_raw = self._get_translation_for_subtitle(i, subtitle, subtitle_to_dialogue_map, expression)
+            
+            # Clean the translation text too (e.g. remove [Sound] if LLM included it)
+            # This ensures consistent visual output with source subtitles
+            from langflix.utils.expression_utils import clean_display_text
+            translation_raw = clean_display_text(translation_raw)
+            
             # Wrap translation text to 35 chars
             translation_wrapped = textwrap.fill(translation_raw, width=35)
             # Add color tag to EACH line

@@ -993,6 +993,11 @@ def get_vocabulary_duration() -> float:
     return get_vocabulary_annotations_config().get('duration', 4.0)
 
 
+def get_vocabulary_annotation_cooldown() -> float:
+    """Get minimum cooldown between vocabulary annotations in seconds (default: 8.0)"""
+    return get_vocabulary_annotations_config().get('annotation_cooldown', 8.0)
+
+
 # ============================================================================
 # Title Settings (viral title overlay at top of video)
 # ============================================================================
@@ -1144,6 +1149,11 @@ def get_expression_annotations_border_color() -> str:
 def get_expression_annotations_duration() -> float:
     """Get expression annotations display duration in seconds (default: 4.0)"""
     return get_expression_annotations_config().get('duration', 4.0)
+
+
+def get_expression_annotations_cooldown() -> float:
+    """Get expression annotations cooldown duration in seconds (default: 5.0)"""
+    return get_expression_annotations_config().get('annotation_cooldown', 5.0)
 
 
 # ============================================================================

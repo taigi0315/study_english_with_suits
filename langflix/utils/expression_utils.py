@@ -11,6 +11,40 @@ This module consolidates duplicate helper functions that were scattered across:
 from typing import Any, Optional
 
 
+
+def clean_display_text(text: str) -> str:
+    """
+    Clean text for display (remove sound effects [..] and technical artifacts).
+    Preserves speaker labels (..) and punctuation in speech.
+    
+    Args:
+        text: Raw text to clean
+        
+    Returns:
+        Cleaned text string
+    """
+    if not text:
+        return ""
+        
+    import re
+    # Pattern to match content inside square brackets, including the brackets
+    bracket_pattern = re.compile(r'\[.*?\]', re.DOTALL)
+    
+    # Pattern for invisible characters (LTR/RTL marks, ZWSP, BOM, etc.)
+    invisible_chars = re.compile(r'[\u200b\u200c\u200d\u200e\u200f\ufeff]')
+    
+    # Remove content in brackets
+    cleaned_text = bracket_pattern.sub('', text)
+    
+    # Remove invisible characters
+    cleaned_text = invisible_chars.sub('', cleaned_text)
+    
+    # Clean up extra whitespace
+    cleaned_text = ' '.join(cleaned_text.split())
+    
+    return cleaned_text
+
+
 def get_expr_attr(expression: Any, attr_name: str, default: Any = None) -> Any:
     """
     Safely get attribute from expression object or dict.
@@ -65,8 +99,13 @@ def clean_text_for_matching(text: str) -> str:
     if not text:
         return ""
 
+    # Remove content in brackets and parentheses (e.g., [Sound], (Speaker))
+    import re
+    cleaned = re.sub(r'\[.*?\]', '', text)
+    cleaned = re.sub(r'\(.*?\)', '', cleaned)
+
     # Normalize whitespace and case
-    cleaned = " ".join(text.strip().lower().split())
+    cleaned = " ".join(cleaned.strip().lower().split())
 
     # Remove punctuation - keep only alphanumeric and spaces
     cleaned = ''.join(c for c in cleaned if c.isalnum() or c.isspace())
@@ -102,6 +141,10 @@ def is_non_speech_subtitle(text: str) -> bool:
     """
     if not text:
         return False
+
+    # Check if text becomes empty after cleaning (e.g., only brackets/parens)
+    if not clean_text_for_matching(text):
+        return True
 
     # Check for common non-speech indicators
     indicators = [

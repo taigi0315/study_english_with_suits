@@ -187,6 +187,69 @@ class ShortFormCreator:
         except (ValueError, AttributeError):
             return 0.0
 
+    def _filter_annotations_by_cooldown(
+        self,
+        annotations: list,
+        cooldown: float,
+        time_per_dialogue: float,
+        min_index: int = 0
+    ) -> list:
+        """
+        recursively filter annotations to respect cooldown period.
+        
+        Args:
+            annotations: List of annotation dicts/objects
+            cooldown: Minimum seconds between annotations
+            time_per_dialogue: Seconds per dialogue line
+            min_index: Minimum dialogue index (for calculating time)
+            
+        Returns:
+            Filtered list of annotations
+        """
+        if not annotations:
+            return []
+            
+        # Helper to get start time for an annotation
+        def get_start_time(item):
+            # Handle both dict and object
+            if isinstance(item, dict):
+                d_idx = item.get('dialogue_index')
+            else:
+                d_idx = getattr(item, 'dialogue_index', None)
+            
+            if d_idx is not None:
+                return max(0, (d_idx - min_index) * time_per_dialogue)
+            return 0.0 # Fallback (shouldn't happen with valid data)
+
+        # Sort by start time
+        sorted_annots = sorted(annotations, key=get_start_time)
+        
+        filtered = []
+        if not sorted_annots:
+            return []
+            
+        # Recursive-like greedy filtering
+        # Always keep the first one
+        current = sorted_annots[0]
+        filtered.append(current)
+        last_time = get_start_time(current)
+        
+        for next_annot in sorted_annots[1:]:
+            next_time = get_start_time(next_annot)
+            if next_time - last_time >= cooldown:
+                filtered.append(next_annot)
+                last_time = next_time
+            else:
+                # Get debug info for logging (handle both dict and obj)
+                if isinstance(next_annot, dict):
+                    text = next_annot.get('word') or next_annot.get('expression') or 'unknown'
+                else:
+                    text = getattr(next_annot, 'word', getattr(next_annot, 'expression', 'unknown'))
+                logger.debug(f"Filtered annotation '{text}' (t={next_time:.2f}) due to cooldown (gap {next_time - last_time:.2f}s < {cooldown}s)")
+                
+        return filtered
+
+
     def create_short_form_from_long_form(
         self,
         long_form_video_path: str,
@@ -346,8 +409,10 @@ class ShortFormCreator:
             crop_x = (scaled_width - target_width) // 2
 
         logger.info(
-            f"Scaling: {content_width}x{content_height} -> {scaled_width}x{scaled_height} "
-            f"(crop_x={crop_x})"
+            f"Scaling Logic (Fill Middle Room): Source Content {content_width}x{content_height} -> Target Height {long_form_video_height}\n"
+            f"   - Scale Factor: {scale_factor:.3f} ({long_form_video_height}/{content_height})\n"
+            f"   - Scaled Size: {scaled_width}x{scaled_height}\n"
+            f"   - Crop Width: {crop_x*2}px (Total from sides)"
         )
 
         # Create scaled video
@@ -447,9 +512,11 @@ class ShortFormCreator:
         input_stream = ffmpeg.input(str(scaled_path))
         video_stream = input_stream['v']
 
-        # Get the actual scaled height
-        long_form_video_height = settings.get_long_form_video_height()
-        y_offset = (target_height - long_form_video_height) // 2
+        # Get the actual scaled height and padding
+        # Use explicit top padding for y_offset to ensure correct placement
+        # irrespective of whether top/bottom padding are symmetric
+        top_padding, _ = settings.get_short_video_padding_heights()
+        y_offset = top_padding  # Place video right after top padding area
 
         # Add black padding
         video_stream = ffmpeg.filter(
@@ -513,6 +580,9 @@ class ShortFormCreator:
                     min_index = lines[0].get('index', 0)
                     break
 
+        # Calculate time per dialogue for filtering
+        time_per_dialogue = context_duration / dialogue_count if dialogue_count > 0 else 0
+
         # Helper to normalize dialogue_index in annotation items
         def normalize_indices(items):
             if not items: return []
@@ -524,20 +594,33 @@ class ShortFormCreator:
                     item_copy['dialogue_index'] = max(0, item['dialogue_index'] - min_index)
                     normalized.append(item_copy)
                 else:
+                    # Cloning object logic omitted for simplicity, assumes dicts are main use case
+                    # or that simple attr modification on copy isn't needed for objects here
                     normalized.append(item)
             return normalized
 
         # 4. Vocabulary annotations
         vocab_annotations = get_expr_attr(expression, 'vocabulary_annotations', [])
         if vocab_annotations:
+            # Apply cooldown filtering
+            cooldown = settings.get_vocabulary_annotation_cooldown()
+            filtered_vocab = self._filter_annotations_by_cooldown(
+                vocab_annotations, cooldown, time_per_dialogue, min_index
+            )
+            
+            logger.info(f"Filtered vocabulary: {len(vocab_annotations)} -> {len(filtered_vocab)} (cooldown: {cooldown}s)")
+            
             video_stream = self.overlay_renderer.add_vocabulary_annotations(
-                video_stream, normalize_indices(vocab_annotations),
+                video_stream, normalize_indices(filtered_vocab),
                 dialogue_count, context_duration, settings
             )
 
         # 5. Narrations
         narrations = get_expr_attr(expression, 'narrations', [])
         if narrations:
+            # Also apply cooldown to narrations? User specified "voca annotation and expression annotation".
+            # Applying similar logic for consistency if desired, but user specifically asked for vocab/expression.
+            # Keeping as is for now unless requested.
             video_stream = self.overlay_renderer.add_narrations(
                 video_stream, normalize_indices(narrations),
                 dialogue_count, context_duration, settings
@@ -546,8 +629,17 @@ class ShortFormCreator:
         # 6. Expression annotations
         expr_annotations = get_expr_attr(expression, 'expression_annotations', [])
         if expr_annotations:
+            # Apply cooldown filtering (use same cooldown as vocab for now, or add specific setting if needed)
+            # Apply cooldown filtering
+            cooldown = settings.get_expression_annotations_cooldown()
+            filtered_expr = self._filter_annotations_by_cooldown(
+                expr_annotations, cooldown, time_per_dialogue, min_index
+            )
+             
+            logger.info(f"Filtered expressions: {len(expr_annotations)} -> {len(filtered_expr)} (cooldown: {cooldown}s)")
+
             video_stream = self.overlay_renderer.add_expression_annotations(
-                video_stream, normalize_indices(expr_annotations),
+                video_stream, normalize_indices(filtered_expr),
                 dialogue_count, context_duration, settings
             )
 

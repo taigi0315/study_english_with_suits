@@ -113,8 +113,8 @@ processing:
   
   # Normal mode expression limits (when test_mode.enabled is false)
   min_expressions_per_chunk: 1
-  max_expressions_per_chunk: 2
-  max_total_expressions: 20         
+  max_expressions_per_chunk: 4
+  max_total_expressions: 20
 
 # ============================================================================
 # Language Proficiency Levels
@@ -350,12 +350,13 @@ short_video:
       x_position: 25               # X position (px from left)
       y_offset: 25                 # Y offset from top of video area
       duration: 4.0                # How long annotation appears (seconds)
+      annotation_cooldown: 5.0     # Minimum gap between annotations (seconds)
 
     # Viral title (top of video, attention-grabbing hook in source language)
     title:
-      font_size: 75                # Large font for emphasis
+      font_size: 70                # Large font for emphasis
       y_position: 27               # Below logo, above keywords
-      chars_per_line: 20           # Max characters per line before wrapping
+      chars_per_line: 25           # Max characters per line before wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -389,6 +390,8 @@ short_video:
       border_width: 2
       border_color: 'black'
       duration: 3.0                # How long annotation appears
+      annotation_cooldown: 5.0     # Minimum gap between annotations (seconds)
+
 
     # Educational slide configuration (displayed during expression replay)
     educational_slide:

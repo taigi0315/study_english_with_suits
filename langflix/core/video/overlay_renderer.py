@@ -122,7 +122,21 @@ class OverlayRenderer:
 
         # Wrap title using configurable chars per line
         title_chars_per_line = settings.get_viral_title_chars_per_line()
-        wrapped_viral_title = textwrap.fill(viral_title, width=title_chars_per_line)
+        
+        # Use configured chars per line directly without implicit scaling
+        # This allows precise control via config.yaml, regardless of language
+        logger.info(f"Using title chars per line: {title_chars_per_line} for language '{self.target_language_code}'")
+
+        # Respect existing newlines while wrapping
+        # textwrap.fill replaces newlines with spaces by default, so we split first
+        input_lines = viral_title.split('\n')
+        wrapped_lines = []
+        for line in input_lines:
+            if line.strip():
+                wrapped = textwrap.fill(line, width=title_chars_per_line)
+                wrapped_lines.append(wrapped)
+        
+        wrapped_viral_title = "\n".join(wrapped_lines)
         
         # Split into lines to render individually (avoids newline artifact issues)
         start_lines = wrapped_viral_title.split('\n')

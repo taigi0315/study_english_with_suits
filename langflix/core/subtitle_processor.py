@@ -43,10 +43,51 @@ class SubtitleProcessor:
             # Use extension-based parser to support multiple formats (SRT, SMI, etc.)
             subtitles = parse_subtitle_file_by_extension(self.subtitle_file_path)
             logger.info(f"Loaded {len(subtitles)} subtitle entries")
-            return subtitles
+            
+            # Clean subtitles (remove hearing-impaired descriptions like [sound])
+            cleaned_subtitles = self._clean_subtitles(subtitles)
+            logger.info(f"Cleaned subtitles: {len(cleaned_subtitles)} entries remaining")
+            
+            return cleaned_subtitles
         except Exception as e:
             logger.error(f"Error loading subtitles: {e}")
             return []
+
+    def _clean_subtitles(self, subtitles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Clean subtitles by removing hearing-impaired descriptions (e.g., [sound])
+        and filtering out empty subtitles.
+        
+        Args:
+            subtitles: List of subtitle dictionaries
+            
+        Returns:
+            List of cleaned subtitle dictionaries
+        """
+        cleaned_subtitles = []
+        # Pattern to match content inside square brackets, including the brackets
+        bracket_pattern = re.compile(r'\[.*?\]')
+        
+        for subtitle in subtitles:
+            text = subtitle.get('text', '')
+            
+            # Remove content in brackets
+            cleaned_text = bracket_pattern.sub('', text)
+            
+            # Clean up extra whitespace that might be left behind
+            cleaned_text = ' '.join(cleaned_text.split())
+            
+            # Only keep subtitle if there is text remaining
+            if cleaned_text:
+                # Create a copy to avoid modifying original if needed, 
+                # though here we are building a new list
+                cleaned_subtitle = subtitle.copy()
+                cleaned_subtitle['text'] = cleaned_text
+                cleaned_subtitles.append(cleaned_subtitle)
+            else:
+                logger.debug(f"Removed empty subtitle after cleaning: '{text}'")
+                
+        return cleaned_subtitles
     
     def extract_subtitles_for_expression(self, expression: ExpressionAnalysis) -> List[Dict[str, Any]]:
         """

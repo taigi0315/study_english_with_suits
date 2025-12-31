@@ -169,9 +169,13 @@ class YouTubeMetadataGenerator:
         """Get translated string for template (TICKET-056)"""
         if target_language is None:
             target_language = self._get_target_language()
+            
+        # Ensure we use full name (e.g. 'es' -> 'Spanish')
+        from langflix.settings import language_code_to_name
+        full_name = language_code_to_name(target_language) or target_language
         
         # Fallback to English if translation not found
-        translations = self.translations.get(target_language, self.translations.get("English", {}))
+        translations = self.translations.get(full_name, self.translations.get("English", {}))
         return translations.get(key, key)
     
     def _load_templates(self) -> Dict[str, YouTubeContentTemplate]:
@@ -250,6 +254,10 @@ class YouTubeMetadataGenerator:
         """
         if target_language is None:
             target_language = self._get_target_language()
+            
+        # Ensure we work with full language name (e.g. 'es' -> 'Spanish')
+        from langflix.settings import language_code_to_name
+        target_language = language_code_to_name(target_language) or target_language
         
         template = self.templates.get(video_metadata.video_type, self.templates["educational"])
         
@@ -731,10 +739,14 @@ class YouTubeMetadataGenerator:
         # Remove spaces for hashtag
         show_hashtag = f"#{show_name.replace(' ', '')}"
         
+        # Ensure we use full name (e.g. 'es' -> 'Spanish')
+        from langflix.settings import language_code_to_name
+        full_name = language_code_to_name(target_language) or target_language
+        
         # Dynamic #Learn{TargetLanguage}
         # e.g., #LearnKorean, #LearnEnglish
         learn_language = getattr(video_metadata, 'learn_language', "English").replace(" ", "")
-        learn_target_hashtag = f"#Learn{target_language.replace(' ', '')}" # This is target language of the AUDIENCE (e.g. Korean people learning English)
+        learn_target_hashtag = f"#Learn{full_name.replace(' ', '')}" # This is target language of the AUDIENCE (e.g. Korean people learning English)
         
         # Correction: The logic was:
         # target_language = audience language (e.g. Korean)
@@ -794,7 +806,10 @@ class YouTubeMetadataGenerator:
         }
         
         # Get translations for target language, fallback to English
-        translations = tag_translations.get(target_language, tag_translations.get("English", {}))
+        from langflix.settings import language_code_to_name
+        full_name = language_code_to_name(target_language) or target_language
+        
+        translations = tag_translations.get(full_name, tag_translations.get("English", {}))
         
         # Construct hashtags: #Shorts #EnglishLearning #ShowName #EnglishExpressions #LearnTarget
         # Base tags

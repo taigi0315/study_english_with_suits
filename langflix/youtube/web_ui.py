@@ -1289,17 +1289,22 @@ class VideoManagementUI:
                 logger.info(f"Generating YouTube metadata for video: {video_path}")
                 logger.info(f"  Video metadata: type={video_metadata.video_type}, expression='{video_metadata.expression}', episode='{video_metadata.episode}', language={video_metadata.language}")
                 
+                target_lang = getattr(video_metadata, 'language', None)
                 # Generate metadata (will use fallbacks if expression/episode are missing)
                 metadata_generator = YouTubeMetadataGenerator()
-                youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
                 
                 # Validate generated metadata (this is the critical check)
                 if not youtube_metadata.title or youtube_metadata.title.strip() == "":
                     expression = getattr(video_metadata, 'expression', '')
+                    translation = getattr(video_metadata, 'expression_translation', '')
                     show_name = getattr(video_metadata, 'show_name', '')
                     
-                    if expression:
-                        fallback_title = f"{expression} | {show_name}" if show_name else expression
+                    # Prefer translation for title if available (better for international audiences)
+                    main_title = translation if translation else expression
+                    
+                    if main_title:
+                        fallback_title = f"{main_title} | {show_name}" if show_name else main_title
                     else:
                         fallback_title = video_metadata.episode or os.path.splitext(os.path.basename(video_path))[0]
 
@@ -1494,15 +1499,20 @@ class VideoManagementUI:
                             })
                             continue
                         
-                        youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        target_lang = getattr(video_metadata, 'language', None)
+                        youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
                         
                         # Fallback if title is empty
                         if not youtube_metadata.title or not youtube_metadata.title.strip():
                             expression = getattr(video_metadata, 'expression', '')
+                            translation = getattr(video_metadata, 'expression_translation', '')
                             show_name = getattr(video_metadata, 'show_name', '')
                             
-                            if expression:
-                                fallback_title = f"{expression} | {show_name}" if show_name else expression
+                            # Prefer translation for title if available (better for international audiences)
+                            main_title = translation if translation else expression
+                            
+                            if main_title:
+                                fallback_title = f"{main_title} | {show_name}" if show_name else main_title
                             else:
                                 fallback_title = video_path_obj.stem
                                 
@@ -1658,16 +1668,20 @@ class VideoManagementUI:
                             })
                             continue
                         
-                        try:
-                            youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                            target_lang = getattr(video_metadata, 'language', None)
+                            youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
                             
                             # Fallback if title is empty
                             if not youtube_metadata.title or not youtube_metadata.title.strip():
                                 expression = getattr(video_metadata, 'expression', '')
+                                translation = getattr(video_metadata, 'expression_translation', '')
                                 show_name = getattr(video_metadata, 'show_name', '')
                                 
-                                if expression:
-                                    fallback_title = f"{expression} | {show_name}" if show_name else expression
+                                # Prefer translation for title if available (better for international audiences)
+                                main_title = translation if translation else expression
+                                
+                                if main_title:
+                                    fallback_title = f"{main_title} | {show_name}" if show_name else main_title
                                 else:
                                     fallback_title = video_path_obj.stem
                                     

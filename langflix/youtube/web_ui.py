@@ -726,6 +726,58 @@ class VideoManagementUI:
                 logger.error(f"Error getting YouTube account: {e}")
                 return jsonify({"error": str(e)}), 500
         
+        @self.app.route('/api/youtube/channels')
+        def get_youtube_channels():
+            """Get all installed YouTube accounts (tokens)"""
+            try:
+                # Scan tokens directory for available accounts
+                accounts = self.upload_manager.scan_accounts()
+                
+                # Also list accessible channels for current token (for legacy reasons or if needed)
+                # But primarily we want "accounts" we can switch to.
+                # scan_accounts returns list of dicts with channel info
+                
+                if accounts:
+                    return jsonify({
+                        "authenticated": True,
+                        "channels": accounts,
+                        "count": len(accounts)
+                    })
+                else:
+                    return jsonify({
+                        "authenticated": False,
+                        "channels": [],
+                        "message": "No YouTube accounts found"
+                    })
+            except Exception as e:
+                logger.error(f"Error getting YouTube accounts: {e}")
+                return jsonify({"error": str(e)}), 500
+        
+        @self.app.route('/api/youtube/account/switch', methods=['POST'])
+        def switch_youtube_account():
+            """Switch active YouTube account"""
+            data = request.get_json() or {}
+            channel_id = data.get('channel_id')
+            
+            if not channel_id:
+                return jsonify({"error": "channel_id is required"}), 400
+                
+            try:
+                success = self.upload_manager.switch_account(channel_id)
+                if success:
+                    # Get new channel info
+                    info = self.upload_manager.uploader.get_channel_info()
+                    return jsonify({
+                        "success": True, 
+                        "message": f"Switched to channel {channel_id}",
+                        "channel": info
+                    })
+                else:
+                    return jsonify({"error": "Failed to switch account or account not found"}), 404
+            except Exception as e:
+                logger.error(f"Error switching account: {e}")
+                return jsonify({"error": str(e)}), 500
+
         @self.app.route('/api/youtube/login', methods=['POST'])
         def youtube_login():
             """Authenticate with YouTube (supports both Desktop and Web flow)"""
@@ -805,7 +857,13 @@ class VideoManagementUI:
                         # Get channel info and save to database
                         channel_info = self.upload_manager.uploader.get_channel_info()
                         if channel_info:
-                            self._save_youtube_account(channel_info)
+                            try:
+                                self._save_youtube_account(channel_info)
+                            except Exception as e:
+                                logger.warning(f"Failed to save account to DB (ignoring): {e}")
+                            
+                            # AUTO-SAVE account to tokens dir
+                            self.upload_manager.save_current_account()
                         
                         return jsonify({
                             "message": "Successfully authenticated with YouTube",
@@ -909,7 +967,13 @@ class VideoManagementUI:
                     # Get channel info and save to database
                     channel_info = self.upload_manager.uploader.get_channel_info()
                     if channel_info:
-                        self._save_youtube_account(channel_info)
+                        try:
+                            self._save_youtube_account(channel_info)
+                        except Exception as e:
+                            logger.warning(f"Failed to save account to DB in callback (ignoring): {e}")
+                            
+                        # AUTO-SAVE account to tokens dir
+                        self.upload_manager.save_current_account()
                     
                     # Serialize channel_info to JSON for safe embedding
                     channel_info_json = json.dumps(channel_info) if channel_info else 'null'
@@ -1225,21 +1289,27 @@ class VideoManagementUI:
                 logger.info(f"Generating YouTube metadata for video: {video_path}")
                 logger.info(f"  Video metadata: type={video_metadata.video_type}, expression='{video_metadata.expression}', episode='{video_metadata.episode}', language={video_metadata.language}")
                 
+                target_lang = getattr(video_metadata, 'language', None)
                 # Generate metadata (will use fallbacks if expression/episode are missing)
                 metadata_generator = YouTubeMetadataGenerator()
-                youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
                 
                 # Validate generated metadata (this is the critical check)
                 if not youtube_metadata.title or youtube_metadata.title.strip() == "":
-                    logger.error(f"❌ Generated metadata has empty title!")
-                    logger.error(f"  Video path: {video_path}")
-                    logger.error(f"  Video metadata - expression: '{video_metadata.expression}', episode: '{video_metadata.episode}', type: {video_metadata.video_type}")
-                    logger.error(f"  Generated title: '{youtube_metadata.title}'")
-                    return jsonify({
-                        "success": False,
-                        "error": "Failed to generate video title",
-                        "details": f"Video metadata could not be used to generate a valid title. Expression: '{video_metadata.expression}', Episode: '{video_metadata.episode}'"
-                    }), 400
+                    expression = getattr(video_metadata, 'expression', '')
+                    translation = getattr(video_metadata, 'expression_translation', '')
+                    show_name = getattr(video_metadata, 'show_name', '')
+                    
+                    # Prefer translation for title if available (better for international audiences)
+                    main_title = translation if translation else expression
+                    
+                    if main_title:
+                        fallback_title = f"{main_title} | {show_name}" if show_name else main_title
+                    else:
+                        fallback_title = video_metadata.episode or os.path.splitext(os.path.basename(video_path))[0]
+
+                    logger.warning(f"Generated metadata has empty title. Using smart fallback: {fallback_title}")
+                    youtube_metadata.title = fallback_title
                 
                 logger.info(f"✅ Generated metadata successfully: title='{youtube_metadata.title[:60]}...', description length={len(youtube_metadata.description)}, tags={len(youtube_metadata.tags)}")
                 
@@ -1429,7 +1499,25 @@ class VideoManagementUI:
                             })
                             continue
                         
-                        youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                        target_lang = getattr(video_metadata, 'language', None)
+                        youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
+                        
+                        # Fallback if title is empty
+                        if not youtube_metadata.title or not youtube_metadata.title.strip():
+                            expression = getattr(video_metadata, 'expression', '')
+                            translation = getattr(video_metadata, 'expression_translation', '')
+                            show_name = getattr(video_metadata, 'show_name', '')
+                            
+                            # Prefer translation for title if available (better for international audiences)
+                            main_title = translation if translation else expression
+                            
+                            if main_title:
+                                fallback_title = f"{main_title} | {show_name}" if show_name else main_title
+                            else:
+                                fallback_title = video_path_obj.stem
+                                
+                            logger.warning(f"Generated metadata has empty title. Using smart fallback: {fallback_title}")
+                            youtube_metadata.title = fallback_title
                         
                         # Upload immediately
                         logger.info(f"Starting immediate batch upload: {video_path}")
@@ -1580,8 +1668,26 @@ class VideoManagementUI:
                             })
                             continue
                         
-                        try:
-                            youtube_metadata = metadata_generator.generate_metadata(video_metadata)
+                            target_lang = getattr(video_metadata, 'language', None)
+                            youtube_metadata = metadata_generator.generate_metadata(video_metadata, target_language=target_lang)
+                            
+                            # Fallback if title is empty
+                            if not youtube_metadata.title or not youtube_metadata.title.strip():
+                                expression = getattr(video_metadata, 'expression', '')
+                                translation = getattr(video_metadata, 'expression_translation', '')
+                                show_name = getattr(video_metadata, 'show_name', '')
+                                
+                                # Prefer translation for title if available (better for international audiences)
+                                main_title = translation if translation else expression
+                                
+                                if main_title:
+                                    fallback_title = f"{main_title} | {show_name}" if show_name else main_title
+                                else:
+                                    fallback_title = video_path_obj.stem
+                                    
+                                logger.warning(f"Generated metadata has empty title. Using smart fallback: {fallback_title}")
+                                youtube_metadata.title = fallback_title
+                                
                         except Exception as e:
                             logger.error(f"Error generating metadata for {video_path}: {e}", exc_info=True)
                             results.append({

@@ -265,7 +265,7 @@ export const ui = {
         `;
     },
 
-    renderAccountInfo(accountData) {
+    async renderAccountInfo(accountData) {
         const container = document.getElementById('youtubeAccountSection');
         if (!accountData || !accountData.authenticated) {
             container.innerHTML = `
@@ -279,9 +279,46 @@ export const ui = {
             return;
         }
 
-        // Assuming accountData structure matches: { authenticated: true, channel: { title: "...", thumbnail_url: "..." } }
-        // We handle fallback if structure is flat for some reason, but backend sends nested 'channel'.
+        // Fetch all accessible channels
+        let channels = [];
+        try {
+            const channelsData = await api.fetchChannels();
+            if (channelsData && channelsData.channels) {
+                channels = channelsData.channels;
+            }
+        } catch (e) {
+            console.warn('Could not fetch channels list:', e);
+        }
+
+        // Get the current channel from accountData
         const channel = accountData.channel || accountData;
+        // Check if we have multiple channels/accounts available
+        // Always show selector if we have channels, plus an "Add Account" option
+        const hasChannels = channels.length > 0;
+        
+        // Build channel selector HTML
+        let channelSelectorHtml = '';
+        
+        const options = channels.map(ch => {
+            const selected = ch.channel_id === channel.channel_id ? 'selected' : '';
+            const displayName = ch.custom_url ? `${ch.title} (${ch.custom_url})` : ch.title;
+            // Add a marker for the current active one if needed, though 'selected' handles it
+            return `<option value="${ch.channel_id}" ${selected}>${formatters.escapeHtml(displayName)}</option>`;
+        }).join('');
+        
+        // Add "Add new account" option
+        const addAccountOption = `<option value="ADD_NEW" style="font-weight: bold; color: #4caf50;">+ Add new account...</option>`;
+        
+        channelSelectorHtml = `
+            <div class="channel-selector" style="margin-top: 8px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 4px;">Active Channel:</label>
+                <select id="channelSelector" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #444; background: #2c3e50; color: white; font-size: 13px; cursor: pointer; min-width: 200px;">
+                    ${options}
+                    <option disabled>──────────</option>
+                    ${addAccountOption}
+                </select>
+            </div>
+        `;
 
         container.innerHTML = `
             <div class="youtube-account-info">
@@ -290,13 +327,48 @@ export const ui = {
                     <div class="account-text">
                         <div class="channel-title">${formatters.escapeHtml(channel.title || 'Unknown Channel')}</div>
                         <div class="channel-email">${formatters.escapeHtml(channel.custom_url || '')}</div>
+                        ${channelSelectorHtml}
                     </div>
                 </div>
                 <button class="btn-logout" id="btnLogout">Disconnect</button>
             </div>
         `;
-        const btn = document.getElementById('btnLogout');
-        if (btn) btn.addEventListener('click', () => eventBus.dispatchEvent(new CustomEvent('logout')));
+        
+        // Setup logout button
+        const logoutBtn = document.getElementById('btnLogout');
+        if (logoutBtn) logoutBtn.addEventListener('click', () => eventBus.dispatchEvent(new CustomEvent('logout')));
+        
+        // Setup channel selector
+        const channelSelector = document.getElementById('channelSelector');
+        if (channelSelector) {
+            channelSelector.addEventListener('change', async (e) => {
+                const selectedValue = e.target.value;
+                
+                if (selectedValue === 'ADD_NEW') {
+                    // Reset selection to current while adding
+                    e.target.value = channel.channel_id;
+                    // Trigger login flow
+                    eventBus.dispatchEvent(new CustomEvent('login'));
+                    return;
+                }
+                
+                // Handle switching
+                if (selectedValue !== channel.channel_id) {
+                    try {
+                        const result = await api.switchAccount(selectedValue);
+                        if (result.success) {
+                            // Reload page or refresh view to reflect changes
+                            window.location.reload();
+                        } else {
+                            alert('Failed to switch account: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('Error switching account:', error);
+                        alert('Error switching account. See console for details.');
+                    }
+                }
+            });
+        }
     },
 
     async showCreateContentModal() {

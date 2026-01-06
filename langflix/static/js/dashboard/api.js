@@ -76,9 +76,38 @@ export const api = {
         }
     },
 
+    async fetchChannels() {
+        try {
+            const response = await fetch('/api/youtube/channels');
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (e) {
+            console.warn("Failed to fetch channels", e);
+            return null;
+        }
+    },
+
     async login() {
-        const response = await fetch('/api/youtube/login', { method: 'POST' });
+        const response = await fetch('/api/youtube/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ use_web_flow: true })
+        });
         return await response.json();
+    },
+
+    async switchAccount(channelId) {
+        try {
+            const response = await fetch('/api/youtube/account/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel_id: channelId })
+            });
+            return await response.json();
+        } catch (e) {
+            console.warn("Failed to switch account", e);
+            throw e;
+        }
     },
 
     async logout() {

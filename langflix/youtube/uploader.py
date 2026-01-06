@@ -610,9 +610,15 @@ class YouTubeUploader:
             logger.info(f"Starting upload: {video_file.name}")
             
             # Prepare video metadata
+            # Ensure title is valid (max 100 chars, not empty)
+            title = metadata.title or "Untitled Video"
+            if len(title) > 100:
+                title = title[:100]
+                logger.warning(f"Title truncated to 100 chars: {title}")
+            
             body = {
                 'snippet': {
-                    'title': metadata.title,
+                    'title': title,
                     'description': metadata.description,
                     'tags': metadata.tags,
                     'categoryId': metadata.category_id
@@ -1008,6 +1014,53 @@ class YouTubeUploader:
             logger.error(f"Failed to get channel info: {e}")
             return None
     
+    def list_accessible_channels(self) -> List[Dict[str, Any]]:
+        """List all channels accessible to the authenticated user (including Brand Accounts).
+        
+        Returns:
+            List of channel info dictionaries with channel_id, title, description, thumbnail_url
+        """
+        if not self.authenticated:
+            if not self.authenticate():
+                return []
+        
+        try:
+            # Get all channels the authenticated user has access to
+            response = self.service.channels().list(
+                part='snippet,contentDetails',
+                mine=True
+            ).execute()
+            
+            channels = []
+            for channel in response.get('items', []):
+                snippet = channel.get('snippet', {})
+                
+                # Safely get thumbnail URL
+                thumbnail_url = ''
+                if 'thumbnails' in snippet:
+                    thumbnails = snippet['thumbnails']
+                    for size in ['default', 'medium', 'high', 'standard']:
+                        if size in thumbnails and 'url' in thumbnails[size]:
+                            thumbnail_url = thumbnails[size]['url']
+                            break
+                
+                channels.append({
+                    'channel_id': channel['id'],
+                    'title': snippet.get('title', 'Unknown Channel'),
+                    'description': snippet.get('description', ''),
+                    'thumbnail_url': thumbnail_url,
+                    'custom_url': snippet.get('customUrl', ''),
+                    'country': snippet.get('country', ''),
+                    'published_at': snippet.get('publishedAt', '')
+                })
+            
+            logger.info(f"Found {len(channels)} accessible channel(s)")
+            return channels
+            
+        except Exception as e:
+            logger.error(f"Failed to list accessible channels: {e}")
+            return []
+    
     def schedule_video_publish(
         self, 
         video_id: str, 
@@ -1066,6 +1119,19 @@ class YouTubeUploader:
         except Exception as e:
             logger.error(f"Failed to update video publish time: {e}")
             return False
+            
+    def set_token_file(self, token_file: str) -> bool:
+        """Change the token file used for authentication and re-authenticate if needed"""
+        if self.token_file == token_file:
+            return True
+            
+        logger.info(f"Switching token file from {self.token_file} to {token_file}")
+        self.token_file = token_file
+        self.authenticated = False
+        self.service = None
+        
+        # Attempt to authenticate with new token file
+        return self.authenticate()
     
     def get_quota_usage(self) -> Dict[str, Any]:
         """Get current YouTube API quota usage (approximate)"""
@@ -1078,12 +1144,123 @@ class YouTubeUploader:
         }
 
 class YouTubeUploadManager:
-    """Manages YouTube uploads with queue and status tracking"""
+    """Manages YouTube uploads with queue and status tracking, supporting multiple accounts"""
     
     def __init__(self, credentials_file: str = "auth/youtube_credentials.json", oauth_state_storage=None):
         self.uploader = YouTubeUploader(credentials_file, oauth_state_storage=oauth_state_storage)
         self.upload_queue = []
         self.upload_history = []
+        
+        # Multi-account support
+        self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.tokens_base_dir = os.path.join(self.project_root, "auth", "tokens")
+        
+        # Ensure tokens directory exists
+        if not os.path.exists(self.tokens_base_dir):
+            try:
+                os.makedirs(self.tokens_base_dir, mode=0o755, exist_ok=True)
+            except Exception as e:
+                logger.warning(f"Failed to create tokens directory: {e}")
+        
+        # Cache of discovered accounts: {channel_id: {channel_info, token_path}}
+        self.accounts_cache = {}
+        self.scan_accounts()
+        
+    def scan_accounts(self) -> List[Dict[str, Any]]:
+        """Scan for available account tokens"""
+        accounts = []
+        
+        # Check standard locations (main token)
+        main_token = self.uploader.token_file
+        if os.path.exists(main_token):
+             # Try to get info about main token
+             try:
+                 # Temporarily switch to verify/load info if not authenticated
+                 if not self.uploader.authenticated:
+                     self.uploader.authenticate()
+                 
+                 if self.uploader.authenticated:
+                     info = self.uploader.get_channel_info()
+                     if info:
+                         info['is_active'] = True
+                         info['token_path'] = main_token
+                         info['type'] = 'Main'
+                         accounts.append(info)
+                         self.accounts_cache[info['channel_id']] = info
+             except Exception as e:
+                 logger.warning(f"Failed to scan main token: {e}")
+
+        # Scan tokens directory
+        if os.path.exists(self.tokens_base_dir):
+            for filename in os.listdir(self.tokens_base_dir):
+                if filename.endswith('.json'):
+                    token_path = os.path.join(self.tokens_base_dir, filename)
+                    try:
+                        # Inspect token content to identify channel (without full auth if possible, or verify)
+                        # Ideally we name files as channel_id.json
+                        channel_id = filename.replace('.json', '')
+                        
+                        # Just verify it's a valid JSON first
+                        with open(token_path, 'r') as f:
+                            json.load(f)
+                            
+                        # If we have it in cache, use it
+                        if channel_id in self.accounts_cache:
+                             accounts.append(self.accounts_cache[channel_id])
+                             continue
+                             
+                        # Otherwise we might need to load it to confirm details
+                        # This could be expensive to do on every load, so we might want to store metadata
+                        # For now, just list it
+                        accounts.append({
+                            'channel_id': channel_id,
+                            'title': f'Channel {channel_id}', # Placeholder until loaded
+                            'token_path': token_path,
+                            'type': 'Stored'
+                        })
+                    except Exception as e:
+                        logger.warning(f"Invalid token file {filename}: {e}")
+        
+        return accounts
+
+    def switch_account(self, channel_id: str) -> bool:
+        """Switch active uploader to specified channel"""
+        # Check cache/scan results
+        target_account = None
+        
+        # Re-scan to be sure
+        self.scan_accounts()
+        
+        # Check tokens dir matches
+        token_path = os.path.join(self.tokens_base_dir, f"{channel_id}.json")
+        if os.path.exists(token_path):
+            return self.uploader.set_token_file(token_path)
+            
+        # Check if it's the main token (fallback logic)
+        # In a robust system, we would map channel_id to file path precisely
+        return False
+
+    def save_current_account(self) -> Optional[str]:
+        """Save currently authenticated account to tokens directory"""
+        if not self.uploader.authenticated:
+            return None
+            
+        info = self.uploader.get_channel_info()
+        if not info:
+            return None
+            
+        channel_id = info['channel_id']
+        target_path = os.path.join(self.tokens_base_dir, f"{channel_id}.json")
+        
+        # Copy current token file to target path
+        import shutil
+        try:
+            shutil.copy2(self.uploader.token_file, target_path)
+            logger.info(f"Saved account {channel_id} token to {target_path}")
+            return channel_id
+        except Exception as e:
+            logger.error(f"Failed to save account token: {e}")
+            return None
     
     def add_to_queue(self, video_path: str, metadata: YouTubeVideoMetadata):
         """Add video to upload queue"""

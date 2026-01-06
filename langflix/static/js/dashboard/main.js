@@ -58,23 +58,56 @@ function setupFilters() {
 
 async function loadAccountInfo() {
     const accountData = await api.fetchAccountInfo();
-    ui.renderAccountInfo(accountData);
+    await ui.renderAccountInfo(accountData);
 }
 
 function setupAuth() {
     eventBus.addEventListener('login', async () => {
-        const result = await api.login();
-        if (result && result.auth_url) {
-            window.location.href = result.auth_url;
-        } else {
-            console.error('Login returned no auth URL', result);
-            alert('Failed to start login process');
+        try {
+            // Request auth URL from backend
+            const result = await api.login();
+            
+            if (result && result.auth_url) {
+                // Open popup window
+                const width = 600;
+                const height = 700;
+                const left = (window.screen.width / 2) - (width / 2);
+                const top = (window.screen.height / 2) - (height / 2);
+                
+                window.open(
+                    result.auth_url, 
+                    'youtube_auth', 
+                    `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
+                );
+            } else {
+                console.error('Login returned no auth URL', result);
+                alert('Failed to start login process');
+            }
+        } catch (e) {
+            console.error('Login error:', e);
+            alert('Failed to initialize login');
         }
     });
 
     eventBus.addEventListener('logout', async () => {
         await api.logout();
         await loadAccountInfo(); // Refresh state
+        window.location.reload(); // Reload to clear any stale state
+    });
+    
+    // Listen for auth messages from popup
+    window.addEventListener('message', async (event) => {
+        if (event.data.type === 'youtube-auth-success') {
+            console.log('Authentication successful:', event.data.channel);
+            // Refresh account info
+            await loadAccountInfo();
+            // Show success notification if needed
+             // Reload page to reflect new account in dropdown immediately
+            window.location.reload();
+        } else if (event.data.type === 'youtube-auth-error') {
+            console.error('Authentication error:', event.data.error);
+            alert(`Authentication failed: ${event.data.details || event.data.error}`);
+        }
     });
 }
 

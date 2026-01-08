@@ -98,10 +98,27 @@ class ShortFormCreator:
 
         # Temp files to clean up
         self._temp_files = []
+        
+        # Determine learn_language based on source
+        # This is the language being taught in the video
+        if self.source_language_code == 'ko':
+            self.learn_language = "Korean"
+        elif self.source_language_code == 'en':
+            self.learn_language = "English"
+        elif self.source_language_code == 'ja':
+            self.learn_language = "Japanese"
+        elif self.source_language_code == 'zh':
+            self.learn_language = "Chinese"
+        elif self.source_language_code == 'es':
+            self.learn_language = "Spanish"
+        elif self.source_language_code == 'fr':
+            self.learn_language = "French"
+        else:
+            self.learn_language = "English"
 
         logger.info(
             f"ShortFormCreator initialized: "
-            f"source={source_language_code}, target={target_language_code}, show={show_name}"
+            f"source={source_language_code}, target={target_language_code}, show={show_name}, learn={self.learn_language}"
         )
 
     def _register_temp_file(self, path: Path) -> None:
@@ -822,6 +839,9 @@ class ShortFormCreator:
         """
         try:
             import json
+            from datetime import datetime
+            from langflix.youtube.video_manager import VideoMetadata
+            from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
             
             # Helper to get attribute from dict or object
             def get_attr(obj, key, default=None):
@@ -829,21 +849,80 @@ class ShortFormCreator:
                     return obj.get(key, default)
                 return getattr(obj, key, default)
             
+            # 1. Prepare basic expression data
+            expression_text = get_attr(expression, 'expression', '')
+            expression_translation = get_attr(expression, 'expression_translation', '')
+            title_translation = get_attr(expression, 'title_translation', '') # Target language title
+            catchy_keywords = get_attr(expression, 'catchy_keywords', [])
+            
+            # 2. visual metadata (file stats) - gentle fallback if file not fully ready/accessible
+            try:
+                stat = video_path.stat()
+                size_mb = stat.st_size / (1024 * 1024)
+                # We could probe duration, but let's trust we are short form
+                duration_seconds = 60.0 # Approximation or 0 if unknown, generator doesn't use it for text
+            except Exception:
+                size_mb = 0.0
+                duration_seconds = 0.0
+
+            # 3. Create VideoMetadata object
+            # Try to extract episode from existing mechanism or filepath
+            episode_str = "Unknown"
+            # Simple extraction from path if possible, or leave as Unknown
+            try:
+                import re
+                match = re.search(r'(S\d+E\d+)', str(video_path), flags=re.IGNORECASE)
+                if match:
+                    episode_str = match.group(1).upper()
+            except:
+                pass
+
+            video_meta = VideoMetadata(
+                path=str(video_path),
+                filename=video_path.name,
+                size_mb=round(size_mb, 2),
+                duration_seconds=duration_seconds,
+                resolution="1080x1920", # Short form
+                format=video_path.suffix.lstrip('.'),
+                created_at=datetime.now(),
+                episode=episode_str,
+                expression=expression_text,
+                expression_translation=expression_translation,
+                title_translation=title_translation,
+                catchy_keywords=catchy_keywords,
+                show_name=self.show_name,
+                video_type="short", # Explicitly short
+                language=self.target_language_code,
+                learn_language=self.learn_language # Use detected learn language
+            )
+
+            # 4. Generate YouTube Metadata
+            generator = YouTubeMetadataGenerator()
+            yt_meta = generator.generate_metadata(video_meta, target_language=self.target_language_code)
+
+            # 5. Construct final JSON dict
             metadata = {
-                "expression": get_attr(expression, 'expression', ''),
-                "expression_translation": get_attr(expression, 'expression_translation', ''),
-                "title": get_attr(expression, 'title', ''),
-                "title_translation": get_attr(expression, 'title_translation', ''),
-                "catchy_keywords": get_attr(expression, 'catchy_keywords', []),
+                "expression": expression_text,
+                "expression_translation": expression_translation,
+                "title": yt_meta.title, # Use generated target-language title
+                "title_translation": title_translation,
+                "description": yt_meta.description.replace('\n', ' '), # Generated description without newlines
+                "tags": yt_meta.tags, # Generated tags
+                "category_id": yt_meta.category_id,
+                "catchy_keywords": catchy_keywords,
                 "language": self.target_language_code,
+                "learn_language": self.learn_language,
                 "show_name": self.show_name,
+                "generated_at": datetime.now().isoformat()
             }
             
             metadata_path = Path(video_path).with_suffix(".meta.json")
             metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
-            logger.debug(f"Saved video metadata: {metadata_path}")
+            logger.debug(f"Saved video metadata with YouTube info: {metadata_path}")
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     def cleanup_temp_files(self) -> None:
         """Clean up temporary files."""

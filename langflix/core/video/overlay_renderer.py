@@ -880,14 +880,25 @@ class OverlayRenderer:
 
                 logger.info(f"Adding media overlay '{overlay_name}': start={start_time}s, duration={duration}s, pos=({x_pos},{y_pos}), size={width}x{height}")
 
-                # Load overlay video/GIF
-                overlay_input = ffmpeg.input(str(video_path))
-                
-                # Get video stream (ignore audio if disabled)
-                overlay_video = overlay_input['v']
-
-                # Scale overlay to desired size
-                overlay_video = overlay_video.filter('scale', width, height)
+                # Load overlay video/GIF with proper animation handling
+                if str(video_path).lower().endswith('.gif'):
+                    # For animated GIFs, we need to loop them for the duration
+                    # First, get the GIF duration to calculate how many loops we need
+                    overlay_input = ffmpeg.input(str(video_path), stream_loop=-1)  # Loop indefinitely
+                    overlay_video = overlay_input['v']
+                    
+                    # Scale first, then apply time constraints
+                    overlay_video = overlay_video.filter('scale', width, height)
+                    
+                    # Limit the duration to match our overlay duration
+                    overlay_video = overlay_video.filter('trim', duration=duration)
+                    overlay_video = overlay_video.filter('setpts', 'PTS-STARTPTS')  # Reset timestamps
+                else:
+                    # For regular videos
+                    overlay_input = ffmpeg.input(str(video_path))
+                    overlay_video = overlay_input['v']
+                    # Scale overlay to desired size
+                    overlay_video = overlay_video.filter('scale', width, height)
                 
                 # Set opacity if not fully opaque
                 if opacity < 1.0:

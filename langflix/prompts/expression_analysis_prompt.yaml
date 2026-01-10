@@ -124,9 +124,42 @@ prompt: |
   - Clip 1 ends at index 8 → Clip 2 must start at index 9 or later
   - Clips should flow chronologically (gaps OK, overlaps NOT OK)
 
-  ---
+  **TITLE & DESCRIPTION FOR YOUTUBE:**
 
-  **VIRAL TITLE:**
+  Each expression needs a unique, engaging title and description for YouTube upload.
+
+  **TITLE REQUIREMENTS:**
+  - **Language:** {target_language}
+  - **Length:** 8-15 words
+  - **Style:** Story-related, not generic
+  - **Content:** Reference the specific situation/context from the scene
+  - **Hook:** Make viewers curious about the story
+
+  **Examples:**
+  - Good: "When your boss asks the one question you can't answer"
+  - Good: "The moment she realized her mistake in the meeting"
+  - Bad: "Learn English expression" (too generic)
+  - Bad: "Suits episode clip" (not engaging)
+
+  **DESCRIPTION REQUIREMENTS:**
+  - **Language:** {target_language}
+  - **Length:** 50-100 words
+  - **Structure:** 
+    1. Hook question or statement (Hey, check this out!)
+    2. Expression and translation
+    3. Context explanation
+    4. Engagement question
+
+  **Description Template:**
+  ```
+  Hey, do you know how to say "{expression}" in {target_language}? 
+  
+  It means "{expression_translation}" and it's super common in [situation type].
+  
+  In this scene, [brief context explanation - who, what, why].
+  
+  Have you ever been in a similar situation? Let me know in the comments!
+  ```
 
   The iconic, meme-worthy quote from the scene.
 
@@ -239,7 +272,8 @@ prompt: |
   {{
     "expressions": [
       {{
-        "title": "Catchy title in {target_language} (8-15 words)",
+        "title": "Story-related title in {target_language} (8-15 words)",
+        "description": "Engaging YouTube description in {target_language} (50-100 words)",
         "viral_title": "Iconic line in {source_language} (3-12 words)",
         "expression": "key phrase copied exactly from {source_language} dialogue (4-8 words)",
         "expression_translation": "translation in {target_language}",
@@ -315,7 +349,7 @@ prompt: |
   - ✓ Covers all entries from context_start_index to context_end_index
 
   **Language Compliance:**
-  - ✓ `title`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
+  - ✓ `title`, `description`, `catchy_keywords`, `narrations`, `intro_hook` → {target_language}
   - ✓ `viral_title`, `expression`, `similar_expressions` → {source_language}
   - ✓ All `translation` fields → {target_language}
   - ✓ Annotation `word`/`expression` fields → {source_language}

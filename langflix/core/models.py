@@ -65,7 +65,11 @@ class ExpressionAnalysis(BaseModel):
     """
     title: Optional[str] = Field(
         default=None,
-        description="Catchy Korean title (8-15 words) for video, in target language NOT English. Examples: '회사에서 상사에게 참교육 당하는 순간', '어제 나를 해고한 상사가 백지수표를 들고 찾아왔다'"
+        description="Story-related title in target language (8-15 words) that references the specific situation/context from the scene"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Engaging YouTube description in target language (50-100 words) with hook, expression explanation, and engagement question"
     )
     viral_title: Optional[str] = Field(
         default=None,

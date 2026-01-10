@@ -853,6 +853,8 @@ class ShortFormCreator:
             # 1. Prepare basic expression data
             expression_text = get_attr(expression, 'expression', '')
             expression_translation = get_attr(expression, 'expression_translation', '')
+            title = get_attr(expression, 'title', '')
+            description = get_attr(expression, 'description', '')
             title_translation = get_attr(expression, 'title_translation', '') # Target language title
             catchy_keywords = get_attr(expression, 'catchy_keywords', [])
             
@@ -922,21 +924,23 @@ class ShortFormCreator:
             logger.debug(f"Saved video metadata with YouTube info: {metadata_path}")
             
             # Create simple text file for easy copy-paste
-            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords)
+            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords, title, description)
             
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
             import traceback
             logger.debug(traceback.format_exc())
 
-    def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list) -> None:
+    def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list, title: str = "", description: str = "") -> None:
         """Write simple text metadata file for easy copy-paste to YouTube.
         
         Creates a .meta.txt file with format:
-        video_filename
-        "expression"
-        "translation"
-        keyword1, keyword2, keyword3
+        Title: [Generated title]
+        Description: [Generated description]
+        --------
+        Expression: "expression"
+        Translation: "translation"
+        Keywords: keyword1, keyword2, keyword3
         --------
         """
         try:
@@ -946,11 +950,19 @@ class ShortFormCreator:
             # Format keywords as comma-separated string
             keywords_text = ", ".join(catchy_keywords) if catchy_keywords else ""
             
-            # Create simple text format
-            text_content = f"""{video_filename}
-"{expression_text}"
-"{expression_translation}"
-{keywords_text}
+            # Use provided title and description, or fallback to filename
+            display_title = title if title else video_filename
+            display_description = description if description else f'Learn the expression "{expression_text}" from this scene!'
+            
+            # Create enhanced text format
+            text_content = f"""Title: {display_title}
+
+Description: {description}
+
+--------
+Expression: "{expression_text}"
+Translation: "{expression_translation}"
+Keywords: {keywords_text}
 --------"""
             
             # Write to .meta.txt file

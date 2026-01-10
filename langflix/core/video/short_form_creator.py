@@ -962,7 +962,7 @@ class ShortFormCreator:
             # Create enhanced text format
             text_content = f"""Title: {display_title}
 
-Description: {description}
+Description: {display_description}
 
 --------
 Expression: "{expression_text}"

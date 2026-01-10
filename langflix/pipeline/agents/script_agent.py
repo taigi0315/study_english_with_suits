@@ -297,6 +297,18 @@ class ScriptAgent:
         except json.JSONDecodeError as e:
             logger.warning(f"JSON parse failed: {e}")
             
+            # Try to fix common JSON issues
+            try:
+                # Fix unescaped quotes in strings
+                fixed_json = self._fix_json_quotes(cleaned)
+                data = json.loads(fixed_json)
+                logger.info(f"Successfully fixed JSON quotes issue")
+                expressions_count = len(data.get("expressions", []))
+                logger.info(f"Parsed fixed response: {expressions_count} expressions")
+                return data
+            except json.JSONDecodeError as fix_error:
+                logger.warning(f"JSON fix attempt failed: {fix_error}")
+            
             # Try to recover chunk_summary even if expressions array is malformed
             try:
                 # Extract chunk_summary using regex
@@ -318,7 +330,31 @@ class ScriptAgent:
                 logger.error(f"Recovery also failed: {recovery_error}")
             
             logger.error(f"Response was: {response[:1000]}...")
-            raise ValueError(f"Invalid JSON response from LLM: {e}")
+
+    def _fix_json_quotes(self, json_str: str) -> str:
+        """
+        Fix common JSON quote escaping issues in LLM responses
+        """
+        import re
+        
+        # Fix unescaped quotes within string values
+        # This regex finds string values and escapes internal quotes
+        def fix_string_quotes(match):
+            full_match = match.group(0)
+            key = match.group(1)
+            value = match.group(2)
+            
+            # Escape internal quotes in the value
+            fixed_value = value.replace('"', '\\"')
+            return f'"{key}": "{fixed_value}"'
+        
+        # Pattern to match "key": "value with potential unescaped quotes"
+        pattern = r'"([^"]+)":\s*"([^"]*(?:"[^"]*)*)"'
+        
+        # Apply the fix
+        fixed = re.sub(pattern, fix_string_quotes, json_str)
+        
+        return fixed
 
     def _get_language_level_descriptions(self) -> str:
         """

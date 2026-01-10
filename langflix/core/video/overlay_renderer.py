@@ -846,6 +846,8 @@ class OverlayRenderer:
         Returns:
             Video stream with bag emoji overlay
         """
+        import ffmpeg
+        
         try:
             # Check if bag emoji is enabled
             if not settings.is_bag_emoji_enabled():

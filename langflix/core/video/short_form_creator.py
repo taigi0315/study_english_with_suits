@@ -668,6 +668,11 @@ class ShortFormCreator:
                 position="top-center", scale_height=59, opacity=0.5
             )
 
+        # 8. Bag emoji overlay (plays at configured time)
+        video_stream = self.overlay_renderer.add_bag_emoji_overlay(
+            video_stream, settings
+        )
+
         # Get audio
         audio_stream = None
         try:

@@ -831,6 +831,84 @@ class OverlayRenderer:
 
         return video_stream
 
+    def add_bag_emoji_overlay(
+        self,
+        video_stream,
+        settings
+    ):
+        """
+        Add bag emoji video overlay at configured time and position.
+
+        Args:
+            video_stream: FFmpeg video stream
+            settings: Settings module for configuration
+
+        Returns:
+            Video stream with bag emoji overlay
+        """
+        try:
+            # Check if bag emoji is enabled
+            if not settings.is_bag_emoji_enabled():
+                logger.debug("Bag emoji overlay disabled")
+                return video_stream
+
+            # Get bag emoji video path
+            bag_video_path = settings.get_bag_emoji_video_path()
+            if not bag_video_path:
+                logger.warning("Bag emoji video path not found")
+                return video_stream
+
+            # Get configuration
+            start_time = settings.get_bag_emoji_start_time()
+            duration = settings.get_bag_emoji_duration()
+            x_pos = settings.get_bag_emoji_x_position()
+            y_pos = settings.get_bag_emoji_y_position()
+            width = settings.get_bag_emoji_width()
+            height = settings.get_bag_emoji_height()
+            audio_enabled = settings.is_bag_emoji_audio_enabled()
+            opacity = settings.get_bag_emoji_opacity()
+
+            logger.info(f"Adding bag emoji overlay: start={start_time}s, duration={duration}s, pos=({x_pos},{y_pos}), size={width}x{height}")
+
+            # Load bag emoji video
+            bag_input = ffmpeg.input(str(bag_video_path))
+            
+            # Get video stream (ignore audio if disabled)
+            if audio_enabled:
+                bag_video = bag_input['v']
+            else:
+                bag_video = bag_input['v']  # Audio will be ignored in overlay
+
+            # Scale bag emoji to desired size
+            bag_video = bag_video.filter('scale', width, height)
+            
+            # Set opacity if not fully opaque
+            if opacity < 1.0:
+                bag_video = bag_video.filter('format', 'rgba')
+                bag_video = bag_video.filter(
+                    'geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
+                    a=f'{opacity}*alpha(X,Y)'
+                )
+
+            # Calculate end time for enable filter
+            end_time = start_time + duration
+
+            # Overlay the bag emoji at specified time and position
+            video_stream = ffmpeg.overlay(
+                video_stream,
+                bag_video,
+                x=x_pos,
+                y=y_pos,
+                enable=f'between(t,{start_time},{end_time})'
+            )
+
+            logger.info(f"✅ Bag emoji overlay added successfully")
+
+        except Exception as e:
+            logger.warning(f"Failed to add bag emoji overlay: {e}")
+
+        return video_stream
+
     @staticmethod
     def escape_drawtext_string(text: str) -> str:
         """

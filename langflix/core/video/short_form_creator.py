@@ -914,6 +914,38 @@ class ShortFormCreator:
         except Exception as e:
             logger.warning(f"Failed to write simple metadata text for {video_path}: {e}")
 
+    def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list) -> None:
+        """Write simple text metadata file for easy copy-paste to YouTube.
+        
+        Creates a .meta.txt file with format:
+        video_filename
+        "expression"
+        "translation"
+        keyword1, keyword2, keyword3
+        --------
+        """
+        try:
+            # Get video filename without extension
+            video_filename = video_path.stem
+            
+            # Format keywords as comma-separated string
+            keywords_text = ", ".join(catchy_keywords) if catchy_keywords else ""
+            
+            # Create simple text format
+            text_content = f"""{video_filename}
+"{expression_text}"
+"{expression_translation}"
+{keywords_text}
+--------"""
+            
+            # Write to .meta.txt file
+            text_path = Path(video_path).with_suffix(".meta.txt")
+            text_path.write_text(text_content, encoding='utf-8')
+            logger.debug(f"Saved simple metadata text: {text_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to write simple metadata text for {video_path}: {e}")
+
     def cleanup_temp_files(self) -> None:
         """Clean up temporary files."""
         for temp_file in self._temp_files:

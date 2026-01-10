@@ -1603,6 +1603,7 @@ if __name__ == "__main__":
     parser.add_argument("--video-dir", default="assets/media", help="Video directory (default: assets/media)")
     parser.add_argument("--output-dir", default="output", help="Output directory (default: output)")
     parser.add_argument("--lang", default="ko", help="Target language code (default: ko)")
+    parser.add_argument("--source-language", default="English", help="Source language (default: English)")
     
     args = parser.parse_args()
     
@@ -1612,9 +1613,10 @@ if __name__ == "__main__":
             args.subtitle, 
             args.video_dir,
             output_dir=args.output_dir,
-            language_code=args.lang
+            language_code=args.lang,
+            source_language=args.source_language
         )
-        pipeline.run()
+        pipeline.run(test_mode=True)  # Enable test mode explicitly
     except Exception as e:
         logger.error(f"Execution failed: {e}")
         sys.exit(1)

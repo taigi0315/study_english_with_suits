@@ -106,7 +106,7 @@ llm:
 processing:
   # Test mode configuration for development
   test_mode:
-    enabled: false                    # Set to true for development, false for production
+    enabled: true                     # Set to true for development, false for production
     max_chunks: 1                     # Only process 1 chunk of subtitles
     max_expressions_per_chunk: 1      # Only extract 1 expression per chunk
     max_total_expressions: 1          # Total expressions limit for entire video
@@ -397,7 +397,7 @@ short_video:
       enabled: true                 # Enable/disable bag emoji overlay
       video_path: "assets/images/bagging_emoji.mp4"  # Path to bag emoji video
       start_time: 18.0             # When to start playing (seconds from video start)
-      duration: 3.0                # How long to show the overlay (seconds)
+      duration: 8.0                # How long to show the overlay (seconds)
       x_position: 850              # X position (pixels from left) - where red box is
       y_position: 700              # Y position (pixels from top) - where red box is
       width: 120                   # Width of overlay (pixels)

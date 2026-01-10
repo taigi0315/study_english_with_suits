@@ -152,9 +152,9 @@ prompt: |
 
   **Description Template:**
   ```
-  Hey, do you know how to say "{expression}" in {target_language}? 
+  Hey, do you know how to say "[expression]" in {target_language}? 
   
-  It means "{expression_translation}" and it's super common in [situation type].
+  It means "[expression_translation]" and it's super common in [situation type].
   
   In this scene, [brief context explanation - who, what, why].
   

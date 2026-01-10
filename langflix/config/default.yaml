@@ -392,18 +392,33 @@ short_video:
       duration: 3.0                # How long annotation appears
       annotation_cooldown: 5.0     # Minimum gap between annotations (seconds)
 
-    # Bag emoji overlay (plays at specific time during video)
-    bag_emoji:
-      enabled: true                 # Enable/disable bag emoji overlay
-      video_path: "assets/images/bagging_emoji.mp4"  # Path to bag emoji video
-      start_time: 18.0             # When to start playing (seconds from video start)
-      duration: 8.0                # How long to show the overlay (seconds)
-      x_position: 850              # X position (pixels from left) - where red box is
-      y_position: 700              # Y position (pixels from top) - where red box is
-      width: 120                   # Width of overlay (pixels)
-      height: 120                  # Height of overlay (pixels)
-      audio_enabled: false         # Turn off audio from bag emoji video
-      opacity: 1.0                 # Opacity (0.0-1.0, 1.0 = fully opaque)
+    # Media overlays (plays at specific times during video)
+    media_overlays:
+      # Thumbs up overlay
+      thumbs_up:
+        enabled: true                 # Enable/disable thumbs up overlay
+        video_path: "assets/images/thumbs_up.gif"  # Path to thumbs up GIF
+        start_time: 15.0             # When to start playing (seconds from video start)
+        duration: 3.0                # How long to show the overlay (seconds)
+        x_position: 850              # X position (pixels from left)
+        y_position: 700              # Y position (pixels from top)
+        width: 120                   # Width of overlay (pixels)
+        height: 120                  # Height of overlay (pixels)
+        audio_enabled: false         # Turn off audio from overlay video
+        opacity: 1.0                 # Opacity (0.0-1.0, 1.0 = fully opaque)
+      
+      # Subscribe button overlay
+      subscribe_button:
+        enabled: true                 # Enable/disable subscribe button overlay
+        video_path: "assets/images/subscribe-click-button.gif"  # Path to subscribe button GIF
+        start_time: 30.0             # When to start playing (seconds from video start)
+        duration: 3.0                # How long to show the overlay (seconds)
+        x_position: 850              # X position (pixels from left)
+        y_position: 700              # Y position (pixels from top)
+        width: 120                   # Width of overlay (pixels)
+        height: 120                  # Height of overlay (pixels)
+        audio_enabled: false         # Turn off audio from overlay video
+        opacity: 1.0                 # Opacity (0.0-1.0, 1.0 = fully opaque)
 
 
     # Educational slide configuration (displayed during expression replay)

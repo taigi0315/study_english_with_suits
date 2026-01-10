@@ -668,8 +668,8 @@ class ShortFormCreator:
                 position="top-center", scale_height=59, opacity=0.5
             )
 
-        # 8. Bag emoji overlay (plays at configured time)
-        video_stream = self.overlay_renderer.add_bag_emoji_overlay(
+        # 8. Media overlays (GIFs/videos at configured times)
+        video_stream = self.overlay_renderer.add_media_overlays(
             video_stream, settings
         )
 

@@ -1459,64 +1459,7 @@ def get_video_config(attribute: str = None):
 # Bag Emoji Overlay Settings
 # ============================================================================
 
-def get_bag_emoji_config() -> Dict[str, Any]:
-    """Get bag emoji overlay configuration"""
+def get_media_overlays() -> Dict[str, Any]:
+    """Get media overlays configuration"""
     layout = get_short_video_layout_config()
-    return layout.get('bag_emoji', {})
-
-
-def is_bag_emoji_enabled() -> bool:
-    """Check if bag emoji overlay is enabled (default: True)"""
-    return get_bag_emoji_config().get('enabled', True)
-
-
-def get_bag_emoji_video_path() -> Optional[str]:
-    """Get bag emoji video path (relative to project root)"""
-    from pathlib import Path
-    video_rel = get_bag_emoji_config().get('video_path', 'assets/images/bagging_emoji.mp4')
-    # Convert relative path to absolute
-    project_root = Path(__file__).parent.parent
-    video_path = project_root / video_rel
-    if video_path.exists():
-        return str(video_path)
-    return None
-
-
-def get_bag_emoji_start_time() -> float:
-    """Get bag emoji start time in seconds (default: 18.0)"""
-    return float(get_bag_emoji_config().get('start_time', 18.0))
-
-
-def get_bag_emoji_duration() -> float:
-    """Get bag emoji display duration in seconds (default: 3.0)"""
-    return float(get_bag_emoji_config().get('duration', 3.0))
-
-
-def get_bag_emoji_x_position() -> int:
-    """Get bag emoji X position in pixels (default: 850)"""
-    return int(get_bag_emoji_config().get('x_position', 850))
-
-
-def get_bag_emoji_y_position() -> int:
-    """Get bag emoji Y position in pixels (default: 700)"""
-    return int(get_bag_emoji_config().get('y_position', 700))
-
-
-def get_bag_emoji_width() -> int:
-    """Get bag emoji width in pixels (default: 120)"""
-    return int(get_bag_emoji_config().get('width', 120))
-
-
-def get_bag_emoji_height() -> int:
-    """Get bag emoji height in pixels (default: 120)"""
-    return int(get_bag_emoji_config().get('height', 120))
-
-
-def is_bag_emoji_audio_enabled() -> bool:
-    """Check if bag emoji audio is enabled (default: False)"""
-    return get_bag_emoji_config().get('audio_enabled', False)
-
-
-def get_bag_emoji_opacity() -> float:
-    """Get bag emoji opacity (0.0-1.0, default: 1.0)"""
-    return float(get_bag_emoji_config().get('opacity', 1.0))
+    return layout.get('media_overlays', {})

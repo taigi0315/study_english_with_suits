@@ -831,85 +831,90 @@ class OverlayRenderer:
 
         return video_stream
 
-    def add_bag_emoji_overlay(
+    def add_media_overlays(
         self,
         video_stream,
         settings
     ):
         """
-        Add bag emoji video overlay at configured time and position.
+        Add multiple media overlays (GIFs/videos) at configured times and positions.
 
         Args:
             video_stream: FFmpeg video stream
             settings: Settings module for configuration
 
         Returns:
-            Video stream with bag emoji overlay
+            Video stream with media overlays
         """
         import ffmpeg
         
         try:
-            # Check if bag emoji is enabled
-            if not settings.is_bag_emoji_enabled():
-                logger.debug("Bag emoji overlay disabled")
+            # Get media overlays configuration
+            media_overlays = settings.get_media_overlays()
+            if not media_overlays:
+                logger.debug("No media overlays configured")
                 return video_stream
 
-            # Get bag emoji video path
-            bag_video_path = settings.get_bag_emoji_video_path()
-            if not bag_video_path:
-                logger.warning("Bag emoji video path not found")
-                return video_stream
+            current_stream = video_stream
 
-            # Get configuration
-            start_time = settings.get_bag_emoji_start_time()
-            duration = settings.get_bag_emoji_duration()
-            x_pos = settings.get_bag_emoji_x_position()
-            y_pos = settings.get_bag_emoji_y_position()
-            width = settings.get_bag_emoji_width()
-            height = settings.get_bag_emoji_height()
-            audio_enabled = settings.is_bag_emoji_audio_enabled()
-            opacity = settings.get_bag_emoji_opacity()
+            # Process each overlay
+            for overlay_name, overlay_config in media_overlays.items():
+                if not overlay_config.get('enabled', False):
+                    logger.debug(f"Media overlay '{overlay_name}' disabled")
+                    continue
 
-            logger.info(f"Adding bag emoji overlay: start={start_time}s, duration={duration}s, pos=({x_pos},{y_pos}), size={width}x{height}")
+                video_path = overlay_config.get('video_path')
+                if not video_path:
+                    logger.warning(f"Media overlay '{overlay_name}' has no video path")
+                    continue
 
-            # Load bag emoji video
-            bag_input = ffmpeg.input(str(bag_video_path))
-            
-            # Get video stream (ignore audio if disabled)
-            if audio_enabled:
-                bag_video = bag_input['v']
-            else:
-                bag_video = bag_input['v']  # Audio will be ignored in overlay
+                # Get configuration
+                start_time = overlay_config.get('start_time', 0.0)
+                duration = overlay_config.get('duration', 3.0)
+                x_pos = overlay_config.get('x_position', 850)
+                y_pos = overlay_config.get('y_position', 700)
+                width = overlay_config.get('width', 120)
+                height = overlay_config.get('height', 120)
+                audio_enabled = overlay_config.get('audio_enabled', False)
+                opacity = overlay_config.get('opacity', 1.0)
 
-            # Scale bag emoji to desired size
-            bag_video = bag_video.filter('scale', width, height)
-            
-            # Set opacity if not fully opaque
-            if opacity < 1.0:
-                bag_video = bag_video.filter('format', 'rgba')
-                bag_video = bag_video.filter(
-                    'geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
-                    a=f'{opacity}*alpha(X,Y)'
+                logger.info(f"Adding media overlay '{overlay_name}': start={start_time}s, duration={duration}s, pos=({x_pos},{y_pos}), size={width}x{height}")
+
+                # Load overlay video/GIF
+                overlay_input = ffmpeg.input(str(video_path))
+                
+                # Get video stream (ignore audio if disabled)
+                overlay_video = overlay_input['v']
+
+                # Scale overlay to desired size
+                overlay_video = overlay_video.filter('scale', width, height)
+                
+                # Set opacity if not fully opaque
+                if opacity < 1.0:
+                    overlay_video = overlay_video.filter('format', 'rgba')
+                    overlay_video = overlay_video.filter(
+                        'geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
+                        a=f'{opacity}*alpha(X,Y)'
+                    )
+
+                # Calculate end time for enable filter
+                end_time = start_time + duration
+
+                # Overlay the media at specified time and position
+                current_stream = ffmpeg.overlay(
+                    current_stream,
+                    overlay_video,
+                    x=x_pos,
+                    y=y_pos,
+                    enable=f'between(t,{start_time},{end_time})'
                 )
 
-            # Calculate end time for enable filter
-            end_time = start_time + duration
-
-            # Overlay the bag emoji at specified time and position
-            video_stream = ffmpeg.overlay(
-                video_stream,
-                bag_video,
-                x=x_pos,
-                y=y_pos,
-                enable=f'between(t,{start_time},{end_time})'
-            )
-
-            logger.info(f"✅ Bag emoji overlay added successfully")
+                logger.info(f"✅ Media overlay '{overlay_name}' added successfully")
 
         except Exception as e:
-            logger.warning(f"Failed to add bag emoji overlay: {e}")
+            logger.warning(f"Failed to add media overlays: {e}")
 
-        return video_stream
+        return current_stream
 
     @staticmethod
     def escape_drawtext_string(text: str) -> str:

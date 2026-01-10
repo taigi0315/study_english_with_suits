@@ -836,6 +836,7 @@ class ShortFormCreator:
         
         Creates a .meta.json file alongside the video with expression data
         for YouTube title, description, and tag generation.
+        Also creates a .meta.txt file with simple copy-paste format for manual upload.
         """
         try:
             import json
@@ -919,10 +920,46 @@ class ShortFormCreator:
             metadata_path = Path(video_path).with_suffix(".meta.json")
             metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
             logger.debug(f"Saved video metadata with YouTube info: {metadata_path}")
+            
+            # Create simple text file for easy copy-paste
+            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords)
+            
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+
+    def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list) -> None:
+        """Write simple text metadata file for easy copy-paste to YouTube.
+        
+        Creates a .meta.txt file with format:
+        video_filename
+        "expression"
+        "translation"
+        keyword1, keyword2, keyword3
+        --------
+        """
+        try:
+            # Get video filename without extension
+            video_filename = video_path.stem
+            
+            # Format keywords as comma-separated string
+            keywords_text = ", ".join(catchy_keywords) if catchy_keywords else ""
+            
+            # Create simple text format
+            text_content = f"""{video_filename}
+"{expression_text}"
+"{expression_translation}"
+{keywords_text}
+--------"""
+            
+            # Write to .meta.txt file
+            text_path = Path(video_path).with_suffix(".meta.txt")
+            text_path.write_text(text_content, encoding='utf-8')
+            logger.debug(f"Saved simple metadata text: {text_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to write simple metadata text for {video_path}: {e}")
 
     def cleanup_temp_files(self) -> None:
         """Clean up temporary files."""

@@ -858,8 +858,11 @@ class ShortFormCreator:
             # 1. Prepare basic expression data
             expression_text = get_attr(expression, 'expression', '')
             expression_translation = get_attr(expression, 'expression_translation', '')
-            title = get_attr(expression, 'title', '')
-            description = get_attr(expression, 'description', '')
+            
+            # Get LLM-generated title and description (these are the original fields from LLM)
+            llm_title = get_attr(expression, 'title', '')
+            llm_description = get_attr(expression, 'description', '')
+            
             title_translation = get_attr(expression, 'title_translation', '') # Target language title
             catchy_keywords = get_attr(expression, 'catchy_keywords', [])
             
@@ -929,7 +932,7 @@ class ShortFormCreator:
             logger.debug(f"Saved video metadata with YouTube info: {metadata_path}")
             
             # Create simple text file for easy copy-paste
-            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords, title, description)
+            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords, llm_title, llm_description)
             
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
@@ -949,15 +952,24 @@ class ShortFormCreator:
         --------
         """
         try:
-            # Get video filename without extension
+            # Get video filename without extension for fallback only
             video_filename = video_path.stem
             
             # Format keywords as comma-separated string
             keywords_text = ", ".join(catchy_keywords) if catchy_keywords else ""
             
-            # Use provided title and description, or fallback to filename
-            display_title = title if title else video_filename
-            display_description = description if description else f'Learn the expression "{expression_text}" from this scene!'
+            # Use LLM-generated title and description if available, otherwise fallback
+            if title and title.strip():
+                display_title = title.strip()
+            else:
+                display_title = video_filename
+                logger.warning(f"No LLM-generated title found, using filename: {display_title}")
+            
+            if description and description.strip():
+                display_description = description.strip()
+            else:
+                display_description = f'Learn the expression "{expression_text}" from this scene!'
+                logger.warning(f"No LLM-generated description found, using fallback")
             
             # Create enhanced text format
             text_content = f"""Title: {display_title}
@@ -973,7 +985,7 @@ Keywords: {keywords_text}
             # Write to .meta.txt file
             text_path = Path(video_path).with_suffix(".meta.txt")
             text_path.write_text(text_content, encoding='utf-8')
-            logger.debug(f"Saved simple metadata text: {text_path}")
+            logger.info(f"Saved simple metadata text with LLM content: {text_path}")
             
         except Exception as e:
             logger.warning(f"Failed to write simple metadata text for {video_path}: {e}")

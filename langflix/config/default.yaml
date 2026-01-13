@@ -409,7 +409,7 @@ short_video:
       
       # Subscribe button overlay
       subscribe_button:
-        enabled: true                 # Enable/disable subscribe button overlay
+        enabled: false                # Enable/disable subscribe button overlay
         video_path: "assets/images/subscribe-click-button.gif"  # Path to subscribe button GIF
         start_time: 30.0             # When to start playing (seconds from video start)
         duration: 3.0                # How long to show the overlay (seconds)

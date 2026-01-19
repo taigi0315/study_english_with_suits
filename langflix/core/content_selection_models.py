@@ -111,7 +111,7 @@ class ContentSelection(BaseModel):
     # Additional annotations
     vocabulary_annotations: Optional[List[VocabularyAnnotation]] = Field(
         default=None,
-        description="2-5 vocabulary words for dynamic overlays"
+        description="Exactly 2 vocabulary words for dynamic overlays"
     )
     narrations: Optional[List[Narration]] = Field(
         default=None,
@@ -119,7 +119,7 @@ class ContentSelection(BaseModel):
     )
     expression_annotations: Optional[List[ExpressionAnnotation]] = Field(
         default=None,
-        description="1-3 idiom/phrase annotations for dynamic overlays"
+        description="Exactly 2 idiom/phrase annotations for dynamic overlays"
     )
     similar_expressions: List[str] = Field(
         default_factory=list,

@@ -628,27 +628,33 @@ class VideoEditor:
             
             # Step 4: Create educational slide with expression audio (2회 반복)
             # Extract expression audio and repeat it 2 times
-            educational_slide = self._create_educational_slide(
-                    expression_video_path,
+            # Check if educational slide is enabled
+            if settings.is_educational_slide_enabled():
+                educational_slide = self._create_educational_slide(
+                        expression_video_path,
 
-                    expression,
-                    expression_index,
-                    target_duration=context_expr_duration,
-                    use_expression_audio=True,
-                    expression_video_clip_path=str(expression_video_path)
+                        expression,
+                        expression_index,
+                        target_duration=context_expr_duration,
+                        use_expression_audio=True,
+                        expression_video_clip_path=str(expression_video_path)
+                    )
+
+                # Step 5: Concatenate context+expression → slide (direct, no transition)
+                logger.info("Concatenating context+expression → slide (direct, no transition)")
+                long_form_temp_path = self.output_dir / f"temp_long_form_{safe_expression}.mkv"
+                self._register_temp_file(long_form_temp_path)
+
+                concat_filter_with_explicit_map(
+                    str(context_expr_path),
+                    str(educational_slide),
+                    str(long_form_temp_path),
+                    **video_args
                 )
-
-            # Step 5: Concatenate context+expression → slide (direct, no transition)
-            logger.info("Concatenating context+expression → slide (direct, no transition)")
-            long_form_temp_path = self.output_dir / f"temp_long_form_{safe_expression}.mkv"
-            self._register_temp_file(long_form_temp_path)
-
-            concat_filter_with_explicit_map(
-                str(context_expr_path),
-                str(educational_slide),
-                str(long_form_temp_path),
-                **video_args
-            )
+            else:
+                # Educational slide disabled - use context+expression as final video
+                logger.info("Educational slide disabled - skipping slide creation")
+                long_form_temp_path = context_expr_path
             
             # Step 6: Add logo at right-top with 50% opacity (long-form video)
             logger.info("Adding logo to long-form video (right-top, 25% size, 50% opacity)")

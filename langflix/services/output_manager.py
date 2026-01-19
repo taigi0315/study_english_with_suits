@@ -187,26 +187,10 @@ class OutputManager:
         lang_dir.mkdir(exist_ok=True)
         self.ensure_write_permissions(lang_dir)
         
-        # Create language subdirectories
-        # Note: context_videos/, tts_audio/, and videos/ directories are not created as they are not used
-        subtitles_dir = lang_dir / "subtitles"
-        slides_dir = lang_dir / "slides"
-        videos_dir = lang_dir / "videos"  # Legacy: path reference only, not created
-        
-        # New organized structure: expressions/, shorts/, long/
-        expressions_dir = lang_dir / "expressions"  # Individual expression videos
+        # Simplified structure: only shorts/ and long/ directories
+        # Removed: expressions/, videos/, slides/, subtitles/ (intermediate files not needed in final output)
         shorts_dir = lang_dir / "shorts"  # Short-form videos
         long_dir = lang_dir / "long"  # Combined long-form video
-        
-        subtitles_dir.mkdir(exist_ok=True)
-        self.ensure_write_permissions(subtitles_dir)
-        
-        slides_dir.mkdir(exist_ok=True)
-        self.ensure_write_permissions(slides_dir)
-        
-        # videos_dir is not created - not used in new structure
-        expressions_dir.mkdir(exist_ok=True)
-        self.ensure_write_permissions(expressions_dir)
         
         shorts_dir.mkdir(exist_ok=True)
         self.ensure_write_permissions(shorts_dir)
@@ -215,20 +199,20 @@ class OutputManager:
         self.ensure_write_permissions(long_dir)
         
         # Return language-specific paths
+        # Legacy paths point to lang_dir for backward compatibility (files saved there if needed)
         lang_paths = {
             'language_dir': lang_dir,
-            'subtitles': subtitles_dir,
-            'slides': slides_dir,
-            'videos': videos_dir,  # Legacy: kept for backward compatibility
-            # New organized structure
-            'expressions': expressions_dir,
+            'subtitles': lang_dir,  # Legacy: points to lang_dir (intermediate files)
+            'slides': lang_dir,  # Legacy: points to lang_dir (intermediate files)
+            'videos': lang_dir,  # Legacy: points to lang_dir (intermediate files)
+            'expressions': lang_dir,  # Legacy: points to lang_dir (intermediate files)
             'shorts': shorts_dir,
             'long': long_dir,
-            # Legacy path mappings for backward compatibility (all point to videos/)
-            'final_videos': videos_dir,
-            'context_slide_combined': videos_dir,
-            'short_videos': shorts_dir,  # Updated to point to shorts/
-            'long_form_videos': expressions_dir  # Updated to point to expressions/
+            # Legacy path mappings for backward compatibility
+            'final_videos': lang_dir,
+            'context_slide_combined': lang_dir,
+            'short_videos': shorts_dir,
+            'long_form_videos': long_dir
         }
         
         logger.info(f"Created language structure for {language_code}: {lang_dir}")

@@ -36,6 +36,17 @@ def get_video_config() -> Dict[str, Any]:
     return _config_loader.get_section('video') or {}
 
 
+def is_educational_slide_enabled() -> bool:
+    """Check if educational slide is enabled in video config.
+    
+    Returns:
+        bool: True if enabled (default), False if disabled
+    """
+    video_cfg = get_video_config()
+    edu_slide_cfg = video_cfg.get('educational_slide', {})
+    return edu_slide_cfg.get('enabled', True)
+
+
 def get_dialogue_subtitle_styling_config() -> Dict[str, Any]:
     """Get top-level dialogue subtitle styling configuration"""
     return _config_loader.get_section('dialogue_subtitle') or {}

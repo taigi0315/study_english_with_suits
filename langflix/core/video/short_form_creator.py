@@ -836,6 +836,7 @@ class ShortFormCreator:
         
         Creates a .meta.json file alongside the video with expression data
         for YouTube title, description, and tag generation.
+        Also creates a .meta.txt file with simple copy-paste format for manual upload.
         """
         try:
             import json
@@ -849,66 +850,19 @@ class ShortFormCreator:
                     return obj.get(key, default)
                 return getattr(obj, key, default)
             
-            # 1. Prepare basic expression data
+            # Extract data from expression
             expression_text = get_attr(expression, 'expression', '')
             expression_translation = get_attr(expression, 'expression_translation', '')
-            title_translation = get_attr(expression, 'title_translation', '') # Target language title
+            title = get_attr(expression, 'title', '')
+            title_translation = get_attr(expression, 'title_translation', '')
             catchy_keywords = get_attr(expression, 'catchy_keywords', [])
             
-            # 2. visual metadata (file stats) - gentle fallback if file not fully ready/accessible
-            try:
-                stat = video_path.stat()
-                size_mb = stat.st_size / (1024 * 1024)
-                # We could probe duration, but let's trust we are short form
-                duration_seconds = 60.0 # Approximation or 0 if unknown, generator doesn't use it for text
-            except Exception:
-                size_mb = 0.0
-                duration_seconds = 0.0
-
-            # 3. Create VideoMetadata object
-            # Try to extract episode from existing mechanism or filepath
-            episode_str = "Unknown"
-            # Simple extraction from path if possible, or leave as Unknown
-            try:
-                import re
-                match = re.search(r'(S\d+E\d+)', str(video_path), flags=re.IGNORECASE)
-                if match:
-                    episode_str = match.group(1).upper()
-            except:
-                pass
-
-            video_meta = VideoMetadata(
-                path=str(video_path),
-                filename=video_path.name,
-                size_mb=round(size_mb, 2),
-                duration_seconds=duration_seconds,
-                resolution="1080x1920", # Short form
-                format=video_path.suffix.lstrip('.'),
-                created_at=datetime.now(),
-                episode=episode_str,
-                expression=expression_text,
-                expression_translation=expression_translation,
-                title_translation=title_translation,
-                catchy_keywords=catchy_keywords,
-                show_name=self.show_name,
-                video_type="short", # Explicitly short
-                language=self.target_language_code,
-                learn_language=self.learn_language # Use detected learn language
-            )
-
-            # 4. Generate YouTube Metadata
-            generator = YouTubeMetadataGenerator()
-            yt_meta = generator.generate_metadata(video_meta, target_language=self.target_language_code)
-
-            # 5. Construct final JSON dict
+            # Create JSON metadata (existing functionality)
             metadata = {
                 "expression": expression_text,
                 "expression_translation": expression_translation,
-                "title": yt_meta.title, # Use generated target-language title
+                "title": title,
                 "title_translation": title_translation,
-                "description": yt_meta.description.replace('\n', ' '), # Generated description without newlines
-                "tags": yt_meta.tags, # Generated tags
-                "category_id": yt_meta.category_id,
                 "catchy_keywords": catchy_keywords,
                 "language": self.target_language_code,
                 "learn_language": self.learn_language,
@@ -918,11 +872,47 @@ class ShortFormCreator:
             
             metadata_path = Path(video_path).with_suffix(".meta.json")
             metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
-            logger.debug(f"Saved video metadata with YouTube info: {metadata_path}")
+            logger.debug(f"Saved video metadata JSON: {metadata_path}")
+            
+            # Create simple text file for easy copy-paste
+            self._write_simple_metadata_text(video_path, expression_text, expression_translation, catchy_keywords)
+            
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+
+    def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list) -> None:
+        """Write simple text metadata file for easy copy-paste to YouTube.
+        
+        Creates a .meta.txt file with format:
+        video_filename
+        "expression"
+        "translation"
+        keyword1, keyword2, keyword3
+        --------
+        """
+        try:
+            # Get video filename without extension
+            video_filename = video_path.stem
+            
+            # Format keywords as comma-separated string
+            keywords_text = ", ".join(catchy_keywords) if catchy_keywords else ""
+            
+            # Create simple text format
+            text_content = f"""{video_filename}
+"{expression_text}"
+"{expression_translation}"
+{keywords_text}
+--------"""
+            
+            # Write to .meta.txt file
+            text_path = Path(video_path).with_suffix(".meta.txt")
+            text_path.write_text(text_content, encoding='utf-8')
+            logger.debug(f"Saved simple metadata text: {text_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to write simple metadata text for {video_path}: {e}")
 
     def cleanup_temp_files(self) -> None:
         """Clean up temporary files."""

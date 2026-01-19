@@ -98,10 +98,27 @@ class ShortFormCreator:
 
         # Temp files to clean up
         self._temp_files = []
+        
+        # Determine learn_language based on source
+        # This is the language being taught in the video
+        if self.source_language_code == 'ko':
+            self.learn_language = "Korean"
+        elif self.source_language_code == 'en':
+            self.learn_language = "English"
+        elif self.source_language_code == 'ja':
+            self.learn_language = "Japanese"
+        elif self.source_language_code == 'zh':
+            self.learn_language = "Chinese"
+        elif self.source_language_code == 'es':
+            self.learn_language = "Spanish"
+        elif self.source_language_code == 'fr':
+            self.learn_language = "French"
+        else:
+            self.learn_language = "English"
 
         logger.info(
             f"ShortFormCreator initialized: "
-            f"source={source_language_code}, target={target_language_code}, show={show_name}"
+            f"source={source_language_code}, target={target_language_code}, show={show_name}, learn={self.learn_language}"
         )
 
     def _register_temp_file(self, path: Path) -> None:
@@ -823,6 +840,9 @@ class ShortFormCreator:
         """
         try:
             import json
+            from datetime import datetime
+            from langflix.youtube.video_manager import VideoMetadata
+            from langflix.youtube.metadata_generator import YouTubeMetadataGenerator
             
             # Helper to get attribute from dict or object
             def get_attr(obj, key, default=None):
@@ -845,7 +865,9 @@ class ShortFormCreator:
                 "title_translation": title_translation,
                 "catchy_keywords": catchy_keywords,
                 "language": self.target_language_code,
+                "learn_language": self.learn_language,
                 "show_name": self.show_name,
+                "generated_at": datetime.now().isoformat()
             }
             
             metadata_path = Path(video_path).with_suffix(".meta.json")
@@ -857,6 +879,8 @@ class ShortFormCreator:
             
         except Exception as e:
             logger.warning(f"Failed to write metadata file for {video_path}: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     def _write_simple_metadata_text(self, video_path: Path, expression_text: str, expression_translation: str, catchy_keywords: list) -> None:
         """Write simple text metadata file for easy copy-paste to YouTube.

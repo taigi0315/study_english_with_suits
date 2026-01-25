@@ -540,6 +540,13 @@ export const ui = {
                             <span style="font-weight: 500;">Short Form (Vertical)</span>
                         </label>
                     </div>
+                    <div style="margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="includeSlidesCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 500;">Include Slides/Credits</span>
+                        </label>
+                        <small style="color: #7f8c8d; display: block; margin-left: 26px; margin-top: 2px;">Add educational slides or ending credits to videos</small>
+                    </div>
                 </div>
             </div>
 
@@ -641,6 +648,7 @@ export const ui = {
             const shortFormMaxDuration = parseFloat(dialog.querySelector('#shortFormMaxDuration').value);  // Used for both expression target and short-form max
             const createLongForm = dialog.querySelector('#createLongFormCheckbox').checked;
             const createShortForm = dialog.querySelector('#createShortFormCheckbox').checked;
+            const includeSlides = dialog.querySelector('#includeSlidesCheckbox').checked;
             const autoUpload = dialog.querySelector('#autoUploadCheckbox').checked;
             const uploadTiming = autoUpload ? dialog.querySelector('input[name="uploadTiming"]:checked').value : null;
 
@@ -676,6 +684,7 @@ export const ui = {
                             test_llm: testLlm,  // Dev: Use cached LLM response
                             create_long_form: createLongForm,
                             create_short_form: createShortForm,
+                            include_slides: includeSlides,
                             short_form_max_duration: shortFormMaxDuration,  // 🎯 Also used as target duration for expression clips
                             auto_upload_config: autoUpload ? {
                                 enabled: true,

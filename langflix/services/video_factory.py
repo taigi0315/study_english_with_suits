@@ -34,7 +34,9 @@ class VideoFactory:
         subtitle_file: Path = None,  # May be None in Dual-subtitle mode
         video_file: Path = None,  # Explicit video file path
         no_long_form: bool = False,
+        no_long_form: bool = False,
         test_mode: bool = False,
+        include_slides: bool = False,
         progress_callback: Optional[callable] = None,
         start_index: int = 1
     ):
@@ -186,7 +188,8 @@ class VideoFactory:
                         str(original_video), # Still passed for reference/audio extraction if needed
                         str(original_video),
                         expression_index=expr_idx - 1,
-                        pre_extracted_context_clip=master_clips[expr_idx]
+                        pre_extracted_context_clip=master_clips[expr_idx],
+                        include_slides=include_slides
                     )
                     lang_long_form_videos.append(long_form_video)
                 except Exception as e:
@@ -250,6 +253,7 @@ class VideoFactory:
         video_editor_factory_method: callable, # Should return a VideoEditor
         short_form_max_duration: float = 180.0,
         output_dir: Path = None,
+        include_slides: bool = False,
         progress_callback: Optional[callable] = None,
         start_index: int = 1
     ):
@@ -284,6 +288,7 @@ class VideoFactory:
                     episode_name,
                     short_form_max_duration,
                     subtitle_processor,
+                    include_slides=include_slides,
                     start_index=start_index
                 )
             except Exception as e:
@@ -377,6 +382,7 @@ class VideoFactory:
         episode_name: str,
         max_duration: float,
         subtitle_processor: SubtitleProcessor,
+        include_slides: bool = False,
         start_index: int = 1
     ):
         expressions_dir = lang_paths.get('expressions') or lang_paths['language_dir'] / "expressions"
@@ -436,7 +442,8 @@ class VideoFactory:
                     output_path = video_editor.create_short_form_from_long_form(
                         str(long_form_video),
                         expression,
-                        expression_index=i - 1
+                        expression_index=i - 1,
+                        include_slides=include_slides
                     )
                     duration = get_duration_seconds(str(output_path))
                     short_format_videos.append({

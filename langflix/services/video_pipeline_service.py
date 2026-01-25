@@ -50,6 +50,7 @@ class VideoPipelineService:
         no_shorts: bool = False,
         create_long_form: bool = True,
         create_short_form: bool = True,
+        include_slides: bool = False,
         short_form_max_duration: float = 180.0,
         target_duration: float = 60.0,
         schedule_upload: bool = False,
@@ -127,6 +128,7 @@ class VideoPipelineService:
                 test_llm=test_llm,
                 no_shorts=actual_no_shorts,
                 no_long_form=actual_no_long_form,
+                include_slides=include_slides,
                 short_form_max_duration=short_form_max_duration,
                 target_duration=target_duration,
                 schedule_upload=schedule_upload
@@ -143,6 +145,12 @@ class VideoPipelineService:
             educational_videos = self._find_educational_videos(paths)
             short_videos = self._find_short_videos(paths)
             final_video = self._find_final_video(paths, episode_name, video_path)
+            
+            if progress_callback:
+                progress_callback(95, "Cleaning up intermediate files...")
+            
+            # Cleanup intermediate output files (expressions, slides, subtitles)
+            self._cleanup_output_files(paths, create_long_form, create_short_form)
             
             if progress_callback:
                 progress_callback(100, "Completed successfully!")
@@ -314,4 +322,71 @@ class VideoPipelineService:
                         return str(video_file)
         
         return None
+    
+    def _cleanup_output_files(self, paths: Dict[str, Any], create_long_form: bool, create_short_form: bool) -> None:
+        """
+        Clean up intermediate output files (expressions, slides, subtitles, etc.)
+        Only keep long-form videos (combined/final), short-form videos, and LLM responses.
+        """
+        import shutil
+        
+        logger.info("Cleaning up intermediate output files...")
+        
+        # Collect language paths to clean
+        dirs_to_clean = []
+        
+        # 1. Primary language
+        if 'language' in paths:
+             dirs_to_clean.append(paths['language'])
+             
+        # 2. All other languages
+        if 'languages' in paths:
+            for lang_paths in paths['languages'].values():
+                dirs_to_clean.append(lang_paths)
+                
+        for lang_paths in dirs_to_clean:
+            # Directories to remove explicitly (intermediate assets)
+            # We keep 'long' and 'shorts' as they contain final videos
+            dirs_to_remove = ['slides', 'subtitles', 'expressions', 'videos']
+            
+            # Get actual paths to avoid deleting something twice or deleting a parent
+            seen_paths = set()
+            
+            for key in dirs_to_remove:
+                dir_path = lang_paths.get(key)
+                if dir_path and isinstance(dir_path, Path) and dir_path.exists():
+                    abs_path = dir_path.resolve()
+                    
+                    # Safety check: Don't delete 'long' or 'shorts' even if they share a path (unlikely)
+                    skip = False
+                    for keep_key in ['long', 'shorts']:
+                        keep_path = lang_paths.get(keep_key)
+                        if keep_path and isinstance(keep_path, Path) and keep_path.exists():
+                            if abs_path == keep_path.resolve():
+                                skip = True
+                                break
+                    
+                    if skip or abs_path in seen_paths:
+                        continue
+                        
+                    try:
+                        logger.info(f"Removing intermediate directory: {dir_path}")
+                        shutil.rmtree(str(dir_path))
+                        seen_paths.add(abs_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove directory {dir_path}: {e}")
+            
+            # Final check for any empty directories in the language folder
+            lang_dir = lang_paths.get('language_dir')
+            if lang_dir and isinstance(lang_dir, Path) and lang_dir.exists():
+                try:
+                    # After rmtree, check if any remaining dirs are empty (except long/shorts)
+                    for item in lang_dir.iterdir():
+                        if item.is_dir() and item.name not in ['long', 'shorts', 'llm_responses']:
+                             # If it's empty, remove it
+                             if not any(item.iterdir()):
+                                 item.rmdir()
+                except Exception:
+                    pass
+
 

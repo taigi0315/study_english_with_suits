@@ -62,6 +62,7 @@ async def process_video_task(
     target_languages: Optional[List[str]] = None,
     create_long_form: bool = True,
     create_short_form: bool = True,
+    include_slides: bool = False,
     auto_upload_config: Optional[Dict[str, Any]] = None
 ):
     """Process video in background task using unified VideoPipelineService."""
@@ -125,6 +126,7 @@ async def process_video_task(
             no_shorts=no_shorts,
             create_long_form=create_long_form,
             create_short_form=create_short_form,
+            include_slides=include_slides,
             short_form_max_duration=short_form_max_duration,
             target_duration=target_duration,
             progress_callback=update_progress
@@ -414,6 +416,7 @@ async def create_job(
     source_language: str = Form(...),  # Required explicit source language code (TICKET-VIDEO-002)
     create_long_form: bool = Form(True),
     create_short_form: bool = Form(True),
+    include_slides: bool = Form(False),
     auto_upload_config: Optional[str] = Form(None), # JSON string
     background_tasks: BackgroundTasks = BackgroundTasks()
 ) -> Dict[str, Any]:
@@ -536,6 +539,7 @@ async def create_job(
             "target_duration": str(target_duration),
             "create_long_form": str(create_long_form),
             "create_short_form": str(create_short_form),
+            "include_slides": str(include_slides),
             "progress": "0",
             "error": ""
         }
@@ -566,6 +570,7 @@ async def create_job(
             target_languages=target_languages_list,
             create_long_form=create_long_form,
             create_short_form=create_short_form,
+            include_slides=include_slides,
             auto_upload_config=auto_upload_config_dict
         )
         

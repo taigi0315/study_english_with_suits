@@ -235,6 +235,10 @@ class LangFlixPipeline:
     def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, 
             save_llm_output: bool = False, test_mode: bool = False, test_llm: bool = False,
             no_shorts: bool = False, no_long_form: bool = False, short_form_max_duration: float = 180.0, 
+    def run(self, max_expressions: int = None, dry_run: bool = False, language_level: str = None, 
+            save_llm_output: bool = False, test_mode: bool = False, test_llm: bool = False,
+            no_shorts: bool = False, no_long_form: bool = False, include_slides: bool = False,
+            short_form_max_duration: float = 180.0, 
             target_languages: Optional[List[str]] = None, schedule_upload: bool = False,
             target_duration: float = 120.0) -> Dict[str, Any]:
         
@@ -331,6 +335,7 @@ class LangFlixPipeline:
                         video_file=self.video_file,
                         no_long_form=no_long_form,
                         test_mode=test_mode,
+                        include_slides=include_slides,
                         progress_callback=lambda p, m: self._update_progress(p, f"[Chunk {chunk_idx+1}] {m}"),
                         start_index=expression_counter
                     )
@@ -358,6 +363,7 @@ class LangFlixPipeline:
                             create_editor,
                             short_form_max_duration=short_form_max_duration,
                             output_dir=self.output_dir,
+                            include_slides=include_slides,
                             progress_callback=lambda p, m: self._update_progress(p, f"[Chunk {chunk_idx+1} Shorts] {m}"),
                             start_index=expression_counter # Pass start index to keep numbering correct
                         )

@@ -272,7 +272,8 @@ class ShortFormCreator:
         long_form_video_path: str,
         expression: ExpressionAnalysis,
         expression_index: int = 0,
-        settings=None
+        settings=None,
+        add_ending_credit: Optional[bool] = None
     ) -> str:
         """
         Create 9:16 short-form video from long-form video.
@@ -349,7 +350,9 @@ class ShortFormCreator:
                 overlayed_path,
                 output_path,
                 long_form_video_path,
-                settings
+
+                settings,
+                add_ending_credit=add_ending_credit
             )
             
             # Step 4: Create metadata file for YouTube upload
@@ -725,7 +728,8 @@ class ShortFormCreator:
         overlayed_path: Path,
         output_path: Path,
         source_video_path: str,
-        settings
+        settings,
+        add_ending_credit: Optional[bool] = None
     ) -> None:
         """
         Finalize the output video with optional ending credit.
@@ -740,7 +744,11 @@ class ShortFormCreator:
         import subprocess
 
         # Check for ending credit
-        if settings.is_ending_credit_enabled():
+        should_add_credit = settings.is_ending_credit_enabled()
+        if add_ending_credit is not None:
+            should_add_credit = add_ending_credit
+
+        if should_add_credit:
             ending_credit_path = settings.get_ending_credit_video_path()
             if ending_credit_path and os.path.exists(ending_credit_path):
                 try:

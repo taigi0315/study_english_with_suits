@@ -34,7 +34,6 @@ class VideoFactory:
         subtitle_file: Path = None,  # May be None in Dual-subtitle mode
         video_file: Path = None,  # Explicit video file path
         no_long_form: bool = False,
-        no_long_form: bool = False,
         test_mode: bool = False,
         include_slides: bool = False,
         progress_callback: Optional[callable] = None,

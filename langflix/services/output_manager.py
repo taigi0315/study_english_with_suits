@@ -192,25 +192,30 @@ class OutputManager:
         shorts_dir = lang_dir / "shorts"  # Short-form videos
         long_dir = lang_dir / "long"  # Combined long-form video
         
-        shorts_dir.mkdir(exist_ok=True)
-        self.ensure_write_permissions(shorts_dir)
-        
-        long_dir.mkdir(exist_ok=True)
-        self.ensure_write_permissions(long_dir)
+        # Restore separate directories for intermediates relative to language root
+        # This prevents 'cleanup' from deleting the entire language folder
+        subtitles_dir = lang_dir / "subtitles"
+        slides_dir = lang_dir / "slides"
+        videos_dir = lang_dir / "videos"
+        expressions_dir = lang_dir / "expressions"
+
+        for d in [shorts_dir, long_dir, subtitles_dir, slides_dir, videos_dir, expressions_dir]:
+            d.mkdir(exist_ok=True)
+            self.ensure_write_permissions(d)
         
         # Return language-specific paths
         # Legacy paths point to lang_dir for backward compatibility (files saved there if needed)
         lang_paths = {
             'language_dir': lang_dir,
-            'subtitles': lang_dir,  # Legacy: points to lang_dir (intermediate files)
-            'slides': lang_dir,  # Legacy: points to lang_dir (intermediate files)
-            'videos': lang_dir,  # Legacy: points to lang_dir (intermediate files)
-            'expressions': lang_dir,  # Legacy: points to lang_dir (intermediate files)
+            'subtitles': subtitles_dir,
+            'slides': slides_dir,
+            'videos': videos_dir,
+            'expressions': expressions_dir,
             'shorts': shorts_dir,
             'long': long_dir,
             # Legacy path mappings for backward compatibility
-            'final_videos': lang_dir,
-            'context_slide_combined': lang_dir,
+            'final_videos': expressions_dir, # Educational videos go here
+            'context_slide_combined': videos_dir,
             'short_videos': shorts_dir,
             'long_form_videos': long_dir
         }

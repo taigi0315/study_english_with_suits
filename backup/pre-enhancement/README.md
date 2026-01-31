@@ -1,237 +1,34 @@
-# 🎬 LangFlix
-## AI-Powered Educational Video Generation Platform
+# LangFlix - Learn English with Suits
 
-> **Transform TV shows into personalized language learning experiences with cutting-edge AI and professional video processing**
+🎬 **Learn English expressions from your favorite TV shows!**
 
-LangFlix is a sophisticated AI-powered platform that demonstrates advanced technical capabilities across multiple domains: **AI/ML integration**, **video processing pipelines**, and **modern software architecture**. The system automatically analyzes TV show subtitles using Google Gemini 2.0 Flash to extract valuable expressions, idioms, and phrases, then creates educational content with contextual translations and frame-accurate video processing.
+LangFlix automatically analyzes TV show subtitles to extract valuable English expressions, idioms, and phrases, then creates educational content with contextual translations and definitions.
 
-**🎯 Technical Showcase**: This project exemplifies production-ready development with 35,675 lines of clean, well-documented Python code, comprehensive testing suite, and modern architectural patterns including microservices, async processing, and intelligent caching strategies.
+## 🎉 Phase 1 Complete!
 
-### 🚀 **Key Technical Achievements**
+**✅ API-based video processing is now fully operational!**
 
-- **🤖 Advanced AI Integration**: Google Gemini 2.0 Flash with 2M token context window for intelligent content analysis
-- **🎥 Professional Video Processing**: Frame-accurate FFmpeg pipeline with 25 FPS processing speed
-- **⚡ High-Performance API**: FastAPI-based microservices with 180ms average response times
-- **🔄 Scalable Architecture**: Async processing, Redis caching, PostgreSQL database with 99.9% uptime
-- **📊 Production-Ready**: 35,675 lines of code, 743 tests, comprehensive monitoring
-- **🧠 Intelligent Content Extraction**: 95.5% accuracy in AI-powered expression analysis
-- **🏗️ Modern Architecture**: 1,088 functions, 162 classes, clean code with 88.9% type hint coverage
+- 🚀 **FastAPI Service**: Complete REST API for video processing
+- 🎯 **All CLI Features**: Every CLI feature now available via API endpoints
+- 📱 **Background Processing**: Asynchronous video processing with job tracking
+- 🔧 **Production Ready**: Tested with multiple episodes (S01E01-S01E04)
+- 📊 **Job Management**: Real-time progress tracking and status monitoring
 
-### 📈 **Performance Metrics**
+## 🚀 Features
 
-| Metric | Value | Description |
-|--------|-------|-------------|
-| **Processing Speed** | 25.0 FPS | Real-time video processing capability |
-| **API Response Time** | 180.0ms | Average API endpoint response time |
-| **Throughput** | 120 videos/hour | Production processing capacity |
-| **Accuracy Rate** | 95.5% | AI content extraction accuracy |
-| **Test Coverage** | 23.0% | Comprehensive test suite coverage |
-| **Code Quality** | 32.22/10 | Maintainable, clean architecture |
-
-
-
-### 🏆 **Professional Badges**
-
-#### Build Status & Quality
-[![Build](https://img.shields.io/badge/Build-passing-brightgreen?style=for-the-badge&logo=github)](https://github.com/taigi0315/langflix/actions) ![Tests](https://img.shields.io/badge/Tests-743%20passing-brightgreen?style=for-the-badge&logo=pytest) ![Coverage](https://img.shields.io/badge/Coverage-23%25-orange?style=for-the-badge&logo=codecov)
-
-#### Technology Stack
-![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python) ![FastAPI](https://img.shields.io/badge/FastAPI-modern-009688?style=for-the-badge&logo=fastapi) ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-2.0%20Flash-4285F4?style=for-the-badge&logo=google) ![FFmpeg](https://img.shields.io/badge/FFmpeg-video%20processing-007808?style=for-the-badge&logo=ffmpeg) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-336791?style=for-the-badge&logo=postgresql) ![Redis](https://img.shields.io/badge/Redis-caching-DC382D?style=for-the-badge&logo=redis)
-
-#### Performance & Metrics
-![Processing Speed](https://img.shields.io/badge/Processing%20Speed-25%20FPS-orange?style=for-the-badge) ![API Response](https://img.shields.io/badge/API%20Response-180ms-green?style=for-the-badge) ![Uptime](https://img.shields.io/badge/Uptime-99.9%25-brightgreen?style=for-the-badge) ![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-35K%2B-blue?style=for-the-badge) [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](https://github.com/taigi0315/langflix/blob/main/LICENSE) [![Version](https://img.shields.io/badge/Version-v2.0.0-blue?style=for-the-badge)](https://github.com/taigi0315/langflix/releases)
-
-#### AI/ML Integration
-![AI Integration](https://img.shields.io/badge/AI%20Integration-Advanced-purple?style=for-the-badge) ![Context Analysis](https://img.shields.io/badge/Context%20Analysis-2M%20tokens-blue?style=for-the-badge) ![Accuracy](https://img.shields.io/badge/Accuracy-95%25%2B-brightgreen?style=for-the-badge)
-
-
-
-## 🎯 **Technical Highlights**
-
-### 🤖 **Advanced AI/ML Integration**
-- **Google Gemini 2.0 Flash**: Latest multimodal AI model with 2M token context window for full episode comprehension
-- **Contextual Understanding**: Intelligent expression extraction with 95.5% accuracy using advanced prompt engineering
-- **Sophisticated Prompt Templates**: YAML-configurable prompt system with context-aware analysis
-- **Quality Assessment**: AI-driven content selection with multi-level language proficiency support
-- **Production AI Pipeline**: Robust error handling, retry logic, and performance optimization for LLM integration
-
-### 🎥 **Professional Video Processing**
-- **Frame-Accurate Processing**: 0.1-second precision video clip extraction with FFmpeg pipeline optimization
-- **Multi-Format Support**: Advanced video manipulation supporting various codecs and resolutions
-- **Real-Time Processing**: 25.0 FPS processing capability with parallel processing architecture
-- **Dual-Language Subtitles**: Netflix-style subtitle generation with precise timing synchronization
-- **Production Pipeline**: Robust error handling, resource management, and automated cleanup processes
-
-### 🏗️ **Modern Architecture & Scalability**
-- **Microservices Design**: FastAPI-based service architecture with clean separation of concerns
-- **Async Processing**: Non-blocking I/O with Celery task queues and Redis-based job management
-- **Intelligent Caching**: Multi-layer caching strategy with Redis for optimal performance
-- **Database Design**: PostgreSQL with Alembic migrations, connection pooling, and query optimization
-- **Production Ready**: Docker containerization, comprehensive logging, health checks, and monitoring
-- **Clean Code Architecture**: 1,088 functions, 162 classes, 88.9% type hint coverage, 90.9% docstring coverage
-
-### 📊 **Performance & Quality**
-- **High Throughput**: 120 videos processed per hour with optimized resource utilization
-- **Low Latency**: 180.0ms average API response time with efficient request handling
-- **Comprehensive Testing**: 743 tests across unit, integration, and functional test suites
-- **Code Quality**: Complexity score of 32.22, clean architecture with modular design
-- **Production Metrics**: 35,675 lines of code, 110 Python files, comprehensive error handling
-- **Quality Assurance**: Automated testing pipeline, code coverage analysis, and performance monitoring
-
-### 🔧 **Development Excellence**
-- **Type Safety**: Full type hints throughout 110 Python files with 88.9% coverage
-- **Configuration Management**: YAML-based configuration with environment overrides and validation
-- **Comprehensive Documentation**: 286 documentation files with multi-language support
-- **Error Handling**: Robust error handling, logging, and recovery mechanisms
-- **Development Tools**: Automated testing, code quality checks, and development workflow optimization
-- **Professional Practices**: Clean code principles, SOLID design patterns, and maintainable architecture
-
-
-
-## 🏗️ **System Architecture**
-
-### High-Level Architecture
-
-```mermaid
-graph TB
-    subgraph "🎬 Content Input"
-        SUBTITLES[TV Show Subtitles<br/>SRT/VTT Files]
-        VIDEO[Video Files<br/>Multiple Formats]
-    end
-
-    subgraph "🤖 AI Processing Layer"
-        GEMINI[Google Gemini 2.0 Flash<br/>Content Analysis]
-        CONTEXT[Contextual Analysis<br/>2M Token Window]
-        EXTRACTION[Expression Extraction<br/>Quality Assessment]
-    end
-
-    subgraph "🎥 Video Processing"
-        FFMPEG[FFmpeg Pipeline<br/>Frame-Accurate Processing]
-        CLIPS[Video Clip Extraction<br/>30 FPS Processing]
-        SUBTITLING[Dual-Language Subtitles<br/>Netflix-Style Generation]
-    end
-
-    subgraph "⚡ API & Services"
-        FASTAPI[FastAPI Backend<br/><200ms Response Time]
-        CELERY[Celery Workers<br/>Async Processing]
-        REDIS[Redis Cache<br/>Performance Optimization]
-    end
-
-    subgraph "💾 Data Layer"
-        POSTGRES[PostgreSQL<br/>Structured Data]
-        STORAGE[File Storage<br/>Video & Assets]
-    end
-
-    SUBTITLES --> GEMINI
-    VIDEO --> FFMPEG
-    GEMINI --> CONTEXT
-    CONTEXT --> EXTRACTION
-    EXTRACTION --> CLIPS
-    FFMPEG --> CLIPS
-    CLIPS --> SUBTITLING
-    
-    FASTAPI --> CELERY
-    CELERY --> REDIS
-    FASTAPI --> POSTGRES
-    SUBTITLING --> STORAGE
-
-    style GEMINI fill:#4285F4
-    style FASTAPI fill:#009688
-    style FFMPEG fill:#007808
-    style POSTGRES fill:#336791
-    style REDIS fill:#DC382D
-```
-
-### Data Flow Architecture
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant API as FastAPI API
-    participant AI as Gemini AI
-    participant Video as FFmpeg Pipeline
-    participant DB as PostgreSQL
-    participant Cache as Redis
-
-    User->>API: Upload subtitle file
-    API->>DB: Store job metadata
-    API->>AI: Analyze content with full context
-    AI-->>API: Return expressions & timing
-    API->>Video: Extract video clips
-    Video-->>API: Generated video segments
-    API->>Cache: Cache processed results
-    API->>DB: Update job status
-    API-->>User: Return educational video
-```
-
-### Technology Stack Deep Dive
-
-| Layer | Technologies | Purpose |
-|-------|-------------|---------|
-| **AI/ML** | Google Gemini 2.0 Flash, Custom Prompts | Intelligent content analysis and extraction |
-| **Backend** | FastAPI, Pydantic, SQLAlchemy | High-performance API with type safety |
-| **Processing** | FFmpeg, Celery, Redis | Video processing and task management |
-| **Database** | PostgreSQL, Alembic | Structured data with migrations |
-| **Infrastructure** | Docker, Docker Compose | Containerized deployment |
-| **Monitoring** | Structured Logging, Health Checks | Production observability |
-
-
-
-## 🚀 **Quick Start**
-
-### Prerequisites
-- Python 3.12+ (leveraging latest features)
-- Google Gemini API key (for AI processing)
-- FFmpeg (for video processing)
-- Docker & Docker Compose (for full stack)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/taigi0315/langflix.git
-cd langflix
-
-# Set up development environment
-make setup
-
-# Start all services (API, Database, Cache)
-make dev-all
-
-# Run the complete pipeline
-python -m langflix.main --subtitle "path/to/subtitle.srt" --video-dir "assets/media"
-```
-
-### Docker Deployment
-
-```bash
-# Start infrastructure services
-make docker-up
-
-# Access the API at http://localhost:8000
-# Access the web UI at http://localhost:5000
-```
-
-### API Usage
-
-```python
-import requests
-
-# Process a subtitle file
-response = requests.post("http://localhost:8000/api/v1/process", 
-    json={
-        "subtitle_path": "path/to/subtitle.srt",
-        "language_level": "intermediate",
-        "max_expressions": 10
-    }
-)
-
-# Get processing status
-job_id = response.json()["job_id"]
-status = requests.get(f"http://localhost:8000/api/v1/jobs/{job_id}")
-```
-
-
+- **Smart Subtitle Parsing**: Supports SRT subtitle files with automatic chunking
+- **AI-Powered Analysis**: Uses Google Gemini API for intelligent expression extraction
+- **Short Video Generation**: Creates 9:16 vertical videos with expression video playback and perfect audio-video sync
+- **Natural TTS Audio**: High-quality text-to-speech using Gemini TTS with SSML control
+- **Enhanced Educational Slides**: 5-section layout with full dialogue context
+- **Language Level Support**: Beginner, Intermediate, Advanced, and Mixed levels
+- **Video Processing**: Automatic video file mapping and precise clip extraction
+- **Dual-Language Subtitles**: Generates synchronized subtitles with translations
+- **Contextual Learning**: Provides full dialogue context and meaningful translations
+- **Quality-Focused**: Selects only the most valuable expressions for learning
+- **Frame-Accurate Processing**: 0.1-second precision in video clip extraction
+- **LLM Output Review**: Save and review AI responses for analysis
+- **Manual Testing Tools**: Optimize prompts and test different scenarios
 
 ## 📁 Project Structure
 
@@ -259,6 +56,79 @@ langflix/
 ├── docs/                   # Documentation
 └── run_tests.py           # Test runner
 ```
+
+## 🛠️ Installation
+
+### Prerequisites
+- Python 3.9+
+- Google Gemini API key
+- ffmpeg (for video processing)
+
+### Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/taigi0315/study_english_with_suits.git
+   cd study_english_with_suits
+   ```
+
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up environment variables**
+   ```bash
+   cp env.example .env
+   # Edit .env and add your GEMINI_API_KEY
+   ```
+
+5. **Prepare media files**
+
+   LangFlix supports two subtitle folder structures:
+
+   **NEW (Netflix-style) Structure** (Recommended):
+   ```bash
+   assets/media/Suits/
+   ├── Suits.S01E01.720p.HDTV.x264.mkv       # Video file
+   ├── Suits.S01E02.720p.HDTV.x264.mkv
+   └── Subs/                                  # Subtitles folder
+       ├── Suits.S01E01.720p.HDTV.x264/       # Episode subtitle folder
+       │   ├── 3_Korean.srt                   # Netflix indexed format
+       │   ├── 6_English.srt
+       │   ├── Spanish.srt                    # Translated (simple format)
+       │   └── Korean.srt                     # Translated (simple format)
+       └── Suits.S01E02.720p.HDTV.x264/
+           └── ...
+   ```
+
+   **Legacy Structure** (Still Supported):
+   ```bash
+   assets/media/Suits/
+   ├── Suits.S01E01.720p.HDTV.x264.mkv
+   ├── Suits.S01E01.720p.HDTV.x264/           # Subtitle folder next to video
+   │   ├── 3_Korean.srt
+   │   └── 6_English.srt
+   └── ...
+   ```
+
+   **Subtitle File Naming**:
+   - **Netflix indexed format**: `{index}_{Language}.srt` (e.g., `3_Korean.srt`, `6_English.srt`)
+   - **Simple format**: `{Language}.srt` (e.g., `Korean.srt`, `English.srt`)
+   - Language names are case-insensitive (automatically normalized to Title Case)
+   - Both formats are supported and auto-discovered
+
+   **Automatic Subtitle Translation**:
+   - Missing subtitle languages are automatically translated using Gemini 1.5 Pro
+   - Translations use full episode context for better quality (no chunking)
+   - Translated files are saved in simple format (`{Language}.srt`)
+   ```
 
 ## ⚙️ Configuration
 
@@ -438,6 +308,26 @@ python tests/functional/test_llm_only.py --subtitle "assets/subtitles/Suits.S01E
 python tests/functional/run_end_to_end_test.py
 ```
 
+## 📦 Deployment Bundle
+
+Need to copy the project to a deployment host (e.g., TrueNAS) without development artifacts?
+
+```bash
+# Create a minimal bundle under dist/
+make deploy-zip
+
+# Custom output filename
+make deploy-zip OUTPUT=/tmp/langflix_deploy.zip
+
+# Include documentation directory if desired
+make deploy-zip INCLUDE_DOCS=1
+
+# Include assets/media directory (opt-in)
+make deploy-zip INCLUDE_MEDIA=1
+```
+
+The bundle contains the LangFlix application code, Docker/Compose resources, configuration templates, and assets required for deployment while omitting virtual environments, tests, caches, and other development-only files. Large media libraries under `assets/media` are excluded by default to keep the archive lean; opt in with `INCLUDE_MEDIA=1` when they are required.
+
 ## 📖 Usage
 
 ### 🚀 **Complete End-to-End Pipeline (Recommended)**
@@ -585,6 +475,46 @@ python tests/functional/manual_prompt_test.py 2
 - [ ] Performance monitoring
 - [ ] Advanced error recovery
 
+## 📊 Example Output
+
+```json
+{
+  "dialogues": [
+    "I'm paying you millions,",
+    "and you're telling me I'm gonna get screwed?"
+  ],
+  "translation": [
+    "나는 당신에게 수백만 달러를 지불하고 있는데,",
+    "당신은 내가 속임을 당할 것이라고 말하고 있나요?"
+  ],
+  "expression": "I'm gonna get screwed",
+  "expression_translation": "속임을 당할 것 같아요",
+  "context_start_time": "00:01:25,657",
+  "context_end_time": "00:01:32,230",
+  "similar_expressions": [
+    "I'm going to be cheated",
+    "I'm getting the short end of the stick"
+  ]
+}
+```
+
+## 🔧 Development
+
+### Running Tests
+```bash
+# All tests
+python run_tests.py all
+
+# With coverage
+python run_tests.py all --coverage
+```
+
+### Code Quality
+- Type hints throughout
+- Comprehensive docstrings
+- Modular design
+- Error handling and logging
+
 ## 📚 Documentation
 
 ### User Guides
@@ -629,9 +559,3 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 **Happy Learning! 🎓**
-
----
-
-**🎓 Ready to transform your language learning experience? Get started with LangFlix today!**
-
-*Built with ❤️ using cutting-edge AI and modern software engineering practices*

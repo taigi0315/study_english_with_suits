@@ -41,6 +41,133 @@ export const ui = {
         document.getElementById('totalDuration').textContent = formatters.duration(stats.total_duration_minutes * 60) || '0m';
     },
 
+    renderQueueStatus(data) {
+        const container = document.getElementById('systemStatus');
+        if (!container) return;
+
+        const { processor, queue, current_job } = data;
+        const status = processor.status || 'unknown';
+        const isWaiting = status === 'waiting';
+        const isProcessing = status === 'processing';
+        
+        let statusHtml = '';
+        let statusColor = '#95a5a6'; // gray
+        let statusIcon = '⚪';
+        
+        if (isProcessing) {
+            statusColor = '#2ecc71'; // green
+            statusIcon = '▶️';
+            statusHtml = `
+                <div style="font-weight: bold; color: ${statusColor};">Processing Job</div>
+                <div style="font-size: 0.9em; margin-top: 4px;">
+                    ${current_job ? `Analyizing ${current_job.episode_name || current_job.video_file}` : 'Working...'}
+                </div>
+            `;
+        } else if (isWaiting) {
+            statusColor = '#e67e22'; // orange
+            statusIcon = '⏳';
+            const reason = processor.reason || 'unknown';
+            const message = processor.message || 'Waiting...';
+            
+            // Calculate remaining time if waiting for quota
+            let timeInfo = '';
+            if (processor.next_run) {
+                const nextRun = new Date(processor.next_run);
+                const now = new Date();
+                const diffMs = nextRun - now;
+                if (diffMs > 0) {
+                    const diffHrs = Math.floor(diffMs / 3600000);
+                    const diffMins = Math.floor((diffMs % 3600000) / 60000);
+                    timeInfo = `<div style="font-weight: bold; margin-top: 2px;">Resuming in ${diffHrs}h ${diffMins}m</div>`;
+                }
+            }
+            
+            statusHtml = `
+                <div style="font-weight: bold; color: ${statusColor};">Waiting (${reason === 'quota_limit' ? 'Daily Quota' : reason})</div>
+                <div style="font-size: 0.9em; margin-top: 4px;">${message}</div>
+                ${timeInfo}
+            `;
+        } else {
+            statusIcon = '💤';
+            statusHtml = `
+                <div style="font-weight: bold; color: ${statusColor};">System Idle</div>
+                <div style="font-size: 0.9em; margin-top: 4px;">Waiting for new jobs</div>
+            `;
+        }
+
+        // Render Queue Section
+        const queueHtml = queue.length > 0 ? `
+            <div style="margin-left: 20px; padding-left: 20px; border-left: 1px solid #ddd; display: flex; flex-direction: column;">
+                <div style="font-size: 0.8em; text-transform: uppercase; color: #7f8c8d; font-weight: bold; margin-bottom: 4px;">Next in Queue (${queue.length})</div>
+                <div style="display: flex; gap: 8px; overflow-x: auto; max-width: 400px; padding-bottom: 4px;">
+                    ${queue.items.map(item => `
+                        <div style="background: #f8f9fa; padding: 4px 8px; border-radius: 4px; border: 1px solid #eee; font-size: 0.85em; white-space: nowrap;">
+                            🎬 ${item.episode_name || item.video_file}
+                        </div>
+                    `).join('')}
+                    ${queue.next_items_count > 0 ? `<div style="color: #999; font-size: 0.8em; align-self: center;">+${queue.next_items_count} more</div>` : ''}
+                </div>
+            </div>
+        ` : `
+             <div style="margin-left: 20px; padding-left: 20px; border-left: 1px solid #ddd; color: #999; font-size: 0.9em; align-self: center;">
+                Queue is empty
+             </div>
+        `;
+
+        // Render Logs Section
+        let logsHtml = '';
+        if (data.logs && data.logs.length > 0) {
+            logsHtml = `
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-size: 0.8em; text-transform: uppercase; color: #7f8c8d; font-weight: bold;">System Logs</div>
+                        <div style="font-size: 0.8em; color: #95a5a6;">Last 50 lines</div>
+                    </div>
+                    <div class="system-logs" style="font-family: 'Monaco', 'Consolas', monospace; font-size: 11px; background: #2c3e50; color: #ecf0f1; padding: 12px; border-radius: 6px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; line-height: 1.4;">
+                        ${data.logs.map(log => {
+                            let color = '#ecf0f1'; // default
+                            if (log.includes('ERROR') || log.includes('CRITICAL')) color = '#e74c3c';
+                            else if (log.includes('WARNING')) color = '#f39c12';
+                            else if (log.includes('INFO')) color = '#3498db';
+                            else if (log.includes('DEBUG')) color = '#95a5a6';
+                            else if (log.includes('SUCCESS') || log.includes('✅')) color = '#2ecc71';
+                            
+                            // Highlight timestamps (assume ISO-like date at start)
+                            const timeMatch = log.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+                            let content = formatters.escapeHtml(log);
+                            if (timeMatch) {
+                                content = content.replace(timeMatch[0], `<span style="color: #636e72;">${timeMatch[0]}</span>`);
+                            }
+                            
+                            return `<div style="color: ${color}; margin-bottom: 2px;">${content}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Main Status Box
+        container.innerHTML = `
+            <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 4px solid ${statusColor};">
+                <div style="display: flex; align-items: center;">
+                    <div style="font-size: 24px; margin-right: 15px;">${statusIcon}</div>
+                    <div style="flex: 1;">
+                        ${statusHtml}
+                    </div>
+                    ${queueHtml}
+                </div>
+                ${logsHtml}
+            </div>
+        `;
+        
+        // Auto-scroll logs to bottom
+        const logContainer = container.querySelector('.system-logs');
+        if (logContainer) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        container.classList.remove('hidden');
+    },
+
     renderDirectory(items) {
         console.log('[DEBUG] renderDirectory called with', items.length, 'items');
         const container = document.getElementById('videosContainer');

@@ -299,6 +299,70 @@ class RedisJobManager:
             logger.error(f"❌ Failed to invalidate video cache: {e}")
             return False
 
+    def get_last_job_completion_time(self) -> Optional[datetime]:
+        """
+        Get the timestamp of the last successfully completed job.
+        
+        Returns:
+            datetime object or None if no job has completed yet
+        """
+        try:
+            timestamp_str = self.redis_client.get("jobs:last_completion_time")
+            if timestamp_str:
+                return datetime.fromisoformat(timestamp_str)
+            return None
+        except Exception as e:
+            logger.error(f"❌ Failed to get last job completion time: {e}")
+            return None
+
+    def set_last_job_completion_time(self) -> bool:
+        """
+        Set the last job completion time to now.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            self.redis_client.set("jobs:last_completion_time", now)
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to set last job completion time: {e}")
+            return False
+
+    def set_processor_status(self, status: str, details: Dict[str, Any] = None) -> bool:
+        """
+        Set the current status of the queue processor.
+        
+        Args:
+            status: 'idle', 'processing', 'waiting', 'paused'
+            details: Additional details (e.g., next_run_time, reason)
+        """
+        try:
+            data = {
+                "status": status,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                **(details or {})
+            }
+            self.redis_client.set("jobs:processor_status", json.dumps(data))
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to set processor status: {e}")
+            return False
+
+    def get_processor_status(self) -> Dict[str, Any]:
+        """
+        Get the current status of the queue processor.
+        """
+        try:
+            data = self.redis_client.get("jobs:processor_status")
+            if data:
+                return json.loads(data)
+            return {"status": "unknown", "updated_at": None}
+        except Exception as e:
+            logger.error(f"❌ Failed to get processor status: {e}")
+            return {"status": "error", "error": str(e)}
+
     # Batch Queue Management Methods
     
     def create_batch(self, batch_id: str, videos: List[Dict[str, Any]], config: Dict[str, Any]) -> bool:

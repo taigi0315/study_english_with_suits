@@ -11,7 +11,23 @@ from .routes import health, jobs, files, batch, media
 from .exceptions import APIException, api_exception_handler
 from .middleware import LoggingMiddleware
 
-logging.basicConfig(level=logging.INFO)
+
+# Configure Logging
+log_formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s')
+
+# Console Handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+
+# File Handler
+file_handler = logging.FileHandler('langflix.log', encoding='utf-8')
+file_handler.setFormatter(log_formatter)
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[console_handler, file_handler],
+    force=True
+)
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager

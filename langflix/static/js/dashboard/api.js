@@ -65,6 +65,17 @@ export const api = {
         return await response.json();
     },
 
+    async fetchQueueStatus() {
+        try {
+            const response = await fetch('/api/jobs/queue/status');
+            if (response.ok) return await response.json();
+            return null;
+        } catch (e) {
+            console.warn("Failed to fetch queue status", e);
+            return null;
+        }
+    },
+
     async fetchAccountInfo() {
         try {
             const response = await fetch('/api/youtube/account');

@@ -1,114 +1,197 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LangFlix Video Management Dashboard</title>
     <!-- Use external CSS -->
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
     <style>
-        /* Small layout overrides if indispensable */
-        .hidden {
-            display: none !important;
-        }
+      /* Small layout overrides if indispensable */
+      .hidden {
+        display: none !important;
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>🎬 LangFlix Video Dashboard</h1>
-            <p>Manage your generated educational videos for YouTube upload</p>
+      <div class="header">
+        <h1>🎬 LangFlix Video Dashboard</h1>
+        <p>Manage your generated educational videos for YouTube upload</p>
 
-            <!-- YouTube Account - Placeholder structure, logic moved to JS -->
-            <div id="youtubeAccountSection" class="youtube-account-section">
-                <!-- Content rendered by JS -->
-                <div class="loading">Loading Account Info...</div>
-            </div>
+        <!-- YouTube Account - Placeholder structure, logic moved to JS -->
+        <div id="youtubeAccountSection" class="youtube-account-section">
+          <!-- Content rendered by JS -->
+          <div class="loading">Loading Account Info...</div>
         </div>
+      </div>
 
-        <div class="stats-grid" id="statsGrid">
-            <div class="stat-card">
-                <div class="stat-number" id="totalVideos">-</div>
-                <div class="stat-label">Total Videos</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="uploadReady">-</div>
-                <div class="stat-label">Ready for Upload</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="totalSize">-</div>
-                <div class="stat-label">Total Size (MB)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="totalDuration">-</div>
-                <div class="stat-label">Total Duration</div>
-            </div>
-        </div>
+      <!-- System Status Bar -->
+      <div id="systemStatus" class="hidden"></div>
 
-        <div class="controls">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">📺 All Videos</button>
-                    <button class="filter-btn" data-filter="short-form">⚡ Short-Form</button>
-                    <button class="filter-btn" data-filter="long-form">🎬 Long-Form</button>
-                    <button class="filter-btn" data-filter="uploaded">📤 Uploaded</button>
-                    <button class="filter-btn" data-filter="not-uploaded">⏳ Not Uploaded</button>
-                </div>
-                <!-- Action Buttons: Select All, Create Content -->
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <!-- Logic moved to JS -->
-                    <button class="btn-create-content" id="createContentBtn">
-                        <span class="btn-icon">✨</span>
-                        <span class="btn-text">Create Content</span>
-                    </button>
-                </div>
-            </div>
-            <input type="text" class="search-box" placeholder="Search videos..." id="searchBox">
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-number" id="totalVideos">-</div>
+          <div class="stat-label">Total Videos</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-number" id="uploadReady">-</div>
+          <div class="stat-label">Ready for Upload</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="totalSize">-</div>
+          <div class="stat-label">Total Size (MB)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="totalDuration">-</div>
+          <div class="stat-label">Total Duration</div>
+        </div>
+      </div>
 
-        <!-- Bulk Actions Bar -->
-        <div id="bulkActionsBar"
-            style="display: none; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 2px solid #e0e0e0;">
-            <div
-                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="selectAllVideosBtn"
-                        style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;">
-                        ✓ Select All
-                    </button>
-                    <button id="deselectAllVideosBtn"
-                        style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s ease;">
-                        ✗ Deselect All
-                    </button>
-                    <button id="uploadImmediateBtn" class="batch-action-btn"
-                        style="background: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                        📤 Upload Selected (Immediate)
-                    </button>
-                    <button id="uploadScheduleBtn" class="batch-action-btn"
-                        style="background: #27ae60; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                        📅 Upload Selected (Schedule)
-                    </button>
-                </div>
-                <div id="selectionCount" style="color: #7f8c8d; font-weight: 500;">
-                    0 videos selected
-                </div>
-            </div>
+      <div class="controls">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">
+              📺 All Videos
+            </button>
+            <button class="filter-btn" data-filter="short-form">
+              ⚡ Short-Form
+            </button>
+            <button class="filter-btn" data-filter="long-form">
+              🎬 Long-Form
+            </button>
+            <button class="filter-btn" data-filter="uploaded">
+              📤 Uploaded
+            </button>
+            <button class="filter-btn" data-filter="not-uploaded">
+              ⏳ Not Uploaded
+            </button>
+          </div>
+          <!-- Action Buttons: Select All, Create Content -->
+          <div style="display: flex; gap: 10px; align-items: center">
+            <!-- Logic moved to JS -->
+            <button class="btn-create-content" id="createContentBtn">
+              <span class="btn-icon">✨</span>
+              <span class="btn-text">Create Content</span>
+            </button>
+          </div>
         </div>
+        <input
+          type="text"
+          class="search-box"
+          placeholder="Search videos..."
+          id="searchBox"
+        />
+      </div>
 
-        <!-- Breadcrumb Navigation -->
-        <div class="breadcrumb-nav" id="breadcrumbNav">
-            <!-- Rendered by JS -->
+      <!-- Bulk Actions Bar -->
+      <div
+        id="bulkActionsBar"
+        style="
+          display: none;
+          margin: 20px 0;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 10px;
+          border: 2px solid #e0e0e0;
+        "
+      >
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+          "
+        >
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <button
+              id="selectAllVideosBtn"
+              style="
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 25px;
+                cursor: pointer;
+                font-weight: 500;
+                transition: all 0.3s ease;
+              "
+            >
+              ✓ Select All
+            </button>
+            <button
+              id="deselectAllVideosBtn"
+              style="
+                padding: 10px 20px;
+                background: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 25px;
+                cursor: pointer;
+                font-weight: 500;
+                transition: all 0.3s ease;
+              "
+            >
+              ✗ Deselect All
+            </button>
+            <button
+              id="uploadImmediateBtn"
+              class="batch-action-btn"
+              style="
+                background: #f39c12;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+              "
+            >
+              📤 Upload Selected (Immediate)
+            </button>
+            <button
+              id="uploadScheduleBtn"
+              class="batch-action-btn"
+              style="
+                background: #27ae60;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+              "
+            >
+              📅 Upload Selected (Schedule)
+            </button>
+          </div>
+          <div id="selectionCount" style="color: #7f8c8d; font-weight: 500">
+            0 videos selected
+          </div>
         </div>
+      </div>
 
-        <div id="videosContainer">
-            <div class="loading">Loading...</div>
-        </div>
+      <!-- Breadcrumb Navigation -->
+      <div class="breadcrumb-nav" id="breadcrumbNav">
+        <!-- Rendered by JS -->
+      </div>
+
+      <div id="videosContainer">
+        <div class="loading">Loading...</div>
+      </div>
     </div>
 
     <!-- Load Application Logic -->
     <script type="module" src="/static/js/dashboard/main.js"></script>
-</body>
-
+  </body>
 </html>

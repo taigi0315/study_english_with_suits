@@ -67,6 +67,39 @@ class QueueProcessor:
                     continue
                 
                 # No job processing, try to get next from queue
+                
+                # Check for rate limiting (e.g. 1 job per 24h)
+                interval_hours = float(os.getenv('JOB_INTERVAL_HOURS', '0'))
+                if interval_hours > 0:
+                    last_completion = self.redis_manager.get_last_job_completion_time()
+                    if last_completion:
+                        # Ensure timezone awareness
+                        if last_completion.tzinfo is None:
+                            last_completion = last_completion.replace(tzinfo=timezone.utc)
+                        
+                        elapsed = datetime.now(timezone.utc) - last_completion
+                        required_wait = timedelta(hours=interval_hours)
+                        
+                        if elapsed < required_wait:
+                            remaining = (required_wait - elapsed).total_seconds()
+                            hours_remaining = remaining / 3600
+                            
+                            # Only log occasionally to avoid spamming
+                            logger.info(f"⏳ Daily Quota Limit: Waiting {hours_remaining:.2f} hours for next slot (Interval: {interval_hours}h)")
+                            
+                            # Report status
+                            self.redis_manager.set_processor_status('waiting', {
+                                'reason': 'quota_limit',
+                                'message': f"Daily Limit: Waiting {hours_remaining:.2f}h",
+                                'next_run': (datetime.now(timezone.utc) + timedelta(seconds=remaining)).isoformat(),
+                                'interval_hours': interval_hours
+                            })
+                            
+                            # Sleep for 5 minutes or remaining time, whichever is smaller
+                            # This allows checking for shutdown signals
+                            await asyncio.sleep(min(300, remaining))
+                            continue
+
                 next_job_id = self.redis_manager.get_next_job_from_queue()
                 
                 if next_job_id:
@@ -74,6 +107,13 @@ class QueueProcessor:
                     if self.redis_manager.mark_job_processing(next_job_id):
                         # Successfully claimed, process it
                         logger.info(f"📦 Processing job {next_job_id} from queue (queue length: {self.redis_manager.get_queue_length()})")
+                        
+                        # Report status
+                        self.redis_manager.set_processor_status('processing', {
+                            'job_id': next_job_id,
+                            'message': f"Processing job {next_job_id}"
+                        })
+                        
                         try:
                             await self._process_job(next_job_id)
                             logger.info(f"✅ Job {next_job_id} completed successfully")
@@ -94,6 +134,9 @@ class QueueProcessor:
                         logger.debug(f"⚠️ Failed to claim job {next_job_id}, may be claimed by another processor")
                 else:
                     # No jobs in queue, wait
+                    self.redis_manager.set_processor_status('idle', {
+                        'message': "No jobs in queue"
+                    })
                     await asyncio.sleep(self.POLL_INTERVAL)
                     
         except asyncio.CancelledError:
@@ -326,6 +369,9 @@ class QueueProcessor:
                     # Invalidate video cache since new videos were created
                     logger.info("Invalidating video cache after job completion...")
                     self.redis_manager.invalidate_video_cache()
+                    
+                    # Set last completion time for rate limiting
+                    self.redis_manager.set_last_job_completion_time()
                     
                     logger.info(f"✅ Completed processing for job {job_id}")
                     # Temp files automatically cleaned up when context exits

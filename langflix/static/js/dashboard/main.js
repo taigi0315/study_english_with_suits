@@ -10,6 +10,10 @@ async function init() {
     await refreshView();
     loadStats();
     loadAccountInfo();
+    loadQueueStatus(); // Load initial queue status
+
+    // Start Polling for Queue Status (every 5 seconds)
+    setInterval(loadQueueStatus, 5000);
 
     // Setup Event Listeners
     setupNavigation();
@@ -59,6 +63,13 @@ function setupFilters() {
 async function loadAccountInfo() {
     const accountData = await api.fetchAccountInfo();
     await ui.renderAccountInfo(accountData);
+}
+
+async function loadQueueStatus() {
+    const statusData = await api.fetchQueueStatus();
+    if (statusData) {
+        ui.renderQueueStatus(statusData);
+    }
 }
 
 function setupAuth() {

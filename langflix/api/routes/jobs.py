@@ -588,6 +588,78 @@ async def create_job(
         logger.error(f"Error creating job: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating job: {str(e)}")
 
+@router.get("/jobs/queue/status")
+async def get_queue_status() -> Dict[str, Any]:
+    """Get global queue status (processor state, queue length, etc)."""
+    
+    redis_manager = get_redis_job_manager()
+    
+    # Get processor status (idle, waiting, processing)
+    processor_status = redis_manager.get_processor_status()
+    
+    # Get queued jobs
+    queue_length = redis_manager.get_queue_length()
+    queue_job_ids = redis_manager.redis_client.lrange("jobs:queue", 0, -1)
+    queue_jobs = []
+    
+    # Fetch details for top 5 queued jobs
+    for job_id in queue_job_ids[:5]:
+        job_data = redis_manager.get_job(job_id)
+        if job_data:
+            queue_jobs.append({
+                "job_id": job_id,
+                "video_file": job_data.get("video_file", "Unknown"),
+                "episode_name": job_data.get("episode_name", ""),
+                "show_name": job_data.get("show_name", ""),
+                "created_at": job_data.get("created_at")
+            })
+            
+    # Get currently processing job if any
+    current_job_id = redis_manager.get_currently_processing_job()
+    current_job = None
+    if current_job_id:
+        current_job = redis_manager.get_job(current_job_id)
+
+    # Read recent logs
+    logs = read_recent_logs(50)
+
+    return {
+        "processor": processor_status,
+        "queue": {
+            "length": queue_length,
+            "items": queue_jobs,
+            "next_items_count": max(0, queue_length - len(queue_jobs))
+        },
+        "current_job": current_job,
+        "logs": logs
+    }
+
+def read_recent_logs(n: int = 50) -> List[str]:
+    """Read shell-style recent logs from the log file."""
+    try:
+        log_path = project_root / "langflix.log"
+        if not log_path.exists():
+            return [f"Log file not found at {log_path}"]
+            
+        # Read last 30KB (approx 200-300 lines) of logs efficiently
+        file_size = log_path.stat().st_size
+        if file_size == 0:
+            return ["Log file is empty"]
+            
+        read_size = min(file_size, 30000)
+        
+        with open(log_path, "rb") as f:
+            f.seek(-read_size, 2)
+            content = f.read().decode('utf-8', errors='ignore')
+            
+        # Split into lines and take the last n
+        # Filter out empty lines
+        lines = [line for line in content.splitlines() if line.strip()]
+        return lines[-n:]
+    except Exception as e:
+        logger.error(f"Error reading logs: {e}")
+        return [f"Error reading logs: {e}"]
+
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: str) -> Dict[str, Any]:
     """Get job status and details."""

@@ -2405,6 +2405,94 @@ class VideoManagementUI:
             except Exception as e:
                 logger.error(f"Error getting jobs: {e}")
                 return jsonify({"error": str(e)}), 500
+
+        @self.app.route('/api/jobs/queue/status')
+        def get_queue_status():
+            """Get queue status and system logs via Redis"""
+            try:
+                from langflix.core.redis_client import get_redis_job_manager
+                redis_manager = get_redis_job_manager()
+                
+                # Get queue status
+                queue_length = redis_manager.get_queue_length()
+                queue_job_ids = redis_manager.redis_client.lrange("jobs:queue", 0, -1)
+                queue_jobs = []
+                
+                # Fetch details for top 5 queued jobs
+                for job_id in queue_job_ids[:5]:
+                    job_data = redis_manager.get_job(job_id)
+                    if job_data:
+                        queue_jobs.append(job_data)
+                
+                # Get currently processing job
+                current_job_id = redis_manager.get_currently_processing_job()
+                current_job = None
+                if current_job_id:
+                    current_job = redis_manager.get_job(current_job_id)
+                elif queue_length == 0:
+                    # Fallback: If no official processing job and queue is empty,
+                    # check for "ghost" jobs (PROCESSING status but lock lost/zombie)
+                    # This happens if backend restarted during processing
+                    try:
+                        active_job_ids = redis_manager.redis_client.smembers("jobs:active")
+                        for job_id in active_job_ids:
+                            job_data = redis_manager.get_job(job_id)
+                            if job_data and job_data.get('status') == 'PROCESSING':
+                                current_job = job_data
+                                logger.info(f"detected ghost processing job: {job_id}")
+                                break
+                    except Exception as e:
+                        logger.warning(f"Failed to scan for ghost jobs: {e}")
+
+                # Determine processor status
+                processor_status = "processing" if current_job else ("idle" if queue_length == 0 else "waiting")
+                
+                # Read logs from project root
+                logs = self._read_recent_logs()
+                
+                return jsonify({
+                    "processor": processor_status,
+                    "queue": {
+                        "length": queue_length,
+                        "items": queue_jobs,
+                        "next_items_count": max(0, queue_length - len(queue_jobs))
+                    },
+                    "current_job": current_job,
+                    "logs": logs
+                })
+            except Exception as e:
+                logger.error(f"Error getting queue status: {e}")
+                return jsonify({"error": str(e)}), 500
+
+    def _read_recent_logs(self, n: int = 50) -> List[str]:
+        """Read recent logs from langflix.log in project root"""
+        try:
+            # Find project root (3 levels up from this file)
+            # langflix/youtube/web_ui.py -> langflix/youtube -> langflix -> root
+            current_file = Path(__file__).resolve()
+            project_root = current_file.parent.parent.parent
+            log_path = project_root / "langflix.log"
+
+            if not log_path.exists():
+                return [f"Log file not found at {log_path}"]
+            
+            # Read last 30KB (approx 200-300 lines) efficiently
+            file_size = log_path.stat().st_size
+            if file_size == 0:
+                return ["Log file is empty"]
+                
+            read_size = min(file_size, 30000)
+            
+            with open(log_path, "rb") as f:
+                f.seek(-read_size, 2)
+                content = f.read().decode('utf-8', errors='ignore')
+                
+            # Split into lines and take the last n
+            lines = [line for line in content.splitlines() if line.strip()]
+            return lines[-n:]
+        except Exception as e:
+            logger.error(f"Error reading logs: {e}")
+            return [f"Error reading logs: {e}"]
         
         @self.app.route('/api/content/jobs/<job_id>/cancel', methods=['POST'])
         def cancel_job(job_id):

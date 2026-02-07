@@ -116,7 +116,27 @@ class YouTubeUploader:
                     raise FileNotFoundError(error_msg)
             
             # Check if credentials file is empty or invalid
-            if os.path.getsize(self.credentials_file) == 0:
+            # Note: os.path.getsize can sometimes be unreliable on network mounts/Docker volumes
+            file_is_empty = False
+            try:
+                if os.path.getsize(self.credentials_file) == 0:
+                    file_is_empty = True
+            except OSError:
+                # If cannot stat file, try reading it
+                pass
+
+            if not file_is_empty:
+                # Double check by reading content
+                try:
+                    with open(self.credentials_file, 'r') as f:
+                        content = f.read().strip()
+                        if not content:
+                            file_is_empty = True
+                except Exception as e:
+                    logger.warning(f"Failed to read credentials file during empty check: {e}")
+                    file_is_empty = True
+
+            if file_is_empty:
                 error_msg = (
                     f"YouTube credentials file is empty: {self.credentials_file}\n"
                     "Please download OAuth2 credentials from Google Cloud Console and save as 'youtube_credentials.json'"
@@ -128,8 +148,6 @@ class YouTubeUploader:
             try:
                 with open(self.credentials_file, 'r') as f:
                     content = f.read().strip()
-                    if not content:
-                        raise ValueError(f"Credentials file is empty: {self.credentials_file}")
                     json.loads(content)  # Validate JSON
             except json.JSONDecodeError as e:
                 error_msg = (

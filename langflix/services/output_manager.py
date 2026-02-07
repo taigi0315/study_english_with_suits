@@ -88,13 +88,15 @@ class OutputManager:
     │   │   └── metadata/        # Common metadata
     """
     
-    def __init__(self, base_output_dir: str = "output"):
+    def __init__(self, base_output_dir: str = None):
         """
         Initialize OutputManager
         
         Args:
-            base_output_dir: Base output directory
+            base_output_dir: Base output directory (defaults to LANGFLIX_OUTPUT_DIR env or 'output')
         """
+        if base_output_dir is None:
+            base_output_dir = os.getenv('LANGFLIX_OUTPUT_DIR', 'output')
         self.base_output_dir = Path(base_output_dir)
         self.base_output_dir.mkdir(exist_ok=True)
         self.ensure_write_permissions(self.base_output_dir)
@@ -279,7 +281,7 @@ class OutputManager:
         return log_file
 
 
-def create_output_structure(subtitle_file_path: str, language_code: str = "ko", base_output_dir: str = "output", 
+def create_output_structure(subtitle_file_path: str, language_code: str = "ko", base_output_dir: str = None, 
                             series_name: str = None, episode_name: str = None) -> Dict[str, Path]:
     """
     Convenience function to create complete output structure
@@ -287,13 +289,15 @@ def create_output_structure(subtitle_file_path: str, language_code: str = "ko", 
     Args:
         subtitle_file_path: Path to subtitle file
         language_code: Target language code
-        base_output_dir: Base output directory (default: "output")
+        base_output_dir: Base output directory (defaults to LANGFLIX_OUTPUT_DIR env or 'output')
         series_name: Optional series name (if not provided, extracted from subtitle path)
         episode_name: Optional episode name (if not provided, extracted from subtitle path)
         
     Returns:
         Complete path mappings for the episode and language
     """
+    if base_output_dir is None:
+        base_output_dir = os.getenv('LANGFLIX_OUTPUT_DIR', 'output')
     manager = OutputManager(base_output_dir)
     
     # Extract series and episode names (use provided values if available)

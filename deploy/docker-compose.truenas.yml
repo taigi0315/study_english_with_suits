@@ -167,6 +167,7 @@ services:
       - LANGFLIX_API_BASE_URL=http://langflix-api:8000
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/media/shows/langflix_media
+      - LANGFLIX_LOG_DIR=/data/logs
       - LANGFLIX_UI_PORT=${UI_PORT:-5000}
       - YOUTUBE_CREDENTIALS_FILE=/app/auth/youtube_credentials.json
       - YOUTUBE_TOKEN_FILE=/app/auth/youtube_token.json

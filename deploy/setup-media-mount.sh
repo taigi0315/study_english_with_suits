@@ -143,10 +143,22 @@ if mountpoint -q "${MOUNT_POINT}"; then
     ls -la "${MOUNT_POINT}" | head -10
     echo ""
     echo "✓ Setup complete!"
+    
+    # Create langflix_media directory
+    LANGFLIX_MEDIA_DIR="${MOUNT_POINT}/langflix_media"
+    if [ ! -d "${LANGFLIX_MEDIA_DIR}" ]; then
+        echo "Creating langflix_media directory: ${LANGFLIX_MEDIA_DIR}"
+        mkdir -p "${LANGFLIX_MEDIA_DIR}"
+        chmod 777 "${LANGFLIX_MEDIA_DIR}"
+        echo "✓ Created ${LANGFLIX_MEDIA_DIR}"
+    else
+        echo "✓ Directory already exists: ${LANGFLIX_MEDIA_DIR}"
+    fi
+
     echo ""
     echo "Next steps:"
-    echo "1. Update docker-compose.media-server.yml to use: - ${MOUNT_POINT}:/media/shows:ro"
-    echo "2. Set environment variable: LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows"
+    echo "1. Update docker-compose.media-server.yml to use: - ${MOUNT_POINT}:/media/shows:rw"
+    echo "2. Set environment variable: LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows/langflix_media"
     echo "3. Start Docker container: docker-compose -f deploy/docker-compose.media-server.yml up -d"
 else
     echo "✗ Mount point verification failed"

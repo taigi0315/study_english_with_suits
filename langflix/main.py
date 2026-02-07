@@ -62,13 +62,28 @@ def setup_logging(verbose: bool = False):
     console_handler.setLevel(log_level)
     console_handler.setFormatter(simple_formatter)
     
-    file_handler = logging.FileHandler('langflix.log', encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(detailed_formatter)
+    log_dir = os.getenv('LANGFLIX_LOG_DIR', '.')
+    log_file_path = os.path.join(log_dir, 'langflix.log')
+    
+    # Ensure log directory exists
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except Exception:
+        pass
+        
+    handlers = [console_handler]
+    
+    try:
+        file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(detailed_formatter)
+        handlers.append(file_handler)
+    except Exception as e:
+        print(f"WARNING: Could not open log file {log_file_path}: {e}")
     
     logging.basicConfig(
         level=log_level,
-        handlers=[console_handler, file_handler],
+        handlers=handlers,
         force=True
     )
     logging.getLogger('ffmpeg').setLevel(logging.WARNING)

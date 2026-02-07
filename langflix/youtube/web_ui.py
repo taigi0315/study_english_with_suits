@@ -789,7 +789,10 @@ class VideoManagementUI:
                 # Generate auth URL for web flow
                 try:
                     # Get redirect URI (use Flask's request host)
-                    redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
+                    # Use the host from the request to support remote access (e.g. TrueNAS)
+                    scheme = request.scheme
+                    host = request.host
+                    redirect_uri = f"{scheme}://{host}/api/youtube/auth/callback"
                     
                     auth_data = self.upload_manager.uploader.get_authorization_url(
                         redirect_uri=redirect_uri,
@@ -2465,13 +2468,17 @@ class VideoManagementUI:
                 return jsonify({"error": str(e)}), 500
 
     def _read_recent_logs(self, n: int = 50) -> List[str]:
-        """Read recent logs from langflix.log in project root"""
+        """Read recent logs from langflix.log"""
         try:
-            # Find project root (3 levels up from this file)
-            # langflix/youtube/web_ui.py -> langflix/youtube -> langflix -> root
-            current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent.parent
-            log_path = project_root / "langflix.log"
+            # Determine log file path
+            log_dir = os.getenv('LANGFLIX_LOG_DIR')
+            if log_dir:
+                log_path = Path(log_dir) / "langflix.log"
+            else:
+                # Fallback to project root
+                current_file = Path(__file__).resolve()
+                project_root = current_file.parent.parent.parent
+                log_path = project_root / "langflix.log"
 
             if not log_path.exists():
                 return [f"Log file not found at {log_path}"]

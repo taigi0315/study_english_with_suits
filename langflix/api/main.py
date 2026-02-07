@@ -20,12 +20,28 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(log_formatter)
 
 # File Handler
-file_handler = logging.FileHandler('langflix.log', encoding='utf-8')
-file_handler.setFormatter(log_formatter)
+log_dir = os.getenv('LANGFLIX_LOG_DIR', '.')
+log_file_path = os.path.join(log_dir, 'langflix.log')
+
+# Ensure log directory exists
+try:
+    os.makedirs(log_dir, exist_ok=True)
+except Exception:
+    pass
+
+handlers = [console_handler]
+
+try:
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    file_handler.setFormatter(log_formatter)
+    handlers.append(file_handler)
+except Exception as e:
+    # Fallback to stderr provided by console_handler if we can't write to file
+    print(f"WARNING: Could not open log file {log_file_path}: {e}")
 
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[console_handler, file_handler],
+    handlers=handlers,
     force=True
 )
 logger = logging.getLogger(__name__)

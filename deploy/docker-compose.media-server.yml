@@ -11,13 +11,13 @@ services:
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - LANGFLIX_LOG_LEVEL=INFO
       # Media storage path - mount network path here
-      - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows
+      - LANGFLIX_STORAGE_LOCAL_BASE_PATH=/media/shows/langflix_media
       # Or use config file path
       - LANGFLIX_CONFIG_PATH=/app/config/config.yaml
     volumes:
       # Mount network media path to container
       # Option A: If already mounted on host at /mnt/media-server
-      - /mnt/media-server:/media/shows:ro # Read-only mount
+      - /mnt/media-server:/media/shows:rw # Read-write mount
 
       # Option B: Direct NFS/CIFS mount (requires host configuration)
       # Host must have network share mounted first

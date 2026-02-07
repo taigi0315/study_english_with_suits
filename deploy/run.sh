@@ -119,6 +119,43 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
     echo -e "${GREEN}✅ 디렉토리 생성 완료${NC}"
 fi
 
+# Double check critical directories specifically 'logs' which causes Docker start failure if missing
+LOGS_DIR="$TRUENAS_DATA_PATH/logs"
+if [ ! -d "$LOGS_DIR" ]; then
+    echo -e "${YELLOW}⚠️  Logs directory check failed, attempting forced creation...${NC}"
+    sudo mkdir -p "$LOGS_DIR"
+    sudo chown -R 1000:1000 "$LOGS_DIR" 2>/dev/null || true
+    sudo chmod -R 777 "$LOGS_DIR" 2>/dev/null || true
+fi
+
+if [ ! -d "$LOGS_DIR" ]; then
+    echo -e "${RED}❌ Critical Error: Failed to create logs directory at $LOGS_DIR${NC}"
+    echo "   Docker will fail to start. Please run: mkdir -p $LOGS_DIR manually."
+    exit 1
+fi
+
+# langflix_media 디렉토리 확인 및 생성 (미디어 경로 내)
+LANGFLIX_MEDIA_SUBDIR="$TRUENAS_MEDIA_PATH/langflix_media"
+echo ""
+echo -e "${BLUE}📂 미디어 서브 디렉토리 확인 중...${NC}"
+if [ ! -d "$LANGFLIX_MEDIA_SUBDIR" ]; then
+    echo -e "${YELLOW}⚠️  디렉토리 없음: $LANGFLIX_MEDIA_SUBDIR${NC}"
+    echo "   생성 중..."
+    sudo mkdir -p "$LANGFLIX_MEDIA_SUBDIR"
+    
+    # 소유권 및 권한 설정
+    sudo chown -R 1000:1000 "$LANGFLIX_MEDIA_SUBDIR" 2>/dev/null || true
+    sudo chmod -R 777 "$LANGFLIX_MEDIA_SUBDIR" 2>/dev/null || true
+    
+    if [ -d "$LANGFLIX_MEDIA_SUBDIR" ]; then
+         echo -e "${GREEN}✅ 생성 완료: $LANGFLIX_MEDIA_SUBDIR (777)${NC}"
+    else
+         echo -e "${RED}❌ 생성 실패${NC}"
+    fi
+else
+    echo -e "${GREEN}✅ 확인 완료: $LANGFLIX_MEDIA_SUBDIR${NC}"
+fi
+
 # output 디렉토리 추가 확인 (가장 중요)
 OUTPUT_DIR="$TRUENAS_DATA_PATH/output"
 if [ -d "$OUTPUT_DIR" ]; then
